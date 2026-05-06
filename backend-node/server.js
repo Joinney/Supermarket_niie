@@ -31,7 +31,7 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000; 
 
-// --- 2. CẤU HÌNH SWAGGER OPTIONS ---
+// --- 2. CẤU HÌNH SWAGGER OPTIONS (ĐÃ SỬA LỖI SCHEMAS) ---
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
@@ -45,7 +45,6 @@ const swaggerOptions = {
         },
         servers: [
             {
-                // Tự động nhận diện URL backend từ .env hoặc dùng localhost
                 url: process.env.BACKEND_URL || `http://localhost:${PORT}`,
                 description: process.env.NODE_ENV === 'production' ? 'Production Server' : 'Local Server',
             },
@@ -58,9 +57,39 @@ const swaggerOptions = {
                     bearerFormat: 'JWT',
                 },
             },
+            // ĐỊNH NGHĨA SCHEMAS ĐỂ HẾT LỖI MÀU ĐỎ
+            schemas: {
+                Address: {
+                    type: 'object',
+                    properties: {
+                        receiver_name: { type: 'string', example: 'Võ Duy Toàn' },
+                        receiver_phone: { type: 'string', example: '0901234567' },
+                        province_id: { type: 'integer', example: 79 },
+                        province_name: { type: 'string', example: 'Thành phố Hồ Chí Minh' },
+                        district_id: { type: 'integer', example: 769 },
+                        district_name: { type: 'string', example: 'Quận Thủ Đức' },
+                        ward_code: { type: 'string', example: '26743' },
+                        ward_name: { type: 'string', example: 'Phường Linh Trung' },
+                        detail_address: { type: 'string', example: 'Số 123 đường ABC' },
+                        is_default: { type: 'boolean', example: false },
+                        address_type: { type: 'string', enum: ['home', 'office'], example: 'home' }
+                    }
+                },
+                User: {
+                    type: 'object',
+                    properties: {
+                        full_name: { type: 'string' },
+                        email: { type: 'string' },
+                        phone_number: { type: 'string' },
+                        gender: { type: 'string' },
+                        birthday: { type: 'string', format: 'date' },
+                        avatar_url: { type: 'string' },
+                        address: { type: 'string' }
+                    }
+                }
+            }
         },
     },
-    // Đường dẫn để Swagger quét các chú thích @swagger trong thư mục routes
     apis: ['./routes/**/*.js', './server.js'], 
 };
 
@@ -113,7 +142,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // --- 3. ĐĂNG KÝ ROUTE SWAGGER UI ---
-// Truy cập: http://localhost:5000/api-docs để xem tài liệu
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // 5. LOGGING DEBUG
@@ -139,9 +167,7 @@ app.use((req, res, next) => {
     if (req.url.startsWith('/api')) {
         return res.status(404).json({ message: "API endpoint không tồn tại!" });
     }
-    // Bỏ qua nếu là yêu cầu đến swagger
     if (req.url.startsWith('/api-docs')) return next();
-    
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
