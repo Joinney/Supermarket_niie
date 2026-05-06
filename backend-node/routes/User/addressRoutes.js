@@ -1,5 +1,5 @@
 import express from 'express';
-import jwt from 'jsonwebtoken'; // Bổ sung import jwt
+import jwt from 'jsonwebtoken';
 import pool from '../../configs/database.js';
 import dotenv from 'dotenv';
 
@@ -8,8 +8,14 @@ dotenv.config();
 const router = express.Router();
 
 /**
+ * @swagger
+ * tags:
+ *   name: Addresses
+ *   description: Quản lý địa chỉ giao hàng của người dùng (Yêu cầu đăng nhập)
+ */
+
+/**
  * MIDDLEWARE XÁC THỰC TOKEN
- * Được sửa để hoạt động độc lập trên Backend
  */
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -19,20 +25,31 @@ const verifyToken = (req, res, next) => {
         return res.status(401).json({ success: false, message: "Không tìm thấy Token xác thực!" });
     }
 
-    // Sử dụng Secret Key từ .env
     const secretKey = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
 
     jwt.verify(token, secretKey, (err, decoded) => {
         if (err) {
             return res.status(403).json({ success: false, message: "Token không hợp lệ hoặc đã hết hạn!" });
         }
-        // Map thông tin user từ token vào req.user
         req.user = { id: decoded.id || decoded.sub || decoded.user_id };
         next();
     });
 };
 
-// --- 1. LẤY DANH SÁCH ĐỊA CHỈ ---
+/**
+ * @swagger
+ * /api/addresses:
+ *   get:
+ *     summary: Lấy danh sách địa chỉ của người dùng hiện tại
+ *     tags: [Addresses]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Trả về mảng danh sách địa chỉ thành công
+ *       401:
+ *         description: Chưa đăng nhập (Thiếu Token)
+ */
 router.get('/', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -48,12 +65,46 @@ router.get('/', verifyToken, async (req, res) => {
     }
 });
 
-// --- 2. THÊM ĐỊA CHỈ MỚI ---
+/**
+ * @swagger
+ * /api/addresses:
+ *   post:
+ *     summary: Thêm địa chỉ giao hàng mới
+ *     tags: [Addresses]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               receiver_name:
+ *                 type: string
+ *               receiver_phone:
+ *                 type: string
+ *               province_name:
+ *                 type: string
+ *               district_name:
+ *                 type: string
+ *               ward_name:
+ *                 type: string
+ *               detail_address:
+ *                 type: string
+ *               is_default:
+ *                 type: boolean
+ *               address_type:
+ *                 type: string
+ *                 enum: [home, office]
+ *     responses:
+ *       201:
+ *         description: Thêm địa chỉ thành công
+ */
 router.post('/', verifyToken, async (req, res) => {
     const client = await pool.connect();
     try {
         const userId = req.user.id;
-        // Kiểm tra xem body có rỗng không
         if (!req.body.receiver_name) {
             return res.status(400).json({ success: false, message: "Thiếu thông tin người nhận!" });
         }
@@ -66,7 +117,6 @@ router.post('/', verifyToken, async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Ép kiểu is_default về boolean chuẩn để tránh lỗi DB
         const defaultStatus = is_default === true || is_default === 1;
 
         if (defaultStatus) {
@@ -99,11 +149,34 @@ router.post('/', verifyToken, async (req, res) => {
     }
 });
 
-// --- 3. CẬP NHẬT ĐỊA CHỈ ---
+/**
+ * @swagger
+ * /api/addresses/{id}:
+ *   put:
+ *     summary: Cập nhật thông tin địa chỉ
+ *     tags: [Addresses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Address'
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công
+ */
 router.put('/:id', verifyToken, async (req, res) => {
     const client = await pool.connect();
     try {
-        const addressId = req.params.id; // Bạn đang dùng tên biến này
+        const addressId = req.params.id; 
         const userId = req.user.id;
         const { 
             receiver_name, receiver_phone, province_id, province_name, 
@@ -129,7 +202,7 @@ router.put('/:id', verifyToken, async (req, res) => {
             receiver_name, receiver_phone, province_id, province_name,
             district_id, district_name, ward_code, ward_name, detail_address, 
             is_default, address_type, 
-            addressId, // SỬA TẠI ĐÂY: Đổi address_id thành addressId cho khớp với khai báo phía trên
+            addressId, 
             userId
         ]);
 
@@ -149,7 +222,24 @@ router.put('/:id', verifyToken, async (req, res) => {
     }
 });
 
-// --- 4. XÓA ĐỊA CHỈ ---
+/**
+ * @swagger
+ * /api/addresses/{id}:
+ *   delete:
+ *     summary: Xóa một địa chỉ
+ *     tags: [Addresses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ */
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
         const addressId = req.params.id;
@@ -164,7 +254,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
             return res.status(404).json({ success: false, message: "Không tìm thấy địa chỉ!" });
         }
 
-        // Nếu vừa xóa địa chỉ mặc định, set địa chỉ khác (nếu có) làm mặc định
         if (result.rows[0].is_default) {
             await pool.query(`
                 UPDATE user_addresses 

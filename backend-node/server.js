@@ -7,9 +7,12 @@ import session from 'express-session';
 import passport from 'passport';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import fs from 'fs'; // Thêm fs để tự động tạo thư mục nếu thiếu
+import fs from 'fs';
 
-// Nạp config .env
+// 1. IMPORT SWAGGER LIBRARIES
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+
 dotenv.config();
 
 // --- IMPORT ROUTES ---
@@ -28,20 +31,54 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000; 
 
-// --- TỰ ĐỘNG TẠO THƯ MỤC UPLOADS NẾU CHƯA CÓ ---
+// --- 2. CẤU HÌNH SWAGGER OPTIONS ---
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'Demi Mart API Documentation',
+            version: '1.0.0',
+            description: 'Tài liệu API chính thức cho dự án Ecommerce Supermarket - Demi Mart',
+            contact: {
+                name: 'Demi',
+            },
+        },
+        servers: [
+            {
+                // Tự động nhận diện URL backend từ .env hoặc dùng localhost
+                url: process.env.BACKEND_URL || `http://localhost:${PORT}`,
+                description: process.env.NODE_ENV === 'production' ? 'Production Server' : 'Local Server',
+            },
+        ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                },
+            },
+        },
+    },
+    // Đường dẫn để Swagger quét các chú thích @swagger trong thư mục routes
+    apis: ['./routes/**/*.js', './server.js'], 
+};
+
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+
+// --- TỰ ĐỘNG TẠO THƯ MỤC UPLOADS ---
 const uploadDir = path.join(__dirname, 'public/uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
-    console.log("📁 Đã tạo thư mục public/uploads để lưu ảnh đại diện.");
 }
 
 // 1. CẤU HÌNH CORS
-const allowedOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : [];
+const rawFrontendUrl = process.env.FRONTEND_URL || '';
+const allowedOrigins = rawFrontendUrl.split(',').map(url => url.trim());
+
 app.use(cors({
     origin: function (origin, callback) {
-        // Cho phép các yêu cầu không có origin (như Postman hoặc thiết bị di động)
         if (!origin) return callback(null, true);
-        
         if (allowedOrigins.indexOf(origin) !== -1 || !process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
@@ -75,19 +112,22 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// --- 3. ĐĂNG KÝ ROUTE SWAGGER UI ---
+// Truy cập: http://localhost:5000/api-docs để xem tài liệu
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
 // 5. LOGGING DEBUG
 app.use((req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} -> ${req.url}`);
     next();
 });
 
-// 6. CẤU HÌNH PHỤC VỤ FILE TĨNH (Rất quan trọng để hiện ảnh)
-// Dòng này giúp truy cập ảnh qua: http://localhost:5000/uploads/ten-anh.jpg
+// 6. CẤU HÌNH FILE TĨNH
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- 7. ĐĂNG KÝ CÁC ROUTE API ---
-app.use('/api/profile', profileRoutes); // Khớp với api.get("/profile/hoso") ở Frontend
+app.use('/api/profile', profileRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', forgotRoutes);
 app.use('/api/auth', googleRoutes);
@@ -99,16 +139,19 @@ app.use((req, res, next) => {
     if (req.url.startsWith('/api')) {
         return res.status(404).json({ message: "API endpoint không tồn tại!" });
     }
-    // Chỉ gửi file index.html nếu không phải là yêu cầu API
+    // Bỏ qua nếu là yêu cầu đến swagger
+    if (req.url.startsWith('/api-docs')) return next();
+    
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 9. KHỞI CHẠY SERVER
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server đang rực rỡ tại port: ${PORT}`);
+    console.log(`📝 Swagger UI: http://localhost:${PORT}/api-docs`);
     if (process.env.NODE_ENV !== 'production') {
         const ip = getLocalIp();
-        console.log(`📱 Local IP: http://${ip}:${PORT}`);
+        console.log(`📱 Local IP Swagger: http://${ip}:${PORT}/api-docs`);
     }
 });
 

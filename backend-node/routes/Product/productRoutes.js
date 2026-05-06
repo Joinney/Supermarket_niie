@@ -3,11 +3,61 @@ import { getAllProducts, getProductById } from '../../controllers/Product/produc
 
 const router = express.Router();
 
-// 1. Lấy tất cả sản phẩm cho trang Home
+/**
+ * @swagger
+ * tags:
+ *   name: Products
+ *   description: Quản lý danh sách và chi tiết sản phẩm cho Demi Mart
+ */
+
+/**
+ * @swagger
+ * /api/products/all-products:
+ *   get:
+ *     summary: Lấy danh sách tất cả sản phẩm
+ *     description: API này dùng để lấy dữ liệu hiển thị cho trang Home.
+ *     tags: [Products]
+ *     responses:
+ *       200:
+ *         description: Trả về mảng danh sách sản phẩm thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   ma_san_pham:
+ *                     type: integer
+ *                   ten_san_pham:
+ *                     type: string
+ *                   gia_ban:
+ *                     type: number
+ *       500:
+ *         description: Lỗi hệ thống khi truy vấn database
+ */
 router.get('/all-products', getAllProducts);
 
-// 2. Lấy chi tiết một sản phẩm theo ID cho trang ProductDetail 🚀
-// Lưu ý: Đường dẫn này phải khớp với fetch ở Frontend: /api/products/1
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   get:
+ *     summary: Lấy chi tiết một sản phẩm theo ID
+ *     description: API phục vụ cho trang ProductDetail để hiển thị thông tin cụ thể của từng sản phẩm.
+ *     tags: [Products]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của sản phẩm cần lấy (Ví dụ sản phẩm 1 là Gạo Lứt)
+ *     responses:
+ *       200:
+ *         description: Trả về thông tin chi tiết của sản phẩm
+ *       404:
+ *         description: Không tìm thấy sản phẩm với ID cung cấp
+ */
 router.get('/:id', getProductById); 
 
 export default router;
