@@ -4,13 +4,32 @@ import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// Cổng 1: Kích hoạt chọn tài khoản Google
+/**
+ * @swagger
+ * tags:
+ *   name: Google Auth
+ *   description: Đăng nhập bằng tài khoản Google (OAuth2)
+ */
+
+/**
+ * @swagger
+ * /api/auth/google:
+ *   get:
+ *     summary: Kích hoạt luồng đăng nhập Google
+ *     tags: [Google Auth]
+ */
 router.get('/google', passport.authenticate('google', { 
     scope: ['profile', 'email'],
     prompt: 'select_account' 
 }));
 
-// Cổng 2: Xử lý dữ liệu trả về
+/**
+ * @swagger
+ * /api/auth/google/callback:
+ *   get:
+ *     summary: Tiếp nhận dữ liệu từ Google và điều hướng thông minh về Frontend
+ *     tags: [Google Auth]
+ */
 router.get('/google/callback/', 
     passport.authenticate('google', { failureRedirect: '/login', session: true }),
     (req, res) => {
@@ -32,26 +51,38 @@ router.get('/google/callback/',
                 role: user.role
             };
 
-            // 3. XỬ LÝ REDIRECT THÔNG MINH (Chống lỗi Not Found)
-            // Lấy URL Frontend, ưu tiên Render, nếu không có thì dùng localhost
-            let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            // 3. XỬ LÝ REDIRECT THÔNG MINH (Sửa lỗi NXDOMAIN)
+            const rawUrls = process.env.FRONTEND_URL || 'http://localhost:5173';
             
-            // Xóa dấu gạch chéo '/' ở cuối nếu có để tránh lỗi double slash (//)
+            // Tách các URL cách nhau bởi dấu phẩy thành mảng và xóa khoảng trắng
+            const allowedOrigins = rawUrls.split(',').map(url => url.trim());
+
+            /**
+             * LOGIC CHỌN URL:
+             * - Nếu server đang chạy ở localhost, ưu tiên chọn link localhost từ danh sách.
+             * - Nếu không (đang chạy trên Render), chọn link đầu tiên (thường là link Render).
+             */
+            const isLocalhost = req.get('host').includes('localhost');
+            let frontendUrl = isLocalhost 
+                ? (allowedOrigins.find(url => url.includes('localhost')) || allowedOrigins[0])
+                : allowedOrigins[0];
+
+            // Xử lý chuẩn hóa URL (Xóa dấu / cuối cùng)
             frontendUrl = frontendUrl.replace(/\/$/, "");
 
             // Tạo chuỗi Redirect chuẩn
             const queryParams = `token=${token}&user=${encodeURIComponent(JSON.stringify(userData))}`;
             const redirectUrl = `${frontendUrl}/?${queryParams}`;
             
-            console.log("==> ✅ Auth Success! Redirecting to:", redirectUrl);
+            console.log(`[${isLocalhost ? 'LOCAL' : 'RENDER'}] Redirecting to:`, redirectUrl);
             
-            // Chốt hạ: Vút về trang chủ
             res.redirect(redirectUrl);
 
         } catch (error) {
             console.error("❌ Lỗi Redirect sau Google Login:", error);
-            // Link fail cũng phải linh động môi trường
-            const fallbackUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, "");
+            // Fallback an toàn khi có lỗi
+            const rawUrls = process.env.FRONTEND_URL || 'http://localhost:5173';
+            const fallbackUrl = rawUrls.split(',')[0].trim().replace(/\/$/, "");
             res.redirect(`${fallbackUrl}/login?error=auth_failed`);
         }
     }
