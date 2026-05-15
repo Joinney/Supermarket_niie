@@ -9,7 +9,7 @@ import {
 
 // --- CẤU HÌNH API ---
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = isLocalhost ? 'http://localhost:5000' : 'https://ecommerce-supermarket-k691.onrender.com';
+const API_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://ecommerce-supermarket-k691.onrender.com';
 
 const api = axios.create({
     baseURL: `${API_BASE_URL}/api`,
@@ -36,16 +36,20 @@ export default function App() {
   // --- STATE QUẢN LÝ MODAL ĐỊA CHỈ ---
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState(null); 
-  const [addressForm, setAddressForm] = useState({
-    receiver_name: "",
-    receiver_phone: "",
-    province_name: "",
-    district_name: "",
-    ward_name: "",
-    detail_address: "",
-    is_default: false,
-    address_type: "home"
-  });
+ // Cập nhật state addressForm trong Profile.jsx
+const [addressForm, setAddressForm] = useState({
+  receiver_name: "",
+  receiver_phone: "",
+  province_name: "",
+  province_id: "", // Thêm trường này
+  district_name: "",
+  district_id: "", // Thêm trường này
+  ward_name: "",
+  ward_id: "",     // Thêm trường này
+  detail_address: "",
+  is_default: false,
+  address_type: "home"
+});
 
   // --- STATE QUẢN LÝ TAB BẢO MẬT (BỔ SUNG) ---
   const [securityStep, setSecurityStep] = useState("verify-password"); // verify-password, forgot-password, otp-verify, reset-password

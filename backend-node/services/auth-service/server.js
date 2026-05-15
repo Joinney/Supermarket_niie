@@ -17,7 +17,10 @@ import './configs/Auth/passport.js';
 import authRoutes from "./routes/authRoutes.js"; 
 import forgotRoutes from "./routes/ForgotRoutes.js";
 import googleRoutes from './routes/GoogleRoutes.js';
+import profileRoutes from './routes/profileRoutes.js';
+import addressRoutes from './routes/addressRoutes.js';  
 
+// Initialize app and port
 const app = express();
 const PORT = process.env.PORT_AUTH || 5001; 
 
@@ -97,7 +100,8 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', forgotRoutes);
 app.use('/api/auth/google', googleRoutes);
-
+app.use('/api/profile', profileRoutes);
+app.use('/api/addresses', addressRoutes);
 // 7. Xử lý lỗi 404 & Lỗi hệ thống
 app.use((req, res) => {
     res.status(404).json({ success: false, message: "Route này không tồn tại trên Demi Auth Service!" });
