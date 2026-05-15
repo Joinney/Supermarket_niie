@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  # 1. Cơ sở dữ liệu (Vẫn giữ để kết nối nội bộ hoặc backup)
+  # 1. Database (Cơ sở dữ liệu Postgres)
   db:
     image: postgres:15-alpine
     container_name: vdt_supermarket_db
@@ -13,44 +11,78 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - demi_network
+    restart: always
 
-  # 2. Redis (Cache giỏ hàng)
+  # 2. Redis (Dùng để Cache)
   cache:
     image: redis:6-alpine
     container_name: demi_redis
     ports:
       - "6379:6379"
+    networks:
+      - demi_network
+    restart: always
 
-  # 3. Backend (Đóng gói Node.js)
-  backend:
-    build: ./backend-node
-    container_name: vdt_backend
-    env_file: .env
+  # 3. AUTH SERVICE (Cổng 5001)
+  auth-service:
+    build: ./backend-node/services/auth-service
+    container_name: demi_auth_service
+    ports:
+      - "5001:5001"
+    env_file: 
+      - ./backend-node/services/auth-service/.env
     depends_on:
       - db
       - cache
-    # Khi chạy trong Docker, Backend sẽ gọi DB qua tên service 'db' hoặc 'host.docker.internal' cho Render
+    networks:
+      - demi_network
+    restart: on-failure
 
-  # 4. Frontend (Đóng gói React/Vite)
+  # 4. PRODUCT SERVICE (Cổng 5002)
+  product-service:
+    build: ./backend-node/services/product-service
+    container_name: demi_product_service
+    ports:
+      - "5002:5002"
+    env_file: 
+      - ./backend-node/services/product-service/.env
+    depends_on:
+      - db
+    networks:
+      - demi_network
+    restart: on-failure
+
+  # 5. Frontend (Giao diện React/Vite)
   frontend:
     build: ./frontend-web
     container_name: vdt_frontend
-    environment:
-      - VITE_API_URL=http://localhost/api
-    depends_on:
-      - backend
-
-  # 5. Nginx (Điều phối toàn bộ hệ thống)
-  nginx:
-    image: nginx:alpine
-    container_name: vdt_nginx
     ports:
-      - "80:80"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - "5173:5173" # ✅ SỬA LẠI THÀNH 5173 ĐỂ KHỚP VỚI VITE
     depends_on:
-      - frontend
-      - backend
+      - auth-service
+      - product-service
+    networks:
+      - demi_network
+    restart: always
+
+  # 6. Uptime Kuma (Mắt thần giám sát)
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: demi_monitoring
+    ports:
+      - "3001:3001"
+    volumes:
+      - kuma_data:/app/data
+    networks:
+      - demi_network
+    restart: always
+
+networks:
+  demi_network:
+    driver: bridge
 
 volumes:
   pgdata:
+  kuma_data:

@@ -66,18 +66,20 @@ const AppRoutes = () => {
   return (
     <Router>
       <Routes>
-        {/* Nhóm các trang có Header/Footer/Sidebar */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           
-          {/* CẤU TRÚC URL MỚI CỦA DEMI: Quốc gia / product / Danh mục / ID */}
-          <Route path="/:country_code/product/:category_slug/:id" element={<ProductDetail />} />
+          {/* --- SỬA DÒNG NÀY --- */}
+          {/* Thêm /:variantId? để khớp cả khi có SKU biến thể */}
+          <Route 
+            path="/:country_code/product/:category_slug/:id/:variantId?" 
+            element={<ProductDetail />} 
+          />
           
           <Route path="/cart" element={<Cart />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
 
-        {/* Nhóm các trang Auth */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
@@ -87,7 +89,6 @@ const AppRoutes = () => {
     </Router>
   );
 };
-
 /**
  * 4. FINAL APP
  */

@@ -1,7 +1,13 @@
 import { useState, useContext, useId } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, User, Phone, MapPin, Calendar, ArrowRight, CheckCircle2, Users, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, Phone, MapPin, Calendar, ArrowRight, Users, ArrowLeft } from "lucide-react";
+
+/**
+ * QUAN TRỌNG: Import instance axios đã cấu hình.
+ * Dựa trên cấu trúc của Demi, file này nằm tại src/api/axios.js
+ */
+import api from "../../api/axios"; 
 
 export default function Signup() {
     const baseId = useId();
@@ -9,7 +15,15 @@ export default function Signup() {
     const { register } = useContext(AuthContext);
 
     const [formData, setFormData] = useState({
-        username: "", password: "", email: "", full_name: "", phone: "", gender: "Nam", birth_date: "", address: "", confirmPassword: ""
+        username: "", 
+        password: "", 
+        email: "", 
+        full_name: "", 
+        phone: "", 
+        gender: "Nam", 
+        birth_date: "", 
+        address: "", 
+        confirmPassword: ""
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -22,12 +36,46 @@ export default function Signup() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
-        if (formData.password !== formData.confirmPassword) return setError("Mật khẩu xác nhận không khớp!");
+
+        // 1. Kiểm tra mật khẩu khớp nhau
+        if (formData.password !== formData.confirmPassword) {
+            return setError("Mật khẩu xác nhận không khớp!");
+        }
+
         setLoading(true);
-        const result = await register(formData);
-        if (result.success) { navigate("/login"); } 
-        else { setError(result.message); }
-        setLoading(false);
+        
+        try {
+            /**
+             * 2. CHUẨN HÓA DỮ LIỆU:
+             * Dùng 'full_name' để khớp hoàn toàn với Backend (Postman đã thông).
+             */
+            const payload = {
+                username: formData.username,
+                email: formData.email,
+                password: formData.password,
+                full_name: formData.full_name, 
+                phone: formData.phone,
+                address: formData.address,
+                gender: formData.gender,
+                birth_date: formData.birth_date
+            };
+
+            // 3. GỌI API: POST http://localhost:5001/api/auth/signup
+            const response = await api.post('/auth/signup', payload);
+
+            if (response.data.success || response.status === 201) {
+                alert("Chúc mừng Demi đã đăng ký thành công! 🎉");
+                navigate("/login");
+            } else {
+                setError(response.data.message || "Đăng ký không thành công.");
+            }
+        } catch (err) {
+            console.error("🔥 Lỗi Sign up:", err);
+            // Hiển thị thông báo lỗi cụ thể từ Backend (ví dụ: Email đã tồn tại)
+            setError(err.response?.data?.message || err.response?.data?.error || "Lỗi kết nối đến server Demi Mart.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -85,7 +133,11 @@ export default function Signup() {
                         <p className="text-slate-500 font-medium text-xs xl:text-sm text-left">Thành viên hệ thống Demi Mart</p>
                     </header>
 
-                    {error && <div className="p-2 bg-red-50 text-red-600 rounded-xl text-center text-xs font-bold">⚠️ {error}</div>}
+                    {error && (
+                        <div className="p-2 bg-red-50 text-red-600 rounded-xl text-center text-xs font-bold animate-shake">
+                            ⚠️ {error}
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-3 xl:space-y-4">
                         <div className="grid grid-cols-2 gap-3 xl:gap-4">
@@ -115,7 +167,7 @@ export default function Signup() {
                                 <input name="birth_date" type="date" value={formData.birth_date} onChange={handleChange} required className="demi-input" />
                             </InputGroup>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-widest ml-1">Giới tính</label>
+                                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-widest ml-1 block">Giới tính</label>
                                 <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-2 xl:py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-[#006c49] text-sm xl:text-base appearance-none cursor-pointer text-slate-900">
                                     <option value="Nam">Nam</option>
                                     <option value="Nữ">Nữ</option>
@@ -133,11 +185,21 @@ export default function Signup() {
                             </InputGroup>
                         </div>
 
-                        <button disabled={loading} className="w-full bg-[#006c49] hover:bg-[#004d34] text-white py-3.5 xl:py-4.5 rounded-xl font-bold text-sm xl:text-lg shadow-lg active:scale-[0.98] transition-all uppercase mt-2 flex items-center justify-center gap-2">
-                            {loading ? "..." : <>Đăng ký ngay <ArrowRight size={20} /></>}
+                        <button 
+                            disabled={loading} 
+                            type="submit"
+                            className="w-full bg-[#006c49] hover:bg-[#004d34] text-white py-3.5 xl:py-4.5 rounded-xl font-bold text-sm xl:text-lg shadow-lg active:scale-[0.98] transition-all uppercase mt-2 flex items-center justify-center gap-2 disabled:opacity-70"
+                        >
+                            {loading ? (
+                                <span className="animate-pulse">Đang đăng ký...</span>
+                            ) : (
+                                <>Đăng ký ngay <ArrowRight size={20} /></>
+                            )}
                         </button>
                     </form>
-                    <p className="text-center text-xs xl:text-sm text-slate-400 font-medium">Already have account? <Link to="/login" className="text-[#006c49] font-black hover:underline">Sign In</Link></p>
+                    <p className="text-center text-xs xl:text-sm text-slate-400 font-medium">
+                        Already have account? <Link to="/login" className="text-[#006c49] font-black hover:underline">Sign In</Link>
+                    </p>
                 </div>
             </section>
 
@@ -148,7 +210,7 @@ export default function Signup() {
                     padding-right: 1rem; 
                     padding-top: 0.65rem; 
                     padding-bottom: 0.65rem; 
-                    background-color: white; /* Đã đổi sang màu trắng */
+                    background-color: white; 
                     border: 1px solid #e2e8f0; 
                     border-radius: 0.8rem; 
                     outline: none; 
@@ -171,8 +233,10 @@ export default function Signup() {
                         border-radius: 1rem; 
                     } 
                 }
-                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                .animate-fadeIn { animation: fadeIn 0.8s ease-in-out forwards; }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                .animate-fadeIn { animation: fadeIn 0.6s ease-out forwards; }
+                @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+                .animate-shake { animation: shake 0.2s ease-in-out 0s 2; }
             `}} />
         </div>
     );

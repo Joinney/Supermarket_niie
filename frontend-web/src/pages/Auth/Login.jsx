@@ -66,7 +66,7 @@ export default function Login() {
         setLoading(true);
         // Xóa rác trước khi qua Google để tránh xung đột session
         localStorage.clear();
-        const apiBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+        const apiBaseUrl = import.meta.env.VITE_API_AUTH_URL || "http://localhost:5001";
         setTimeout(() => {
             window.location.href = `${apiBaseUrl}/api/auth/google`;
         }, 500);

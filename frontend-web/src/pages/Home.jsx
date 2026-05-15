@@ -89,12 +89,13 @@ export default function Home() {
     window.scrollTo(0, 0);
     
     // Sử dụng biến môi trường hoặc mặc định localhost 5000
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
 
-    const fetchProducts = async () => {
+   const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/products/all-products?limit=12`);
+        // SỬA DÒNG NÀY: Bỏ đoạn "/all-products" đi vì API của Demi chỉ là /api/products
+        const response = await fetch(`${API_BASE_URL}/api/products?limit=12`);
         
         if (!response.ok) throw new Error("Không thể kết nối đến máy chủ Demi Mart");
         
@@ -110,7 +111,7 @@ export default function Home() {
     };
 
     fetchProducts();
-  }, []);
+}, []);
 
   return (
     <div className="space-y-12 pb-20 bg-white font-sans pt-[10px]">

@@ -1,0 +1,28 @@
+{
+  "name": "ecommerce_supermarket",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/Joinney/Ecommerce_supermarket.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://gitlab.com/Joinney/Ecommerce_supermarket/issues"
+  },
+  "homepage": "https://gitlab.com/Joinney/Ecommerce_supermarket#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0"
+  }
+}
