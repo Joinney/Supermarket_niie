@@ -5,7 +5,7 @@ const isLocalhost = window.location.hostname === 'localhost' || window.location.
 const api = axios.create({
     baseURL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? 'http://localhost:5001/api'  // Nếu bạn đang ngồi trước máy code
-        : 'https://ecommerce-supermarket-k691.onrender.com/api', // Nếu đã deploy lên Render
+        : 'https://authservice-sz4p.onrender.com/api', // Nếu đã deploy lên Render
     withCredentials: true 
 });
 
