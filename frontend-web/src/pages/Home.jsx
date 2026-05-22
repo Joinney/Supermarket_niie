@@ -6,43 +6,39 @@ import { ChevronRight, ArrowRight, Star, QrCode, Plus, Zap, AlertCircle } from '
  * --- COMPONENT CON: THẺ SẢN PHẨM ---
  */
 const ProductCard = ({ p }) => {
-  // 1. Logic lấy ảnh: Ưu tiên ảnh chính
-  const mainImage = p.media?.find(m => m.la_anh_chinh)?.duong_dan_url 
-                 || p.media?.[0]?.duong_dan_url 
-                 || "https://via.placeholder.com/300";
+  // 1. Logic lấy ảnh an toàn (Nếu không có link thì dùng ảnh mặc định)
+  const defaultImage = "https://placehold.co/300x300?text=Demi+Mart";
+  const mainImage = p.hinh_anh_chinh || defaultImage;
 
-  // 2. Lấy thông tin giá từ biến thể đầu tiên
-  const variant = p.bien_the?.[0];
-  const currentPrice = variant?.gia_khuyen_mai || variant?.gia_ban_le || 0;
-  const originalPrice = variant?.gia_khuyen_mai ? variant?.gia_ban_le : null;
+  // 2. Xử lý giá tiền an toàn (Đảm bảo luôn là số để toLocaleString không bị lỗi)
+  const currentPrice = Number(p.gia_ban_thap_nhat) || 0;
+  const originalPrice = null; 
 
-  // 3. CHUẨN HÓA DỮ LIỆU URL (Mới)
-  // Lấy country_code và slug_danh_muc từ API (đã được JOIN trong SQL)
-  // Nếu dữ liệu null, sử dụng giá trị mặc định để tránh lỗi vỡ Link
+  // 3. CHUẨN HÓA DỮ LIỆU URL
   const country = p.country_code || 'vn'; 
   const category = p.slug_danh_muc || 'san-pham';
 
+  // 4. Lấy tồn kho
+  const stockCount = p.tong_ton_kho || 0;
+
   return (
-    // CẬP NHẬT: URL theo cấu trúc /:country/product/:category/:id
     <Link to={`/${country}/product/${category}/${p.ma_san_pham}`} className="flex-shrink-0">
       <div className="w-[170px] md:w-[210px] group cursor-pointer font-sans bg-white p-2 rounded-[32px] hover:shadow-2xl hover:shadow-slate-100 transition-all duration-500 border border-transparent hover:border-slate-50">
         <div className="relative aspect-square bg-[#f8fafc] rounded-[24px] overflow-hidden mb-3 border border-slate-50 group-hover:border-[#e6f0ed] transition-all">
-          {variant?.la_ban_chay && (
-            <span className="absolute top-0 left-0 bg-[#ff4d4f] text-white text-[9px] font-black px-2 py-1 rounded-br-xl z-10 uppercase tracking-wider shadow-sm">
-              HOT
-            </span>
-          )}
           <img 
             src={mainImage} 
             loading="lazy"
+            // THÊM SỰ KIỆN NÀY: Nếu link ảnh từ DB bị chết/lỗi tải, tự động thay bằng ảnh mặc định
+            onError={(e) => { e.target.src = defaultImage; }}
             className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition duration-500 p-4" 
-            alt={p.ten_san_pham} 
+            alt={p.ten_san_pham || "Sản phẩm Demi"} 
           />
           <button 
             className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
             onClick={(e) => {
               e.preventDefault();
               // Logic thêm vào giỏ hàng
+              console.log("Thêm vào giỏ:", p.ma_san_pham);
             }}
           >
             <Plus size={20} strokeWidth={3} />
@@ -51,7 +47,7 @@ const ProductCard = ({ p }) => {
         <div className="space-y-1">
           <div className="flex items-baseline gap-2">
             <span className="text-[#ff4d4f] font-black text-lg leading-none">
-              {Number(currentPrice).toLocaleString()}đ
+              {currentPrice.toLocaleString()}đ
             </span>
             {originalPrice && (
               <span className="text-slate-400 text-[10px] line-through font-bold">
@@ -69,7 +65,7 @@ const ProductCard = ({ p }) => {
             </span>
           </div>
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">
-            KHO: {variant?.so_luong_kho || 0}
+            KHO: {stockCount}
           </p>
         </div>
       </div>
