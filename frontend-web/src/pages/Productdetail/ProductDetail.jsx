@@ -5,6 +5,7 @@ import {
   Minus, Plus, ChevronRight, CreditCard
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { productApi } from '../../api/axios';
 
 export default function ProductDetail() {
   const { country, category, id, variantId } = useParams();
@@ -18,7 +19,6 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Kiểm tra ID an toàn
     if (!id || id === 'undefined') {
       setLoading(false);
       return;
@@ -26,23 +26,23 @@ export default function ProductDetail() {
 
     window.scrollTo(0, 0);
     setLoading(true);
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
-    
-    fetch(`${API_BASE_URL}/api/products/${id}`)
-      .then(res => res.json())
-      .then(data => {
+
+    // DÙNG productApi thay vì fetch thủ công
+    productApi.get(`/products/${id}`)
+      .then(res => {
+        const data = res.data; // Axios trả về trong .data
         const productData = Array.isArray(data) ? data[0] : data;
+        
         if (productData && productData.ma_san_pham) {
           setProduct(productData);
           
-          // 2. Tìm biến thể (từ URL hoặc mặc định)
+          // Logic chọn biến thể giữ nguyên
           const targetVariant = productData.bien_the?.find(v => v.ma_bien_the === variantId) || 
                                 productData.bien_the?.find(v => v.la_ban_chay) || 
                                 productData.bien_the?.[0];
           
           setSelectedVariant(targetVariant);
           
-          // 3. Tìm ảnh tương ứng
           const variantMedia = productData.media?.find(m => m.ma_bien_the === targetVariant?.ma_bien_the);
           setMainMedia(variantMedia || productData.media?.find(m => m.la_anh_chinh) || productData.media?.[0]);
         } else {
@@ -54,7 +54,7 @@ export default function ProductDetail() {
         console.error("Error fetching product:", error);
         setLoading(false);
       });
-  }, [id]); // CHỈ lặp khi mã sản phẩm thay đổi
+  }, [id]);
 
   const handleVariantClick = (v) => {
     setSelectedVariant(v);
