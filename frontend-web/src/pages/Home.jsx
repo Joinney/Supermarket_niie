@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ArrowRight, Star, QrCode, Plus, Zap, AlertCircle } from 'lucide-react';
-
+import { productApi } from '../api/axios'; // PHẢI LÀ productApi
 /**
  * --- COMPONENT CON: THẺ SẢN PHẨM ---
  */
@@ -83,31 +83,30 @@ export default function Home() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    
-    // Sử dụng biến môi trường hoặc mặc định localhost 5000
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002';
 
-   const fetchProducts = async () => {
+    const fetchProducts = async () => {
       try {
         setLoading(true);
-        // SỬA DÒNG NÀY: Bỏ đoạn "/all-products" đi vì API của Demi chỉ là /api/products
-        const response = await fetch(`${API_BASE_URL}/api/products?limit=12`);
+        // SỬ DỤNG productApi thay cho fetch thủ công
+        // Nó sẽ tự động dùng baseURL của Product Service đã cấu hình trong api/axios.js
+        const response = await productApi.get('/products?limit=12');
         
-        if (!response.ok) throw new Error("Không thể kết nối đến máy chủ Demi Mart");
-        
-        const data = await response.json();
-        setApiProducts(data);
+        // Axios trả về dữ liệu trong thuộc tính .data
+        setApiProducts(response.data);
         setError(null);
       } catch (err) {
-        console.error("Lỗi API:", err);
-        setError(err.message);
+        console.error("Lỗi API sản phẩm:", err);
+        // Lấy thông báo lỗi từ response nếu có, hoặc dùng thông báo mặc định
+        setError(err.response?.data?.message || "Không thể kết nối đến máy chủ Sản phẩm");
       } finally {
         setLoading(false);
       }
     };
 
     fetchProducts();
-}, []);
+  }, []);
+
+  // ... phần còn lại của return giữ nguyên
 
   return (
     <div className="space-y-12 pb-20 bg-white font-sans pt-[10px]">
