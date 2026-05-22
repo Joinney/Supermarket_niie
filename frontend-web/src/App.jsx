@@ -69,15 +69,17 @@ const AppRoutes = () => {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           
-          {/* --- SỬA DÒNG NÀY --- */}
-          {/* Thêm /:variantId? để khớp cả khi có SKU biến thể */}
           <Route 
             path="/:country_code/product/:category_slug/:id/:variantId?" 
             element={<ProductDetail />} 
           />
           
           <Route path="/cart" element={<Cart />} />
-          <Route path="/profile" element={<Profile />} />
+          
+          {/* --- SỬA DÒNG NÀY --- */}
+          {/* Thêm /:tab? vào sau /profile để khớp với /profile/address, /profile/orders... */}
+          <Route path="/profile/:tab?" element={<Profile />} />
+
         </Route>
 
         <Route element={<AuthLayout />}>

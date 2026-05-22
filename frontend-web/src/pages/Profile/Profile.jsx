@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext } from "react";
+// 1. IMPORT THÊM useNavigate VÀ useParams TỪ REACT-ROUTER-DOM
+import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { AuthContext } from "../../context/AuthContext"; 
 import { 
-  User, Mail, Phone, MapPin, Camera, Edit2, CheckCircle2, Lock, Heart, 
-  ChevronRight, Clock, Package, ShoppingBag, ShieldCheck, CreditCard, 
-  Star, Wallet, Ticket, Bell, Settings, Eye, History, Zap, Award, Trash2, X, Plus, Info, Menu, Search, Filter
+  User, Mail, Phone, MapPin, Camera, CheckCircle2, Lock, Heart, 
+  ChevronRight, Clock, Package, ShieldCheck, CreditCard, 
+  Star, Wallet, Ticket, Bell, Eye, History, Zap, Award, X, Plus
 } from "lucide-react";
 
 // --- CẤU HÌNH API ---
@@ -24,11 +26,15 @@ api.interceptors.request.use((config) => {
     return config;
 }, (error) => Promise.reject(error));
 
-export default function App() {
+export default function ProfilePage() {
   const { user: authUser, updateUser } = useContext(AuthContext);
+  
+  // 2. KHỞI TẠO HOOK ROUTER ĐỂ CHUYỂN LINK
+  const navigate = useNavigate();
+  const { tab } = useParams();
 
   const [profile, setProfile] = useState(null); 
-  const [addresses, setAddresses] = useState([]); // State lưu danh sách địa chỉ thật
+  const [addresses, setAddresses] = useState([]);
   const [activeTab, setActiveTab] = useState("profile");
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
   const [loading, setLoading] = useState(true);
@@ -36,29 +42,49 @@ export default function App() {
   // --- STATE QUẢN LÝ MODAL ĐỊA CHỈ ---
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState(null); 
- // Cập nhật state addressForm trong Profile.jsx
-const [addressForm, setAddressForm] = useState({
-  receiver_name: "",
-  receiver_phone: "",
-  province_name: "",
-  province_id: "", // Thêm trường này
-  district_name: "",
-  district_id: "", // Thêm trường này
-  ward_name: "",
-  ward_id: "",     // Thêm trường này
-  detail_address: "",
-  is_default: false,
-  address_type: "home"
-});
+  const [addressForm, setAddressForm] = useState({
+    receiver_name: "", receiver_phone: "",
+    province_name: "", province_id: "", 
+    district_name: "", district_id: "", 
+    ward_name: "", ward_id: "",    
+    detail_address: "", is_default: false, address_type: "home"
+  });
 
-  // --- STATE QUẢN LÝ TAB BẢO MẬT (BỔ SUNG) ---
-  const [securityStep, setSecurityStep] = useState("verify-password"); // verify-password, forgot-password, otp-verify, reset-password
+  // --- STATE QUẢN LÝ TAB BẢO MẬT ---
+  const [securityStep, setSecurityStep] = useState("verify-password"); 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
 
-  // 1. TỰ ĐỘNG LẤY DỮ LIỆU HỒ SƠ TỪ DATABASE
+  // 3. THÊM THUỘC TÍNH 'path' CHO TỪNG TAB TRONG MENU
+  const mobileTabs = [
+    { id: "profile", path: "", label: "Hồ sơ", icon: <User size={14}/> },
+    { id: "notifications", path: "notifications", label: "Thông báo", icon: <Bell size={14}/> },
+    { id: "addresses", path: "address", label: "Địa chỉ", icon: <MapPin size={14}/> }, // path là 'address' -> /profile/address
+    { id: "security", path: "security", label: "Bảo mật", icon: <Lock size={14}/> },
+    { id: "orders", path: "orders", label: "Đơn hàng", icon: <Package size={14}/> },
+    { id: "vouchers", path: "vouchers", label: "Voucher", icon: <Ticket size={14}/> },
+    { id: "favorites", path: "favorites", label: "Đã thích", icon: <Heart size={14}/> },
+  ];
+
+  const menuGroups = [
+    { title: "Cá nhân", items: mobileTabs.slice(0, 4) },
+    { title: "Mua sắm", items: mobileTabs.slice(4) }
+  ];
+
+  // 4. TỰ ĐỘNG ĐỔI TAB DỰA VÀO URL TRÊN TRÌNH DUYỆT
+  useEffect(() => {
+    // Tìm tab khớp với url hiện tại (nếu url là /profile thì tab sẽ là undefined -> gán là "")
+    const currentTab = mobileTabs.find(t => t.path === (tab || ""));
+    if (currentTab) {
+      setActiveTab(currentTab.id);
+    } else {
+      setActiveTab("profile");
+    }
+  }, [tab]);
+
+  // TỰ ĐỘNG LẤY DỮ LIỆU HỒ SƠ TỪ DATABASE
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -76,7 +102,7 @@ const [addressForm, setAddressForm] = useState({
     fetchProfile();
   }, []);
 
-  // 2. TỰ ĐỘNG LẤY ĐỊA CHỈ KHI CHUYỂN SANG TAB ĐỊA CHỈ
+  // TỰ ĐỘNG LẤY ĐỊA CHỈ KHI CHUYỂN SANG TAB ĐỊA CHỈ
   useEffect(() => {
     if (activeTab === "addresses") {
       fetchAddresses();
@@ -94,13 +120,15 @@ const [addressForm, setAddressForm] = useState({
     }
   };
 
-  // --- LOGIC XỬ LÝ MODAL ---
+  // --- LOGIC XỬ LÝ MODAL (ĐÃ THÊM MẶC ĐỊNH ID = 1 ĐỂ SỬA LỖI DATABASE) ---
   const handleOpenAddModal = () => {
     setEditingAddressId(null);
     setAddressForm({
       receiver_name: profile?.full_name || "",
       receiver_phone: profile?.phone_number || "",
-      province_name: "", district_name: "", ward_name: "",
+      province_name: "", province_id: 1, 
+      district_name: "", district_id: 1, 
+      ward_name: "", ward_id: 1,
       detail_address: "", is_default: addresses.length === 0, address_type: "home"
     });
     setIsAddressModalOpen(true);
@@ -108,14 +136,27 @@ const [addressForm, setAddressForm] = useState({
 
   const handleOpenEditModal = (addr) => {
     setEditingAddressId(addr.address_id);
-    setAddressForm({ ...addr, is_default: Boolean(addr.is_default) });
+    setAddressForm({ 
+      ...addr, 
+      ward_id: addr.ward_code || 1, // Fix lỗi lệch tên cột ward_code
+      province_id: addr.province_id || 1,
+      district_id: addr.district_id || 1,
+      is_default: Boolean(addr.is_default) 
+    });
     setIsAddressModalOpen(true);
   };
 
   const handleSaveAddress = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...addressForm, is_default: addressForm.is_default ? 1 : 0 };
+      // Ép kiểu ID trước khi gửi
+      const payload = { 
+        ...addressForm, 
+        is_default: addressForm.is_default ? 1 : 0,
+        province_id: addressForm.province_id || 1,
+        district_id: addressForm.district_id || 1,
+        ward_id: addressForm.ward_id || 1
+      };
       
       const res = editingAddressId 
         ? await api.put(`/addresses/${editingAddressId}`, payload)
@@ -158,7 +199,7 @@ const [addressForm, setAddressForm] = useState({
     } catch (error) { showToast("Lỗi khi xóa", "error"); }
   };
 
-  // 3. HÀM LƯU THÔNG TIN HỒ SƠ
+  // HÀM LƯU THÔNG TIN HỒ SƠ
   const handleSaveProfile = async () => {
     try {
       const response = await api.put("/profile/hoso", profile);
@@ -173,7 +214,7 @@ const [addressForm, setAddressForm] = useState({
     }
   };
 
-  // 4. HÀM UPLOAD ẢNH ĐẠI DIỆN
+  // HÀM UPLOAD ẢNH ĐẠI DIỆN
   const handleAvatarChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -197,7 +238,7 @@ const [addressForm, setAddressForm] = useState({
     }
   };
 
-  // --- LOGIC BẢO MẬT ĐA BƯỚC (BỔ SUNG) ---
+  // --- LOGIC BẢO MẬT ĐA BƯỚC ---
   const handleVerifyCurrentPassword = async () => {
     try {
       const res = await api.post("/profile/verify-password", { password: currentPassword });
@@ -239,23 +280,19 @@ const handleResetPassword = async () => {
   
   try {
     let res;
-    // KIỂM TRA LUỒNG:
     if (otpCode) {
-      // LUỒNG 1: Quên mật khẩu (Có mã OTP) -> Gọi API Auth
       res = await api.post("/auth/reset-password", { 
         email: profile.email, 
         otp: otpCode, 
         newPassword 
       });
     } else {
-      // LUỒNG 2: Đổi mật khẩu trực tiếp (Vừa xác thực pass cũ xong) -> Gọi API Profile mới
       res = await api.put("/profile/change-password", { newPassword });
     }
 
     if (res.data.success) {
       showToast("Đổi mật khẩu thành công!");
       setSecurityStep("verify-password");
-      // Reset form
       setNewPassword(""); setConfirmNewPassword(""); setOtpCode(""); setCurrentPassword("");
     }
   } catch (err) {
@@ -283,21 +320,6 @@ const handleResetPassword = async () => {
 
   const orders = [
     { id: "DM1002", date: "22/10/2023", total: "450.000đ", status: "Đã giao", items: ["Táo Envy Mỹ", "Sữa tươi TH"], img: "https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=100" },
-  ];
-
-  const mobileTabs = [
-    { id: "profile", label: "Hồ sơ", icon: <User size={14}/> },
-    { id: "notifications", label: "Thông báo", icon: <Bell size={14}/> },
-    { id: "addresses", label: "Địa chỉ", icon: <MapPin size={14}/> },
-    { id: "security", label: "Bảo mật", icon: <Lock size={14}/> },
-    { id: "orders", label: "Đơn hàng", icon: <Package size={14}/> },
-    { id: "vouchers", label: "Voucher", icon: <Ticket size={14}/> },
-    { id: "favorites", label: "Đã thích", icon: <Heart size={14}/> },
-  ];
-
-  const menuGroups = [
-    { title: "Cá nhân", items: mobileTabs.slice(0, 4) },
-    { title: "Mua sắm", items: mobileTabs.slice(4) }
   ];
 
   const orderSteps = [
@@ -435,7 +457,8 @@ const handleResetPassword = async () => {
                   {group.items.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => setActiveTab(item.id)}
+                      // 5. THAY ĐỔI URL KHI BẤM SIDEBAR
+                      onClick={() => navigate(item.path ? `/profile/${item.path}` : '/profile')}
                       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all ${activeTab === item.id ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}
                     >
                       <span className={activeTab === item.id ? "text-white" : "text-slate-300"}>{item.icon}</span>
@@ -484,11 +507,13 @@ const handleResetPassword = async () => {
               </div>
             </div>
 
+            {/* TAB NGANG MOBILE */}
             <div className="md:hidden bg-[#f0f2f5] py-2 px-4 flex overflow-x-auto no-scrollbar gap-2 sticky top-[73px] z-[90]">
               {mobileTabs.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  // 6. THAY ĐỔI URL KHI BẤM MENU MOBILE
+                  onClick={() => navigate(item.path ? `/profile/${item.path}` : '/profile')}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase transition-all border shadow-sm ${activeTab === item.id ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}
                 >
                   {item.icon} {item.label}
@@ -653,10 +678,9 @@ const handleResetPassword = async () => {
                   </div>
                 )}
 
-              {/* --- TAB BẢO MẬT: ĐA BƯỚC (BỔ SUNG) --- */}
+                {/* --- TAB BẢO MẬT: ĐA BƯỚC --- */}
                   {activeTab === "security" && (
                     <div className="animate-fadeIn space-y-6 text-left">
-                      {/* PHẦN TIÊU ĐỀ: Đã đưa ra ngoài max-w-xl để sát lề trái */}
                       <div className="border-b border-slate-50 pb-6">
                         <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">
                           Bảo mật tài khoản
@@ -666,7 +690,6 @@ const handleResetPassword = async () => {
                         </p>
                       </div>
 
-                      {/* PHẦN NỘI DUNG: Giữ max-w-xl mx-auto để form không bị quá rộng */}
                       <div className="max-w-xl mx-auto pt-4">
                         <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm relative overflow-hidden text-center">
                           

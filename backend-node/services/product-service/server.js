@@ -65,6 +65,13 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 // --- 8. Đăng ký Route API ---
 app.use('/api/products', productRoutes);
 
+// Bổ sung thêm route này để Uptime Kuma ping không bị 404
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'Demi Mart - Product Service API is running rực rỡ!'
+    });
+});
 // --- 9. Xử lý lỗi tập trung (Bắt lỗi để server không sập) ---
 app.use((err, req, res, next) => {
     console.error('❌ Lỗi Server:', err.stack);

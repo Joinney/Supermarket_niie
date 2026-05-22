@@ -42,14 +42,6 @@ export const addAddress = async (req, res) => {
             address_type 
         } = req.body;
 
-        // Bắt buộc phải có các mã ID này để sau này tính phí ship/tạo vận đơn API
-        if (!province_id || !district_id || !ward_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Thiếu mã ID địa lý (Province/District/Ward ID). Vui lòng chọn từ danh sách!" 
-            });
-        }
-
         const isDefaultBool = is_default === 1 || is_default === true;
 
         // Nếu người dùng đặt cái này là mặc định, các cái cũ phải về false hết
@@ -62,23 +54,24 @@ export const addAddress = async (req, res) => {
                 user_id, receiver_name, receiver_phone, 
                 province_name, province_id, 
                 district_name, district_id, 
-                ward_name, ward_id, 
+                ward_name, ward_code, 
                 detail_address, is_default, address_type
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
             RETURNING *
         `;
 
+        // Đã xóa biến 'id' thừa ở đây và thêm || 1
         const values = [
             userId, 
             receiver_name, 
             receiver_phone, 
             province_name, 
-            province_id,    // Mã ID chuẩn kết nối API vận chuyển
+            province_id || 1,    
             district_name, 
-            district_id,    // Mã ID chuẩn kết nối API vận chuyển
+            district_id || 1,    
             ward_name, 
-            ward_id,        // Mã ID chuẩn kết nối API vận chuyển
+            ward_id || 1,        
             detail_address, 
             isDefaultBool, 
             address_type || 'home'
@@ -123,16 +116,27 @@ export const updateAddress = async (req, res) => {
             SET receiver_name = $1, receiver_phone = $2, 
                 province_name = $3, province_id = $4, 
                 district_name = $5, district_id = $6, 
-                ward_name = $7, ward_id = $8, 
+                ward_name = $7, ward_code = $8, 
                 detail_address = $9, is_default = $10, address_type = $11
             WHERE address_id = $12 AND user_id = $13
             RETURNING *
         `;
 
+        // ĐÃ SỬA LỖI: Thêm || 1 vào các biến ID
         const values = [
-            receiver_name, receiver_phone, province_name, province_id, 
-            district_name, district_id, ward_name, ward_id, 
-            detail_address, isDefaultBool, address_type, id, userId
+            receiver_name, 
+            receiver_phone, 
+            province_name, 
+            province_id || 1, 
+            district_name, 
+            district_id || 1, 
+            ward_name, 
+            ward_id || 1, 
+            detail_address, 
+            isDefaultBool, 
+            address_type, 
+            id, 
+            userId
         ];
 
         const result = await pool.query(query, values);
@@ -143,6 +147,7 @@ export const updateAddress = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Đã cập nhật địa chỉ!", data: result.rows[0] });
     } catch (error) {
+        console.error("Lỗi updateAddress:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };
@@ -166,6 +171,7 @@ export const deleteAddress = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Đã xóa địa chỉ khỏi hệ thống!" });
     } catch (error) {
+        console.error("Lỗi deleteAddress:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };
