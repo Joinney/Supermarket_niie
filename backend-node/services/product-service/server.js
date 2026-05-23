@@ -49,6 +49,7 @@ app.use(cors({
     credentials: true
 }));
 
+
 // --- 6. Middleware ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -67,10 +68,16 @@ app.use('/api/products', productRoutes);
 
 // Bổ sung thêm route này để Uptime Kuma ping không bị 404
 app.get('/', (req, res) => {
-    res.status(200).json({
-        status: 'success',
-        message: 'Demi Mart - Product Service API is running rực rỡ!'
-    });
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(`
+        <div style="text-align: center; margin-top: 50px; font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
+            <h1 style="color: #006c49; font-size: 2.5rem;">Demi Mart Product Service</h1>
+            <p style="color: #64748b; font-size: 1.2rem;">Hệ thống đang hoạt động xanh mướt! 🚀</p>
+            <div style="margin-top: 20px;">
+                <a href="/api-docs" style="background-color: #006c49; color: white; padding: 12px 24px; border-radius: 10px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(0, 108, 73, 0.2);">Vào Swagger xem API →</a>
+            </div>
+        </div>
+    `);
 });
 // --- 9. Xử lý lỗi tập trung (Bắt lỗi để server không sập) ---
 app.use((err, req, res, next) => {

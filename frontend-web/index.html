@@ -1,97 +1,96 @@
 <!doctype html>
 <html lang="vi">
-  <head>
+<head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/DemiMarticon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <link rel="icon" type="image/png" href="/DemiMarticon.png" />
+    <link rel="apple-touch-icon" href="/DemiMarticon.png" />
+    
     <title>Demi Mart - Siêu thị Á Châu trực tuyến</title>
 
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
-      /* --- DIỆT TẬN GỐC THANH GOOGLE & POPUP --- */
-      html, body {
-        top: 0px !important;
-        position: static !important;
-        margin-top: 0px !important;
-        padding-top: 0px !important;
-      }
+        /* --- DIỆT TẬN GỐC THANH GOOGLE & POPUP --- */
+        html, body {
+            top: 0px !important;
+            position: static !important;
+            margin-top: 0px !important;
+            padding-top: 0px !important;
+        }
 
-      .goog-te-banner-frame, .goog-te-banner, .skiptranslate, #goog-gt-tt, 
-      .goog-te-balloon-frame, .goog-tooltip, .goog-tooltip:hover {
-        display: none !important;
-        visibility: hidden !important;
-      }
+        .goog-te-banner-frame, .goog-te-banner, .skiptranslate, #goog-gt-tt, 
+        .goog-te-balloon-frame, .goog-tooltip, .goog-tooltip:hover {
+            display: none !important;
+            visibility: hidden !important;
+        }
 
-      font {
-        background-color: transparent !important;
-        box-shadow: none !important;
-      }
+        font {
+            background-color: transparent !important;
+            box-shadow: none !important;
+        }
 
-      #google_translate_element, .goog-logo-link, .goog-te-gadget span, .goog-te-gadget-icon {
-        display: none !important;
-      }
-      
-      .goog-te-gadget {
-        font-size: 0 !important;
-        color: transparent !important;
-      }
+        #google_translate_element, .goog-logo-link, .goog-te-gadget span, .goog-te-gadget-icon {
+            display: none !important;
+        }
+        
+        .goog-te-gadget {
+            font-size: 0 !important;
+            color: transparent !important;
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <div id="root"></div>
     
     <div id="google_translate_element"></div>
 
     <script type="text/javascript">
-      // 1. Khởi tạo máy dịch
-      function googleTranslateElementInit() {
-        new google.translate.TranslateElement({
-          pageLanguage: 'vi', 
-          includedLanguages: 'en,vi,zh-CN',
-          autoDisplay: false 
-        }, 'google_translate_element');
+        // 1. Khởi tạo máy dịch
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({
+                pageLanguage: 'vi', 
+                includedLanguages: 'en,vi,zh-CN',
+                autoDisplay: false 
+            }, 'google_translate_element');
 
-        // 2. TỰ ĐỘNG ĐỒNG BỘ KHI LOAD TRANG:
-        // Kiểm tra xem trong máy người dùng có lưu ngôn ngữ nào trước đó không
-        const savedLang = localStorage.getItem('demi_mart_lang');
-        if (savedLang && savedLang !== 'vi') {
-          // Chờ script ổn định rồi kích hoạt dịch ngay
-          setTimeout(() => window.changeLanguageAuto(savedLang), 1000);
+            // 2. Tự động đồng bộ ngôn ngữ đã lưu
+            const savedLang = localStorage.getItem('demi_mart_lang');
+            if (savedLang && savedLang !== 'vi') {
+                setTimeout(() => window.changeLanguageAuto(savedLang), 1000);
+            }
         }
-      }
     </script>
+    
     <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 
     <script>
-      // 3. Hàm kích hoạt dịch & Lưu trạng thái
-      window.changeLanguageAuto = function(langCode) {
-        const select = document.querySelector('.goog-te-combo');
-        if (select) {
-          select.value = langCode;
-          select.dispatchEvent(new Event('change'));
-          // Lưu vào bộ nhớ trình duyệt để đi đâu cũng nhớ tiếng này
-          localStorage.setItem('demi_mart_lang', langCode);
-        } else {
-          setTimeout(() => window.changeLanguageAuto(langCode), 500);
-        }
-      };
+        // 3. Hàm kích hoạt dịch & Lưu trạng thái
+        window.changeLanguageAuto = function(langCode) {
+            const select = document.querySelector('.goog-te-combo');
+            if (select) {
+                select.value = langCode;
+                select.dispatchEvent(new Event('change'));
+                localStorage.setItem('demi_mart_lang', langCode);
+            } else {
+                setTimeout(() => window.changeLanguageAuto(langCode), 500);
+            }
+        };
 
-      // 4. THEO DÕI SỰ THAY ĐỔI (Dành cho React chuyển trang)
-      // Khi React chuyển trang, nội dung thay đổi nhưng trang không load lại
-      // Đoạn này giúp "nhắc" Google dịch lại trang mới
-      let lastPathname = window.location.pathname;
-      setInterval(() => {
-        if (lastPathname !== window.location.pathname) {
-          lastPathname = window.location.pathname;
-          const savedLang = localStorage.getItem('demi_mart_lang');
-          if (savedLang && savedLang !== 'vi') {
-            window.changeLanguageAuto(savedLang);
-          }
-        }
-      }, 1000); // Kiểm tra mỗi giây một lần
+        // 4. Theo dõi sự thay đổi đường dẫn (Dành cho React SPA)
+        let lastPathname = window.location.pathname;
+        setInterval(() => {
+            if (lastPathname !== window.location.pathname) {
+                lastPathname = window.location.pathname;
+                const savedLang = localStorage.getItem('demi_mart_lang');
+                if (savedLang && savedLang !== 'vi') {
+                    window.changeLanguageAuto(savedLang);
+                }
+            }
+        }, 1000);
     </script>
 
     <script type="module" src="/src/main.jsx"></script>
-  </body>
+</body>
 </html>
