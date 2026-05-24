@@ -12,18 +12,24 @@ connectDB();
 
 const app = express();
 
-// 1. Cấu hình CORS linh hoạt
+// --- 1. Middleware cơ bản ---
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// --- 2. Cấu hình CORS ổn định (Fix lỗi 500) ---
 const allowedOrigins = [
   'http://localhost:5173', 
-  'https://demimart-fr.onrender.com' // Domain của Frontend trên Render
+  'https://demimart-fr.onrender.com'
 ];
 
 app.use(cors({
-    origin: function (origin, callback) {
+    origin: (origin, callback) => {
+        // Cho phép request không có origin (như server-to-server)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS')); // Vẫn giữ lỗi để bảo mật
+            // Thay vì trả về Error gây lỗi 500, ta trả về false
+            callback(null, false);
         }
     },
     credentials: true,
@@ -31,7 +37,10 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// 2. Cấu hình Swagger linh hoạt cho cả Local và Production
+// Xử lý Preflight cho tất cả route
+app.options('*', cors());
+
+// --- 3. Cấu hình Swagger ---
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
@@ -48,19 +57,22 @@ const swaggerOptions = {
     apis: ['./routes/*.js'], 
 };
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(swaggerOptions)));
 
-// 3. Routes
+// --- 4. Routes ---
 app.use('/api/cart', cartRoutes);
 
 app.get('/', (req, res) => {
     res.send('<h1>Demi Mart Cart Service is running!</h1>');
 });
 
-// 4. Khởi chạy Server
+// Xử lý 404 cho các route không tồn tại
+app.use((req, res) => {
+    res.status(404).json({ message: "Endpoint not found" });
+});
+
+// --- 5. Khởi chạy Server ---
 const PORT = process.env.PORT || 5003;
 app.listen(PORT, () => {
     console.log(`🛒 Cart Service running on port ${PORT}`);
-    console.log(`📚 Swagger Docs available at http://localhost:${PORT}/api-docs`);
 });
