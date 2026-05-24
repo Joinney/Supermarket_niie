@@ -1,0 +1,8 @@
+source 'https://rubygems.org'
+
+gem 'sinatra'
+gem 'sinatra-contrib'
+gem 'puma'
+gem 'rackup'
+gem 'json'
+gem 'rack-cors' # Cần thiết để React gọi được API

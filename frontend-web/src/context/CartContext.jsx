@@ -47,18 +47,31 @@ export const CartProvider = ({ children }) => {
         const token = localStorage.getItem("token");
         const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
         
+        console.log("🔍 mergeCart called:");
+        console.log("   Token:", token ? "✅ YES" : "❌ NO");
+        console.log("   Local cart items:", local.length);
+        console.log("   Local cart data:", local);
+        
         if (token && local.length > 0) {
             try {
-                console.log("📦 Merging local cart...");
-                await cartApi.post("/cart/merge", { items: local });
+                console.log("📦 Sending merge request to server...");
+                const response = await cartApi.post("/cart/merge", { items: local });
+                console.log("✅ Merge response:", response.data);
                 // Xóa local ngay lập tức sau khi gọi API thành công
                 localStorage.removeItem("demi_cart");
-                console.log("✅ Local cart synced and cleared");
+                console.log("✅ Local cart cleared from localStorage");
             } catch (err) {
                 console.error("❌ Lỗi merge:", err);
+                console.error("   Error details:", err.response?.data || err.message);
             }
+        } else if (token && local.length === 0) {
+            console.log("ℹ️ Token exists but no local cart to merge, fetching from server only");
+        } else if (!token) {
+            console.log("⚠️ No token found - skipping merge");
         }
+        
         // Luôn fetch lại sau khi merge (hoặc nếu không có gì để merge)
+        console.log("📥 Fetching cart from server...");
         await fetchCart();
     }, [fetchCart]);
 
