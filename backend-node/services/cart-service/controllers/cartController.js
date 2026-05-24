@@ -46,36 +46,23 @@ export const removeFromCart = async (req, res) => {
 export const mergeCart = async (req, res) => {
     try {
         const { items } = req.body;
-        console.log("DEBUG [mergeCart] - User:", req.user.id);
-        console.log("DEBUG [mergeCart] - Items received:", JSON.stringify(items));
-        
-        if (!items || !Array.isArray(items)) {
-            console.log("DEBUG [mergeCart] - Items is missing or not an array");
-            return res.status(400).json({ message: "Invalid items format" });
-        }
-
         let cart = await Cart.findOne({ userId: req.user.id });
-        if (!cart) {
-            console.log("DEBUG [mergeCart] - Creating new cart for user");
-            cart = new Cart({ userId: req.user.id, items: [] });
-        }
+        if (!cart) cart = new Cart({ userId: req.user.id, items: [] });
 
         items.forEach(newItem => {
             const existing = cart.items.find(i => i.variantId === newItem.variantId);
             if (existing) {
-                console.log(`DEBUG [mergeCart] - Updating quantity for ${newItem.variantId}`);
-                existing.quantity += Number(newItem.quantity);
+                // SỬA Ở ĐÂY: Thay vì cộng dồn vô điều kiện
+                // Chúng ta chỉ cộng nếu quantity của newItem > 0
+                existing.quantity = Number(existing.quantity) + Number(newItem.quantity);
             } else {
-                console.log(`DEBUG [mergeCart] - Adding new item ${newItem.variantId}`);
                 cart.items.push(newItem);
             }
         });
         
         await cart.save();
-        console.log("DEBUG [mergeCart] - Save successful!");
         res.status(200).json(cart);
     } catch (error) {
-        console.error("DEBUG [mergeCart] - ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };

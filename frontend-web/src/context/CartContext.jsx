@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useCallback, useContext } from "react";
+import { createContext, useState, useEffect, useCallback, useContext, useRef } from "react";
 import { cartApi } from "../api/axios";
 import { AuthContext } from "./AuthContext";
 
@@ -7,9 +7,10 @@ export const CartContext = createContext();
 export const CartProvider = ({ children }) => {
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(true);
-    
-    // Sử dụng AuthContext để biết chính xác khi nào user đăng nhập/đăng xuất
     const { user } = useContext(AuthContext);
+    
+    // Dùng ref để ngăn việc merge bị chạy nhiều lần khi component re-render
+    const hasMerged = useRef(false);
 
     const formatItem = (item) => ({
         variantId: item.variantId || item.ma_bien_the,
@@ -41,55 +42,49 @@ export const CartProvider = ({ children }) => {
         }
     }, []);
 
-    // 2. Hàm Hợp nhất giỏ hàng (Khi đăng nhập: merge local + server)
     const mergeCart = useCallback(async () => {
+        // Chỉ merge nếu có token và có dữ liệu local
         const token = localStorage.getItem("token");
         const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
         
         if (token && local.length > 0) {
             try {
-                console.log("📦 Merging local cart with server...", local);
-                // Gửi giỏ hàng local lên server để merge
+                console.log("📦 Merging local cart...");
                 await cartApi.post("/cart/merge", { items: local });
-                // Xóa giỏ hàng local sau khi merge thành công
+                // Xóa local ngay lập tức sau khi gọi API thành công
                 localStorage.removeItem("demi_cart");
-                console.log("✅ Local cart merged and cleared");
+                console.log("✅ Local cart synced and cleared");
             } catch (err) {
                 console.error("❌ Lỗi merge:", err);
-            } finally {
-                // Luôn fetch lại từ server để có data mới nhất sau merge
-                await fetchCart();
             }
-        } else if (token && local.length === 0) {
-            // Đã đăng nhập nhưng không có giỏ hàng local
-            await fetchCart();
         }
+        // Luôn fetch lại sau khi merge (hoặc nếu không có gì để merge)
+        await fetchCart();
     }, [fetchCart]);
 
-    // 3. Hàm xóa giỏ hàng local (Khi đăng xuất)
     const clearLocalCart = useCallback(() => {
         localStorage.removeItem("demi_cart");
-        console.log("🗑️ Local cart cleared on logout");
+        hasMerged.current = false;
     }, []);
 
-    // 4. Theo dõi thay đổi trạng thái user để merge hoặc fetch cart
+    // Theo dõi thay đổi trạng thái user
     useEffect(() => {
         if (user) {
-            // Có user (đã đăng nhập) -> thực hiện merge cart (hàm mergeCart đã tự lo fetchCart bên trong)
-            mergeCart();
+            if (!hasMerged.current) {
+                hasMerged.current = true;
+                mergeCart();
+            }
         } else {
-            // Không có user -> chưa đăng nhập -> tải local cart
+            hasMerged.current = false;
             fetchCart();
         }
     }, [user, mergeCart, fetchCart]);
 
-    // 5. Hàm thêm sản phẩm
     const addToCart = useCallback(async (product) => {
         const newItem = formatItem(product);
         const token = localStorage.getItem("token");
 
         if (!token) {
-            // Chưa đăng nhập: Lưu vào localStorage (demi_cart)
             const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
             const idx = local.findIndex(i => i.variantId === newItem.variantId);
             if (idx > -1) {
@@ -99,30 +94,22 @@ export const CartProvider = ({ children }) => {
             }
             localStorage.setItem("demi_cart", JSON.stringify(local));
             setCart(local.map(formatItem));
-            console.log("📦 Added to local cart (not logged in):", newItem);
         } else {
-            // Đã đăng nhập: Lưu lên server
+            // Server-side: Đảm bảo controller cộng dồn dựa trên variantId
             const res = await cartApi.post("/cart/add", newItem);
             setCart((res.data?.items || []).map(formatItem));
-            console.log("📦 Added to server cart (logged in):", newItem);
         }
     }, []);
 
-    // 6. Hàm xóa sản phẩm
     const removeFromCart = useCallback(async (variantId) => {
         const token = localStorage.getItem("token");
-        
         if (!token) {
-            // Chưa đăng nhập: Xóa từ localStorage
             const local = JSON.parse(localStorage.getItem("demi_cart") || "[]").filter(i => i.variantId !== variantId);
             localStorage.setItem("demi_cart", JSON.stringify(local));
             setCart(local.map(formatItem));
-            console.log("🗑️ Removed from local cart");
         } else {
-            // Đã đăng nhập: Xóa từ server
             await cartApi.delete(`/cart/remove/${variantId}`);
             await fetchCart();
-            console.log("🗑️ Removed from server cart");
         }
     }, [fetchCart]);
 
