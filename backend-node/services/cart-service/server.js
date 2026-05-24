@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- Cấu hình CORS chuẩn (Sửa lỗi 500 và lỗi CORS) ---
 const allowedOrigins = [
   'http://localhost:5173', 
-  'https://demimart-fr.onrender.com'
+  'https://demimart-fe.onrender.com'
 ];
 
 app.use(cors({
@@ -39,7 +39,8 @@ app.use(cors({
 
 // XÓA DÒNG: app.options('*', cors()); // <--- Dòng này gây ra lỗi PathError
 
-
+// Thêm dòng này để xử lý triệt để các request OPTIONS (preflight)
+app.options('*', cors());
 
 // --- 3. Cấu hình Swagger ---
 const swaggerOptions = {
