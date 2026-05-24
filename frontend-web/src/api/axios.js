@@ -42,7 +42,7 @@ export const productApi = createInstance(
 
 // Đặt baseURL là /api, khi gọi fetchCart() dùng "/cart" là chuẩn nhất
 export const cartApi = createInstance(
-    isLocal ? 'http://localhost:5003/api' : 'https://cartservice-abc.onrender.com/api'
+    isLocal ? 'http://localhost:5003/api' : 'https://cartservice-i6s1.onrender.com//api'
 );
 
 export default authApi;
