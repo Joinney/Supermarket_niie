@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = isLocalhost ? 'http://localhost:5000' : 'https://ecommerce-supermarket-k691.onrender.com';
+const AUTH_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://authservice-sz4p.onrender.com';
 
 export default function Header({ onOpenMenu }) {
   const { user: authUser, logout } = useContext(AuthContext);
@@ -67,7 +67,7 @@ export default function Header({ onOpenMenu }) {
     }
     if (url.startsWith('http')) return url;
     const cleanPath = url.startsWith('/') ? url.substring(1) : url;
-    const base = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
+    const base = AUTH_BASE_URL.endsWith('/') ? AUTH_BASE_URL : `${AUTH_BASE_URL}/`;
     return `${base}${cleanPath}`;
   };
 

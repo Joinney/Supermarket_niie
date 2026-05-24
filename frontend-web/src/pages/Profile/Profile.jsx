@@ -11,7 +11,7 @@ import {
 
 // --- CẤU HÌNH API ---
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://ecommerce-supermarket-k691.onrender.com';
+const API_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://authservice-sz4p.onrender.com';
 
 const api = axios.create({
     baseURL: `${API_BASE_URL}/api`,

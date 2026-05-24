@@ -53,6 +53,9 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
+// Cho phép Frontend truy cập ảnh trong thư mục uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // 4. Swagger - Tài liệu API rực rỡ
 const swaggerOptions = {
     definition: {

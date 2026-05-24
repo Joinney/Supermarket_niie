@@ -23,6 +23,25 @@ export const getHoso = async (req, res) => {
     }
 };
 
+// 3. Cập nhật ảnh đại diện
+export const uploadAvatar = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "Không tìm thấy file ảnh!" });
+        }
+
+        const userId = req.user.id;
+        const avatarUrl = `/uploads/${req.file.filename}`;
+
+        await pool.query('UPDATE users SET avatar_url = $1 WHERE user_id = $2', [avatarUrl, userId]);
+
+        res.status(200).json({ success: true, message: "Cập nhật ảnh đại diện thành công", avatarUrl });
+    } catch (error) {
+        console.error("Lỗi uploadAvatar:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải ảnh lên" });
+    }
+};
+
 // 2. Cập nhật thông tin hồ sơ (Hàm mà Demi đang thiếu đây!)
 export const updateHoso = async (req, res) => {
     try {

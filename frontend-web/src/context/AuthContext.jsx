@@ -120,8 +120,8 @@ export const AuthProvider = ({ children }) => {
 
     // Dùng useMemo để tránh re-render provider không cần thiết
     const authValue = useMemo(() => ({
-        user, updateUser, login, logout, loading, authActionLoading
-    }), [user, updateUser, logout, loading, authActionLoading]);
+        user, updateUser, fetchFreshProfile, login, logout, loading, authActionLoading
+    }), [user, updateUser, fetchFreshProfile, logout, loading, authActionLoading]);
 
     return (
         <AuthContext.Provider value={authValue}>
