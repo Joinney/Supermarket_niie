@@ -112,6 +112,7 @@ export const AuthProvider = ({ children }) => {
         } finally {
             updateUser(null);
             localStorage.removeItem("token");
+            localStorage.removeItem("demi_cart"); // ✅ Xóa giỏ hàng local khi đăng xuất
             delete api.defaults.headers.common['Authorization'];
             window.location.href = "/login"; // Dùng href để reset toàn bộ state app cho sạch
         }

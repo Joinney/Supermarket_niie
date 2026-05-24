@@ -1,5 +1,6 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../../context/AuthContext";
+import { useCart } from "../../context/CartContext";
 import { useNavigate, Link } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
@@ -11,6 +12,7 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
 
     const { login, user } = useContext(AuthContext);
+    const { mergeCart } = useCart();
     const navigate = useNavigate();
 
     const stats = [
@@ -30,42 +32,27 @@ export default function Login() {
         setError("");
         setLoading(true);
         
-        // 1. Dọn dẹp sạch sẽ rác cũ để tránh lỗi "invalid signature"
-        localStorage.clear(); 
-        
         try {
             const result = await login(username, password);
             
-            if (result.success) {
-                // 2. ÉP GHI DỮ LIỆU VÀO STORAGE NGAY LẬP TỨC
-                // Kiểm tra tên biến trả về từ Backend (accessToken hoặc token)
-                const token = result.accessToken || result.token;
-                
-                if (token) {
-                    localStorage.setItem('token', token);
-                    localStorage.setItem('user', JSON.stringify(result.user));
-                    
-                    // 3. Sử dụng window.location.href để "làm tươi" hoàn toàn state ứng dụng
-                    // giúp Header và Profile nhận Token mới nhất 100%
-                    window.location.href = "/"; 
-                } else {
-                    setError("Không nhận được mã xác thực từ server.");
-                }
-            } else {
+            if (!result.success) {
                 setError(result.message || "Email hoặc mật khẩu không đúng");
+                setLoading(false);
             }
+            // If success, AuthContext updates the user state,
+            // which triggers the useEffect in CartContext to merge the cart automatically.
+            // Also the useEffect in Login.jsx will navigate to '/' automatically.
         } catch (err) {
             console.error("Login logic error:", err);
             setError("Lỗi kết nối server. Vui lòng thử lại sau.");
-        } finally {
             setLoading(false);
         }
     };
 
     const handleGoogleLogin = () => {
         setLoading(true);
-        // Xóa rác trước khi qua Google để tránh xung đột session
-        localStorage.clear();
+        // Không xóa demi_cart! Chỉ xóa những item cũ khác
+        // demi_cart sẽ được merge khi Google redirect trở lại
         const apiBaseUrl = import.meta.env.VITE_API_AUTH_URL || "http://localhost:5001";
         setTimeout(() => {
             window.location.href = `${apiBaseUrl}/api/auth/google`;

@@ -81,9 +81,25 @@ export default function ProductDetail() {
     });
   };
 
-  const handleAddToCart = () => {
+const handleAddToCart = () => {
     if (!product || !selectedVariant) return;
-    addToCart(product, selectedVariant, quantity);
+
+    // Đóng gói dữ liệu chuẩn hóa
+    const itemToCart = {
+      variantId: selectedVariant.ma_bien_the,
+      name: product.ten_san_pham,
+      price: currentPrice,
+      quantity: quantity,
+      image: mainMedia?.duong_dan_url,
+      // Các trường phụ trợ cho URL chi tiết
+      id: product.ma_san_pham,
+      categorySlug: product.slug_danh_muc,
+      countryCode: product.country_code,
+      variantName: selectedVariant.ten_bien_the
+    };
+
+    console.log("Đang gửi dữ liệu này vào giỏ:", itemToCart);
+    addToCart(itemToCart); // Gọi với 1 tham số duy nhất
     alert("Đã thêm vào giỏ hàng Demi Mart!");
   };
 
