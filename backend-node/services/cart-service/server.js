@@ -16,7 +16,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- 2. Cấu hình CORS ổn định (Fix lỗi 500) ---
+// --- Cấu hình CORS chuẩn (Sửa lỗi 500 và lỗi CORS) ---
 const allowedOrigins = [
   'http://localhost:5173', 
   'https://demimart-fr.onrender.com'
@@ -24,12 +24,12 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Cho phép request không có origin (như server-to-server)
+        // origin là undefined nếu là request từ cùng domain hoặc không có header origin
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            // Thay vì trả về Error gây lỗi 500, ta trả về false
-            callback(null, false);
+            // Không được dùng Error, hãy trả về false
+            callback(null, false); 
         }
     },
     credentials: true,
@@ -37,8 +37,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Xử lý Preflight cho tất cả route
-app.options('*', cors());
+// XÓA DÒNG: app.options('*', cors()); // <--- Dòng này gây ra lỗi PathError
+
+
 
 // --- 3. Cấu hình Swagger ---
 const swaggerOptions = {
