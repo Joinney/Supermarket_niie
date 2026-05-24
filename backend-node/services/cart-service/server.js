@@ -16,7 +16,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Cấu hình CORS chuẩn (Sửa lỗi 500 và lỗi CORS) ---
+// --- 2. Cấu hình CORS chuẩn ---
 const allowedOrigins = [
   'http://localhost:5173', 
   'https://demimart-fe.onrender.com'
@@ -24,11 +24,9 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
-        // origin là undefined nếu là request từ cùng domain hoặc không có header origin
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            // Không được dùng Error, hãy trả về false
             callback(null, false); 
         }
     },
@@ -37,10 +35,8 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// XÓA DÒNG: app.options('*', cors()); // <--- Dòng này gây ra lỗi PathError
-
-// Thêm dòng này để xử lý triệt để các request OPTIONS (preflight)
-app.options('*', cors());
+// KHÔNG CẦN DÒNG app.options('*', cors()) NỮA! 
+// Middleware cors bên trên đã tự xử lý request OPTIONS (preflight).
 
 // --- 3. Cấu hình Swagger ---
 const swaggerOptions = {
@@ -68,13 +64,13 @@ app.get('/', (req, res) => {
     res.send('<h1>Demi Mart Cart Service is running!</h1>');
 });
 
-// Xử lý 404 cho các route không tồn tại
 app.use((req, res) => {
     res.status(404).json({ message: "Endpoint not found" });
 });
 
 // --- 5. Khởi chạy Server ---
-const PORT = process.env.PORT || 5003;
-app.listen(PORT, () => {
+// Dùng 0.0.0.0 để lắng nghe tất cả các kết nối từ Render
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🛒 Cart Service running on port ${PORT}`);
 });
