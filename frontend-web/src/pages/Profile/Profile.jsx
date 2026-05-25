@@ -305,12 +305,20 @@ const handleResetPassword = async () => {
     setTimeout(() => setToast({ show: false, message: "", type: "success" }), 3000);
   };
 
-  const getAvatarSrc = (url) => {
-    if (!url || url === "" || url.includes('unsplash.com')) {
-       return `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.full_name || 'User')}&background=006c49&color=fff`;
-    }
-    return `${API_BASE_URL}${url.startsWith('/') ? url : '/' + url}?t=${new Date().getTime()}`; 
-  };
+const getAvatarSrc = (url) => {
+  // 1. Kiểm tra nếu không có URL hoặc là ảnh mặc định unsplash
+  if (!url || url === "" || url.includes('unsplash.com')) {
+     return `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.full_name || 'User')}&background=006c49&color=fff`;
+  }
+  
+  // 2. NẾU URL ĐÃ LÀ LINK CLOUDINARY (BẮT ĐẦU BẰNG HTTP), DÙNG LUÔN
+  if (url.startsWith('http')) {
+      return `${url}?t=${new Date().getTime()}`;
+  }
+
+  // 3. NẾU URL LÀ ĐƯỜNG DẪN CỤC BỘ CŨ (/uploads/...), MỚI CẦN THÊM API_BASE_URL
+  return `${API_BASE_URL}${url.startsWith('/') ? url : '/' + url}?t=${new Date().getTime()}`;
+};
 
   // --- DỮ LIỆU MẪU CÁC TAB CHƯA CÓ API ---
   const notifications = [

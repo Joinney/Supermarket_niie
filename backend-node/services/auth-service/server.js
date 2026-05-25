@@ -103,6 +103,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', forgotRoutes);
 app.use('/api/auth/google', googleRoutes);
+console.log("Đang đăng ký profileRoutes...");
 app.use('/api/profile', profileRoutes);
 app.use('/api/addresses', addressRoutes);
 // 7. Xử lý lỗi 404 & Lỗi hệ thống
