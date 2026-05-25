@@ -60,17 +60,25 @@ export default function Header({ onOpenMenu }) {
 
   // --- 3. HÀM XỬ LÝ AVATAR & LOGOUT ---
   const getAvatarSrc = (userObj) => {
-    const url = userObj?.avatar_url || userObj?.avatar;
-    const name = userObj?.full_name || 'User';
-    if (!url || url === "" || url.includes('unsplash.com')) {
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
-    }
-    if (url.startsWith('http')) return url;
-    const cleanPath = url.startsWith('/') ? url.substring(1) : url;
-    const base = AUTH_BASE_URL.endsWith('/') ? AUTH_BASE_URL : `${AUTH_BASE_URL}/`;
-    return `${base}${cleanPath}`;
-  };
+  if (!userObj) return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
 
+  const url = userObj.avatar_url || userObj.avatar;
+  const name = userObj.full_name || 'User';
+
+  // 1. Nếu không có url hoặc là ảnh mặc định unsplash cũ
+  if (!url || url === "" || url.includes('unsplash.com')) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
+  }
+
+  // 2. NẾU LÀ LINK CLOUDINARY (bắt đầu bằng http) -> Dùng luôn và thêm timestamp để phá cache
+  if (url.startsWith('http')) {
+    return `${url}?t=${new Date().getTime()}`;
+  }
+
+  // 3. Nếu là đường dẫn cục bộ (ví dụ: /uploads/abc.png)
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${AUTH_BASE_URL}${cleanPath}?t=${new Date().getTime()}`;
+};
   const handleLogout = async () => {
     try {
       await logout(); 

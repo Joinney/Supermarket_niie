@@ -306,20 +306,19 @@ const handleResetPassword = async () => {
   };
 
 const getAvatarSrc = (url) => {
-  // 1. Kiểm tra nếu không có URL hoặc là ảnh mặc định unsplash
+  // 1. Nếu không có url, dùng ảnh mặc định từ UI Avatars
   if (!url || url === "" || url.includes('unsplash.com')) {
      return `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.full_name || 'User')}&background=006c49&color=fff`;
   }
   
-  // 2. NẾU URL ĐÃ LÀ LINK CLOUDINARY (BẮT ĐẦU BẰNG HTTP), DÙNG LUÔN
+  // 2. NẾU LÀ LINK CLOUDINARY (BẮT ĐẦU BẰNG HTTPS), TRẢ VỀ LUÔN
   if (url.startsWith('http')) {
-      return `${url}?t=${new Date().getTime()}`;
+      return url; 
   }
 
-  // 3. NẾU URL LÀ ĐƯỜNG DẪN CỤC BỘ CŨ (/uploads/...), MỚI CẦN THÊM API_BASE_URL
+  // 3. Nếu là đường dẫn cũ (/uploads/...), mới cần thêm API_BASE_URL
   return `${API_BASE_URL}${url.startsWith('/') ? url : '/' + url}?t=${new Date().getTime()}`;
 };
-
   // --- DỮ LIỆU MẪU CÁC TAB CHƯA CÓ API ---
   const notifications = [
     { id: 1, title: "Ưu đãi Platinum độc quyền", desc: "Giảm ngay 100k cho đơn hàng từ 500k.", time: "10 phút trước", type: "promo", unread: true },
