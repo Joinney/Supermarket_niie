@@ -23,26 +23,7 @@ export const getHoso = async (req, res) => {
     }
 };
 
-// 3. Cập nhật ảnh đại diện
-export const uploadAvatar = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: "Không tìm thấy file ảnh!" });
-        }
-
-        const userId = req.user.id;
-        const avatarUrl = `/uploads/${req.file.filename}`;
-
-        await pool.query('UPDATE users SET avatar_url = $1 WHERE user_id = $2', [avatarUrl, userId]);
-
-        res.status(200).json({ success: true, message: "Cập nhật ảnh đại diện thành công", avatarUrl });
-    } catch (error) {
-        console.error("Lỗi uploadAvatar:", error.message);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải ảnh lên" });
-    }
-};
-
-// 2. Cập nhật thông tin hồ sơ (Hàm mà Demi đang thiếu đây!)
+// 2. Cập nhật thông tin hồ sơ
 export const updateHoso = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -68,5 +49,32 @@ export const updateHoso = async (req, res) => {
     } catch (error) {
         console.error("Lỗi updateHoso:", error.message);
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// 3. Cập nhật ảnh đại diện (ĐÃ HOÀN CHỈNH CHO CLOUDINARY)
+export const uploadAvatar = async (req, res) => {
+    try {
+        // req.file được cung cấp bởi middleware upload.single('avatar')
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "Không tìm thấy file ảnh!" });
+        }
+
+        const userId = req.user.id;
+        
+        // CÁCH MỚI: Lấy đường dẫn URL tuyệt đối từ Cloudinary trả về
+        const avatarUrl = req.file.path; 
+
+        // Lưu URL này vào Database
+        await pool.query('UPDATE users SET avatar_url = $1 WHERE user_id = $2', [avatarUrl, userId]);
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Cập nhật ảnh đại diện thành công", 
+            avatarUrl 
+        });
+    } catch (error) {
+        console.error("Lỗi uploadAvatar:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải ảnh lên Cloudinary" });
     }
 };
