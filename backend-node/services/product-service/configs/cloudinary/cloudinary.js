@@ -1,20 +1,29 @@
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const multer = require('multer');
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import multer from 'multer';
+import dotenv from 'dotenv';
 
+// Kích hoạt dotenv để đọc các biến từ file .env (chỉ cần thiết khi chạy local)
+dotenv.config();
+
+// Cấu hình Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// Thiết lập lưu trữ trên Cloudinary
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'demi-mart', // Bạn có thể đổi thành 'auth' hoặc 'product' để dễ quản lý ảnh
+    folder: 'demi-mart',
     format: async (req, file) => 'png',
     public_id: (req, file) => `${Date.now()}`,
   },
 });
 
-module.exports = multer({ storage: storage });
+const upload = multer({ storage: storage });
+
+// Sử dụng export default để khớp với cú pháp import trong profileRoutes.js
+export default upload;
