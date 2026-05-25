@@ -1,6 +1,6 @@
 import express from 'express';
 // Import middleware upload đã cấu hình Cloudinary từ file config
-import upload from '../config/cloudinary.js'; 
+import upload from '../configs/cloudinary.js'; 
 import { getHoso, updateHoso, uploadAvatar } from '../controllers/profileController.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 
