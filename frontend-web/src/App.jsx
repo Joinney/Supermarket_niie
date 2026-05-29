@@ -2,7 +2,10 @@ import React, { useState, useContext } from "react";
 import { BrowserRouter as Router, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
-import Checkout from "./pages/Checkout/Checkout"; // Kiểm tra lại đường dẫn file của bạn
+import { OrderProvider } from "./context/OrderContext";
+import { ProtectedRoute } from "./components/ProtectedRoute"; // Import bảo vệ route
+
+import Checkout from "./pages/Checkout/Checkout";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
@@ -36,6 +39,7 @@ const MainLayout = () => {
 const AuthLayout = () => (
   <div className="min-h-screen w-full bg-white flex items-center justify-center"><Outlet /></div>
 );
+
 /**
  * 2. CẤU HÌNH ROUTES
  */
@@ -45,11 +49,12 @@ const AppRoutes = () => (
       <Route path="/" element={<Home />} />
       <Route path="/:country_code/product/:category_slug/:id/:variantId?" element={<ProductDetail />} />
       <Route path="/cart" element={<Cart />} />
-      
-      {/* --- THÊM DÒNG NÀY VÀO ĐÂY --- */}
-      <Route path="/checkout" element={<Checkout />} /> 
-      {/* ------------------------------ */}
-      
+      {/* Route Checkout đã được bọc trong ProtectedRoute */}
+      <Route path="/checkout" element={
+        <ProtectedRoute>
+          <Checkout />
+        </ProtectedRoute>
+      } /> 
       <Route path="/profile/:tab?" element={<Profile />} />
     </Route>
     <Route element={<AuthLayout />}>
@@ -78,15 +83,17 @@ const AppContent = () => {
 };
 
 /**
- * 4. FINAL APP - Nơi duy nhất chứa Router
+ * 4. FINAL APP
  */
 function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <Router>
-          <AppContent />
-        </Router>
+        <OrderProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </OrderProvider>
       </CartProvider>
     </AuthProvider>
   );

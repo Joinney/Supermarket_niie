@@ -7,7 +7,6 @@ export const getAddresses = async (req, res) => {
     try {
         const userId = req.user.id;
         
-        // Luôn ưu tiên địa chỉ mặc định lên đầu để FE hiển thị chuẩn
         const query = `
             SELECT * FROM user_addresses 
             WHERE user_id = $1 
@@ -26,7 +25,7 @@ export const getAddresses = async (req, res) => {
 };
 
 /**
- * 2. THÊM ĐỊA CHỈ MỚI (Chuẩn hóa ID vận chuyển)
+ * 2. THÊM ĐỊA CHỈ MỚI
  */
 export const addAddress = async (req, res) => {
     try {
@@ -36,7 +35,7 @@ export const addAddress = async (req, res) => {
             receiver_phone, 
             province_name, province_id, 
             district_name, district_id, 
-            ward_name, ward_id, 
+            ward_name, ward_id, ward_code,
             detail_address, 
             is_default, 
             address_type 
@@ -44,7 +43,6 @@ export const addAddress = async (req, res) => {
 
         const isDefaultBool = is_default === 1 || is_default === true;
 
-        // Nếu người dùng đặt cái này là mặc định, các cái cũ phải về false hết
         if (isDefaultBool) {
             await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
         }
@@ -61,7 +59,6 @@ export const addAddress = async (req, res) => {
             RETURNING *
         `;
 
-        // Đã xóa biến 'id' thừa ở đây và thêm || 1
         const values = [
             userId, 
             receiver_name, 
@@ -71,7 +68,7 @@ export const addAddress = async (req, res) => {
             district_name, 
             district_id || 1,    
             ward_name, 
-            ward_id || 1,        
+            ward_code || ward_id || '1', // Đảm bảo không bị null cột ward_code       
             detail_address, 
             isDefaultBool, 
             address_type || 'home'
@@ -91,22 +88,25 @@ export const addAddress = async (req, res) => {
 };
 
 /**
- * 3. CẬP NHẬT ĐỊA CHỈ
+ * 3. CẬP NHẬT ĐỊA CHỈ (ĐÃ SỬA LỖI MẶC ĐỊNH & THAM SỐ)
  */
 export const updateAddress = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { id } = req.params;
+        // Phòng thủ lấy ID từ cả req.params.id lẫn req.params.address_id cho chuẩn
+        const addressId = req.params.id || req.params.address_id;
+
         const { 
             receiver_name, receiver_phone, 
             province_name, province_id, 
             district_name, district_id, 
-            ward_name, ward_id, 
+            ward_name, ward_id, ward_code, 
             detail_address, is_default, address_type 
         } = req.body;
 
         const isDefaultBool = is_default === 1 || is_default === true;
 
+        // Nếu FE yêu cầu đặt bản ghi này làm mặc định, gạt toàn bộ bản ghi khác về false trước
         if (isDefaultBool) {
             await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
         }
@@ -122,7 +122,6 @@ export const updateAddress = async (req, res) => {
             RETURNING *
         `;
 
-        // ĐÃ SỬA LỖI: Thêm || 1 vào các biến ID
         const values = [
             receiver_name, 
             receiver_phone, 
@@ -131,21 +130,21 @@ export const updateAddress = async (req, res) => {
             district_name, 
             district_id || 1, 
             ward_name, 
-            ward_id || 1, 
+            ward_code || ward_id || '1', // Đồng bộ map dữ liệu vào cột ward_code trong db
             detail_address, 
             isDefaultBool, 
-            address_type, 
-            id, 
-            userId
+            address_type || 'home', 
+            addressId, // Truyền chính xác ID địa chỉ vào mệnh đề WHERE ($12)
+            userId     // Kiểm tra đúng chủ sở hữu ($13)
         ];
 
         const result = await pool.query(query, values);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy địa chỉ" });
+            return res.status(404).json({ success: false, message: "Không tìm thấy địa chỉ hoặc không có quyền chỉnh sửa" });
         }
 
-        res.status(200).json({ success: true, message: "Đã cập nhật địa chỉ!", data: result.rows[0] });
+        res.status(200).json({ success: true, message: "Đã cập nhật địa chỉ thành công!", data: result.rows[0] });
     } catch (error) {
         console.error("Lỗi updateAddress:", error.message);
         res.status(500).json({ success: false, error: error.message });
@@ -157,16 +156,16 @@ export const updateAddress = async (req, res) => {
  */
 export const deleteAddress = async (req, res) => {
     try {
-        const { id } = req.params;
+        const addressId = req.params.id || req.params.address_id;
         const userId = req.user.id;
 
         const result = await pool.query(
             'DELETE FROM user_addresses WHERE address_id = $1 AND user_id = $2 RETURNING *',
-            [id, userId]
+            [addressId, userId]
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Xóa thất bại!" });
+            return res.status(404).json({ success: false, message: "Xóa thất bại hoặc không tìm thấy địa chỉ!" });
         }
 
         res.status(200).json({ success: true, message: "Đã xóa địa chỉ khỏi hệ thống!" });

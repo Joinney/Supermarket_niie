@@ -44,5 +44,7 @@ export const productApi = createInstance(
 export const cartApi = createInstance(
     isLocal ? 'http://localhost:5003/api' : 'https://cartservice-i6s1.onrender.com/api'
 );
-
+export const orderApi = createInstance(
+    isLocal ? 'http://localhost:5005/api' : 'https://orderservice-url.onrender.com/api'
+);
 export default authApi;

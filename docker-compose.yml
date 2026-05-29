@@ -1,5 +1,7 @@
+version: '3.8'
+
 services:
-  # 1. Database (Cơ sở dữ liệu Postgres)
+  # 1. Database
   db:
     image: postgres:15-alpine
     container_name: vdt_supermarket_db
@@ -15,7 +17,7 @@ services:
       - demi_network
     restart: always
 
-  # 2. Redis (Dùng để Cache)
+  # 2. Redis
   cache:
     image: redis:6-alpine
     container_name: demi_redis
@@ -25,7 +27,7 @@ services:
       - demi_network
     restart: always
 
-  # 3. AUTH SERVICE (Cổng 5001)
+  # 3. AUTH SERVICE
   auth-service:
     build: ./backend-node/services/auth-service
     container_name: demi_auth_service
@@ -40,7 +42,7 @@ services:
       - demi_network
     restart: on-failure
 
-  # 4. PRODUCT SERVICE (Cổng 5002)
+  # 4. PRODUCT SERVICE
   product-service:
     build: ./backend-node/services/product-service
     container_name: demi_product_service
@@ -50,24 +52,56 @@ services:
       - ./backend-node/services/product-service/.env
     depends_on:
       - db
+      - cache
     networks:
       - demi_network
     restart: on-failure
 
-  # 5. Frontend (Giao diện React/Vite)
+  # 5. CART SERVICE (Cổng 5003)
+  cart-service:
+    build: ./backend-node/services/cart-service
+    container_name: demi_cart_service
+    ports:
+      - "5003:5003"
+    env_file: 
+      - ./backend-node/services/cart-service/.env
+    depends_on:
+      - db
+      - cache
+    networks:
+      - demi_network
+    restart: on-failure
+    
+  # 6. PAYMENT SERVICE (Cổng 5004)
+  payment-service:
+    build: ./backend-node/services/payment-service
+    container_name: demi_payment_service
+    ports:
+      - "5004:5004"
+    env_file: 
+      - ./backend-node/services/payment-service/.env
+    depends_on:
+      - db
+      - cache
+    networks:
+      - demi_network
+    restart: on-failure
+
+  # 7. Frontend
   frontend:
     build: ./frontend-web
     container_name: vdt_frontend
     ports:
-      - "5173:5173" # ✅ SỬA LẠI THÀNH 5173 ĐỂ KHỚP VỚI VITE
+      - "5173:5173"
     depends_on:
       - auth-service
       - product-service
+      - cart-service
     networks:
       - demi_network
     restart: always
 
-  # 6. Uptime Kuma (Mắt thần giám sát)
+  # 8. Uptime Kuma
   uptime-kuma:
     image: louislam/uptime-kuma:1
     container_name: demi_monitoring
@@ -78,6 +112,22 @@ services:
     networks:
       - demi_network
     restart: always
+
+
+    # 9. ORDER SERVICE (Cổng 5005)
+  order-service:
+    build: ./backend-node/services/order-service
+    container_name: demi_order_service
+    ports:
+      - "5005:5005"
+    env_file: 
+      - ./backend-node/services/order-service/.env
+    depends_on:
+      - db
+      - cache
+    networks:
+      - demi_network
+    restart: on-failure
 
 networks:
   demi_network:

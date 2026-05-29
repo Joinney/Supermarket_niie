@@ -1,11 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import { MapPin, Truck, Tag, CreditCard } from 'lucide-react';
+import { MapPin, Truck, Tag, CreditCard, Loader2 } from 'lucide-react';
+import { useOrder } from '../../context/OrderContext';
+import { authApi } from '../../api/axios';
+import AddressModal from '../Checkout/AddressModal'; // Đảm bảo đường dẫn import chính xác
 
 export default function Checkout() {
   const { cart: contextCart } = useCart();
-  
+  const { placeOrder, loading } = useOrder();
+  const navigate = useNavigate();
+
+  // State mới bổ sung phục vụ cho logic địa chỉ động & Modal
+  const [address, setAddress] = useState(null);
+  const [addresses, setAddresses] = useState([]);
+  const [isLoadingAddress, setIsLoadingAddress] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Hook lấy danh sách địa chỉ thực từ auth-service
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      try {
+        const res = await authApi.get('/addresses');
+        const data = res.data.data || res.data;
+        setAddresses(data);
+        // Ưu tiên tìm địa chỉ có thuộc tính mặc định bằng true, nếu không có lấy cái đầu tiên
+        const defaultAddr = data.find(a => a.is_default === true) || data[0];
+        setAddress(defaultAddr);
+      } catch (err) {
+        console.error("Lỗi fetch địa chỉ:", err);
+      } finally {
+        setIsLoadingAddress(false);
+      }
+    };
+    fetchAddresses();
+  }, []);
+
   // Dữ liệu sản phẩm giả để test giao diện
   const mockCart = [
     {
@@ -25,7 +55,6 @@ export default function Checkout() {
   ];
 
   const cart = contextCart && contextCart.length > 0 ? contextCart : mockCart;
-  const navigate = useNavigate();
   
   // State quản lý thanh toán
   const [selectedPayment, setSelectedPayment] = useState('COD');
@@ -35,6 +64,35 @@ export default function Checkout() {
   const shippingFee = 78500;
   const xuDiscount = 500;
   const finalTotal = itemTotal + shippingFee - xuDiscount;
+
+  // Hàm xử lý đặt hàng kết hợp dữ liệu địa chỉ động
+  const handlePlaceOrder = async () => {
+    if (!address) return alert("Vui lòng cập nhật hoặc chọn địa chỉ giao hàng trước khi đặt!");
+
+    const orderData = {
+      thong_tin_giao_hang: {
+        ten_nguoi_nhan: address.receiver_name,
+        so_dien_thoai: address.receiver_phone,
+        dia_chi_day_du: `${address.detail_address}, ${address.ward_name}, ${address.district_name}, ${address.province_name}`
+      },
+      danh_sach_san_pham: cart,
+      tong_tien_hang: itemTotal,
+      phi_van_chuyen: shippingFee,
+      so_tien_giam_gia: xuDiscount,
+      tong_thanh_toan: finalTotal,
+      phuong_thuc_thanh_toan: selectedPayment
+    };
+
+    try {
+      const result = await placeOrder(orderData);
+      if (result && result.ma_don_hang) {
+        alert(`Đặt hàng thành công! Mã đơn hàng: ${result.ma_don_hang}`);
+        // navigate('/orders'); // Điều hướng tới trang lịch sử đơn hàng
+      }
+    } catch (error) {
+      alert("Đặt hàng thất bại, vui lòng thử lại!");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 pt-10">
@@ -47,13 +105,40 @@ export default function Checkout() {
           <section className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-[#006c49]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[#006c49] flex items-center gap-2 font-black"><MapPin size={20} /> ĐỊA CHỈ NHẬN HÀNG</h2>
-              <button className="text-[#006c49] font-bold text-sm hover:underline">Thay đổi</button>
+              <button 
+                onClick={() => setIsModalOpen(true)} 
+                className="text-[#006c49] font-bold text-sm hover:underline"
+              >
+                Thay đổi
+              </button>
             </div>
-            <div className="text-sm font-bold flex items-center gap-4">
-              <p>Đạt Vũ (+84) 979 758 744</p>
-              <p className="text-gray-600 font-normal">Thôn 1 Hòa Bình, Xã Đắk Liêng, Tỉnh Đắk Lắk</p>
-              <span className="border border-[#006c49] text-[#006c49] px-2 rounded text-xs">Mặc định</span>
-            </div>
+            
+            {isLoadingAddress ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
+                <Loader2 className="animate-spin text-[#006c49]" size={16} />
+                Đang tải dữ liệu địa chỉ...
+              </div>
+            ) : address ? (
+              <div className="text-sm font-bold flex items-center gap-4">
+                <p>{address.receiver_name} (+84) {address.receiver_phone}</p>
+                <p className="text-gray-600 font-normal">
+                  {address.detail_address}, {address.ward_name}, {address.district_name}, {address.province_name}
+                </p>
+                {address.is_default && (
+                  <span className="border border-[#006c49] text-[#006c49] px-2 rounded text-xs">Mặc định</span>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm font-bold flex items-center justify-between">
+                <p className="text-red-500">Bạn chưa thiết lập địa chỉ giao hàng nhận hàng nào.</p>
+                <button 
+                  onClick={() => navigate('/profile/addresses')} 
+                  className="bg-[#006c49] text-white px-4 py-1.5 rounded-xl text-xs hover:bg-[#005a3d] transition-all"
+                >
+                  Thêm địa chỉ ngay
+                </button>
+              </div>
+            )}
           </section>
 
           {/* 2. DANH SÁCH SẢN PHẨM */}
@@ -114,7 +199,6 @@ export default function Checkout() {
                 {isEditingPayment ? 'Xong' : 'Thay đổi'}
               </button>
             </div>
-
             {!isEditingPayment ? (
               <div className="px-6 py-3 rounded-xl border-2 border-[#006c49] bg-emerald-50 text-[#006c49] font-bold inline-block">
                 {selectedPayment === 'COD' ? 'Thanh toán khi nhận hàng' : selectedPayment}
@@ -124,10 +208,7 @@ export default function Checkout() {
                 {['COD', 'MoMo', 'Banking'].map(method => (
                   <button 
                     key={method}
-                    onClick={() => {
-                      setSelectedPayment(method);
-                      setIsEditingPayment(false);
-                    }}
+                    onClick={() => { setSelectedPayment(method); setIsEditingPayment(false); }}
                     className={`px-6 py-3 rounded-xl border-2 font-bold transition-all ${
                       selectedPayment === method 
                         ? 'border-[#006c49] bg-emerald-50 text-[#006c49]' 
@@ -142,7 +223,7 @@ export default function Checkout() {
           </section>
         </div>
 
-        {/* CỘT PHẢI: TỔNG THANH TOÁN (STICKY) */}
+        {/* CỘT PHẢI: TỔNG THANH TOÁN */}
         <div className="lg:col-span-4">
           <div className="lg:sticky lg:top-24 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
             <h2 className="font-black italic mb-6">TỔNG THANH TOÁN</h2>
@@ -155,11 +236,25 @@ export default function Checkout() {
               </div>
             </div>
             <p className="text-[10px] text-gray-400 mt-6 text-center">Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân theo Điều khoản Demi Mart.</p>
-            <button className="w-full mt-4 bg-[#006c49] text-white py-4 rounded-xl font-black uppercase hover:bg-[#005a3d] transition-all">Đặt hàng</button>
+            <button 
+              onClick={handlePlaceOrder}
+              disabled={loading}
+              className="w-full mt-4 bg-[#006c49] text-white py-4 rounded-xl font-black uppercase hover:bg-[#005a3d] transition-all disabled:opacity-50"
+            >
+              {loading ? 'Đang xử lý...' : 'Đặt hàng'}
+            </button>
           </div>
         </div>
-        
       </div>
+
+      {/* RENDER MODAL POPUP QUẢN LÝ ĐỊA CHỈ */}
+      <AddressModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSelect={(addr) => setAddress(addr)}
+        currentAddresses={addresses}
+        selectedAddressId={address?.address_id}
+      />
     </div>
   );
 }
