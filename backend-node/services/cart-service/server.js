@@ -35,10 +35,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// KHÔNG CẦN DÒNG app.options('*', cors()) NỮA! 
-// Middleware cors bên trên đã tự xử lý request OPTIONS (preflight).
-
-// --- 3. Cấu hình Swagger ---
+// --- 3. Cấu hình Swagger (ĐÃ FIX LỖI CRASH) ---
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
@@ -52,7 +49,9 @@ const swaggerOptions = {
             { url: 'https://cartservice-i6s1.onrender.com', description: 'Production Server' }
         ],
     },
-    apis: ['./routes/*.js'], 
+    // 🚀 SỬA TẠI ĐÂY: Trỏ trực tiếp vào chính file server.js 
+    // Không cho phép hệ thống quét tự động vào thư mục routes để triệt tiêu YAMLSemanticError kẹt cache
+    apis: ['./server.js'], 
 };
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(swaggerOptions)));
@@ -69,7 +68,6 @@ app.use((req, res) => {
 });
 
 // --- 5. Khởi chạy Server ---
-// Dùng 0.0.0.0 để lắng nghe tất cả các kết nối từ Render
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🛒 Cart Service running on port ${PORT}`);

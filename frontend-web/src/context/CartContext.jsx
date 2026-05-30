@@ -8,12 +8,10 @@ export const CartProvider = ({ children }) => {
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(true);
     const { user } = useContext(AuthContext);
-    
-    // Dùng ref để ngăn việc merge bị chạy nhiều lần khi component re-render
     const hasMerged = useRef(false);
 
     const formatItem = (item) => ({
-        variantId: item.variantId || item.ma_bien_the,
+        variantId: item.variantId || item.variant_id || item.ma_bien_the,
         name: item.name || item.ten_san_pham || "Sản phẩm",
         price: Number(item.price || item.gia_ban_le || 0),
         quantity: Number(item.quantity || 1),
@@ -43,35 +41,17 @@ export const CartProvider = ({ children }) => {
     }, []);
 
     const mergeCart = useCallback(async () => {
-        // Chỉ merge nếu có token và có dữ liệu local
         const token = localStorage.getItem("token");
         const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
         
-        console.log("🔍 mergeCart called:");
-        console.log("   Token:", token ? "✅ YES" : "❌ NO");
-        console.log("   Local cart items:", local.length);
-        console.log("   Local cart data:", local);
-        
         if (token && local.length > 0) {
             try {
-                console.log("📦 Sending merge request to server...");
-                const response = await cartApi.post("/cart/merge", { items: local });
-                console.log("✅ Merge response:", response.data);
-                // Xóa local ngay lập tức sau khi gọi API thành công
+                await cartApi.post("/cart/merge", { items: local });
                 localStorage.removeItem("demi_cart");
-                console.log("✅ Local cart cleared from localStorage");
             } catch (err) {
-                console.error("❌ Lỗi merge:", err);
-                console.error("   Error details:", err.response?.data || err.message);
+                console.error("❌ Lỗi merge:", err.response?.data || err.message);
             }
-        } else if (token && local.length === 0) {
-            console.log("ℹ️ Token exists but no local cart to merge, fetching from server only");
-        } else if (!token) {
-            console.log("⚠️ No token found - skipping merge");
         }
-        
-        // Luôn fetch lại sau khi merge (hoặc nếu không có gì để merge)
-        console.log("📥 Fetching cart from server...");
         await fetchCart();
     }, [fetchCart]);
 
@@ -80,7 +60,6 @@ export const CartProvider = ({ children }) => {
         hasMerged.current = false;
     }, []);
 
-    // Theo dõi thay đổi trạng thái user
     useEffect(() => {
         if (user) {
             if (!hasMerged.current) {
@@ -108,7 +87,6 @@ export const CartProvider = ({ children }) => {
             localStorage.setItem("demi_cart", JSON.stringify(local));
             setCart(local.map(formatItem));
         } else {
-            // Server-side: Đảm bảo controller cộng dồn dựa trên variantId
             const res = await cartApi.post("/cart/add", newItem);
             setCart((res.data?.items || []).map(formatItem));
         }
@@ -126,8 +104,46 @@ export const CartProvider = ({ children }) => {
         }
     }, [fetchCart]);
 
+    const clearCart = useCallback(async () => {
+        const token = localStorage.getItem("token");
+        try {
+            if (token) {
+                await cartApi.delete('/cart/clear');
+            } else {
+                localStorage.removeItem("demi_cart");
+            }
+            setCart([]); 
+            console.log("✅ Đã dọn sạch toàn bộ giỏ hàng!");
+        } catch (err) {
+            console.error("Lỗi xóa giỏ hàng:", err);
+        }
+    }, []);
+
+    const clearPurchasedItems = useCallback(async (boughtVariantIds) => {
+        if (!boughtVariantIds || boughtVariantIds.length === 0) return;
+        
+        const token = localStorage.getItem("token");
+        try {
+            if (token) {
+                await cartApi.post('/cart/remove-selected', { variant_ids: boughtVariantIds });
+                await fetchCart();
+            } else {
+                const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
+                const remainingItems = local.filter(item => !boughtVariantIds.includes(item.variantId || item.variant_id));
+                localStorage.setItem("demi_cart", JSON.stringify(remainingItems));
+                setCart(remainingItems.map(formatItem));
+            }
+            console.log("✅ Đã lọc bỏ các sản phẩm đã mua khỏi giỏ hàng!");
+        } catch (err) {
+            console.error("Lỗi khi loại bỏ sản phẩm đã mua:", err);
+            setCart(prev => prev.filter(item => !boughtVariantIds.includes(item.variantId || item.variant_id)));
+        }
+    }, [fetchCart]);
+
     return (
-        <CartContext.Provider value={{ cart, loading, addToCart, removeFromCart, fetchCart, mergeCart, clearLocalCart }}>
+        <CartContext.Provider value={{ 
+            cart, loading, addToCart, removeFromCart, fetchCart, mergeCart, clearLocalCart, clearCart, clearPurchasedItems
+        }}>
             {children}
         </CartContext.Provider>
     );

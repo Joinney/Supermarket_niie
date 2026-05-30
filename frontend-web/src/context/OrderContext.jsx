@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { orderApi } from '../api/axios'; // Import instance bạn vừa tạo
+import { orderApi } from '../api/axios'; // Đã dùng orderApi chuẩn cổng Gateway 5005
 
 const OrderContext = createContext();
 
@@ -10,13 +10,16 @@ export const OrderProvider = ({ children }) => {
   const placeOrder = async (orderData) => {
     setLoading(true);
     try {
-      const response = await orderApi.post('/orders', orderData);
-      return response.data; // Trả về thông tin đơn hàng (có ma_don_hang)
+      // Gọi chính xác đến endpoint /orders/place-order qua Gateway
+      const response = await orderApi.post('/orders/place-order', orderData);
+      
+      // Trả về dữ liệu sạch xuôi dòng (chứa ma_don_hang) từ response của Backend
+      return response.data; 
     } catch (error) {
-      console.error("Lỗi đặt hàng:", error);
+      console.error("Lỗi đặt hàng tại Context:", error);
       throw error;
     } finally {
-      setLoading(false);
+      setLoading(false); // Khối cuối cùng sạch sẽ, hạ loading
     }
   };
 

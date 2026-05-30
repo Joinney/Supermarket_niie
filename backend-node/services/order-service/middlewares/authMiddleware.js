@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 /**
  * Middleware để xác thực JWT token từ Authorization header
@@ -46,4 +46,4 @@ const protect = (req, res, next) => {
     }
 };
 
-module.exports = { protect };
+export { protect };

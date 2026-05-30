@@ -19,12 +19,14 @@ import forgotRoutes from "./routes/ForgotRoutes.js";
 import googleRoutes from './routes/GoogleRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';  
+// Import trực tiếp các hàm proxy địa chính từ Controller để xử lý cưỡng chế tại tệp gốc
+import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
 
 // Initialize app and port
 const app = express();
 const PORT = process.env.PORT_AUTH || 5001; 
 
-// 2. Cấu hình CORS - Chấp nhận cả 5173 và 5174 để Demi không bao giờ bị chặn nữa
+// 2. Cấu hình CORS - Chấp nhận cả 5173 và 5174 để không bao giờ bị chặn nữa
 const allowedOrigins = [
     process.env.FRONTEND_URL, 
     'http://localhost:5173', 
@@ -36,11 +38,10 @@ const allowedOrigins = [
 
 app.use(cors({ 
     origin: (origin, callback) => {
-        // Cho phép request không có origin (như Postman) hoặc nằm trong danh sách trắng
         if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
-            callback(new Error(`CORS blocked: Origin ${origin} not allowed by Demi`));
+            callback(new Error(`CORS blocked: Origin ${origin} not allowed`));
         }
     },
     credentials: true,
@@ -63,7 +64,7 @@ const swaggerOptions = {
         info: { 
             title: 'Demi Mart - Auth Service API', 
             version: '1.0.0',
-            description: 'Tài liệu hướng dẫn sử dụng API xác thực chính thức của Demi Mart' 
+            description: 'Tài liệu hướng dẫn sử dụng API xác thực và Địa chính chính thức của Demi Mart' 
         },
         servers: [
             { 
@@ -81,12 +82,12 @@ const swaggerOptions = {
             }
         }
     },
-    apis: ['./routes/*.js'], 
+    apis: ['./routes/*.js', './src/routes/*.js'], 
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// 5. Health Check cho Demi & Uptime Kuma
+// 5. Health Check cho Hệ thống
 app.get('/', (req, res) => {
     res.status(200).send(`
         <div style="text-align: center; margin-top: 50px; font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
@@ -103,9 +104,18 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', forgotRoutes);
 app.use('/api/auth/google', googleRoutes);
+
 console.log("Đang đăng ký profileRoutes...");
 app.use('/api/profile', profileRoutes);
+
+// 🎯 HÀM ĐỊA CHÍNH CÔNG KHAI TUYỆT ĐỐI - ĐÓN ĐẦU TRƯỚC TIỀN TỐ TRUNG GIAN
+app.get('/api/addresses/locations/provinces', getProvincesProxy);
+app.get('/api/addresses/locations/districts', getDistrictsProxy);
+app.get('/api/addresses/locations/wards', getWardsProxy);
+
+// Đăng ký mạch quản lý địa chỉ có Token bảo mật
 app.use('/api/addresses', addressRoutes);
+
 // 7. Xử lý lỗi 404 & Lỗi hệ thống
 app.use((req, res) => {
     res.status(404).json({ success: false, message: "Route này không tồn tại trên Demi Auth Service!" });
@@ -115,7 +125,7 @@ app.use((err, req, res, next) => {
     console.error('🔥 LỖI HỆ THỐNG:', err.message);
     res.status(500).json({ 
         success: false, 
-        message: "Server gặp sự cố nhỏ, Demi check log nhé!",
+        message: "Server gặp sự cố nhỏ, check log nhé!",
         error: process.env.NODE_ENV === 'development' ? err.message : {}
     });
 });
