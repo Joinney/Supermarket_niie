@@ -1,5 +1,5 @@
 import express from 'express';
-import { getShippingFee, placeOrder } from '../controllers/orderController.js';
+import { getShippingFee, placeOrder, vnpayReturn } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -138,22 +138,37 @@ router.post('/shipping-fee', protect, getShippingFee);
  *     responses:
  *       201:
  *         description: Đơn hàng đã được tạo thành công
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 ma_don_hang:
- *                   type: string
- *                 message:
- *                   type: string
  *       401:
  *         description: Chưa đăng nhập
  *       500:
  *         description: Lỗi máy chủ
  */
 router.post('/place-order', protect, placeOrder);
+
+/**
+ * @swagger
+ * /orders/vnpay-callback:
+ *   get:
+ *     summary: Tiếp nhận phản hồi kết quả giao dịch từ VNPay
+ *     tags:
+ *       - Orders
+ *     parameters:
+ *       - in: query
+ *         name: vnp_ResponseCode
+ *         schema:
+ *           type: string
+ *         description: Mã phản hồi kết quả (00 là thành công)
+ *       - in: query
+ *         name: vnp_SecureHash
+ *         schema:
+ *           type: string
+ *         description: Chuỗi mã hóa bảo toàn dữ liệu
+ *     responses:
+ *       200:
+ *         description: Xử lý đối soát thành công
+ *       400:
+ *         description: Chuỗi chữ ký không hợp lệ
+ */
+router.get('/vnpay-callback', vnpayReturn);
 
 export default router;

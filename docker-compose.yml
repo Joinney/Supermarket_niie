@@ -93,6 +93,9 @@ services:
     container_name: vdt_frontend
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend-web:/app
+      - /app/node_modules
     depends_on:
       - auth-service
       - product-service
@@ -113,8 +116,7 @@ services:
       - demi_network
     restart: always
 
-
-    # 9. ORDER SERVICE (Cổng 5005)
+  # 9. ORDER SERVICE (Cổng 5005)
   order-service:
     build: ./backend-node/services/order-service
     container_name: demi_order_service
@@ -122,6 +124,10 @@ services:
       - "5005:5005"
     env_file: 
       - ./backend-node/services/order-service/.env
+    # 🚀 ĐÃ BỔ SUNG THÊM VOLUMES ĐỂ ĐỒNG BỘ CODE & BIẾN MÔI TRƯỜNG .ENV LẬP TỨC
+    volumes:
+      - ./backend-node/services/order-service:/app
+      - /app/node_modules
     depends_on:
       - db
       - cache
