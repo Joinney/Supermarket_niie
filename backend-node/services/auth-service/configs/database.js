@@ -11,9 +11,9 @@ const pool = new Pool({
 
   // 2. Thông số dự phòng (Nếu DATABASE_URL trống)
   user: process.env.DB_USER || 'supermarket_db_exvs_user',
-  host: process.env.DB_HOST || 'dpg-d7lkmvjeo5us73dmsfi0-a.singapore-postgres.render.com', // Đã sửa đuôi chuẩn
+  host: process.env.DB_HOST || 'dpg-d8jb8du47okc73a2mk8g-a.singapore-postgres.render.com', // Đã sửa đuôi chuẩn
   database: process.env.DB_NAME || 'demi_auth_db',
-  password: process.env.DB_PASSWORD || 'u0tGq1rZG5nb84Ek2siWlqzIDb9W8qO7',
+  password: process.env.DB_PASSWORD || 'eN0b2l8Vxo6BzJTgu1rBkXzVvAeZ8kKg',
   port: parseInt(process.env.DB_PORT || '5432'),
 
   // 3. SSL là bắt buộc khi kết nối tới Render DB từ bên ngoài hoặc chạy production
