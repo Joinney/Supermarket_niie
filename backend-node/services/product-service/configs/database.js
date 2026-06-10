@@ -17,9 +17,9 @@ const pool = new Pool({
   port: parseInt(process.env.DB_PORT || '5432'),
 
   // 3. SSL là bắt buộc khi kết nối tới Render DB từ bên ngoài hoặc chạy production
- // ssl: {
- //   rejectUnauthorized: false
- // }
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 pool.on('connect', () => {
