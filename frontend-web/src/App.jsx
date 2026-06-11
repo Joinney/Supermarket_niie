@@ -1,10 +1,11 @@
 import React, { useState, useContext } from "react";
-import { BrowserRouter as Router, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { OrderProvider } from "./context/OrderContext";
-import { ProtectedRoute } from "./components/ProtectedRoute"; // Import bảo vệ route
+import { ProtectedRoute } from "./components/ProtectedRoute"; // Bảo vệ route khách hàng
 
+// --- IMPORTS GIAO DIỆN KHÁCH HÀNG ---
 import Checkout from "./pages/Checkout/Checkout";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
@@ -17,8 +18,13 @@ import Profile from "./pages/Profile/Profile";
 import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
 
+// --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHUẨN ĐƯỜNG DẪN) ---
+import AdminLogin from "./admindb/pages/Auth/AdminLogin";
+import Dashboard from "./admindb/pages/Dashboard"; // SỬA: Đúng vị trí src/admindb/pages/Dashboard.jsx
+import AdminProtect from "./admindb/components/AdminProtect"; // Bộ lọc bảo vệ admin
+
 /**
- * 1. LAYOUTS
+ * 1. LAYOUTS (KHÁCH HÀNG)
  */
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -41,15 +47,24 @@ const AuthLayout = () => (
 );
 
 /**
+ * NEW: LAYOUTS (ADMIN BIỆT LẬP)
+ */
+const AdminLayout = () => (
+  <div className="min-h-screen w-full bg-gray-100 text-gray-900">
+    <Outlet />
+  </div>
+);
+
+/**
  * 2. CẤU HÌNH ROUTES
  */
 const AppRoutes = () => (
   <Routes>
+    {/* ================= ROUTES CHO KHÁCH HÀNG ================= */}
     <Route element={<MainLayout />}>
       <Route path="/" element={<Home />} />
       <Route path="/:country_code/product/:category_slug/:id/:variantId?" element={<ProductDetail />} />
       <Route path="/cart" element={<Cart />} />
-      {/* Route Checkout đã được bọc trong ProtectedRoute */}
       <Route path="/checkout" element={
         <ProtectedRoute>
           <Checkout />
@@ -57,10 +72,24 @@ const AppRoutes = () => (
       } /> 
       <Route path="/profile/:tab?" element={<Profile />} />
     </Route>
+
     <Route element={<AuthLayout />}>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+    </Route>
+
+    {/* ================= ROUTES BIỆT LẬP CHO ADMIN ================= */}
+    <Route element={<AdminLayout />}>
+      {/* Trang đăng nhập của Admin */}
+      <Route path="/admin/login" element={<AdminLogin />} />
+      
+      {/* Trang quản trị Dashboard */}
+      {/* MẸO: Tạm thời bỏ bọc <AdminProtect> để test xem ứng dụng có hết trắng trang không */}
+      <Route path="/admin/dashboard" element={<Dashboard />} />
+
+      {/* Điều hướng an toàn */}
+      <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     </Route>
   </Routes>
 );
