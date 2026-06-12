@@ -1,6 +1,7 @@
 import express from 'express';
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
+import pool from '../configs/database.js';
 
 const router = express.Router();
 
@@ -24,6 +25,19 @@ router.get('/google', passport.authenticate('google', {
     prompt: 'select_account' 
 }));
 
+// ✅ Hàm lấy cookie options (tái sử dụng từ authController)
+const getCookieOptions = (req) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isLocalhost = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    
+    return {
+        httpOnly: true,
+        secure: isProduction && !isLocalhost, 
+        sameSite: (isProduction && !isLocalhost) ? 'None' : 'Lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000 
+    };
+};
+
 /**
  * @swagger
  * /api/auth/google/callback:
@@ -34,19 +48,34 @@ router.get('/google', passport.authenticate('google', {
 router.get('/google/callback', 
     // SỬA: session: false vì Demi đang dùng JWT
     passport.authenticate('google', { failureRedirect: '/login', session: false }),
-    (req, res) => {
+    async (req, res) => {
         try {
             const user = req.user;
 
-            // 1. Tạo Token JWT (SỬA: Dùng đúng tên biến môi trường trong .env của Demi)
-            // Đảm bảo JWT_ACCESS_SECRET khớp với các service khác
-            const token = jwt.sign(
+            // ✅ 1. Tạo Access Token (15 phút)
+            const accessToken = jwt.sign(
                 { id: user.user_id, email: user.email, role: user.role },
-                process.env.JWT_ACCESS_SECRET || 'your_secret_key', 
+                process.env.JWT_ACCESS_SECRET || 'vdt_secret_2026', 
+                { expiresIn: '15m' }
+            );
+
+            // ✅ 2. Tạo Refresh Token (7 ngày)
+            const refreshToken = jwt.sign(
+                { id: user.user_id },
+                process.env.JWT_REFRESH_SECRET || 'vdt_refresh_secret_2026',
                 { expiresIn: '7d' }
             );
 
-            // 2. Chuẩn bị thông tin User
+            // ✅ 3. Lưu Refresh Token vào Database
+            await pool.query(
+                'UPDATE users SET refresh_token = $1, last_login = NOW() WHERE user_id = $2',
+                [refreshToken, user.user_id]
+            );
+
+            // ✅ 4. Gửi cookie refreshToken
+            res.cookie('refreshToken', refreshToken, getCookieOptions(req));
+
+            // 5. Chuẩn bị thông tin User
             const userData = {
                 user_id: user.user_id,
                 full_name: user.full_name || user.username,
@@ -54,7 +83,7 @@ router.get('/google/callback',
                 role: user.role
             };
 
-            // 3. XỬ LÝ REDIRECT THÔNG MINH
+            // 6. XỬ LÝ REDIRECT THÔNG MINH
             const rawUrls = process.env.FRONTEND_URL || 'http://localhost:5173';
             const allowedOrigins = rawUrls.split(',').map(url => url.trim());
 
@@ -65,8 +94,8 @@ router.get('/google/callback',
 
             frontendUrl = frontendUrl.replace(/\/$/, "");
 
-            // Tạo chuỗi Redirect kèm token và user info
-            const queryParams = `token=${token}&user=${encodeURIComponent(JSON.stringify(userData))}`;
+            // Tạo chuỗi Redirect kèm token và user info (✅ THÊM refreshToken)
+            const queryParams = `token=${accessToken}&user=${encodeURIComponent(JSON.stringify(userData))}&refreshToken=${refreshToken}`; 
             const redirectUrl = `${frontendUrl}/login-success?${queryParams}`; 
             
             console.log(`[Google Auth] [${isLocalhost ? 'LOCAL' : 'RENDER'}] Redirecting to:`, redirectUrl);

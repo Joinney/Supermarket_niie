@@ -10,10 +10,10 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 
   // 2. Thông số dự phòng (Nếu DATABASE_URL trống)
-  user: process.env.DB_USER || 'supermarket_db_exvs_user',
-  host: process.env.DB_HOST || 'dpg-d7lkmvjeo5us73dmsfi0-a.singapore-postgres.render.com', // Đã sửa đuôi chuẩn
+  user: process.env.DB_USER || 'postgres.aiesurvlmtrrgdiwxtma',
+  host: process.env.DB_HOST || 'aws-1-ap-southeast-1.pooler.supabase.com', // Đã sửa đuôi chuẩn
   database: process.env.DB_NAME || 'demi_product_db',
-  password: process.env.DB_PASSWORD || 'u0tGq1rZG5nb84Ek2siWlqzIDb9W8qO7',
+  password: process.env.DB_PASSWORD || 'demimart@2026',
   port: parseInt(process.env.DB_PORT || '5432'),
 
   // 3. SSL là bắt buộc khi kết nối tới Render DB từ bên ngoài hoặc chạy production

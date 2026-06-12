@@ -20,13 +20,14 @@ export default function Login() {
         { value: "30m", label: "Fast Delivery" },
     ];
 
-    // Nếu đã đăng nhập thì đá về trang chủ ngay
+    // Nếu đã có user hợp lệ nằm vững trong hệ thống thì điều hướng về Home
     useEffect(() => {
         if (user) {
             navigate("/", { replace: true });
         }
     }, [user, navigate]);
 
+    // 🎯 CẬP NHẬT: Xử lý đăng nhập cưỡng chế luồng điều hướng trang
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
@@ -35,13 +36,16 @@ export default function Login() {
         try {
             const result = await login(username, password);
             
-            if (!result.success) {
+            if (result && result.success) {
+                console.log("🚀 Login thành công! Tiến hành điều hướng an toàn...");
+                
+                // 🎯 Sử dụng replace cứng của window để làm mới trạng thái DOM, 
+                // giúp cố định 3 key (token, refreshToken, user) vững chắc trong localStorage
+                window.location.replace("/");
+            } else {
                 setError(result.message || "Email hoặc mật khẩu không đúng");
                 setLoading(false);
             }
-            // If success, AuthContext updates the user state,
-            // which triggers the useEffect in CartContext to merge the cart automatically.
-            // Also the useEffect in Login.jsx will navigate to '/' automatically.
         } catch (err) {
             console.error("Login logic error:", err);
             setError("Lỗi kết nối server. Vui lòng thử lại sau.");
@@ -51,8 +55,6 @@ export default function Login() {
 
     const handleGoogleLogin = () => {
         setLoading(true);
-        // Không xóa demi_cart! Chỉ xóa những item cũ khác
-        // demi_cart sẽ được merge khi Google redirect trở lại
         const apiBaseUrl = import.meta.env.VITE_API_AUTH_URL || "http://localhost:5001";
         setTimeout(() => {
             window.location.href = `${apiBaseUrl}/api/auth/google`;
@@ -60,7 +62,6 @@ export default function Login() {
     };
 
     return (
-        // Đổi overflow-hidden thành overflow-y-auto để mobile không bị cắt mất form
         <div className="fixed inset-0 h-screen w-screen flex bg-white overflow-y-auto font-['Plus_Jakarta_Sans',sans-serif] z-[9999]">
             
             {/* TRÁI: HERO SECTION */}
