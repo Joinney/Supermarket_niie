@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. Database
   db:
@@ -59,12 +57,12 @@ services:
 
   # 5. CART SERVICE (Cổng 5003)
   cart-service:
-    build: ./backend-node/services/cart-service
+    build: ./backend-node/cart-service
     container_name: demi_cart_service
     ports:
       - "5003:5003"
     env_file: 
-      - ./backend-node/services/cart-service/.env
+      - ./backend-node/cart-service/.env
     depends_on:
       - db
       - cache
