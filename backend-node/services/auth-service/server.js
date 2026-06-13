@@ -122,12 +122,11 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    // Bổ sung log toàn bộ stack trace để dễ debug trên terminal Render
     console.error('🔥 LỖI HỆ THỐNG CHI TIẾT:', err);
     res.status(500).json({ 
         success: false, 
         message: "Server gặp sự cố nhỏ, check log nhé!",
-        error: err.message || "Lỗi không xác định"
+        error: err.message || "Lỗi hệ thống không xác định"
     });
 });
 
