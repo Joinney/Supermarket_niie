@@ -8,7 +8,10 @@ import {
   Star, Wallet, Ticket, Bell, Eye, History, Zap, Award, X, Plus, ChevronDown, Search, Trash2, Edit2, Check, Loader2
 } from "lucide-react";
 
-// --- CẤU HÌNH API INSTANCE ---
+// 🚀 IMPORT THƯ VIỆN CẮT ẢNH CHUYÊN NGHIỆP
+import Cropper from "react-easy-crop";
+
+// --- CẤU HÌNH API INSTANCE TỰ ĐỘNG DI CHUYỂN MÔI TRƯỜNG ---
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const API_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://authservice-sz4p.onrender.com';
 
@@ -25,6 +28,44 @@ api.interceptors.request.use((config) => {
     return config;
 }, (error) => Promise.reject(error));
 
+// 📦 HELPER TẠO ẢNH ĐÃ CẮT TỪ CANVAS (CANVAS CROPPER UTILS)
+const getCroppedImg = (imageSrc, pixelCrop) => {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.src = imageSrc;
+    image.crossOrigin = "anonymous"; // Tránh lỗi CORS khi xử lý ảnh từ Cloudinary/Render
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+
+      ctx.drawImage(
+        image,
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0,
+        0,
+        pixelCrop.width,
+        pixelCrop.height
+      );
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Canvas trống rỗng"));
+          return;
+        }
+        blob.name = "cropped-avatar.jpeg";
+        resolve(blob);
+      }, "image/jpeg");
+    };
+    image.onerror = (error) => reject(error);
+  });
+};
+
 export default function ProfilePage() {
   const { user: authUser, updateUser } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -36,14 +77,21 @@ export default function ProfilePage() {
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
   const [loading, setLoading] = useState(true);
 
-  // --- STATES QUẢN LÝ DANH MỤC ĐỊA CHÍNH ĐỘNG (DROPDOWN SEARCHABLE) ---
+  // --- STATES QUẢN LÝ CẮT ẢNH ĐẠI DIỆN ---
+  const [imageSrc, setImageSrc] = useState(null); 
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [isCropping, setIsCropping] = useState(false); 
+
+  // --- STATES QUẢN LÝ DANH MỤC ĐỊA CHÍNH ĐỘNG ---
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState(null); 
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
   const [wards, setWards] = useState([]);
   const [loadingGeography, setLoadingGeography] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState(null); // 'province', 'district', 'ward'
+  const [openDropdown, setOpenDropdown] = useState(null); 
   const [searchTerm, setSearchTerm] = useState('');
 
   const provinceRef = useRef(null);
@@ -80,7 +128,6 @@ export default function ProfilePage() {
     { title: "Mua sắm", items: mobileTabs.slice(4) }
   ];
 
-  // Lắng nghe click ngoài vùng để tự đóng dropdown lọc tìm kiếm
   useEffect(() => {
     function handleClickOutside(event) {
       if (
@@ -95,7 +142,6 @@ export default function ProfilePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Tự động đổi tab dựa trên URL
   useEffect(() => {
     const currentTab = mobileTabs.find(t => t.path === (tab || ""));
     if (currentTab) {
@@ -105,7 +151,6 @@ export default function ProfilePage() {
     }
   }, [tab]);
 
-  // Tải dữ liệu hồ sơ cá nhân khi khởi chạy trang
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -123,20 +168,19 @@ export default function ProfilePage() {
     fetchProfile();
   }, []);
 
-  // Tải danh sách địa chỉ người dùng
   useEffect(() => {
     if (activeTab === "addresses") {
       fetchAddresses();
     }
   }, [activeTab]);
 
-  // Kéo danh mục Tỉnh/Thành từ lõi Proxy khi mở form nhập liệu
+  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL để Render bốc được dữ liệu Tỉnh/Thành
   useEffect(() => {
     if (isAddressModalOpen) {
       const fetchProvincesGeo = async () => {
         try {
           setLoadingGeography(true);
-          const res = await axios.get('http://localhost:5001/api/addresses/locations/provinces');
+          const res = await axios.get(`${API_BASE_URL}/api/addresses/locations/provinces`);
           if (res.data && res.data.success) {
             setProvinces(res.data.data || []);
           }
@@ -161,7 +205,7 @@ export default function ProfilePage() {
     }
   };
 
-  // --- LOGIC XỬ LÝ CHỌN VÀ FETCH DANH MỤC LỒNG NHAU (SEARCHABLE) ---
+  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động cho Quận/Huyện
   const selectProvince = async (id, name) => {
     setDistricts([]);
     setWards([]);
@@ -179,7 +223,7 @@ export default function ProfilePage() {
 
     setLoadingGeography(true);
     try {
-      const res = await axios.get(`http://localhost:5001/api/addresses/locations/districts?province_id=${id}`);
+      const res = await axios.get(`${API_BASE_URL}/api/addresses/locations/districts?province_id=${id}`);
       if (res.data && res.data.success) {
         setDistricts(res.data.data || []);
       }
@@ -190,6 +234,7 @@ export default function ProfilePage() {
     }
   };
 
+  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động cho Phường/Xã
   const selectDistrict = async (id, name) => {
     setWards([]);
     setAddressForm(prev => ({
@@ -204,7 +249,7 @@ export default function ProfilePage() {
 
     setLoadingGeography(true);
     try {
-      const res = await axios.get(`http://localhost:5001/api/addresses/locations/wards?district_id=${id}`);
+      const res = await axios.get(`${API_BASE_URL}/api/addresses/locations/wards?district_id=${id}`);
       if (res.data && res.data.success) {
         setWards(res.data.data || []);
       }
@@ -221,12 +266,10 @@ export default function ProfilePage() {
     setSearchTerm('');
   };
 
-  // Lọc mảng động khi gõ từ khóa tìm kiếm
   const filteredProvinces = provinces.filter(p => p.ProvinceName.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredDistricts = districts.filter(d => d.DistrictName.toLowerCase().includes(searchTerm.toLowerCase()));
   const filteredWards = wards.filter(w => w.WardName.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Kích hoạt Modal Thêm/Sửa
   const handleOpenAddModal = () => {
     setEditingAddressId(null);
     setDistricts([]);
@@ -242,6 +285,7 @@ export default function ProfilePage() {
     setIsAddressModalOpen(true);
   };
 
+  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động khi sửa địa chỉ cũ
   const handleOpenEditModal = async (addr) => {
     setEditingAddressId(addr.address_id);
     setAddressForm({ 
@@ -254,11 +298,11 @@ export default function ProfilePage() {
     if (addr.province_id) {
       try {
         setLoadingGeography(true);
-        const distRes = await axios.get(`http://localhost:5001/api/addresses/locations/districts?province_id=${addr.province_id}`);
+        const distRes = await axios.get(`${API_BASE_URL}/api/addresses/locations/districts?province_id=${addr.province_id}`);
         if (distRes.data.success) setDistricts(distRes.data.data || []);
         
         if (addr.district_id) {
-          const wardRes = await axios.get(`http://localhost:5001/api/addresses/locations/wards?district_id=${addr.district_id}`);
+          const wardRes = await axios.get(`${API_BASE_URL}/api/addresses/locations/wards?district_id=${addr.district_id}`);
           if (wardRes.data.success) setWards(wardRes.data.data || []);
         }
       } catch (err) {
@@ -343,28 +387,48 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAvatarChange = async (e) => {
+  const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append("avatar", file);
 
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setImageSrc(reader.result); 
+    });
+    reader.readAsDataURL(file);
+  };
+
+  const onCropComplete = (croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const handleUploadCroppedAvatar = async () => {
     try {
-        const response = await api.post("/profile/upload-avatar", formData, {
-            headers: { "Content-Type": "multipart/form-data" }
-        });
-        if (response.data.success) {
-            const newUrl = response.data.avatarUrl;
-            setProfile(prev => ({ ...prev, avatar_url: newUrl }));
-            if (updateUser) updateUser({ avatar_url: newUrl });
-            showToast("Đã cập nhật ảnh đại diện mới!");
-        }
+      setIsCropping(true);
+      const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
+      
+      const formData = new FormData();
+      formData.append("avatar", croppedBlob, "cropped-avatar.jpeg");
+
+      const response = await api.post("/profile/upload-avatar", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+      });
+
+      if (response.data.success) {
+          const newUrl = response.data.avatarUrl;
+          setProfile(prev => ({ ...prev, avatar_url: newUrl }));
+          if (updateUser) updateUser({ avatar_url: newUrl });
+          showToast("Đã cập nhật ảnh đại diện tùy chỉnh rực rỡ!");
+          setImageSrc(null); 
+      }
     } catch (error) {
-        console.error("Lỗi upload avatar:", error);
+        console.error("Lỗi upload avatar sau khi cắt:", error);
+        showToast("Lỗi xử lý cắt ảnh hệ thống", "error");
+    } finally {
+        setIsCropping(false);
     }
   };
 
-  // --- LOGIC XỬ LÝ BẢO MẬT ĐA LỚP ---
   const handleVerifyCurrentPassword = async () => {
     try {
       const res = await api.post("/profile/verify-password", { password: currentPassword });
@@ -425,7 +489,6 @@ export default function ProfilePage() {
     return `${API_BASE_URL}${url.startsWith('/') ? url : '/' + url}?t=${new Date().getTime()}`;
   };
 
-  // MOCK DATA CÁC TAB CHƯA ĐẨY RA MICROSERVICES
   const notifications = [
     { id: 1, title: "Ưu đãi Platinum độc quyền", desc: "Giảm ngay 100k cho đơn hàng từ 500k.", time: "10 phút trước", unread: true },
     { id: 2, title: "Đơn hàng #DM9922 thành công", desc: "Kiện hàng của bạn đã được giao đến đích.", time: "2 giờ trước", unread: false },
@@ -444,7 +507,7 @@ export default function ProfilePage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="w-10 h-10 border-4 border-`#006c49` border-t-transparent rounded-full animate-spin"></div>
+      <div className="w-10 h-10 border-4 border-[#006c49] border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
 
@@ -457,9 +520,72 @@ export default function ProfilePage() {
   return (
     <div className="w-full bg-[#f0f2f5] font-sans text-slate-700 min-h-screen transition-all relative selection:bg-[#006c49] selection:text-white pb-8 text-left">
       
-      {/* ========================================================
-          🎯 MODAL NHẬP LIỆU ĐỊA CHÍNH SEARCHABLE LỌC TÌM KIẾM ĐỘNG
-          ======================================================== */}
+      {/* MODAL CẮT ẢNH ĐẠI DIỆN */}
+      {imageSrc && (
+        <div className="fixed inset-0 z-[10008] flex flex-col items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-800">
+            <div className="p-5 border-b flex justify-between items-center bg-white">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Cắt chỉnh ảnh đại diện</h3>
+              <button disabled={isCropping} onClick={() => setImageSrc(null)} className="text-slate-400 hover:text-red-500 transition-all">
+                <X size={18}/>
+              </button>
+            </div>
+
+            <div className="relative w-full h-80 bg-slate-900">
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1} 
+                cropShape="rect" 
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            </div>
+
+            <div className="p-6 bg-white space-y-5">
+              <div className="space-y-2">
+                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  <span>Thu nhỏ</span>
+                  <span>Phóng to</span>
+                </div>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-label="Zoom"
+                  className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#006c49]"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2 border-t">
+                <button 
+                  type="button" 
+                  disabled={isCropping}
+                  onClick={() => setImageSrc(null)} 
+                  className="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider text-slate-400 hover:bg-slate-50 border disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button 
+                  type="button" 
+                  disabled={isCropping}
+                  onClick={handleUploadCroppedAvatar} 
+                  className="flex-1 bg-[#006c49] text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md flex items-center justify-center gap-2 disabled:opacity-75"
+                >
+                  {isCropping ? <Loader2 size={12} className="animate-spin" /> : "Xác nhận cắt"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NHẬP LIỆU ĐỊA CHÍNH */}
       {isAddressModalOpen && (
         <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-fadeIn">
           <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-toastIn border border-slate-100">
@@ -482,7 +608,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* DROPDOWN CHỌN TỈNH THÀNH (CÓ TÌM KIẾM) */}
+              {/* DROPDOWN CHỌN TỈNH THÀNH */}
               <div className="relative" ref={provinceRef}>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Tỉnh / Thành phố</label>
                 <div 
@@ -513,7 +639,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* DROPDOWN CHỌN QUẬN HUYỆN (CÓ TÌM KIẾM) */}
+                {/* DROPDOWN CHỌN QUẬN HUYỆN */}
                 <div className="relative" ref={districtRef}>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Quận / Huyện</label>
                   <div 
@@ -543,7 +669,7 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* DROPDOWN CHỌN PHƯỜNG XÃ (CÓ TÌM KIẾM) */}
+                {/* DROPDOWN CHỌN PHƯỜNG XÃ */}
                 <div className="relative" ref={wardRef}>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Phường / Xã</label>
                   <div 
@@ -592,7 +718,7 @@ export default function ProfilePage() {
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${addressForm.is_default ? 'bg-[#006c49] border-[#006c49]' : 'border-slate-200'}`}>
                     {addressForm.is_default && <CheckCircle2 size={12} className="text-white"/>}
                   </div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest📌">Mặc định</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mặc định</span>
                 </label>
               </div>
 
@@ -772,11 +898,11 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="flex flex-col items-center justify-start pt-2 order-1 lg:order-2">
-                        <div className="bg-[#f8fafc] rounded-[32px] p-8 border-2 border-slate-100 border-dashed w-full flex flex-col items-center text-center">
+                        <div className="bg-white rounded-[32px] p-8 border-2 border-slate-100 border-dashed w-full flex flex-col items-center text-center">
                           <div className="relative mb-4 group">
                             <img src={getAvatarSrc(profile.avatar_url)} className="w-28 h-28 rounded-[36px] object-cover border-4 border-white shadow-xl group-hover:scale-105 transition-all" alt="Avatar" />
                             <label htmlFor="avatar-up" className="absolute -bottom-1 -right-1 bg-white p-2.5 rounded-xl shadow-lg border border-slate-100 text-[#006c49] cursor-pointer hover:scale-115 transition-all"><Camera size={16} /></label>
-                            <input type="file" id="avatar-up" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                            <input type="file" id="avatar-up" className="hidden" accept="image/*" onChange={handleAvatarChange} onClick={(e) => { e.target.value = null; }} />
                           </div>
                           <p className="text-[10px] font-black text-slate-400 uppercase">Ảnh hồ sơ cá nhân</p>
                         </div>
@@ -789,7 +915,7 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* --- TAB 2: SỔ ĐỊA CHỈ CAO CẤP (GLASSMORPHISM VIEW) --- */}
+                {/* --- TAB 2: SỔ ĐỊA CHỈ --- */}
                 {activeTab === "addresses" && (
                   <div className="space-y-6 animate-fadeIn">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-4 text-left">
@@ -851,7 +977,7 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* --- TAB 3: BẢO MẬT ĐA LỚP --- */}
+                {/* --- TAB 3: BẢO MẬT --- */}
                 {activeTab === "security" && (
                   <div className="animate-fadeIn space-y-6 text-left">
                     <div className="border-b border-slate-100 pb-4">
@@ -861,7 +987,6 @@ export default function ProfilePage() {
 
                     <div className="max-w-xl mx-auto pt-4">
                       <div className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm relative overflow-hidden text-center">
-                        
                         {securityStep === "verify-password" && (
                           <div className="space-y-6 animate-fadeIn">
                             <div className="w-16 h-16 bg-[#e6f0ed] rounded-3xl flex items-center justify-center text-[#006c49] mx-auto"><ShieldCheck size={32} /></div>
@@ -990,6 +1115,21 @@ export default function ProfilePage() {
         .animate-toastIn { animation: toastIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Giao diện thanh trượt phóng to thu nhỏ */
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #006c49;
+          cursor: pointer;
+          transition: all 0.1s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.2);
+        }
       `}} />
     </div>
   );
