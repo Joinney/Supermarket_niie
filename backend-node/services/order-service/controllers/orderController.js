@@ -166,22 +166,27 @@ const placeOrder = async (req, res) => {
       danh_sach_san_pham,
       phuong_thuc_thanh_toan,
       paypal_transaction_id,
-      paypal_order_id
+      paypal_order_id,
+      thong_tin_giao_hang // Bóc tách thêm object này để đảm bảo có dữ liệu shipper/người nhận
     } = req.body;
     
-    if (!to_district_id || !to_ward_code || !danh_sach_san_pham) return res.status(400).json({ success: false, message: "Dữ liệu đơn hàng thiếu!" });
+    if (!to_district_id || !to_ward_code || !danh_sach_san_pham) {
+      return res.status(400).json({ success: false, message: "Dữ liệu đơn hàng thiếu!" });
+    }
 
+    // Tính toán lại phí vận chuyển từ GHN dựa trên district và ward code
     const shippingCheck = await calculateGhnShippingCost(to_district_id, to_ward_code, req.body.weight);
     req.body.phi_van_chuyen = shippingCheck.cost;
+    req.body.don_vi_van_chuyen = shippingCheck.name;
     
+    // Tính tổng thanh toán cuối cùng
     let finalTotal = Number(tong_tien_hang) + shippingCheck.cost - Number(req.body.so_tien_giam_gia || 0);
-    
     if (isNaN(finalTotal) || finalTotal < 5000) {
-      finalTotal = 50000;
+      finalTotal = 50000; // Ngưỡng an toàn hoặc test
     }
-    
     req.body.tong_thanh_toan = finalTotal;
 
+    // Chuẩn hóa cấu trúc dữ liệu trước khi bắn vào Model khởi tạo DB
     const normalizedOrder = {
         ...req.body,
         danh_sach_san_pham: danh_sach_san_pham.map(item => ({
@@ -193,9 +198,11 @@ const placeOrder = async (req, res) => {
         paypal_order_id: paypal_order_id ? String(paypal_order_id) : null
     };
 
+    // Gọi tầng Model thực thi Query vào Database
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công với ID:", order.id);
 
+    // Xử lý luồng thanh toán VNPay nếu user chọn phương thức này
     if (phuong_thuc_thanh_toan === 'VNPay') {
       const paymentUrl = createVnpayUrl(req, order.ma_don_hang, finalTotal);
       console.log("👉 LINK VNPAY CỦA DEMI:", paymentUrl);
@@ -209,10 +216,17 @@ const placeOrder = async (req, res) => {
       });
     }
 
-    res.status(201).json({ success: true, ma_don_hang: order.ma_don_hang, message: "Đặt hàng thành công!" });
+    // Trả về kết quả cho phương thức COD thông thường
+    return res.status(201).json({ success: true, ma_don_hang: order.ma_don_hang, message: "Đặt hàng thành công!" });
+
   } catch (err) {
-    console.error("Order Place Error:", err);
-    res.status(500).json({ success: false, message: "Lỗi hệ thống khi tạo đơn!" });
+    // 🔴 ĐOẠN QUAN TRỌNG: Log toàn bộ object lỗi để debug tận gốc
+    console.error("🔥 [LỖI TẠO ĐƠN HÀNG LOG CHI TIẾT]:");
+    console.error("- Message:", err.message);
+    console.error("- Stack Trace:", err.stack);
+    if (err.detail) console.error("- DB Detail Error:", err.detail); // Hiển thị lỗi ràng buộc của PostgreSQL (nếu có)
+    
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tạo đơn!" });
   }
 };
 

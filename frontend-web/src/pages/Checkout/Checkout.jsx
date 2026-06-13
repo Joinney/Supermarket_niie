@@ -131,17 +131,23 @@ export default function Checkout() {
   const finalTotal = itemTotal + shippingFee - xuDiscount;
 
   // ========================================================
-  // 🎯 LUỒNG XỬ LÝ LƯU ĐƠN CHUNG (GOM CHUNG CHO CÁC PHƯƠNG THỨC)
+  // 🎯 LUỒNG XỬ LÝ LƯU ĐƠN CHUNG (TỐI ƯU CHO LOCAL & RENDER CLOUD)
   // ========================================================
   const executePlaceOrder = async (extraPaymentInfo = {}) => {
+    if (!address) return alert("Vui lòng chọn địa chỉ giao hàng hợp lệ!");
+
+    // Trích xuất an toàn các mã định danh địa chỉ tránh lỗi hiển thị NaN ngầm sang backend
+    const targetDistrictId = address.district_id || address.to_district_id || address.districtId;
+    const targetWardCode = address.ward_code || address.to_ward_code || address.wardCode || address.ward_id;
+
     const orderData = {
       thong_tin_giao_hang: {
-        ten_nguoi_nhan: address.receiver_name,
-        so_dien_thoai: address.receiver_phone,
-        dia_chi_day_du: `${address.detail_address}, ${address.ward_name}, ${address.district_name}, ${address.province_name}`
+        ten_nguoi_nhan: address.receiver_name || address.receiverName || "Khách hàng",
+        so_dien_thoai: address.receiver_phone || address.receiverPhone || "0123456789",
+        dia_chi_day_du: `${address.detail_address || address.detailAddress || ""}, ${address.ward_name || address.wardName || ""}, ${address.district_name || address.districtName || ""}, ${address.province_name || address.provinceName || ""}`
       },
-      to_district_id: Number(address.district_id),
-      to_ward_code: String(address.ward_code || address.ward_id),
+      to_district_id: Number(targetDistrictId),
+      to_ward_code: String(targetWardCode),
       weight: 1000,
       
       danh_sach_san_pham: checkoutCart.map(item => ({
@@ -150,7 +156,7 @@ export default function Checkout() {
         price: Number(item.price)
       })),
       
-      don_vi_van_chuyen: selectedShipping.name,
+      don_vi_van_chuyen: selectedShipping?.name || 'Giao Hàng Nhanh (Dự phòng)',
       tong_tien_hang: itemTotal,
       phi_van_chuyen: shippingFee,
       so_tien_giam_gia: xuDiscount,
@@ -160,28 +166,23 @@ export default function Checkout() {
     };
 
     try {
+      // Tự động điều hướng kết nối API linh hoạt theo môi trường thực thi của Order Context
       const result = placeOrder ? await placeOrder(orderData) : await orderApi.post('/orders/place-order', orderData);
       const cleanResult = result?.data || result; 
       
       if (cleanResult && cleanResult.success) {
         
-        // =========================================================================
-        // 🚀 LUỒNG THANH TOÁN VNPAY: ÉP PHÁ CACHE TRÌNH DUYỆT BẰNG NONCE TIMESTAMP
-        // =========================================================================
+        // 🚀 LUỒNG THANH TOÁN VNPAY: Ép bẻ cache trình duyệt bằng nonce timestamp
         if (cleanResult.phuong_thuc_thanh_toan === 'VNPay' && cleanResult.paymentUrl) {
-          // Lưu tạm danh sách variantId cần xóa vào vùng nhớ đệm, sau khi VNPay quay lại sẽ dọn dẹp
           const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
           localStorage.setItem('vnpay_pending_variants', JSON.stringify(boughtVariantIds));
           
-          // 🎯 MẸO HOÀN HẢO: Thêm timestamp ảo vào đuôi URL (sau SecureHash) để ép Chrome Hard Reload link mới tinh
           const finalPaymentUrl = `${cleanResult.paymentUrl}&vnp_BrowserNonce=${new Date().getTime()}`;
-          console.log("✈️ Front-end đang điều hướng sang link bẻ cache:", finalPaymentUrl);
-          
           window.location.href = finalPaymentUrl;
           return;
         }
 
-        // Luồng cũ của COD và PayPal giữ nguyên:
+        // Luồng dọn dẹp giỏ hàng khi đặt hàng thành công (COD và PayPal)
         alert(`🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart: ${cleanResult.ma_don_hang || cleanResult.data?.ma_don_hang || "DM-OK"}`);
         const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
         
@@ -213,18 +214,23 @@ export default function Checkout() {
     setIsPlacing(false);
   };
 
-  // 🚀 CALLBACK HOÀN TẤT THANH TOÁN QUA VÍ PAYPAL
+  // 🚀 CALLBACK PAYPAL HOÀN TẤT: Đồng bộ ghi nhận mã PayPal Transaction ID an toàn
   const handlePayPalSuccess = async (details) => {
-    setIsPlacing(true);
-    const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
-    console.log("🔑 Bốc được mã PayPal Transaction ID lưu database:", transactionId);
+    try {
+      setIsPlacing(true);
+      const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
+      console.log("🔑 Bốc được mã PayPal Transaction ID lưu database:", transactionId);
 
-    await executePlaceOrder({
-      trang_thai_thanh_toan: "completed",
-      paypal_transaction_id: transactionId,
-      paypal_order_id: details.id
-    });
-    setIsPlacing(false);
+      await executePlaceOrder({
+        trang_thai_thanh_toan: "completed",
+        paypal_transaction_id: transactionId,
+        paypal_order_id: details.id
+      });
+    } catch (err) {
+      console.error("Lỗi callback xử lý hậu PayPal:", err);
+    } finally {
+      setIsPlacing(false);
+    }
   };
 
   const isGlobalLoading = orderContextLoading || isPlacing;
@@ -237,7 +243,7 @@ export default function Checkout() {
         <div className="lg:col-span-8 space-y-6 text-left">
           
           {/* 1. ĐỊA CHỈ */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-l--[#006c49]">
+          <section className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-l-[#006c49]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider"><MapPin size={18} /> Địa chỉ nhận hàng</h2>
               <button onClick={() => setIsModalOpen(true)} className="text-[#006c49] font-black text-xs uppercase hover:underline">Thay đổi</button>
@@ -249,8 +255,8 @@ export default function Checkout() {
               </div>
             ) : address ? (
               <div className="text-sm font-bold flex flex-wrap items-center gap-3">
-                <p className="text-slate-900">{address.receiver_name} <span className="font-mono text-[#006c49] bg-emerald-50 px-1.5 py-0.5 rounded text-xs ml-1">(+84) {address.receiver_phone}</span></p>
-                <p className="text-gray-500 font-medium">{address.detail_address}, {address.ward_name}, {address.district_name}, {address.province_name}</p>
+                <p className="text-slate-900">{address.receiver_name || address.receiverName} <span className="font-mono text-[#006c49] bg-emerald-50 px-1.5 py-0.5 rounded text-xs ml-1">(+84) {address.receiver_phone || address.receiverPhone}</span></p>
+                <p className="text-gray-500 font-medium">{address.detail_address || address.detailAddress}, {address.ward_name || address.wardName}, {address.district_name || address.districtName}, {address.province_name || address.provinceName}</p>
                 {Boolean(address.is_default) && <span className="text-[10px] bg-red-50 text-red-500 font-black px-2 py-0.5 rounded uppercase tracking-wider">Mặc định</span>}
               </div>
             ) : (
@@ -258,7 +264,8 @@ export default function Checkout() {
                 <p className="text-red-500">Bạn chưa có địa chỉ nhận hàng nào trong hệ thống.</p>
                 <button onClick={() => navigate('/profile/address')} className="bg-[#006c49] text-white px-4 py-2 rounded-xl text-xs font-black uppercase">Thêm địa chỉ</button>
               </div>
-            )}
+            )
+          }
           </section>
 
           {/* 2. SẢN PHẨM */}
@@ -291,7 +298,7 @@ export default function Checkout() {
 
             {isLoadingShipping ? (
               <div className="flex items-center gap-2 text-sm text-amber-600 font-bold py-2">
-                <Loader2 className="animate-spin" size={16} /> Đang kết nối định tuyến cước phí GHN Production...
+                <Loader2 className="animate-spin" size={16} /> Đang kết nối định tuyến cước phí GHN...
               </div>
             ) : selectedShipping ? (
               <div className="flex items-center justify-between">
@@ -316,7 +323,7 @@ export default function Checkout() {
             </div>
           </section>
 
-          {/* 4. PHƯƠNG THỨC THANH TOÁN (ĐÃ GỒM PAYPAL + VNPAY) */}
+          {/* 4. PHƯƠNG THỨC THANH TOÁN */}
           <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider"><CreditCard size={18} /> Phương thức thanh toán</h2>
@@ -328,7 +335,6 @@ export default function Checkout() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-3">
-                {/* 🚀 ĐÃ CẬP NHẬT GỒM COD, PAYPAL, VNPAY, MOMO, BANKING */}
                 {['COD', 'PayPal', 'VNPay', 'MoMo', 'Banking'].map(method => (
                   <button key={method} onClick={() => { setSelectedPayment(method); setIsEditingPayment(false); }} className={`px-5 py-2.5 rounded-xl border-2 text-xs font-black uppercase tracking-wider transition-all ${selectedPayment === method ? 'border-[#006c49] bg-emerald-50/40 text-[#006c49]' : 'border-gray-200 text-gray-500'}`}>
                     {method === 'COD' ? 'Thanh toán khi nhận hàng' : method}
@@ -353,20 +359,16 @@ export default function Checkout() {
             </div>
             <p className="text-[10px] text-gray-400 text-center leading-relaxed">Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân thủ theo các chính sách bảo mật và Điều khoản mua sắm của Demi Mart.</p>
             
-            {/* ========================================================================= */}
-            {/* 🚀 KHỐI LOGIC ĐIỀU KIỆN QUYẾT ĐỊNH HIỂN THỊ NÚT THANH TOÁN CHÍNH XÁC LUỒNG    */}
-            {/* ========================================================================= */}
+            {/* 🚀 KHỐI HIỂN THỊ NÚT THANH TOÁN ĐỘNG QUY CHUẨN */}
             {selectedPayment === 'PayPal' ? (
-              // Luồng 1: Thanh toán PayPal
               <div className="w-full pt-2">
                 <PayPalButton 
                   amount={finalTotal} 
                   onSuccess={handlePayPalSuccess}
-                  onError={() => alert("Giao dịch PayPal bị gián đoạn, Demi vui lòng kiểm tra lại ví Sandbox nhé!")}
+                  onError={() => alert("Giao dịch PayPal bị gián đoạn, Demi vui lòng kiểm tra lại cấu hình Client ID nhé!")}
                 />
               </div>
             ) : (
-              // Luồng 2: COD, Banking và cổng điều hướng VNPay dùng chung nút đặt hàng mặc định
               <button 
                 onClick={handlePlaceOrder}
                 disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0}
@@ -380,7 +382,7 @@ export default function Checkout() {
         </div>
       </div>
 
-      <AddressModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSelect={(addr) => setAddress(addr)} currentAddresses={addresses} selectedAddressId={address?.address_id} onRefresh={fetchAddresses} />
+      <AddressModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSelect={(addr) => setAddress(addr)} currentAddresses={addresses} selectedAddressId={address?.address_id || address?.id} onRefresh={fetchAddresses} />
       <ShippingModal isOpen={isShippingModalOpen} onClose={() => setIsShippingModalOpen(false)} onSelect={(method) => setSelectedShipping(method)} shippingMethods={shippingMethods} selectedMethodId={selectedShipping?.id} />
     </div>
   );
