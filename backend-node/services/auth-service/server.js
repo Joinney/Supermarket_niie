@@ -122,11 +122,12 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error('🔥 LỖI HỆ THỐNG:', err.message);
+    // Bổ sung log toàn bộ stack trace để dễ debug trên terminal Render
+    console.error('🔥 LỖI HỆ THỐNG CHI TIẾT:', err);
     res.status(500).json({ 
         success: false, 
         message: "Server gặp sự cố nhỏ, check log nhé!",
-        error: process.env.NODE_ENV === 'development' ? err.message : {}
+        error: err.message || "Lỗi không xác định"
     });
 });
 
