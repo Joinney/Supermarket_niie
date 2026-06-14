@@ -43,6 +43,13 @@ export default function Header({ onOpenMenu }) {
   });
 
   useEffect(() => {
+    // Kiểm tra token để tránh lỗi Header kẹt thông tin khi phiên hết hạn
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setDisplayUser(null);
+      return;
+    }
+
     if (authUser) setDisplayUser(authUser);
     else setDisplayUser(null);
   }, [authUser]);

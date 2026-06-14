@@ -41,6 +41,13 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("❌ Lỗi Fetch Profile:", error.response?.data?.message || error.message);
+            // 🎯 Đăng xuất ngầm và xóa trạng thái User nếu API xác thực trả về 401 (Hết hạn Token)
+            if (error.response?.status === 401) {
+                updateUser(null);
+                localStorage.removeItem("token");
+                localStorage.removeItem("refreshToken");
+                delete authApi.defaults.headers.common['Authorization'];
+            }
             return null;
         }
     }, [updateUser]);

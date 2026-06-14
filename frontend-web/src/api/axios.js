@@ -54,7 +54,14 @@ const createInstance = (baseURL) => {
                         return instance(originalRequest);
                     } catch (refreshError) {
                         console.error("❌ Đổi Token ngầm thất bại. Phiên làm việc đã hết hạn hoàn toàn!");
+                        // Xóa sạch dữ liệu lỗi thời để Header không bị kẹt tài khoản
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("refreshToken");
+                        localStorage.removeItem("user");
                     }
+                } else if (!localRefreshToken && (baseURL.includes('authservice') || baseURL.includes('5001'))) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("user");
                 }
 
                 // 🎯 THAY ĐỔI QUAN TRỌNG: Nếu các service khác (Cart, Product) báo lỗi 401 do mất database local,
