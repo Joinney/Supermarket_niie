@@ -1,5 +1,5 @@
 # 1. Sử dụng image Node.js phiên bản ổn định
-FROM node:24-alpine
+FROM node:20-alpine
 
 # 2. Cài đặt các công cụ cần thiết (nếu service của bạn có dùng native modules)
 RUN apk add --no-cache python3 make g++
@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # 5. Cài đặt các thư viện cần thiết
-RUN npm install --production
+RUN npm install
 
 # 6. Copy toàn bộ mã nguồn còn lại
 COPY . .

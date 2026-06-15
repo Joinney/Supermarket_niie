@@ -1,5 +1,5 @@
 # Sử dụng phiên bản Node.js ổn định
-FROM node:24-alpine
+FROM node:20-alpine
 
 # Thiết lập thư mục làm việc bên trong container
 WORKDIR /app
@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Cài đặt các thư viện cần thiết
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy toàn bộ mã nguồn của order-service vào container
 COPY . .

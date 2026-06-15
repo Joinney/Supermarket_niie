@@ -1,85 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ArrowRight, Star, QrCode, Plus, Zap, AlertCircle } from 'lucide-react';
-import { productApi } from '../api/axios'; // PHẢI LÀ productApi
-/**
- * --- COMPONENT CON: THẺ SẢN PHẨM ---
- */
-const ProductCard = ({ p }) => {
-  // 1. Logic lấy ảnh an toàn (Nếu không có link thì dùng ảnh mặc định)
-  const defaultImage = "https://placehold.co/300x300?text=Demi+Mart";
-  const mainImage = p.hinh_anh_chinh || defaultImage;
-
-  // 2. Xử lý giá tiền an toàn (Đảm bảo luôn là số để toLocaleString không bị lỗi)
-  const currentPrice = Number(p.gia_ban_thap_nhat) || 0;
-  const originalPrice = null; 
-
-  // 3. CHUẨN HÓA DỮ LIỆU URL
-  const country = p.country_code || 'vn'; 
-  const category = p.slug_danh_muc || 'san-pham';
-
-  // 4. Lấy tồn kho
-  const stockCount = p.tong_ton_kho || 0;
-
-  return (
-    <Link to={`/${country}/product/${category}/${p.ma_san_pham}`} className="flex-shrink-0">
-      <div className="w-[170px] md:w-[210px] group cursor-pointer font-sans bg-white p-2 rounded-[32px] hover:shadow-2xl hover:shadow-slate-100 transition-all duration-500 border border-transparent hover:border-slate-50">
-        <div className="relative aspect-square bg-[#f8fafc] rounded-[24px] overflow-hidden mb-3 border border-slate-50 group-hover:border-[#e6f0ed] transition-all">
-          <img 
-            src={mainImage} 
-            loading="lazy"
-            // THÊM SỰ KIỆN NÀY: Nếu link ảnh từ DB bị chết/lỗi tải, tự động thay bằng ảnh mặc định
-            onError={(e) => { e.target.src = defaultImage; }}
-            className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition duration-500 p-4" 
-            alt={p.ten_san_pham || "Sản phẩm Demi"} 
-          />
-          <button 
-            className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
-            onClick={(e) => {
-              e.preventDefault();
-              // Logic thêm vào giỏ hàng
-              console.log("Thêm vào giỏ:", p.ma_san_pham);
-            }}
-          >
-            <Plus size={20} strokeWidth={3} />
-          </button>
-        </div>
-        <div className="space-y-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[#ff4d4f] font-black text-lg leading-none">
-              {currentPrice.toLocaleString()}đ
-            </span>
-            {originalPrice && (
-              <span className="text-slate-400 text-[10px] line-through font-bold">
-                {Number(originalPrice).toLocaleString()}đ
-              </span>
-            )}
-          </div>
-          <p className="text-[13px] text-[#161b22] leading-tight line-clamp-2 h-8 font-bold group-hover:text-[#006c49] transition-colors">
-            {p.ten_san_pham}
-          </p>
-          <div className="flex gap-1 items-center pt-0.5">
-            <span className="bg-red-50 text-[#ff4d4f] text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Giá hời</span>
-            <span className="bg-[#e6f0ed] text-[#006c49] text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
-              {p.ten_danh_muc || 'Siêu thị'}
-            </span>
-          </div>
-          <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">
-            KHO: {stockCount}
-          </p>
-        </div>
-      </div>
-    </Link>
-  );
-};
-
+import { useLanguage } from '../context/LanguageContext';
+import { productApi } from '../api/axios';
+import ProductCard from '../components/ProductCard';
 /**
  * --- COMPONENT CHÍNH ---
  */
 export default function Home() {
+  const { t } = useLanguage();
   const [apiProducts, setApiProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const favRef = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -106,7 +39,46 @@ export default function Home() {
     fetchProducts();
   }, []);
 
-  // ... phần còn lại của return giữ nguyên
+  // Auto-scroll favorites carousel: advance one item every ~2 seconds
+  useEffect(() => {
+    const container = favRef.current;
+    if (!container) return;
+
+    let intervalId = null;
+
+    const computeItemWidth = () => {
+      const first = container.firstElementChild;
+      if (!first) return 0;
+      const gap = parseFloat(getComputedStyle(container).gap) || 0;
+      const width = Math.round(first.getBoundingClientRect().width + gap);
+      return width;
+    };
+
+    let itemWidth = computeItemWidth();
+
+    const step = () => {
+      if (!container) return;
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      // Recompute width in case of responsive changes
+      if (!itemWidth) itemWidth = computeItemWidth();
+      if (Math.abs(container.scrollLeft - maxScroll) < 5) {
+        container.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        container.scrollBy({ left: itemWidth, behavior: 'smooth' });
+      }
+    };
+
+    // start after a short delay so layout stabilizes
+    intervalId = setInterval(step, 2000);
+
+    const onResize = () => { itemWidth = computeItemWidth(); };
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [apiProducts, loading, error]);
 
   return (
     <div className="space-y-12 pb-20 bg-white font-sans pt-[10px]">
@@ -115,10 +87,10 @@ export default function Home() {
       <div className="px-6 md:px-10 pt-4 flex flex-col md:flex-row items-start justify-between gap-6">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 bg-[#e6f0ed] text-[#006c49] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-            <Zap size={14} fill="currentColor" className="text-[#fea619]" /> Online 24/7
+            <Zap size={14} fill="currentColor" className="text-[#fea619]" /> {t('online_247')}
           </div>
           <h1 className="text-4xl md:text-[56px] font-black text-[#161b22] tracking-tighter leading-[0.95] text-left">
-            Siêu thị trực tuyến <br/> hàng đầu <span className="text-[#006c49] italic">Á Châu</span>
+            {t('hero_title_part1')} <br/> {t('hero_title_part2')} <span className="text-[#006c49] italic">{t('hero_title_em')}</span>
           </h1>
         </div>
         
@@ -168,16 +140,16 @@ export default function Home() {
       {/* 3. SẢN PHẨM THỊNH HÀNH */}
       <section className="px-6 md:px-10">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <div className="w-1.5 h-6 bg-[#006c49] rounded-full"></div>
-            <h2 className="text-2xl font-black text-[#161b22] tracking-tight uppercase">Sản phẩm yêu thích</h2>
+            <h2 className="text-2xl font-black text-[#161b22] tracking-tight uppercase">{t('favorites_title')}</h2>
           </div>
-          <button className="flex items-center gap-2 text-xs font-black text-[#006c49] bg-[#e6f0ed] px-6 py-2.5 rounded-2xl hover:bg-[#006c49] hover:text-white transition-all shadow-sm active:scale-95 uppercase tracking-widest">
-            XEM THÊM <ChevronRight size={14} />
-          </button>
+          <Link to="/category/tat-ca" className="flex items-center gap-2 text-xs font-black text-[#006c49] bg-[#e6f0ed] px-6 py-2.5 rounded-2xl hover:bg-[#006c49] hover:text-white transition-all shadow-sm active:scale-95 uppercase tracking-widest">
+            {t('see_more')} <ChevronRight size={14} />
+        </Link>
         </div>
 
-        <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4">
+        <div ref={favRef} className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4">
           {loading ? (
             [...Array(6)].map((_, i) => (
               <div key={i} className="min-w-[170px] md:min-w-[210px] space-y-4">
@@ -194,14 +166,16 @@ export default function Home() {
             </div>
           ) : (
             apiProducts.map(p => (
-              <ProductCard key={p.ma_san_pham} p={p} />
+              <div key={p.ma_san_pham} className="min-w-[170px] md:min-w-[210px]">
+                <ProductCard p={p} />
+              </div>
             ))
           )}
           
           {!loading && !error && (
-            <div className="min-w-[120px] flex items-center justify-center text-[#006c49] font-black text-xs cursor-pointer hover:underline uppercase tracking-widest group">
+            <Link to="/category/tat-ca" className="min-w-[120px] flex items-center justify-center text-[#006c49] font-black text-xs cursor-pointer hover:underline uppercase tracking-widest group">
               Xem Tất Cả <ArrowRight size={16} className="ml-2 group-hover:translate-x-2 transition-transform" />
-            </div>
+            </Link>
           )}
         </div>
       </section>

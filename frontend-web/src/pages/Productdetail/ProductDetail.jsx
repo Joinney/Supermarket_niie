@@ -187,7 +187,7 @@ const handleAddToCart = () => {
 
             <div className="space-y-3 lg:space-y-4">
               <p className="text-[10px] lg:text-[11px] 2xl:text-[13px] text-slate-500 leading-relaxed italic border-l-4 border-[#006c49] pl-3">
-                "{product.mo_ta_ngan || "Sản phẩm tuyển chọn từ Demi Mart."}"
+                  "{product.mo_ta || "Sản phẩm tuyển chọn từ Demi Mart."}"
               </p>
               
               <div className="flex flex-wrap gap-1.5 lg:gap-2 pt-1">

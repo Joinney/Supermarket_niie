@@ -122,10 +122,6 @@ services:
       - "5005:5005"
     env_file: 
       - ./backend-node/services/order-service/.env
-    # 🚀 ĐÃ BỔ SUNG THÊM VOLUMES ĐỂ ĐỒNG BỘ CODE & BIẾN MÔI TRƯỜNG .ENV LẬP TỨC
-    volumes:
-      - ./backend-node/services/order-service:/app
-      - /app/node_modules
     depends_on:
       - db
       - cache

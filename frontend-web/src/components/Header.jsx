@@ -3,6 +3,8 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext"; 
 import { AuthContext } from "../context/AuthContext";
 import Logo from "../assets/Demi Mart.png";
+import { productApi } from "../api/axios";
+import { useLanguage } from "../context/LanguageContext";
 import { 
   Globe, ChevronDown, Check, Search, LogOut, MapPin, 
   ShoppingCart, Calendar, User, Gift, Menu 
@@ -24,12 +26,24 @@ const getCleanImage = (url) => {
   }
   return cleanUrl;
 };
+
 export default function Header({ onOpenMenu }) {
   const { user: authUser, logout } = useContext(AuthContext);
   const { cart } = useCart(); 
   const navigate = useNavigate();
   const location = useLocation();
-
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [isSuggestOpen, setIsSuggestOpen] = useState(false);
+  const suggestRef = useRef(null);
+  const suggestTimer = useRef(null);
+  const handleSearch = () => {
+    if (searchKeyword.trim()) {
+      navigate(`/search?keyword=${encodeURIComponent(searchKeyword.trim())}`);
+      setSearchKeyword("");
+    }
+  };
+  const { currentLanguage, changeLanguage, languages, t } = useLanguage();
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langRef = useRef(null);
   const [currentDate, setCurrentDate] = useState("Đang tải...");
@@ -67,16 +81,21 @@ export default function Header({ onOpenMenu }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const languages = [
-    { code: 'vi', name: 'Tiếng Việt', flag: '🇻🇳' },
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'zh', name: '中文', flag: '🇨🇳' },
-  ];
+  // Close suggestion dropdown when clicking outside
+  useEffect(() => {
+    function onDocClick(e) {
+      if (suggestRef.current && !suggestRef.current.contains(e.target)) {
+        // if click outside input too
+        const input = document.getElementById('demi-search-bar');
+        if (input && input.contains(e.target)) return;
+        setIsSuggestOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
 
-  const [currentLang, setCurrentLang] = useState(() => {
-    const saved = localStorage.getItem('demi_mart_lang');
-    return languages.find(l => l.code === saved) || languages[0];
-  });
+  
 
   // --- 3. HÀM XỬ LÝ AVATAR ĐỘNG CHUẨN ĐƯỜNG TRUYỀN ---
   const getAvatarSrc = (userObj) => {
@@ -130,10 +149,79 @@ export default function Header({ onOpenMenu }) {
 
         {!isAuthPage && (
           <div className="flex-1 max-w-xl relative group hidden sm:block min-h-[45px]">
-            <input type="text" placeholder="Tìm sản phẩm trên siêu thị Demi Mart..." className="w-full bg-[#f3f6f9] border-2 border-transparent py-2 md:py-2.5 pl-5 pr-12 rounded-full outline-none focus:bg-white focus:border-[#006c49] transition-all text-xs md:text-sm font-bold text-slate-700 shadow-inner" />
-            <button className="absolute right-1 top-1 bottom-1 w-10 md:w-12 flex items-center justify-center bg-[#006c49] text-white rounded-full transition-transform active:scale-90">
+            {/* ĐÃ BỔ SUNG ID demi-search-bar VÀO ĐÂY */}
+            <input 
+              id="demi-search-bar"
+              type="text" 
+              placeholder={t('search_placeholder')}
+              value={searchKeyword}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSearchKeyword(v);
+                // debounce suggestion fetch
+                if (suggestTimer.current) clearTimeout(suggestTimer.current);
+                if (v.trim()) {
+                  suggestTimer.current = setTimeout(async () => {
+                    try {
+                      const res = await productApi.get(`/products/search?keyword=${encodeURIComponent(v)}&limit=8`);
+                      setSuggestions(res.data || []);
+                      setIsSuggestOpen(true);
+                    } catch (err) {
+                      setSuggestions([]);
+                      setIsSuggestOpen(false);
+                    }
+                  }, 250);
+                } else {
+                  setSuggestions([]);
+                  setIsSuggestOpen(false);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (isSuggestOpen && suggestions.length > 0) {
+                    // navigate to first suggestion
+                    const p = suggestions[0];
+                    const country = p.country_code || 'vn';
+                    const category = p.slug_danh_muc || 'san-pham';
+                    navigate(`/${country}/product/${category}/${p.ma_san_pham}`);
+                    setSearchKeyword('');
+                    setIsSuggestOpen(false);
+                  } else {
+                    handleSearch();
+                  }
+                } else if (e.key === 'ArrowDown') {
+                  // focus first suggestion
+                  const first = suggestRef.current?.querySelector('button');
+                  if (first) first.focus();
+                }
+              }}
+              className="w-full bg-[#f3f6f9] border-2 border-transparent py-2 md:py-2.5 pl-5 pr-12 rounded-full outline-none focus:bg-white focus:border-[#006c49] transition-all text-xs md:text-sm font-bold text-slate-700 shadow-inner" 
+            />
+            <button onClick={handleSearch} className="absolute right-1 top-1 bottom-1 w-10 md:w-12 flex items-center justify-center bg-[#006c49] text-white rounded-full transition-transform active:scale-90">
               <Search size={16} strokeWidth={3} />
             </button>
+
+            {/* Suggestions dropdown */}
+            {isSuggestOpen && suggestions.length > 0 && (
+              <div ref={suggestRef} className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-lg z-50 p-2">
+                {suggestions.map(s => (
+                  <button key={s.ma_san_pham} onClick={() => {
+                    const country = s.country_code || 'vn';
+                    const category = s.slug_danh_muc || 'san-pham';
+                    navigate(`/${country}/product/${category}/${s.ma_san_pham}`);
+                    setIsSuggestOpen(false);
+                    setSearchKeyword('');
+                  }} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 text-left">
+                    <img src={s.hinh_anh_chinh || 'https://placehold.co/60x60'} className="w-10 h-10 object-contain rounded" alt={s.ten_san_pham} />
+                    <div className="flex-1">
+                      <div className="font-bold text-sm text-slate-700">{s.ten_san_pham}</div>
+                      <div className="text-xs text-slate-400">{(s.gia_ban_thap_nhat||0).toLocaleString()}đ</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -143,7 +231,7 @@ export default function Header({ onOpenMenu }) {
           <div className="relative" ref={langRef}>
             <button onClick={() => setIsLangOpen(!isLangOpen)} className="flex items-center gap-1 text-slate-600 hover:text-[#006c49] transition-colors">
               <Globe size={18} />
-              <span className="text-[11px] font-black uppercase hidden md:block">{currentLang.code}</span>
+              <span className="text-[11px] font-black uppercase hidden md:block">{currentLanguage.code}</span>
               <ChevronDown size={12} className={`transition-transform duration-300 ${isLangOpen ? 'rotate-180' : ''}`} />
             </button>
             
@@ -152,11 +240,11 @@ export default function Header({ onOpenMenu }) {
                 {languages.map((l) => (
                   <button 
                     key={l.code} 
-                    onClick={() => { setCurrentLang(l); setIsLangOpen(false); localStorage.setItem('demi_mart_lang', l.code); }} 
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentLang.code === l.code ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50'}`}
+                    onClick={() => { changeLanguage(l.code); setIsLangOpen(false); }} 
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentLanguage.code === l.code ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
                     <div className="flex items-center gap-2"><span>{l.flag}</span>{l.name}</div>
-                    {currentLang.code === l.code && <Check size={14} strokeWidth={3} />}
+                    {currentLanguage.code === l.code && <Check size={14} strokeWidth={3} />}
                   </button>
                 ))}
               </div>
@@ -187,9 +275,9 @@ export default function Header({ onOpenMenu }) {
               <div className="flex items-center gap-1 text-slate-700 font-bold text-[12px] md:text-[14px] whitespace-nowrap">
                 <User size={18} className="text-slate-800" />
                 <div className="flex items-center">
-                  <Link to="/login" className="hover:text-[#006c49] transition-colors">Đăng nhập</Link>
+                  <Link to="/login" className="hover:text-[#006c49] transition-colors">{t('login')}</Link>
                   <span className="mx-1 text-slate-300 font-light hidden md:inline">/</span>
-                  <Link to="/signup" className="hover:text-[#006c49] transition-colors hidden md:inline">Đăng ký</Link>
+                  <Link to="/signup" className="hover:text-[#006c49] transition-colors hidden md:inline">{t('signup')}</Link>
                 </div>
               </div>
             )}
@@ -205,7 +293,7 @@ export default function Header({ onOpenMenu }) {
                 </span>
               )}
             </div>
-            <span className="text-[11px] font-black uppercase hidden lg:block tracking-widest">Giỏ hàng</span>
+            <span className="text-[11px] font-black uppercase hidden lg:block tracking-widest">{t('cart')}</span>
           </Link>
         </div>
       </div>

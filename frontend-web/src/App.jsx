@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Outlet, Navigate } from "react-
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { OrderProvider } from "./context/OrderContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import { ProtectedRoute } from "./components/ProtectedRoute"; // Bảo vệ route khách hàng
 
 // --- IMPORTS GIAO DIỆN KHÁCH HÀNG ---
@@ -15,8 +16,10 @@ import Login from "./pages/Auth/Login";
 import Signup from "./pages/Auth/Signup";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 import Profile from "./pages/Profile/Profile";
+import CategoryPage from "./pages/Category/CategoryPage";
 import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
+import SearchPage from "./pages/Search/SearchPage";
 
 // --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHUẨN ĐƯỜNG DẪN) ---
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
@@ -63,6 +66,8 @@ const AppRoutes = () => (
     {/* ================= ROUTES CHO KHÁCH HÀNG ================= */}
     <Route element={<MainLayout />}>
       <Route path="/" element={<Home />} />
+      <Route path="/category/:slug" element={<CategoryPage />} />
+      <Route path="/search" element={<SearchPage />} />
       <Route path="/:country_code/product/:category_slug/:id/:variantId?" element={<ProductDetail />} />
       <Route path="/cart" element={<Cart />} />
       <Route path="/checkout" element={
@@ -114,14 +119,16 @@ const AppContent = () => {
 /**
  * 4. FINAL APP
  */
-function App() {
+function App({ initialLanguage }) {
   return (
     <AuthProvider>
       <CartProvider>
         <OrderProvider>
-          <Router>
-            <AppContent />
-          </Router>
+          <LanguageProvider initialLanguage={initialLanguage}>
+            <Router>
+              <AppContent />
+            </Router>
+          </LanguageProvider>
         </OrderProvider>
       </CartProvider>
     </AuthProvider>

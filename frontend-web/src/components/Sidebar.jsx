@@ -1,11 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Tag, Flame, X } from "lucide-react";
+import { useLanguage } from '../context/LanguageContext';
+import { Search, Tag, Flame, X, MapPin, Check } from "lucide-react";
+import { useNavigate } from 'react-router-dom';
 
 // Demi lưu ý: Truyền prop isOpen và onClose từ App.jsx hoặc Header.jsx vào nhé
 export default function Sidebar({ isOpen, onClose }) {
-  const [activeCategory, setActiveCategory] = useState("Tìm kiếm");
+  const navigate = useNavigate(); 
+  const { t } = useLanguage();
+  const [activeCategory, setActiveCategory] = useState('search');
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
+
+  // --- 1. STATE CHO TÍNH NĂNG CHỌN CỬA HÀNG ---
+  const [selectedStore, setSelectedStore] = useState("Demi Việt Nam");
+  const [isStoreOpen, setIsStoreOpen] = useState(false);
+  const stores = ["Demi Việt Nam", "Demi US (Mỹ)","Demi China (Trung Quốc)"];
 
   const handleScroll = () => {
     setIsScrolling(true);
@@ -16,23 +25,54 @@ export default function Sidebar({ isOpen, onClose }) {
   };
 
   const mainMenus = [
-    { n: "Tìm kiếm", i: <Search size={20} /> },
-    { n: "Khuyến mãi", i: <Tag size={20} /> },
-    { n: "Bán chạy", i: <Flame size={20} /> },
+    { slug: 'search', key: 'sidebar.main.search', i: <Search size={20} /> },
+    { slug: 'promotion', key: 'sidebar.main.promotion', i: <Tag size={20} /> },
+    { slug: 'bestseller', key: 'sidebar.main.bestseller', i: <Flame size={20} /> },
   ];
 
+  // 3. BỔ SUNG THÊM TRƯỜNG "slug" ĐỂ TẠO ĐƯỜNG DẪN TƯƠNG ỨNG VỚI DATABASE
   const categories = [
-    { n: "Đồ ăn liền", i: "🍜" }, { n: "Bánh mì", i: "🥐" }, { n: "Đồ ăn vặt", i: "🥨" },
-    { n: "Đồ uống", i: "🥤" }, { n: "Sữa & Trứng", i: "🥚" }, { n: "Đồ chay", i: "🥗" },
-    { n: "Gia vị", i: "🧴" }, { n: "Đồ đóng hộp", i: "🥫" }, { n: "Gạo & Đồ khô", i: "🥡" },
-    { n: "Chăm sóc cá nhân", i: "🧼" }, { n: "Đồ gia dụng", i: "🏠" }, { n: "Rượu bia", i: "🍷" },
-    { n: "Sơ chế sẵn", i: "🍱", hot: true }, { n: "Bánh tươi", i: "🥯", hot: true },
-    { n: "Sức khỏe", i: "💊" }
+    { i: "🍜", slug: "do-an-lien" }, 
+    { i: "🥐", slug: "banh-mi" }, 
+    { i: "🥨", slug: "do-an-vat" },
+    { i: "🥤", slug: "do-uong" }, 
+    { i: "🥚", slug: "sua-va-trung" }, 
+    { i: "🥗", slug: "do-chay" },
+    { i: "🧴", slug: "gia-vi" }, 
+    { i: "🥫", slug: "do-dong-hop" }, 
+    { i: "🥡", slug: "gao-va-do-kho" },
+    { i: "🧼", slug: "cham-soc-ca-nhan" }, 
+    { i: "🏠", slug: "do-gia-dung" }, 
+    { i: "🍷", slug: "ruou-bia" },
+    { i: "🍱", slug: "so-che-san", hot: true }, 
+    { i: "🥯", slug: "banh-tuoi", hot: true },
+    { i: "💊", slug: "suc-khoe" }
   ];
 
   const footerLinks = [
-    "Tải ứng dụng", "Quảng cáo", "Công ty", "Mua sỉ", "Hỗ trợ", "Bảo mật", "Điều khoản"
+    'sidebar.footerLinks.0','sidebar.footerLinks.1','sidebar.footerLinks.2','sidebar.footerLinks.3','sidebar.footerLinks.4','sidebar.footerLinks.5','sidebar.footerLinks.6'
   ];
+
+  // --- 2. HÀM XỬ LÝ CLICK MENU CHÍNH (TÌM KIẾM, KHUYẾN MÃI...) ---
+  const handleMainMenuClick = (menuSlug) => {
+    setActiveCategory(menuSlug);
+    
+    if (menuSlug === 'search') {
+      // Đóng sidebar trên mobile
+      if(window.innerWidth < 1024) onClose();
+      
+      // Tự động nhảy con trỏ chuột vào thanh tìm kiếm trên Header
+      const searchInput = document.getElementById('demi-search-bar');
+      if (searchInput) {
+        searchInput.focus();
+        // Mẹo nhỏ: Scroll mượt lên đầu trang để người dùng thấy rõ thanh tìm kiếm
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else {
+      // Tạm thời các menu khác chỉ đổi màu và đóng sidebar (mobile)
+      if(window.innerWidth < 1024) onClose();
+    }
+  };
 
   return (
     <>
@@ -70,53 +110,87 @@ export default function Sidebar({ isOpen, onClose }) {
           <X size={20} strokeWidth={3} />
         </button>
 
-        {/* 1. CHỌN CỬA HÀNG */}
-        <div className="bg-white border border-slate-100 rounded-2xl p-4 mb-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group shadow-sm shrink-0 mt-8 lg:mt-0">
-          <p className="text-[10px] font-black text-slate-400 uppercase text-center mb-1 tracking-[2px]">Chọn cửa hàng</p>
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-[15px] font-black text-[#161b22] tracking-tight group-hover:text-[#006c49] transition-colors italic">Demi Việt Nam</span>
-            <span className="text-[10px] text-slate-400 group-hover:translate-y-0.5 transition-transform">▼</span>
+        {/* --- KHU VỰC CHỌN CỬA HÀNG (ĐÃ NÂNG CẤP DROPDOWN) --- */}
+        <div className="mb-4 mt-8 lg:mt-0 relative">
+          <div 
+            onClick={() => setIsStoreOpen(!isStoreOpen)}
+            className={`bg-white border ${isStoreOpen ? 'border-[#006c49]' : 'border-slate-100'} rounded-2xl p-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group shadow-sm`}
+          >
+            <p className="text-[10px] font-black text-slate-400 uppercase text-center mb-1 tracking-[2px]">{t('sidebar.current_store')}</p>
+            <div className="flex items-center justify-center gap-2">
+              <MapPin size={16} className="text-[#006c49]" />
+              <span className="text-[14px] font-black text-[#161b22] tracking-tight group-hover:text-[#006c49] transition-colors line-clamp-1">
+                {selectedStore}
+              </span>
+              <span className={`text-[10px] text-slate-400 transition-transform duration-300 ${isStoreOpen ? 'rotate-180' : ''}`}>▼</span>
+            </div>
+          </div>
+
+          {/* Menu Dropdown chứa danh sách cửa hàng */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isStoreOpen ? 'max-h-[200px] mt-2 opacity-100' : 'max-h-0 opacity-0'}`}>
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-2 flex flex-col gap-1">
+              {stores.map(store => (
+                <div 
+                  key={store}
+                  onClick={() => {
+                    setSelectedStore(store);
+                    setIsStoreOpen(false);
+                  }}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-[13px] font-bold transition-all
+                    ${selectedStore === store ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                  `}
+                >
+                  {store}
+                  {selectedStore === store && <Check size={16} />}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* 2. MENU CHÍNH */}
+        {/* 2. MENU CHÍNH (Gắn hàm handleMainMenuClick) */}
         <nav className="space-y-1 mb-4 pb-4 border-b border-slate-200/60 shrink-0">
           {mainMenus.map(m => (
             <div 
-              key={m.n} 
-              onClick={() => { setActiveCategory(m.n); if(window.innerWidth < 1024) onClose(); }}
+              key={m.slug} 
+              onClick={() => handleMainMenuClick(m.slug)}
               className={`flex items-center gap-4 px-4 py-3 rounded-2xl cursor-pointer transition-all duration-300
-                ${activeCategory === m.n 
+                ${activeCategory === m.slug 
                   ? 'bg-[#006c49] shadow-lg shadow-[#006c49]/20 text-white' 
                   : 'text-slate-900 hover:bg-[#e6f0ed] hover:text-[#006c49]'}`}
             >
-              <span className={`transition-transform ${activeCategory === m.n ? 'scale-110 text-white' : 'text-black'}`}>
+              <span className={`transition-transform ${activeCategory === m.slug ? 'scale-110 text-white' : 'text-black'}`}>
                 {m.i}
               </span>
-              <span className="text-[14px] font-black tracking-tight uppercase">{m.n}</span>
+              <span className="text-[14px] font-black tracking-tight uppercase">{t(m.key)}</span>
             </div>
           ))}
         </nav>
 
         {/* 3. DANH MỤC SẢN PHẨM */}
         <div className="space-y-1 flex-1 pb-6">
-          <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-3 ml-1">Danh mục sản phẩm</p>
+          <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-3 ml-1">{t('sidebar.product_catalog')}</p>
           {categories.map(c => (
             <div 
-              key={c.n} 
-              onClick={() => { setActiveCategory(c.n); if(window.innerWidth < 1024) onClose(); }}
+              key={c.slug} 
+              // 4. BỔ SUNG LỆNH NAVIGATE ĐỂ ĐIỀU HƯỚNG SANG TRANG CATEGORY
+              onClick={() => { 
+                setActiveCategory(c.slug); 
+                navigate(`/category/${c.slug}`); 
+                if(window.innerWidth < 1024) onClose(); 
+              }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all group
-                ${activeCategory === c.n ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}
+                ${activeCategory === c.slug ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}
             >
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shadow-sm transition-all duration-300
-                ${activeCategory === c.n ? 'bg-[#006c49] text-white scale-105 shadow-[#006c49]/20' : 'bg-white group-hover:bg-[#e6f0ed] group-hover:text-[#006c49]'}`}>
+                ${activeCategory === c.slug ? 'bg-[#006c49] text-white scale-105 shadow-[#006c49]/20' : 'bg-white group-hover:bg-[#e6f0ed] group-hover:text-[#006c49]'}`}>
                 {c.i}
               </div>
-              <span className={`text-[13.5px] flex-1 transition-colors ${activeCategory === c.n ? 'font-black text-[#161b22]' : 'font-bold text-slate-500 group-hover:text-slate-700'}`}>
-                {c.n}
+              <span className={`text-[13.5px] flex-1 transition-colors ${activeCategory === c.slug ? 'font-black text-[#161b22]' : 'font-bold text-slate-500 group-hover:text-slate-700'}`}>
+                {t(`sidebar.categories.${c.slug}`)}
               </span>
               {c.hot && (
-                <span className="bg-[#fea619] text-[8px] text-[#684000] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter shadow-sm">HOT</span>
+                <span className="bg-[#fea619] text-[8px] text-[#684000] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter shadow-sm">{t('sidebar.hot')}</span>
               )}
             </div>
           ))}
@@ -125,9 +199,9 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* 4. LIÊN KẾT PHỤ */}
         <div className="pt-6 border-t border-slate-200/60 space-y-3 px-3 shrink-0">
           <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {footerLinks.map(link => (
-              <a key={link} href="#" className="text-[10px] text-slate-400 font-black uppercase tracking-widest hover:text-[#006c49] transition-colors leading-tight">
-                {link}
+            {footerLinks.map((linkKey, idx) => (
+              <a key={linkKey} href="#" className="text-[10px] text-slate-400 font-black uppercase tracking-widest hover:text-[#006c49] transition-colors leading-tight">
+                {t(linkKey)}
               </a>
             ))}
           </div>

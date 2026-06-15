@@ -17,7 +17,8 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 const PORT = process.env.PORT_PRODUCT || 5002;
 
 // --- 3. Import Routes (PHẢI CÓ .js VÀ ĐÚNG ĐƯỜNG DẪN) ---
-import productRoutes from './routes/productRoutes.js'; 
+import productRoutes from './routes/productRoutes.js';
+import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
 
 const app = express();
 
@@ -93,6 +94,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🔗 API: http://localhost:${PORT}/api/products`);
     console.log(`📝 Swagger: http://localhost:${PORT}/api-docs`);
     console.log('===========================================');
+    
+    // Start periodic description generation scheduler
+    schedulePeriodicDescriptionGeneration();
 });
 
 // Bắt lỗi nếu cổng bị chiếm hoặc lỗi hệ thống

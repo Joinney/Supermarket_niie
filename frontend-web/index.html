@@ -55,10 +55,15 @@
                 autoDisplay: false 
             }, 'google_translate_element');
 
-            // 2. Tự động đồng bộ ngôn ngữ đã lưu
+            // 2. Tự động đồng bộ ngôn ngữ đã lưu (hỗ trợ mã ngắn 'zh' -> 'zh-CN')
             const savedLang = localStorage.getItem('demi_mart_lang');
+            const mapToGoogle = (code) => {
+                if (!code) return code;
+                if (code === 'zh') return 'zh-CN';
+                return code;
+            };
             if (savedLang && savedLang !== 'vi') {
-                setTimeout(() => window.changeLanguageAuto(savedLang), 1000);
+                setTimeout(() => window.changeLanguageAuto(mapToGoogle(savedLang)), 1000);
             }
         }
     </script>
@@ -69,10 +74,20 @@
         // 3. Hàm kích hoạt dịch & Lưu trạng thái
         window.changeLanguageAuto = function(langCode) {
             const select = document.querySelector('.goog-te-combo');
+            const mapFromGoogle = (code) => {
+                if (!code) return code;
+                // Accept both short and google codes
+                if (code === 'zh-CN') return 'zh-CN';
+                if (code === 'zh') return 'zh-CN';
+                return code;
+            };
+            const mapped = mapFromGoogle(langCode);
             if (select) {
-                select.value = langCode;
+                select.value = mapped;
                 select.dispatchEvent(new Event('change'));
-                localStorage.setItem('demi_mart_lang', langCode);
+                // store the original short code for app use when possible
+                if (langCode === 'zh-CN') localStorage.setItem('demi_mart_lang', 'zh');
+                else localStorage.setItem('demi_mart_lang', langCode);
             } else {
                 setTimeout(() => window.changeLanguageAuto(langCode), 500);
             }
@@ -85,7 +100,9 @@
                 lastPathname = window.location.pathname;
                 const savedLang = localStorage.getItem('demi_mart_lang');
                 if (savedLang && savedLang !== 'vi') {
-                    window.changeLanguageAuto(savedLang);
+                    // map short code to google code
+                    const toGoogle = (c) => c === 'zh' ? 'zh-CN' : c;
+                    window.changeLanguageAuto(toGoogle(savedLang));
                 }
             }
         }, 1000);
