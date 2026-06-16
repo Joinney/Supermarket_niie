@@ -11,7 +11,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 1. Cấu hình biến môi trường (Ưu tiên nạp sớm nhất)
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+const envPath = path.resolve(__dirname, '.env');
+dotenv.config({ path: envPath });
+
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+}
 
 import './configs/Auth/passport.js'; 
 import authRoutes from "./routes/authRoutes.js"; 

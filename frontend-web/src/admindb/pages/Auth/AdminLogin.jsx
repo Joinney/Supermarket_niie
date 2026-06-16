@@ -11,68 +11,112 @@ export default function AdminLogin() {
     e.preventDefault();
     setError('');
 
-    // 🎯 LOGIC ĐĂNG NHẬP LÀM MẪU (MOCK LOGIN)
     if (email === 'admin@gmail.com' && password === '123456') {
-      // Lưu thông tin giả lập vào localStorage để làm mẫu dữ liệu session
       localStorage.setItem('adminToken', 'mock_token_key_demimart_2026');
       localStorage.setItem('adminRole', 'superadmin');
-      
-      console.log("🔑 Đăng nhập Admin mẫu thành công! Đang chuyển hướng...");
-      
-      // Cho phép chuyển hướng thẳng sang trang Dashboard
       navigate('/admin/dashboard');
     } else {
-      // Nếu nhập bất kỳ tài khoản/mật khẩu nào khác sẽ báo lỗi này
-      setError('Tài khoản hoặc mật khẩu Admin mẫu không chính xác! (Thử lại với: admin@gmail.com / 123456)');
+      setError('Tài khoản hoặc mật khẩu không chính xác!');
     }
   };
 
   return (
-    <div className="min-h-screen w-screen flex items-center justify-center bg-slate-900 px-4 m-0 p-0 absolute inset-0 z-[99999]">
-      <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-2xl">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">🛡️ DemiMart Admin</h2>
-          <p className="text-xs text-gray-400 mt-2 font-medium">Hệ thống quản trị nội bộ độc lập</p>
+    <div className="min-h-screen w-screen flex overflow-hidden bg-slate-950">
+      {/* Left Panel - Green */}
+      <div className="hidden lg:flex w-5/12 bg-emerald-600 relative flex-col justify-between p-12">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+            🛒
+          </div>
+          <span className="text-white text-2xl font-bold tracking-tight">DemiMart</span>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-xs font-bold text-center mb-4">
-            {error}
-          </div>
-        )}
+        <div>
+          <h1 className="text-white text-6xl font-bold leading-tight mb-4">
+            Welcome Back!
+          </h1>
+          <p className="text-emerald-100 text-xl">
+            Đăng nhập để tiếp tục quản trị hệ thống
+          </p>
+        </div>
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div className="text-left">
-            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-widest mb-1.5 ml-1">Tài khoản Admin</label>
-            <input
-              type="text" // Đổi sang text để bạn gõ nhanh không cần check định dạng email nếu muốn
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50"
-              placeholder="admin@gmail.com"
-            />
+        {/* Decorative elements */}
+        <div className="absolute bottom-12 right-12 w-80 h-80 border-[20px] border-white/10 rounded-full"></div>
+        <div className="absolute -bottom-10 -right-10 w-64 h-64 border-[15px] border-white/10 rounded-full"></div>
+        
+        <div className="text-white/30 text-sm absolute bottom-8 left-12">
+          DemiMart Admin © 2026
+        </div>
+      </div>
+
+      {/* Right Panel - Form */}
+      <div className="flex-1 flex items-center justify-center p-6 bg-white">
+        <div className="w-full max-w-md">
+          {/* Mobile Header */}
+          <div className="lg:hidden flex justify-center mb-10">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-600 rounded-3xl flex items-center justify-center text-4xl">
+                🛒
+              </div>
+              <span className="text-3xl font-bold text-slate-800">DemiMart</span>
+            </div>
           </div>
 
-          <div className="text-left">
-            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-widest mb-1.5 ml-1">Mật khẩu</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50"
-              placeholder="••••••••"
-            />
+          <div className="text-center lg:text-left mb-10">
+            <h2 className="text-4xl font-bold text-slate-900">Welcome Back!</h2>
+            <p className="text-slate-600 mt-3 text-lg">
+              Đăng nhập để tiếp tục quản trị hệ thống
+            </p>
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl transition duration-200 text-sm shadow-lg uppercase tracking-wider mt-2"
-          >
-            Đăng Nhập Hệ Thống
-          </button>
-        </form>
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl text-center">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-8">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
+              <input
+                type="text"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-6 py-4 bg-slate-100 border border-slate-200 rounded-2xl focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 text-lg"
+                placeholder="admin@gmail.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-6 py-4 bg-slate-100 border border-slate-200 rounded-2xl focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 text-lg"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xl font-semibold rounded-2xl transition-all duration-200 shadow-lg active:scale-[0.985]"
+            >
+              LOGIN
+            </button>
+          </form>
+
+          <div className="text-center mt-8">
+            <span 
+              className="text-emerald-600 hover:text-emerald-700 cursor-pointer text-sm font-medium"
+              onClick={() => alert('Chức năng khôi phục mật khẩu sẽ được triển khai sau')}
+            >
+              Quên mật khẩu? <span className="underline">Khôi phục</span>
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
