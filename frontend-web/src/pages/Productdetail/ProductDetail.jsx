@@ -6,11 +6,14 @@ import {
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { productApi } from '../../api/axios';
+import { useStore } from '../../context/StoreContext';
 
 export default function ProductDetail() {
   const { country, category, id, variantId } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  
+  const { currentStore } = useStore();
   
   const [product, setProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -18,6 +21,17 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
 
+  // 3. LOGIC MỚI: TỰ ĐỘNG CHUYỂN HƯỚNG URL KHI ĐỔI CỬA HÀNG
+  useEffect(() => {
+    if (currentStore?.code && currentStore.code !== country && product) {
+      // Nếu mã cửa hàng hiện tại khác với mã trong URL -> Đổi URL
+      const cSlug = category || product?.slug_danh_muc || 'product';
+      const vId = variantId || selectedVariant?.ma_bien_the || '';
+      navigate(`/${currentStore.code}/product/${cSlug}/${id}${vId ? `/${vId}` : ''}`, { replace: true });
+    }
+  }, [currentStore, country, id, category, variantId, navigate, product]);
+
+  // LOGIC LẤY DATA CŨ CỦA BẠN (GIỮ NGUYÊN)
   useEffect(() => {
     if (!id || id === 'undefined') {
       setLoading(false);
@@ -27,21 +41,22 @@ export default function ProductDetail() {
     window.scrollTo(0, 0);
     setLoading(true);
 
-    // DÙNG productApi thay vì fetch thủ công
-    productApi.get(`/products/${id}`)
+    const currentCountry = country || 'vn';
+    // Đẩy param country xuống API để lọc tồn kho
+    productApi.get(`/products/${id}?country=${currentCountry}`)
       .then(res => {
-        const data = res.data; // Axios trả về trong .data
+        const data = res.data;
         const productData = Array.isArray(data) ? data[0] : data;
         
         if (productData && productData.ma_san_pham) {
           setProduct(productData);
           
-          // Logic chọn biến thể giữ nguyên
           const targetVariant = productData.bien_the?.find(v => v.ma_bien_the === variantId) || 
                                 productData.bien_the?.find(v => v.la_ban_chay) || 
                                 productData.bien_the?.[0];
           
           setSelectedVariant(targetVariant);
+          setQuantity(1);
           
           const variantMedia = productData.media?.find(m => m.ma_bien_the === targetVariant?.ma_bien_the);
           setMainMedia(variantMedia || productData.media?.find(m => m.la_anh_chinh) || productData.media?.[0]);
@@ -54,7 +69,7 @@ export default function ProductDetail() {
         console.error("Error fetching product:", error);
         setLoading(false);
       });
-  }, [id]);
+  }, [id, country]); // Phụ thuộc vào biến country từ URL
 
   const handleVariantClick = (v) => {
     setSelectedVariant(v);
@@ -211,11 +226,40 @@ const handleAddToCart = () => {
             <div className="bg-[#fcfcfc] p-4 lg:p-6 2xl:p-8 rounded-[20px] lg:rounded-[24px] border border-slate-100 shadow-xl space-y-4 lg:space-y-6">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Số lượng</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Số lượng</p>
+                    {/* Hiển thị thêm tồn kho để khách hàng dễ thấy */}
+                    <span className="text-[9px] text-[#006c49] font-bold">
+                      (Kho: {selectedVariant?.ton_kho || 0})
+                    </span>
+                  </div>
+                  
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 lg:p-1 shadow-sm">
-                    <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg"><Minus size={14}/></button>
-                    <span className="w-8 lg:w-10 text-center font-bold">{quantity}</span>
-                    <button onClick={() => setQuantity(quantity + 1)} className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg"><Plus size={14}/></button>
+                    <button 
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))} 
+                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg transition-colors text-slate-600"
+                    >
+                      <Minus size={14}/>
+                    </button>
+                    
+                    <span className="w-8 lg:w-10 text-center font-bold text-slate-800">
+                      {quantity}
+                    </span>
+                    
+                    <button 
+                      onClick={() => {
+                        const maxStock = selectedVariant?.ton_kho || 0;
+                        if (quantity < maxStock) {
+                          setQuantity(quantity + 1);
+                        } else {
+                          alert(`Kho tại khu vực này chỉ còn tối đa ${maxStock} sản phẩm!`);
+                        }
+                      }} 
+                      disabled={quantity >= (selectedVariant?.ton_kho || 0)}
+                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg transition-colors text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    >
+                      <Plus size={14}/>
+                    </button>
                   </div>
                 </div>
                 <div className="text-right">
@@ -225,11 +269,11 @@ const handleAddToCart = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                <button onClick={handleAddToCart} className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] active:scale-95">
+                <button onClick={handleAddToCart} className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] active:scale-95 transition-transform">
                   <ShoppingCart size={16} strokeWidth={2.5} /> GIỎ HÀNG
                 </button>
 
-                <button onClick={handleBuyNow} className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] active:scale-95 shadow-lg shadow-amber-200/50">
+                <button onClick={handleBuyNow} className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] active:scale-95 shadow-lg shadow-amber-200/50 transition-transform">
                   <CreditCard size={16} strokeWidth={2.5} /> MUA NGAY
                 </button>
               </div>

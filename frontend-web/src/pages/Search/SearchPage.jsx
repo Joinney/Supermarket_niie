@@ -4,11 +4,14 @@ import { ChevronRight, Home, AlertCircle, Plus, Search } from 'lucide-react';
 import { productApi } from '../../api/axios';
 import ProductCard from '../../components/ProductCard';
 import { useLanguage } from '../../context/LanguageContext';
+import { useStore } from '../../context/StoreContext';
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const keyword = searchParams.get("keyword") || "";
-  const { t } = useLanguage();
+  
+  const { t } = useLanguage(); 
+  const { currentStore } = useStore();
   
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,13 +27,19 @@ export default function SearchPage() {
       }
       try {
         setLoading(true);
-        // Gọi API với query parameter
-        const response = await productApi.get(`/products/search?keyword=${encodeURIComponent(keyword)}`);
+        
+        // 3. Lấy mã quốc gia từ Cửa hàng đang chọn (ví dụ: 'vn', 'us', 'cn')
+        const currentCountry = currentStore?.code || 'vn';
+
+        // 4. Truyền biến country xuống Backend API
+        const response = await productApi.get(`/products/search?keyword=${encodeURIComponent(keyword)}&country=${currentCountry}`);
         let results = response.data || [];
-        // Fallback: if no results, fetch a larger product set and filter locally for substring matches
+        
+        // Fallback: Nếu không có kết quả từ DB, tìm kiếm thủ công
         if ((!results || results.length === 0) && keyword.trim()) {
           try {
-            const allResp = await productApi.get(`/products?limit=200`);
+            // Truyền country vào cả API dự phòng
+            const allResp = await productApi.get(`/products?limit=200&country=${currentCountry}`);
             const all = allResp.data || [];
             const q = keyword.trim().toLowerCase();
             results = all.filter(p => {
@@ -39,7 +48,7 @@ export default function SearchPage() {
               return name.includes(q) || cat.includes(q);
             });
           } catch (e) {
-            // ignore fallback errors
+            // bỏ qua lỗi fallback
           }
         }
         setProducts(results);
@@ -53,7 +62,7 @@ export default function SearchPage() {
     };
 
     fetchSearchResults();
-  }, [keyword]);
+  }, [keyword, currentStore.code]); // 5. THEO DÕI SỰ THAY ĐỔI CỦA CỬA HÀNG
 
   return (
     <div className="p-6 md:p-10 font-sans bg-white h-fit pb-12 min-h-screen">
@@ -95,7 +104,7 @@ export default function SearchPage() {
       ) : products.length === 0 ? (
         <div className="w-full py-20 flex flex-col items-center text-slate-400 gap-3 bg-slate-50 rounded-3xl mx-auto max-w-2xl border border-dashed border-slate-200">
           <Search size={64} className="text-slate-300 mb-2" />
-          <p className="font-bold text-lg text-slate-500">{t('search.no_results', 'Currently, no products matching your search criteria are available')}</p>
+          <p className="font-bold text-lg text-slate-500">{t('search.no_results', 'Hiện tại không có sản phẩm nào khớp với tìm kiếm của bạn.')}</p>
           
           {/* Cụm nút hành động chuyên nghiệp */}
           <div className="flex gap-3 mt-4">

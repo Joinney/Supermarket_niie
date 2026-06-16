@@ -3,11 +3,15 @@ import { useParams, Link } from 'react-router-dom';
 import { ChevronRight, Home, AlertCircle, Plus } from 'lucide-react';
 import { productApi } from '../../api/axios';
 import ProductCard from '../../components/ProductCard';
+import { useStore } from '../../context/StoreContext'; 
+
 /**
  * --- TRANG DANH MỤC CHÍNH ---
  */
 export default function CategoryPage() {
   const { slug } = useParams();
+  const { currentStore } = useStore();
+  
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,7 +25,12 @@ export default function CategoryPage() {
     const fetchCategoryProducts = async () => {
       try {
         setLoading(true);
-        const response = await productApi.get(`/products/category/${slug}`);
+        
+        // 3. Lấy mã quốc gia hiện tại từ cửa hàng đang chọn (ví dụ: 'vn', 'us', 'cn')
+        const currentCountry = currentStore?.code || 'vn';
+        
+        // 4. Gọi API truyền kèm tham số country
+        const response = await productApi.get(`/products/category/${slug}?country=${currentCountry}`);
         setProducts(response.data);
         
         // Cập nhật tên danh mục chuẩn từ database
@@ -40,7 +49,7 @@ export default function CategoryPage() {
     };
 
     fetchCategoryProducts();
-  }, [slug]);
+  }, [slug, currentStore.code]); // 5. RE-RENDER KHI ĐỔI CỬA HÀNG
 
   return (
     <div className="p-6 md:p-10 font-sans bg-white h-fit pb-12">

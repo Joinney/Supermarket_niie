@@ -2,13 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, ArrowRight, Star, QrCode, Plus, Zap, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useStore } from '../context/StoreContext';
 import { productApi } from '../api/axios';
 import ProductCard from '../components/ProductCard';
+
 /**
  * --- COMPONENT CHÍNH ---
  */
 export default function Home() {
-  const { t } = useLanguage();
+  const { t } = useLanguage(); 
+  const { currentStore } = useStore(); 
+  
   const [apiProducts, setApiProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -20,16 +24,13 @@ export default function Home() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        // SỬ DỤNG productApi thay cho fetch thủ công
-        // Nó sẽ tự động dùng baseURL của Product Service đã cấu hình trong api/axios.js
-        const response = await productApi.get('/products?limit=12');
+        // 3. Đẩy param country vào URL dựa trên mã code của cửa hàng đang chọn (vn, us, cn)
+        const response = await productApi.get(`/products?limit=12&country=${currentStore.code}`);
         
-        // Axios trả về dữ liệu trong thuộc tính .data
         setApiProducts(response.data);
         setError(null);
       } catch (err) {
         console.error("Lỗi API sản phẩm:", err);
-        // Lấy thông báo lỗi từ response nếu có, hoặc dùng thông báo mặc định
         setError(err.response?.data?.message || "Không thể kết nối đến máy chủ Sản phẩm");
       } finally {
         setLoading(false);
@@ -37,7 +38,7 @@ export default function Home() {
     };
 
     fetchProducts();
-  }, []);
+  }, [currentStore.code]); // 4. THEO DÕI SỰ THAY ĐỔI CỦA CỬA HÀNG ĐỂ LOAD LẠI DATA
 
   // Auto-scroll favorites carousel: advance one item every ~2 seconds
   useEffect(() => {
@@ -59,7 +60,6 @@ export default function Home() {
     const step = () => {
       if (!container) return;
       const maxScroll = container.scrollWidth - container.clientWidth;
-      // Recompute width in case of responsive changes
       if (!itemWidth) itemWidth = computeItemWidth();
       if (Math.abs(container.scrollLeft - maxScroll) < 5) {
         container.scrollTo({ left: 0, behavior: 'smooth' });
@@ -68,7 +68,6 @@ export default function Home() {
       }
     };
 
-    // start after a short delay so layout stabilizes
     intervalId = setInterval(step, 2000);
 
     const onResize = () => { itemWidth = computeItemWidth(); };

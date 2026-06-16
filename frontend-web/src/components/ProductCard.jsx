@@ -36,7 +36,7 @@ const ProductCard = ({ p }) => {
           <div className="flex gap-1 items-center pt-0.5">
             <span className="bg-[#e6f0ed] text-[#006c49] text-[8px] font-black px-1.5 py-0.5 rounded uppercase">{p.ten_danh_muc || 'Siêu thị'}</span>
           </div>
-          <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">KHO: {stockCount}</p>
+          <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">SỐ LƯỢNG: {stockCount}</p>
         </div>
       </div>
     </Link>

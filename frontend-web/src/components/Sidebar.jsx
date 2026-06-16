@@ -1,20 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { useStore } from '../context/StoreContext'; // 1. IMPORT THÊM CONTEXT MỚI
 import { Search, Tag, Flame, X, MapPin, Check } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 
-// Demi lưu ý: Truyền prop isOpen và onClose từ App.jsx hoặc Header.jsx vào nhé
 export default function Sidebar({ isOpen, onClose }) {
   const navigate = useNavigate(); 
   const { t } = useLanguage();
+  
+  // 2. LẤY DATA TỪ STORE CONTEXT THAY VÌ USESTATE CỤC BỘ
+  const { currentStore, setCurrentStore, stores } = useStore(); 
+  const [isStoreOpen, setIsStoreOpen] = useState(false);
+
   const [activeCategory, setActiveCategory] = useState('search');
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
-
-  // --- 1. STATE CHO TÍNH NĂNG CHỌN CỬA HÀNG ---
-  const [selectedStore, setSelectedStore] = useState("Demi Việt Nam");
-  const [isStoreOpen, setIsStoreOpen] = useState(false);
-  const stores = ["Demi Việt Nam", "Demi US (Mỹ)","Demi China (Trung Quốc)"];
 
   const handleScroll = () => {
     setIsScrolling(true);
@@ -30,7 +30,6 @@ export default function Sidebar({ isOpen, onClose }) {
     { slug: 'bestseller', key: 'sidebar.main.bestseller', i: <Flame size={20} /> },
   ];
 
-  // 3. BỔ SUNG THÊM TRƯỜNG "slug" ĐỂ TẠO ĐƯỜNG DẪN TƯƠNG ỨNG VỚI DATABASE
   const categories = [
     { i: "🍜", slug: "do-an-lien" }, 
     { i: "🥐", slug: "banh-mi" }, 
@@ -53,30 +52,23 @@ export default function Sidebar({ isOpen, onClose }) {
     'sidebar.footerLinks.0','sidebar.footerLinks.1','sidebar.footerLinks.2','sidebar.footerLinks.3','sidebar.footerLinks.4','sidebar.footerLinks.5','sidebar.footerLinks.6'
   ];
 
-  // --- 2. HÀM XỬ LÝ CLICK MENU CHÍNH (TÌM KIẾM, KHUYẾN MÃI...) ---
   const handleMainMenuClick = (menuSlug) => {
     setActiveCategory(menuSlug);
-    
     if (menuSlug === 'search') {
-      // Đóng sidebar trên mobile
       if(window.innerWidth < 1024) onClose();
-      
-      // Tự động nhảy con trỏ chuột vào thanh tìm kiếm trên Header
       const searchInput = document.getElementById('demi-search-bar');
       if (searchInput) {
         searchInput.focus();
-        // Mẹo nhỏ: Scroll mượt lên đầu trang để người dùng thấy rõ thanh tìm kiếm
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     } else {
-      // Tạm thời các menu khác chỉ đổi màu và đóng sidebar (mobile)
       if(window.innerWidth < 1024) onClose();
     }
   };
 
   return (
     <>
-      {/* 1. OVERLAY (Lớp phủ đen khi mở trên điện thoại) */}
+      {/* 1. OVERLAY */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-[10001] lg:hidden backdrop-blur-sm transition-opacity"
@@ -87,30 +79,14 @@ export default function Sidebar({ isOpen, onClose }) {
       {/* 2. SIDEBAR MAIN */}
       <aside 
         onScroll={handleScroll}
-        className={`
-          /* Cấu trúc cố định */
-          fixed lg:sticky z-[10002] lg:z-[99]
-          top-0 lg:top-[112px] 
-          h-full lg:h-[calc(100vh-112px)] 
-          bg-[#F8FAF9] border-r border-slate-100 overflow-y-auto py-6 px-4 font-sans transition-all duration-300 ease-in-out
-          
-          /* Logic Ẩn/Hiện trên Mobile */
-          w-[280px] sm:w-[300px] lg:w-[260px]
-          ${isOpen ? 'left-0' : '-left-[300px] lg:left-0'}
-          
-          /* Scroll State */
-          ${isScrolling ? 'demi-scroll-active' : 'demi-scroll-idle'}
-        `}
+        className={`fixed lg:sticky z-[10002] lg:z-[99] top-0 lg:top-[112px] h-full lg:h-[calc(100vh-112px)] bg-[#F8FAF9] border-r border-slate-100 overflow-y-auto py-6 px-4 font-sans transition-all duration-300 ease-in-out w-[280px] sm:w-[300px] lg:w-[260px] ${isOpen ? 'left-0' : '-left-[300px] lg:left-0'} ${isScrolling ? 'demi-scroll-active' : 'demi-scroll-idle'}`}
       >
-        {/* NÚT ĐÓNG (Chỉ hiện trên Mobile) */}
-        <button 
-          onClick={onClose}
-          className="lg:hidden absolute right-4 top-4 p-2 bg-white rounded-full shadow-sm text-slate-500 active:scale-90 transition-all"
-        >
+        {/* NÚT ĐÓNG */}
+        <button onClick={onClose} className="lg:hidden absolute right-4 top-4 p-2 bg-white rounded-full shadow-sm text-slate-500 active:scale-90 transition-all">
           <X size={20} strokeWidth={3} />
         </button>
 
-        {/* --- KHU VỰC CHỌN CỬA HÀNG (ĐÃ NÂNG CẤP DROPDOWN) --- */}
+        {/* --- KHU VỰC CHỌN CỬA HÀNG --- */}
         <div className="mb-4 mt-8 lg:mt-0 relative">
           <div 
             onClick={() => setIsStoreOpen(!isStoreOpen)}
@@ -120,28 +96,28 @@ export default function Sidebar({ isOpen, onClose }) {
             <div className="flex items-center justify-center gap-2">
               <MapPin size={16} className="text-[#006c49]" />
               <span className="text-[14px] font-black text-[#161b22] tracking-tight group-hover:text-[#006c49] transition-colors line-clamp-1">
-                {selectedStore}
+                {currentStore.name} {/* 3. HIỂN THỊ TÊN TỪ CONTEXT */}
               </span>
               <span className={`text-[10px] text-slate-400 transition-transform duration-300 ${isStoreOpen ? 'rotate-180' : ''}`}>▼</span>
             </div>
           </div>
 
-          {/* Menu Dropdown chứa danh sách cửa hàng */}
+          {/* Menu Dropdown */}
           <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isStoreOpen ? 'max-h-[200px] mt-2 opacity-100' : 'max-h-0 opacity-0'}`}>
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-2 flex flex-col gap-1">
               {stores.map(store => (
                 <div 
-                  key={store}
+                  key={store.code}
                   onClick={() => {
-                    setSelectedStore(store);
+                    setCurrentStore(store); // 4. CẬP NHẬT CONTEXT KHI CLICK
                     setIsStoreOpen(false);
                   }}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-[13px] font-bold transition-all
-                    ${selectedStore === store ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                    ${currentStore.code === store.code ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
                   `}
                 >
-                  {store}
-                  {selectedStore === store && <Check size={16} />}
+                  {store.name}
+                  {currentStore.code === store.code && <Check size={16} />}
                 </div>
               ))}
             </div>

@@ -9,37 +9,38 @@ export const getAllProducts = async (req, res) => {
         const limit = parseInt(req.query.limit) || 12;
         const page = parseInt(req.query.page) || 1;
         const offset = (page - 1) * limit;
+        // Lấy quốc gia từ Frontend truyền lên, mặc định là VN
+        const countryCode = (req.query.country || 'VN').toUpperCase(); 
 
         const query = `
             SELECT 
                 sp.*, 
                 dm.ten_danh_muc,
                 dm.duong_dan_seo AS slug_danh_muc,
-                LOWER(vm.ma_quoc_gia) AS country_code,
+                LOWER($3) AS country_code,
                 COALESCE((SELECT MIN(gia_ban_le) FROM bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS gia_ban_thap_nhat,
                 (SELECT duong_dan_url FROM media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh,
-                -- Lấy array mã biến thể để sau này map stock
-                COALESCE((SELECT array_agg(ma_bien_the) FROM bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), '{}') as variant_ids
+                -- Tính tổng tồn kho của toàn bộ biến thể thuộc sản phẩm này tại quốc gia yêu cầu
+                COALESCE(
+                    (SELECT SUM(tk.so_luong) 
+                     FROM ton_kho_quoc_gia tk
+                     JOIN bien_the_san_pham bt ON tk.ma_bien_the = bt.ma_bien_the
+                     JOIN vung_mien vm ON tk.ma_vung = vm.ma_vung
+                     WHERE bt.ma_san_pham = sp.ma_san_pham 
+                       AND UPPER(vm.ma_quoc_gia) = UPPER($3)
+                    ), 0
+                ) AS tong_ton_kho
             FROM san_pham sp
             LEFT JOIN danh_muc dm ON sp.ma_danh_muc = dm.ma_danh_muc
-            LEFT JOIN vung_mien vm ON sp.ma_vung = vm.ma_vung
             WHERE sp.trang_thai = true
             ORDER BY sp.ngay_tao DESC
             LIMIT $1 OFFSET $2;
         `;
 
-        const { rows: products } = await pool.query(query, [limit, offset]);
-
+        const { rows: products } = await pool.query(query, [limit, offset, countryCode]);
+        
         if (products.length === 0) return res.status(200).json([]);
-
-        // --- TẠM THỜI BỎ QUA GỌI INVENTORY SERVICE ---
-        // Gán tồn kho giả để Frontend không bị lỗi undefined
-        const finalProducts = products.map(p => {
-            delete p.variant_ids; 
-            return { ...p, tong_ton_kho: 999 }; // Số ảo để test giao diện
-        });
-
-        res.status(200).json(finalProducts);
+        res.status(200).json(products);
     } catch (error) {
         console.error("Lỗi API getAllProducts:", error.message);
         res.status(500).json({ error: error.message });
@@ -49,15 +50,31 @@ export const getAllProducts = async (req, res) => {
 // 2. Lấy chi tiết 1 sản phẩm (Trang Chi tiết)
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
+    const countryCode = (req.query.country || 'VN').toUpperCase();
+
     try {
         const query = `
             SELECT 
                 sp.*, 
                 dm.ten_danh_muc,
                 dm.duong_dan_seo AS slug_danh_muc,
-                LOWER(vm.ma_quoc_gia) AS country_code,
+                LOWER($2) AS country_code,
+                -- Lấy danh sách biến thể KÈM THEO số lượng tồn kho của quốc gia đó
                 COALESCE(
-                    (SELECT json_agg(bt) FROM bien_the_san_pham bt WHERE bt.ma_san_pham = sp.ma_san_pham), 
+                    (SELECT json_agg(
+                        json_build_object(
+                            'ma_bien_the', bt.ma_bien_the,
+                            'ten_bien_the', bt.ten_bien_the,
+                            'sku', bt.sku,
+                            'gia_ban_le', bt.gia_ban_le,
+                            'ton_kho', COALESCE((
+                                SELECT tk.so_luong 
+                                FROM ton_kho_quoc_gia tk 
+                                JOIN vung_mien vm ON tk.ma_vung = vm.ma_vung 
+                                WHERE tk.ma_bien_the = bt.ma_bien_the AND UPPER(vm.ma_quoc_gia) = UPPER($2)
+                            ), 0)
+                        )
+                    ) FROM bien_the_san_pham bt WHERE bt.ma_san_pham = sp.ma_san_pham), 
                     '[]'
                 ) as bien_the,
                 COALESCE(
@@ -66,27 +83,16 @@ export const getProductById = async (req, res) => {
                 ) as media
             FROM san_pham sp
             LEFT JOIN danh_muc dm ON sp.ma_danh_muc = dm.ma_danh_muc
-            LEFT JOIN vung_mien vm ON sp.ma_vung = vm.ma_vung
             WHERE sp.ma_san_pham = $1;
         `;
-        const result = await pool.query(query, [id]);
+        
+        const result = await pool.query(query, [id, countryCode]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ message: "Sản phẩm không tồn tại Demi ơi!" });
         }
 
-        const product = result.rows[0];
-
-        // --- TẠM THỜI BỎ QUA GỌI INVENTORY SERVICE ---
-        // Gán tồn kho cho từng biến thể để nút chọn biến thể hoạt động
-        if (product.bien_the) {
-            product.bien_the = product.bien_the.map(bt => ({
-                ...bt,
-                ton_kho: 100 // Số ảo
-            }));
-        }
-
-        res.status(200).json(product); 
+        res.status(200).json(result.rows[0]); 
     } catch (error) {
         console.error("Lỗi API getProductById:", error.message);
         res.status(500).json({ error: error.message });
@@ -96,37 +102,42 @@ export const getProductById = async (req, res) => {
 // 3. Lấy sản phẩm theo danh mục (slug)
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
+    const countryCode = (req.query.country || 'VN').toUpperCase();
+
     try {
         let query = `
             SELECT 
                 sp.*, 
                 dm.ten_danh_muc,
                 dm.duong_dan_seo AS slug_danh_muc,
-                LOWER(vm.ma_quoc_gia) AS country_code,
+                LOWER($1) AS country_code,
                 COALESCE((SELECT MIN(gia_ban_le) FROM bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS gia_ban_thap_nhat,
-                (SELECT duong_dan_url FROM media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
+                (SELECT duong_dan_url FROM media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh,
+                COALESCE(
+                    (SELECT SUM(tk.so_luong) 
+                     FROM ton_kho_quoc_gia tk
+                     JOIN bien_the_san_pham bt ON tk.ma_bien_the = bt.ma_bien_the
+                     JOIN vung_mien vm ON tk.ma_vung = vm.ma_vung
+                     WHERE bt.ma_san_pham = sp.ma_san_pham 
+                       AND UPPER(vm.ma_quoc_gia) = UPPER($1)
+                    ), 0
+                ) AS tong_ton_kho
             FROM san_pham sp
             LEFT JOIN danh_muc dm ON sp.ma_danh_muc = dm.ma_danh_muc
-            LEFT JOIN vung_mien vm ON sp.ma_vung = vm.ma_vung
             WHERE sp.trang_thai = true
         `;
         
-        const params = [];
+        const params = [countryCode];
 
-        // Nếu slug không phải 'tat-ca', thêm điều kiện lọc theo danh mục
         if (slug !== 'tat-ca') {
-            query += ` AND dm.duong_dan_seo = $1`;
+            query += ` AND dm.duong_dan_seo = $2`;
             params.push(slug);
         }
 
         query += ` ORDER BY sp.ngay_tao DESC;`;
 
         const { rows: products } = await pool.query(query, params);
-
-        // Gán tồn kho giả giống hàm getAllProducts để UI không bị lỗi
-        const finalProducts = products.map(p => ({ ...p, tong_ton_kho: 999 }));
-
-        res.status(200).json(finalProducts);
+        res.status(200).json(products);
     } catch (error) {
         console.error("Lỗi API getProductsByCategorySlug:", error.message);
         res.status(500).json({ error: error.message });
@@ -136,6 +147,7 @@ export const getProductsByCategorySlug = async (req, res) => {
 // 4. Tìm kiếm sản phẩm theo từ khóa
 export const searchProducts = async (req, res) => {
     const keyword = req.query.keyword || '';
+    const countryCode = (req.query.country || 'VN').toUpperCase();
     
     try {
         const query = `
@@ -143,25 +155,29 @@ export const searchProducts = async (req, res) => {
                 sp.*, 
                 dm.ten_danh_muc,
                 dm.duong_dan_seo AS slug_danh_muc,
-                LOWER(vm.ma_quoc_gia) AS country_code,
+                LOWER($2) AS country_code,
                 COALESCE((SELECT MIN(gia_ban_le) FROM bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS gia_ban_thap_nhat,
-                (SELECT duong_dan_url FROM media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
+                (SELECT duong_dan_url FROM media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh,
+                COALESCE(
+                    (SELECT SUM(tk.so_luong) 
+                     FROM ton_kho_quoc_gia tk
+                     JOIN bien_the_san_pham bt ON tk.ma_bien_the = bt.ma_bien_the
+                     JOIN vung_mien vm ON tk.ma_vung = vm.ma_vung
+                     WHERE bt.ma_san_pham = sp.ma_san_pham 
+                       AND UPPER(vm.ma_quoc_gia) = UPPER($2)
+                    ), 0
+                ) AS tong_ton_kho
             FROM san_pham sp
             LEFT JOIN danh_muc dm ON sp.ma_danh_muc = dm.ma_danh_muc
-            LEFT JOIN vung_mien vm ON sp.ma_vung = vm.ma_vung
             WHERE sp.trang_thai = true 
             AND (sp.ten_san_pham ILIKE $1 OR sp.mo_ta ILIKE $1)
             ORDER BY sp.ngay_tao DESC;
         `;
         
-        // Thêm dấu % để tìm kiếm chứa từ khóa (LIKE %keyword%)
         const searchTerm = `%${keyword}%`;
-        const { rows: products } = await pool.query(query, [searchTerm]);
+        const { rows: products } = await pool.query(query, [searchTerm, countryCode]);
 
-        // Gán tồn kho giả để UI không bị lỗi
-        const finalProducts = products.map(p => ({ ...p, tong_ton_kho: 999 }));
-
-        res.status(200).json(finalProducts);
+        res.status(200).json(products);
     } catch (error) {
         console.error("Lỗi API searchProducts:", error.message);
         res.status(500).json({ error: error.message });

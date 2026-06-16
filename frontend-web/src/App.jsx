@@ -20,6 +20,7 @@ import CategoryPage from "./pages/Category/CategoryPage";
 import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
 import SearchPage from "./pages/Search/SearchPage";
+import { StoreProvider } from "./context/StoreContext";
 
 // --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHUẨN ĐƯỜNG DẪN) ---
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
@@ -122,6 +123,7 @@ const AppContent = () => {
 function App({ initialLanguage }) {
   return (
     <AuthProvider>
+      <StoreProvider>
       <CartProvider>
         <OrderProvider>
           <LanguageProvider initialLanguage={initialLanguage}>
@@ -131,6 +133,7 @@ function App({ initialLanguage }) {
           </LanguageProvider>
         </OrderProvider>
       </CartProvider>
+      </StoreProvider>
     </AuthProvider>
   );
 }
