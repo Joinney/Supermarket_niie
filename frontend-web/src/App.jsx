@@ -11,7 +11,7 @@ import Checkout from "./pages/Checkout/Checkout";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import Footer from "./components/Footer";
-import Home from "./pages/Home";
+import Home from "./pages/Homeindex/Home";
 import Login from "./pages/Auth/Login";
 import Signup from "./pages/Auth/Signup";
 import ForgotPassword from "./pages/Auth/ForgotPassword";

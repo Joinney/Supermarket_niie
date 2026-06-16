@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
-  Star, ShoppingCart, ShieldCheck, Truck, 
+  ShoppingCart, ShieldCheck, Truck, 
   Minus, Plus, ChevronRight, CreditCard
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { productApi } from '../../api/axios';
 import { useStore } from '../../context/StoreContext';
+
+// Import các component con được tách biệt trong cùng thư mục
+import Feedback from './Feedback';
+import RelatedProducts from './RelatedProducts';
 
 export default function ProductDetail() {
   const { country, category, id, variantId } = useParams();
@@ -96,7 +100,7 @@ export default function ProductDetail() {
     });
   };
 
-const handleAddToCart = () => {
+  const handleAddToCart = () => {
     if (!product || !selectedVariant) return;
 
     // Đóng gói dữ liệu chuẩn hóa
@@ -137,7 +141,7 @@ const handleAddToCart = () => {
   );
 
   return (
-    <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-8">
+    <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10 transition-all duration-300">
         
         {/* BREADCRUMBS */}
@@ -149,6 +153,7 @@ const handleAddToCart = () => {
           <span className="text-[#006c49] truncate font-black italic">{product.ten_san_pham}</span>
         </nav>
 
+        {/* THÔNG TIN CHI TIẾT SẢN PHẨM KHỐI TRÊN */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
           
           {/* GALLERY */}
@@ -228,7 +233,6 @@ const handleAddToCart = () => {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Số lượng</p>
-                    {/* Hiển thị thêm tồn kho để khách hàng dễ thấy */}
                     <span className="text-[9px] text-[#006c49] font-bold">
                       (Kho: {selectedVariant?.ton_kho || 0})
                     </span>
@@ -289,6 +293,13 @@ const handleAddToCart = () => {
             </div>
           </div>
         </div>
+
+        {/* 1. KHỐI ĐÁNH GIÁ SẢN PHẨM (COMPATIBLE COLOR #006c49) */}
+        <Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} />
+
+        {/* 2. KHỐI SẢN PHẨM TƯƠNG TỰ (GRID TIÊU CHUẨN DEMI MART) */}
+        <RelatedProducts currentProduct={product} countryCode={country} />
+
       </div>
     </div>
   );
