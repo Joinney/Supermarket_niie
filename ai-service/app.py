@@ -2,7 +2,7 @@ import os
 from typing import List, Dict
 import numpy as np
 from fastapi import FastAPI, HTTPException
-# 1. Import thêm HTMLResponse từ fastapi.responses để trả về giao diện web
+# Import thêm HTMLResponse từ fastapi.responses để trả về giao diện web
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import httpx
@@ -209,3 +209,12 @@ async def ai_recommend_endpoint(request: RecommendRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# =========================================================================
+# TỰ ĐỘNG ĐO ĐẠC CỔNG MẠNG: CHẠY SONG SONG LOCAL (8000) & CLOUD (RENDER)
+# =========================================================================
+if __name__ == "__main__":
+    import uvicorn
+    # Render sẽ tự động gán cổng qua biến môi trường PORT, nếu không có (ở local) sẽ chạy cổng 8000
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)
