@@ -7,7 +7,8 @@ import {
     batchGenerateDescriptionsController,
     getProductsWithoutDescriptions,
     refreshEmptyDescriptions,
-    createProduct
+    createProduct,
+    getAIChatRecommendation // <-- Hàm xử lý tư vấn sản phẩm từ AI
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -16,31 +17,27 @@ const router = express.Router();
  * @swagger
  * tags:
  * - name: Products
- * description: Quản lý danh sách và chi tiết sản phẩm cho Demi Mart
+ * description: Quản lý danh sách, chi tiết sản phẩm và trợ lý ảo AI cho Demi Mart
  */
+
+// =========================================================================
+// 1. STATIC ROUTES - Đặt lên hàng đầu để tránh xung đột với route động /:id
+// =========================================================================
 
 /**
  * @swagger
- * /api/products:
- * get:
- * summary: Lấy danh sách tất cả sản phẩm
- * description: API này dùng để lấy dữ liệu hiển thị cho trang Home.
- * tags: [Products]
- * responses:
- * 200:
- * description: Trả về mảng danh sách sản phẩm thành công
- * 500:
- * description: Lỗi hệ thống khi truy vấn database
- */
-router.get('/', getAllProducts);
-
-/**
- * @swagger
- * /api/products:
+ * /api/products/chat-recommend:
  * post:
- * summary: Tạo sản phẩm mới (tự động tạo mô tả)
- * description: Tạo sản phẩm mới và tự động sinh mô tả ngắn từ AI
+ * summary: Trợ lý AI tư vấn và gợi ý sản phẩm Realtime
+ * description: API nhận tin nhắn từ người dùng, tự động nạp danh sách sản phẩm trong kho làm ngữ cảnh và trả về câu trả lời tư vấn từ mô hình DeepSeek.
  * tags: [Products]
+ * parameters:
+ * - in: query
+ * name: country
+ * schema:
+ * type: string
+ * default: VN
+ * description: Mã quốc gia để lọc tồn kho chính xác (ví dụ VN, US)
  * requestBody:
  * required: true
  * content:
@@ -48,33 +45,32 @@ router.get('/', getAllProducts);
  * schema:
  * type: object
  * required:
- * - ten_san_pham
- * - ma_danh_muc
+ * - message
  * properties:
- * ten_san_pham:
+ * message:
  * type: string
- * description: Tên sản phẩm
- * ma_danh_muc:
- * type: string
- * description: Mã danh mục
- * gia_ban_le:
- * type: number
- * description: Giá bán lẻ
- * mo_ta:
- * type: string
- * description: Mô tả chi tiết
- * ma_vung:
- * type: string
- * description: Mã vùng miền
+ * description: Câu hỏi hoặc yêu cầu tìm kiếm của khách hàng
+ * example: "Tôi muốn tìm món nào ăn liền vị tôm chua cay"
  * responses:
- * 201:
- * description: Sản phẩm được tạo thành công, mô tả sẽ được sinh tự động
+ * 200:
+ * description: AI phân tích kho hàng và trả về lời tư vấn thành công
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * success:
+ * type: boolean
+ * example: true
+ * reply:
+ * type: string
+ * example: "Dựa vào kho hàng Demi Mart, bạn có thể chọn 'Mì ăn liền Hảo Hảo tôm chua cay' giá 4,500 VNĐ đang còn hàng nhé!"
  * 400:
- * description: Dữ liệu không hợp lệ
+ * description: Tin nhắn rỗng hoặc không hợp lệ
  * 500:
- * description: Lỗi hệ thống
+ * description: Lỗi hệ thống AI hoặc Database
  */
-router.post('/', createProduct);
+router.post('/chat-recommend', getAIChatRecommendation);
 
 /**
  * @swagger
@@ -209,6 +205,71 @@ router.post('/refresh-empty-descriptions', refreshEmptyDescriptions);
  * description: Lỗi hệ thống
  */
 router.get('/category/:slug', getProductsByCategorySlug);
+
+/**
+ * @swagger
+ * /api/products:
+ * get:
+ * summary: Lấy danh sách tất cả sản phẩm
+ * description: API này dùng để lấy dữ liệu hiển thị cho trang Home.
+ * tags: [Products]
+ * responses:
+ * 200:
+ * description: Trả về mảng danh sách sản phẩm thành công
+ * 500:
+ * description: Lỗi hệ thống khi truy vấn database
+ */
+router.get('/', getAllProducts);
+
+/**
+ * @swagger
+ * /api/products:
+ * post:
+ * summary: Tạo sản phẩm mới (tự động tạo mô tả)
+ * description: Tạo sản phẩm mới và tự động sinh mô tả ngắn từ AI
+ * tags: [Products]
+ * requestBody:
+ * required: true
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * required:
+ * - ten_san_pham
+ * - ma_danh_muc
+ * properties:
+ * ten_san_pham:
+ * type: string
+ * description: Tên sản phẩm
+ * ma_danh_muc:
+ * type: string
+ * description: Mã danh mục
+ * gia_ban_le:
+ * type: number
+ * description: Giá bán lẻ
+ * mo_ta:
+ * type: string
+ * description: Mô tả chi tiết
+ * ma_vung:
+ * type: string
+ * description: Mã vùng miền
+ * responses:
+ * 201:
+ * description: Sản phẩm được tạo thành công, mô tả sẽ được sinh tự động
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * 400:
+ * description: Dữ liệu không hợp lệ
+ * 500:
+ * description: Lỗi hệ thống
+ */
+router.post('/', createProduct);
+
+// =========================================================================
+// 2. DYNAMIC ROUTES - Đặt xuống dưới cùng để không bắt nhầm chuỗi của route khác
+// =========================================================================
 
 /**
  * @swagger

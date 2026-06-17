@@ -7,20 +7,15 @@ import { productApi } from "../api/axios";
 import { useLanguage } from "../context/LanguageContext";
 import { 
   Globe, ChevronDown, Check, Search, LogOut, MapPin, 
-  ShoppingCart, Calendar, User, Gift, Menu 
+  ShoppingCart, Calendar, User, Gift, Menu, X 
 } from "lucide-react";
 
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const AUTH_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://authservice-sz4p.onrender.com';
 
-// Dùng hàm này thay thế cho mọi chỗ hiển thị ảnh
 const getCleanImage = (url) => {
   if (!url) return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200';
-  
-  // Xóa mọi tham số cũ sau dấu '?' để tránh lỗi "?t=...?t=..."
   let cleanUrl = url.split('?')[0];
-  
-  // Nếu là link Cloudinary, thêm tham số timestamp duy nhất một lần
   if (cleanUrl.includes('cloudinary.com')) {
     return `${cleanUrl}?t=${Date.now()}`;
   }
@@ -37,16 +32,46 @@ export default function Header({ onOpenMenu }) {
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const suggestRef = useRef(null);
   const suggestTimer = useRef(null);
+  
   const handleSearch = () => {
     if (searchKeyword.trim()) {
       navigate(`/search?keyword=${encodeURIComponent(searchKeyword.trim())}`);
       setSearchKeyword("");
     }
   };
+  
   const { currentLanguage, changeLanguage, languages, t } = useLanguage();
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langRef = useRef(null);
   const [currentDate, setCurrentDate] = useState("Đang tải...");
+
+  // --- LOGIC BANNER & ĐẾM NGƯỢC ---
+  const [showBanner, setShowBanner] = useState(true);
+  // Thiết lập đếm ngược giả lập: 11 giờ, 59 phút, 23 giây
+  const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+    const timer = setInterval(() => {
+      setTimeLeft(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft]);
+
+  const formatTime = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const pad = (num) => String(num).padStart(2, '0');
+    return {
+      h: pad(hours).split(''),
+      m: pad(minutes).split(''),
+      s: pad(seconds).split('')
+    };
+  };
+
+  const timeChunks = formatTime(timeLeft);
 
   // --- 1. ĐỒNG BỘ USER & AVATAR TỨC THÌ ---
   const [displayUser, setDisplayUser] = useState(() => {
@@ -57,13 +82,11 @@ export default function Header({ onOpenMenu }) {
   });
 
   useEffect(() => {
-    // Kiểm tra token để tránh lỗi Header kẹt thông tin khi phiên hết hạn
     const token = localStorage.getItem('token');
     if (!token) {
       setDisplayUser(null);
       return;
     }
-
     if (authUser) setDisplayUser(authUser);
     else setDisplayUser(null);
   }, [authUser]);
@@ -81,11 +104,9 @@ export default function Header({ onOpenMenu }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close suggestion dropdown when clicking outside
   useEffect(() => {
     function onDocClick(e) {
       if (suggestRef.current && !suggestRef.current.contains(e.target)) {
-        // if click outside input too
         const input = document.getElementById('demi-search-bar');
         if (input && input.contains(e.target)) return;
         setIsSuggestOpen(false);
@@ -95,28 +116,19 @@ export default function Header({ onOpenMenu }) {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  
-
-  // --- 3. HÀM XỬ LÝ AVATAR ĐỘNG CHUẨN ĐƯỜNG TRUYỀN ---
+  // --- 3. HÀM XỬ LÝ AVATAR ĐỘNG ---
   const getAvatarSrc = (userObj) => {
     if (!userObj) return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
-
     const url = userObj.avatar_url || userObj.avatar;
     const name = userObj.full_name || 'User';
 
     if (!url || url === "" || url.includes('unsplash.com')) {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
     }
-
-    // Tách bỏ cấu trúc chuỗi truy vấn cũ một cách an toàn
     const cleanUrl = url.split('?')[0];
-
     if (cleanUrl.startsWith('http')) {
-      // Giữ nguyên chuỗi CDN tuyệt đối và chỉ đính kèm duy nhất một dấu hỏi chống cache
       return `${cleanUrl}?t=${new Date().getTime()}`;
     }
-
-    // Nếu là ảnh lưu cục bộ trong thư mục /uploads của Backend
     const cleanPath = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
     return `${AUTH_BASE_URL}${cleanPath}?t=${new Date().getTime()}`;
   };
@@ -133,11 +145,45 @@ export default function Header({ onOpenMenu }) {
   const isAuthPage = ["/login", "/signup", "/forgot-password"].includes(location.pathname);
 
   return (
-    <header className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md min-h-[96px] md:min-h-[112px]">
+    <header className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md">
       
+      {/* --- BANNER THÔNG BÁO KHUYẾN MÃI (MÀU VÀNG THƯƠNG HIỆU) --- */}
+      {showBanner && (
+        <div className="w-full bg-[#fea619] text-slate-900 h-10 md:h-11 flex items-center justify-between px-4 relative overflow-hidden text-xs md:text-sm font-bold tracking-wide shadow-sm">
+          {/* Nút đóng Banner màu tối tương phản tốt trên nền vàng */}
+          <button 
+            onClick={() => setShowBanner(false)} 
+            className="text-slate-800 hover:text-black transition-colors p-1 z-10"
+          >
+            <X size={18} strokeWidth={2.5} />
+          </button>
+
+          {/* Cụm Nội Dung Chính Căn Giữa */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 whitespace-nowrap">
+            <span>Giao hàng miễn phí cho 5 đơn hàng đầu tiên của bạn</span>
+            
+            {/* Bộ Đếm Ngược: Ô đen chữ trắng nổi bật trên nền vàng */}
+            <div className="flex items-center gap-1 font-black text-white text-[11px] md:text-xs">
+              {/* Giờ */}
+              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.h[0]}</span>
+              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.h[1]}</span>
+              <span className="text-slate-900 font-black -mt-0.5 mx-0.5">:</span>
+              {/* Phút */}
+              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.m[0]}</span>
+              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.m[1]}</span>
+              <span className="text-slate-900 font-black -mt-0.5 mx-0.5">:</span>
+              {/* Giây */}
+              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.s[0]}</span>
+              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.s[1]}</span>
+            </div>
+          </div>
+
+          <div className="w-5 opacity-0 pointer-events-none"></div>
+        </div>
+      )}
+
       {/* --- TẦNG 1: LOGO, SEARCH BAR, USER ACTIONS --- */}
       <div className="h-[60px] md:h-[72px] px-3 md:px-10 flex items-center justify-between gap-2 border-b border-slate-50">
-        
         <div className="flex items-center gap-1 md:gap-4 flex-shrink-0 min-w-[130px] md:min-w-[170px]">
           <button onClick={onOpenMenu} className="lg:hidden p-1.5 text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
             <Menu size={22} />
@@ -149,7 +195,6 @@ export default function Header({ onOpenMenu }) {
 
         {!isAuthPage && (
           <div className="flex-1 max-w-xl relative group hidden sm:block min-h-[45px]">
-            {/* ĐÃ BỔ SUNG ID demi-search-bar VÀO ĐÂY */}
             <input 
               id="demi-search-bar"
               type="text" 
@@ -158,7 +203,6 @@ export default function Header({ onOpenMenu }) {
               onChange={(e) => {
                 const v = e.target.value;
                 setSearchKeyword(v);
-                // debounce suggestion fetch
                 if (suggestTimer.current) clearTimeout(suggestTimer.current);
                 if (v.trim()) {
                   suggestTimer.current = setTimeout(async () => {
@@ -180,7 +224,6 @@ export default function Header({ onOpenMenu }) {
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   if (isSuggestOpen && suggestions.length > 0) {
-                    // navigate to first suggestion
                     const p = suggestions[0];
                     const country = p.country_code || 'vn';
                     const category = p.slug_danh_muc || 'san-pham';
@@ -191,7 +234,6 @@ export default function Header({ onOpenMenu }) {
                     handleSearch();
                   }
                 } else if (e.key === 'ArrowDown') {
-                  // focus first suggestion
                   const first = suggestRef.current?.querySelector('button');
                   if (first) first.focus();
                 }
@@ -202,7 +244,6 @@ export default function Header({ onOpenMenu }) {
               <Search size={16} strokeWidth={3} />
             </button>
 
-            {/* Suggestions dropdown */}
             {isSuggestOpen && suggestions.length > 0 && (
               <div ref={suggestRef} className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-lg z-50 p-2">
                 {suggestions.map(s => (
@@ -226,8 +267,6 @@ export default function Header({ onOpenMenu }) {
         )}
 
         <div className="flex items-center gap-2 md:gap-6 flex-shrink-0 min-w-[160px] md:min-w-[300px] justify-end">
-          
-          {/* Bộ chọn ngôn ngữ */}
           <div className="relative" ref={langRef}>
             <button onClick={() => setIsLangOpen(!isLangOpen)} className="flex items-center gap-1 text-slate-600 hover:text-[#006c49] transition-colors">
               <Globe size={18} />
@@ -251,7 +290,6 @@ export default function Header({ onOpenMenu }) {
             )}
           </div>
 
-          {/* Khối tài khoản thành viên */}
           <div className="flex items-center min-w-[100px] md:min-w-[140px] justify-end">
             {displayUser ? (
               <div className="flex items-center gap-2 md:gap-3 bg-[#f8fafc] p-1 md:p-1.5 rounded-full border border-slate-100 md:pr-3 group transition-all">
@@ -283,7 +321,6 @@ export default function Header({ onOpenMenu }) {
             )}
           </div>
 
-          {/* Cụm nút Giỏ Hàng thông minh */}
           <Link to="/cart" className="bg-[#006c49] text-white p-2 md:px-5 md:py-2.5 rounded-full md:rounded-2xl flex items-center gap-2 shadow-lg shadow-[#006c49]/20 active:scale-95 transition-all flex-shrink-0 min-w-[44px] md:min-w-[120px] justify-center group">
             <div className="relative">
               <ShoppingCart size={18} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform" />
