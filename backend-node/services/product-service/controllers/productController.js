@@ -1,9 +1,9 @@
 import pool from '../configs/database.js';
-import axios from 'axios'; // Mở comment axios để gọi sang AI Service Python
+import axios from 'axios'; 
 import { batchGenerateDescriptions, generateDescriptionFromAI } from '../utils/aiDescriptionGenerator.js'; 
 
 // =========================================================================
-// 0. CHATBOT AI GỢI Ý & TƯ VẤN SẢN PHẨM REALTIME (CHẠY TRỰC TIẾP NODE.JS)
+// 0. CHATBOT AI GỢI Ý & TƯ VẤN SẢN PHẨM REALTIME (KẾT NỐI QUA AI-SERVICE PYTHON)
 // =========================================================================
 export const getAIChatRecommendation = async (req, res) => {
     try {
@@ -14,7 +14,7 @@ export const getAIChatRecommendation = async (req, res) => {
             return res.status(400).json({ success: false, message: "Tin nhắn không được để trống" });
         }
 
-        // 1. Lấy toàn bộ sản phẩm khả dụng trong DB để làm ngữ cảnh
+        // 1. Lấy toàn bộ sản phẩm khả dụng trong DB để làm ngữ cảnh dữ liệu thô
         const query = `
             SELECT 
                 sp.ma_san_pham AS id,
@@ -45,73 +45,47 @@ export const getAIChatRecommendation = async (req, res) => {
             });
         }
 
-        // 2. Thuật toán tìm kiếm lai (Hybrid keyword match) bằng JS rút gọn
-        const queryWords = message.toLowerCase().split(' ');
-        const matchedProducts = productsData.map(p => {
-            const content = `${p.name} ${p.category} ${p.description}`.toLowerCase();
-            let score = 0;
-            queryWords.forEach(word => {
-                if (content.includes(word)) score += 1;
-            });
-            return { ...p, score };
-        })
-        .filter(p => p.score > 0 || message.trim() === "")
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3); // Lấy top 3 sản phẩm sát nhất với câu hỏi
+        // 2. Đọc cấu hình URL của Python AI Microservice từ file .env
+        const aiServiceUrl = process.env.AI_SERVICE_URL || 'https://ai-service-0zyu.onrender.com';
 
-        // Gom mảng sản phẩm thành chuỗi ngữ cảnh văn bản (Context)
-        const contextStr = matchedProducts.length > 0 
-            ? matchedProducts.map(p => 
-                `- Tên: ${p.name}\n  Danh mục: ${p.category}\n  Giá: ${p.price.toLocaleString('vi-VN')} VNĐ\n  Mô tả: ${p.description}\n  Kho: ${p.stock > 0 ? 'Còn hàng' : 'Hết hàng'}`
-              ).join('\n---\n')
-            : "Không tìm thấy sản phẩm trùng khớp từ khóa trong kho hàng.";
+        console.log(`🤖 Chuyển tiếp luồng RAG sang Python AI Service: ${aiServiceUrl}/ai/recommend`);
 
-        // 3. Thiết lập hệ thống prompt nghiêm ngặt cho Bot bán hàng
-        const systemPrompt = `Bạn là một nhân viên tư vấn bán hàng AI chuyên nghiệp cho cửa hàng Demi Mart.
-Hãy dựa vào DỮ LIỆU SẢN PHẨM dưới đây để gợi ý và tư vấn cho khách.
-
-QUY TẮC BẮT BUỘC:
-1. CHỈ tư vấn các sản phẩm có trong danh sách. TUYỆT ĐỐI không tự bịa thông tin hoặc giá cả.
-2. Báo đúng GIÁ TIỀN và trạng thái kho hàng được ghi.
-3. Nếu sản phẩm đã 'Hết hàng', hãy tư vấn đổi sang sản phẩm khác tương đương còn hàng.
-4. Trả lời mạch lạc, ngắn gọn, lịch sự bằng tiếng Việt.
-
-DỮ LIỆU SẢN PHẨM KHẢ DỤNG TRONG KHO:
-${contextStr}`;
-
-        // 4. BẮN TRỰC TIẾP LÊN SERVER DEEPSEEK - BYPASS QUA TIẾN TRÌNH PYTHON PORT 8000
-        const deepSeekResponse = await axios.post('https://api.iamhc.cn/v1/chat/completions', {
-            model: "DeepSeek-V4-Flash", 
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: message }
-            ],
-            temperature: 0.2
+        // 3. Chuyển tiếp tin nhắn của khách và mảng thô sản phẩm sang Python băm Vector Lai
+        const aiResponse = await axios.post(`${aiServiceUrl}/ai/recommend`, {
+            message: message,
+            products_data: productsData 
         }, {
             headers: {
-                'Authorization': 'Bearer sk-zKO6CNAi13P5S7N57Z1wNbpOoUir4ZX5A2MWpYanqkbbBOIZ',
                 'Content-Type': 'application/json'
             },
-            timeout: 30000 
+            timeout: 45000 // Thiết lập 45 giây đề phòng trường hợp instance Render Free ngủ đông
         });
 
-        return res.status(200).json({
-            success: true,
-            reply: deepSeekResponse.data.choices[0].message.content
-        });
+        // 4. Trích xuất và phản hồi kết quả mượt mà về Client/Frontend
+        if (aiResponse.data && aiResponse.data.reply) {
+            return res.status(200).json({
+                success: true,
+                reply: aiResponse.data.reply
+            });
+        } else {
+            return res.status(200).json({
+                success: false,
+                reply: "Trợ lý AI của Demi Mart đang xử lý dữ liệu, bạn vui lòng đợi trong giây lát nhé!"
+            });
+        }
 
     } catch (error) {
-        console.error("❌ Lỗi liên thông Direct DeepSeek:", error.response ? error.response.data : error.message);
+        console.error("❌ Lỗi Microservice kết nối AI Service:", error.response ? error.response.data : error.message);
         return res.status(500).json({ 
             success: false, 
-            message: "Hệ thống trợ lý AI phản hồi chậm hoặc trục trặc, vui lòng thử lại.",
+            message: "Hệ thống trợ lý AI liên thông trục trặc hoặc phản hồi chậm, vui lòng thử lại.",
             error: error.message 
         });
     }
 };
 
 // =========================================================================
-// 1. Lấy tất cả sản phẩm (Trang Home)
+// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME)
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
@@ -155,7 +129,7 @@ export const getAllProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 2. Lấy chi tiết 1 sản phẩm (Trang Chi tiết)
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT)
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
@@ -208,7 +182,7 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. Lấy sản phẩm theo danh mục (slug)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (SLUG)
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
@@ -255,7 +229,7 @@ export const getProductsByCategorySlug = async (req, res) => {
 };
 
 // =========================================================================
-// 4. Tìm kiếm sản phẩm theo từ khóa
+// 4. TÌM KIẾM SẢN PHẨM THEO TỪ KHÓA
 // =========================================================================
 export const searchProducts = async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -297,7 +271,7 @@ export const searchProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 5. Batch generate descriptions via AI and store in database
+// 5. BATCH GENERATE DESCRIPTIONS VIA AI AND STORE IN DATABASE
 // =========================================================================
 export const batchGenerateDescriptionsController = async (req, res) => {
     try {
@@ -391,7 +365,7 @@ export const batchGenerateDescriptionsController = async (req, res) => {
 };
 
 // =========================================================================
-// 6. Get products without descriptions (candidates for AI generation)
+// 6. GET PRODUCTS WITHOUT DESCRIPTIONS (CANDIDATES FOR AI GENERATION)
 // =========================================================================
 export const getProductsWithoutDescriptions = async (req, res) => {
     try {
@@ -445,7 +419,7 @@ export const getProductsWithoutDescriptions = async (req, res) => {
 };
 
 // =========================================================================
-// 7. Refresh empty descriptions with online research
+// 7. REFRESH EMPTY DESCRIPTIONS WITH ONLINE RESEARCH
 // =========================================================================
 export const refreshEmptyDescriptions = async (req, res) => {
     try {
@@ -509,7 +483,7 @@ export const refreshEmptyDescriptions = async (req, res) => {
 };
 
 // =========================================================================
-// 8. Create product with auto-generated description
+// 8. CREATE PRODUCT WITH AUTO-GENERATED DESCRIPTION
 // =========================================================================
 export const createProduct = async (req, res) => {
     try {
@@ -575,7 +549,7 @@ export const createProduct = async (req, res) => {
 };
 
 // =========================================================================
-// 9. Periodic task: Generate descriptions for products without them
+// 9. PERIODIC TASK: GENERATE DESCRIPTIONS FOR PRODUCTS WITHOUT THEM
 // =========================================================================
 export const schedulePeriodicDescriptionGeneration = () => {
     const checkInterval = 6 * 60 * 60 * 1000;
