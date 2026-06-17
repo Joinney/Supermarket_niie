@@ -520,6 +520,7 @@ export const createProduct = async (req, res) => {
 
         console.log(`🤖 Auto-generating description for new product: ${ten_san_pham}`);
         
+        // Chạy ngầm tiến trình gọi AI sinh dữ liệu và tự động bắt lỗi bằng .catch() tránh crash app
         generateDescriptionFromAI(ten_san_pham, categoryName, true)
             .then(async (description) => {
                 if (description) {
@@ -531,7 +532,7 @@ export const createProduct = async (req, res) => {
                 }
             })
             .catch((err) => {
-                console.error(`⚠️ Failed to auto-generate description: ${err.message}`);
+                console.error(`⚠️ Failed to auto-generate description ngầm: ${err.message}`);
             });
 
         res.status(201).json({
@@ -549,11 +550,12 @@ export const createProduct = async (req, res) => {
 };
 
 // =========================================================================
-// 9. PERIODIC TASK: GENERATE DESCRIPTIONS FOR PRODUCTS WITHOUT THEM
+// 9. PERIODIC TASK: GENERATE DESCRIPTIONS FOR PRODUCTS WITHOUT THEM (ĐÃ SỬA CHỮA HOÀN CHỈNH)
 // =========================================================================
 export const schedulePeriodicDescriptionGeneration = () => {
-    const checkInterval = 6 * 60 * 60 * 1000;
+    const checkInterval = 6 * 60 * 60 * 1000; // Mỗi 6 tiếng chạy 1 lần
 
+    // Callback đổi sang async để chạy bất đồng bộ trơn tru
     setInterval(async () => {
         try {
             console.log('🌙 Running periodic description regeneration check...');
