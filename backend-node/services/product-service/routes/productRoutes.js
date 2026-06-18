@@ -29,7 +29,8 @@ const router = express.Router();
  * get:
  * summary: Tìm kiếm sản phẩm theo từ khóa
  * description: API tìm kiếm sản phẩm theo tên hoặc mô tả.
- * tags: [Products]
+ * tags:
+ * - Products
  * parameters:
  * - in: query
  * name: keyword
@@ -48,7 +49,8 @@ router.get('/search', searchProducts);
  * post:
  * summary: Batch generate product descriptions via AI
  * description: Generate short descriptions for multiple products using OpenAI API and store in database
- * tags: [Products]
+ * tags:
+ * - Products
  * requestBody:
  * required: true
  * content:
@@ -83,7 +85,8 @@ router.post('/batch-generate-descriptions', batchGenerateDescriptionsController)
  * get:
  * summary: Get products without descriptions
  * description: Fetch products that need AI-generated descriptions for batch processing
- * tags: [Products]
+ * tags:
+ * - Products
  * parameters:
  * - in: query
  * name: limit
@@ -111,7 +114,8 @@ router.get('/without-descriptions', getProductsWithoutDescriptions);
  * post:
  * summary: Refresh old products with empty descriptions using online research
  * description: Automatically generate descriptions for old products that are missing descriptions by researching online ads and product information.
- * tags: [Products]
+ * tags:
+ * - Products
  * requestBody:
  * required: false
  * content:
@@ -141,7 +145,8 @@ router.post('/refresh-empty-descriptions', refreshEmptyDescriptions);
  * get:
  * summary: Lấy danh sách sản phẩm theo danh mục (slug)
  * description: API phục vụ cho trang CategoryPage để hiển thị lưới sản phẩm theo từng danh mục.
- * tags: [Products]
+ * tags:
+ * - Products
  * parameters:
  * - in: path
  * name: slug
@@ -163,7 +168,8 @@ router.get('/category/:slug', getProductsByCategorySlug);
  * get:
  * summary: Lấy danh sách tất cả sản phẩm
  * description: API này dùng để lấy dữ liệu hiển thị cho trang Home.
- * tags: [Products]
+ * tags:
+ * - Products
  * responses:
  * 200:
  * description: Trả về mảng danh sách sản phẩm thành công
@@ -178,7 +184,8 @@ router.get('/', getAllProducts);
  * post:
  * summary: Tạo sản phẩm mới (tự động tạo mô tả)
  * description: Tạo sản phẩm mới và tự động sinh mô tả ngắn từ AI
- * tags: [Products]
+ * tags:
+ * - Products
  * requestBody:
  * required: true
  * content:
@@ -207,10 +214,6 @@ router.get('/', getAllProducts);
  * responses:
  * 201:
  * description: Sản phẩm được tạo thành công, mô tả sẽ được sinh tự động
- * content:
- * application/json:
- * schema:
- * type: object
  * 400:
  * description: Dữ liệu không hợp lệ
  * 500:
@@ -228,7 +231,8 @@ router.post('/', createProduct);
  * get:
  * summary: Lấy chi tiết một sản phẩm theo ID
  * description: API phục vụ cho trang ProductDetail để hiển thị thông tin cụ thể.
- * tags: [Products]
+ * tags:
+ * - Products
  * parameters:
  * - in: path
  * name: id

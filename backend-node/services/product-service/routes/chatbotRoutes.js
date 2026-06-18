@@ -16,7 +16,8 @@ const router = express.Router();
  * post:
  * summary: Trợ lý AI tư vấn và gợi ý sản phẩm Realtime
  * description: API nhận tin nhắn từ người dùng, tự động nạp danh sách sản phẩm trong kho làm ngữ cảnh và trả về câu trả lời tư vấn từ mô hình DeepSeek.
- * tags: [Chatbot AI]
+ * tags:
+ * - Chatbot AI
  * parameters:
  * - in: query
  * name: country

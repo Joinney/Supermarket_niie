@@ -16,9 +16,9 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 const PORT = process.env.PORT_PRODUCT || 5002;
 
-// --- 3. Import Routes (PHẢI CÓ .js VÀ ĐÚNG ĐƯỜNG DẪN) ---
+// --- 3. Import Routes ---
 import productRoutes from './routes/productRoutes.js';
-import chatbotRoutes from './routes/chatbotRoutes.js'; // 🌟 THÊM: Import Router Chatbot mới tách biệt
+import chatbotRoutes from './routes/chatbotRoutes.js'; 
 import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
 
 const app = express();
@@ -34,7 +34,8 @@ const swaggerOptions = {
         },
         servers: [{ url: `http://localhost:${PORT}` }],
     },
-    apis: [path.join(__dirname, './routes/*.js')], 
+    // 🔥 ĐÃ SỬA: Nạp trực tiếp bằng biến thay vì quét chuỗi string pattern để tránh lỗi môi trường
+    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js'], 
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
@@ -64,9 +65,15 @@ app.use((req, res, next) => {
 // --- 7. Đăng ký Swagger UI ---
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
+// 🛠️ BỔ SUNG: Endpoint phụ để phục vụ kiểm tra JSON thô nếu giao diện UI gặp trục trặc thụt lề JSDoc
+app.get('/api-docs-json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).send(swaggerDocs);
+});
+
 // --- 8. Đăng ký Route API ---
 app.use('/api/products', productRoutes);
-app.use('/api/chatbot', chatbotRoutes); // 🌟 THÊM: Đăng ký endpoint gốc cho Chatbot AI
+app.use('/api/chatbot', chatbotRoutes); 
 
 // Bổ sung thêm route này để Uptime Kuma ping không bị 404
 app.get('/', (req, res) => {
@@ -107,7 +114,6 @@ server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
         console.error(`❌ Cổng ${PORT} đã bị chiếm dụng!`);
     } else {
-        // ✨ ĐÃ SỬA: Sửa cú pháp lỗi hệ thống "else {a" từ phiên bản trước
         console.error('❌ Lỗi hệ thống:', e);
     }
 });
