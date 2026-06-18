@@ -14,7 +14,7 @@ export const getAIChatRecommendation = async (req, res) => {
             return res.status(400).json({ success: false, message: "Tin nhắn không được để trống" });
         }
 
-        // 1. Lấy toàn bộ sản phẩm khả dụng trong DB để làm ngữ cảnh dữ liệu thô
+        // 1. Chỉ lấy TOP 20 sản phẩm mới nhất/phù hợp nhất từ DB để tránh làm sập RAM con Python Cloud
         const query = `
             SELECT 
                 sp.ma_san_pham AS id,
@@ -33,7 +33,8 @@ export const getAIChatRecommendation = async (req, res) => {
                 ) AS stock
             FROM san_pham sp
             LEFT JOIN danh_muc dm ON sp.ma_danh_muc = dm.ma_danh_muc
-            WHERE sp.trang_thai = true;
+            WHERE sp.trang_thai = true
+            LIMIT 20; 
         `;
 
         const { rows: productsData } = await pool.query(query, [countryCode]);
@@ -50,35 +51,73 @@ export const getAIChatRecommendation = async (req, res) => {
 
         console.log(`🤖 Chuyển tiếp luồng RAG sang Python AI Service: ${aiServiceUrl}/ai/recommend`);
 
-        // 3. Chuyển tiếp tin nhắn của khách và mảng thô sản phẩm sang Python băm Vector Lai
-        const aiResponse = await axios.post(`${aiServiceUrl}/ai/recommend`, {
-            message: message,
-            products_data: productsData 
-        }, {
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 45000 // Thiết lập 45 giây đề phòng trường hợp instance Render Free ngủ đông
-        });
+        let aiReply = "";
 
-        // 4. Trích xuất và phản hồi kết quả mượt mà về Client/Frontend
-        if (aiResponse.data && aiResponse.data.reply) {
+        try {
+            // 3. Chuyển tiếp tin nhắn sang Python băm Vector Lai
+            const aiResponse = await axios.post(`${aiServiceUrl}/ai/recommend`, {
+                message: message,
+                products_data: productsData 
+            }, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 25000 // Chờ Python xử lý tối đa 25 giây
+            });
+
+            if (aiResponse.data && aiResponse.data.reply) {
+                aiReply = aiResponse.data.reply;
+            }
+        } catch (pyError) {
+            console.error("⚠️ Tầng Python Cloud quá tải hoặc lỗi. Kích hoạt Direct DeepSeek cứu cánh luồng mạng...");
+            
+            // 🚑 BIỆN PHÁP DỰ PHÒNG (FALLBACK): Nếu Python trả về rỗng/sập, Node.js tự gom text gọi thẳng sang API DeepSeek
+            const contextStr = productsData.slice(0, 5).map(p => 
+                `- Tên: ${p.name}\n  Danh mục: ${p.category}\n  Giá: ${Number(p.price).toLocaleString('vi-VN')} VNĐ\n  Mô tả: ${p.description}\n  Kho: ${p.stock > 0 ? 'Còn hàng' : 'Hết hàng'}`
+            ).join('\n---\n');
+
+            const systemPrompt = `Bạn là nhân viên tư vấn bán hàng AI chuyên nghiệp cho cửa hàng Demi Mart.
+Hãy dựa vào DỮ LIỆU SẢN PHẨM dưới đây để gợi ý và tư vấn cho khách. Không tự bịa thông tin sản phẩm.
+
+DỮ LIỆU SẢN PHẨM TRONG KHO:
+${contextStr}`;
+
+            const deepSeekResponse = await axios.post('https://api.iamhc.cn/v1/chat/completions', {
+                model: "DeepSeek-V4-Flash", 
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: message }
+                ],
+                temperature: 0.2
+            }, {
+                headers: {
+                    'Authorization': 'Bearer sk-zKO6CNAi13P5S7N57Z1wNbpOoUir4ZX5A2MWpYanqkbbBOIZ',
+                    'Content-Type': 'application/json'
+                },
+                timeout: 20000 
+            });
+
+            if (deepSeekResponse.data && deepSeekResponse.data.choices) {
+                aiReply = deepSeekResponse.data.choices[0].message.content;
+            }
+        }
+
+        // 4. Trả kết quả cuối cùng về cho Postman
+        if (aiReply && aiReply.trim() !== "") {
             return res.status(200).json({
                 success: true,
-                reply: aiResponse.data.reply
+                reply: aiReply
             });
         } else {
             return res.status(200).json({
                 success: false,
-                reply: "Trợ lý AI của Demi Mart đang xử lý dữ liệu, bạn vui lòng đợi trong giây lát nhé!"
+                reply: "Hệ thống AI của Demi Mart đang đồng bộ dữ liệu, Demi vui lòng thử bấm Send lại một lần nữa nhé!"
             });
         }
 
     } catch (error) {
-        console.error("❌ Lỗi Microservice kết nối AI Service:", error.response ? error.response.data : error.message);
+        console.error("❌ Lỗi Microservice kết nối AI Service:", error.message);
         return res.status(500).json({ 
             success: false, 
-            message: "Hệ thống trợ lý AI liên thông trục trặc hoặc phản hồi chậm, vui lòng thử lại.",
+            message: "Hệ thống trợ lý AI liên thông trục trặc, vui lòng thử lại.",
             error: error.message 
         });
     }
