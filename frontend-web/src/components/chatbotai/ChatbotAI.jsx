@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import RecipeModal from './RecipeModal'; // Chuẩn hóa đường dẫn cùng cấp thư mục chatbotai
+import RecipeModal from './RecipeModal'; 
 
 const ChatbotAI = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -47,12 +47,11 @@ const ChatbotAI = () => {
                 const aiReply = response.data.reply;
                 const recommendedProducts = response.data.products || [];
 
-                // Kiểm tra xem nội dung phản hồi từ AI Backend có chứa thông tin công thức/cách làm hay không
+                // Kiểm tra xem phản hồi từ AI có chứa nội dung công thức hay không
                 const hasRecipeContent = /Cách\s+làm|Nguyên\s+liệu/i.test(aiReply);
                 
-                // 🌟 PHÂN TÁCH HÀNH VI HIỂN THỊ THÔNG MINH THEO CÂU HỎI CỦA KHÁCH
-                // Câu hỏi loại A: Hỏi đích danh cách làm, hướng dẫn nấu, cách nấu -> Bật Modal Popup ngay lập tức
-                const isDirectActionQuery = /(cách\s+làm|nấu|công\s+thức|chế\s+biến|hướng\s+dẫn|làm\s+món)/i.test(userMessage);
+                // 🌟 CẢI TIẾN QUY TẮC: Bật Modal ngay khi khách hỏi cách làm HOẶC hỏi nguyên liệu (có những gì, gồm những gì, cần những gì...)
+                const isDirectActionQuery = /(cách\s+làm|nấu|công\s+thức|chế\s+biến|hướng\s+dẫn|làm\s+món|có\s+những\s+gì|gồm\s+những|nguyên\s+liệu|cần\s+những)/i.test(userMessage);
 
                 const newRecipeData = {
                     recipeTitle: userMessage,
@@ -60,30 +59,30 @@ const ChatbotAI = () => {
                     products: recommendedProducts
                 };
 
+                // Nếu thỏa mãn có sản phẩm gợi ý và thuộc nhóm câu hỏi tra cứu thông tin chi tiết món ăn
                 if (hasRecipeContent && recommendedProducts.length > 0 && isDirectActionQuery) {
-                    // Hành vi 1: Chủ động bật Modal Popup lên màn hình chính
                     setModalData(newRecipeData);
-                    setShowModal(true); 
+                    setShowModal(true); // 🌟 BẬT MODAL LÊN NGAY LẬP TỨC
 
                     setChatHistory(prev => [...prev, { 
                         role: 'assistant', 
-                        content: `🍳 Demi AI đã tìm thấy công thức và chuẩn bị sẵn gói nguyên liệu nấu ăn chi tiết ở bảng Popup lớn giữa màn hình rồi nhé!`,
+                        content: `🍳 Demi AI đã chuẩn bị sẵn gói nguyên liệu và hướng dẫn chi tiết của món này ở bảng Popup lớn giữa màn hình rồi nhé!`,
                         products: [],
                         isRecipe: true, 
                         savedData: newRecipeData 
                     }]);
                 } else if (hasRecipeContent && recommendedProducts.length > 0) {
-                    // Hành vi 2: Khách hỏi "có những gì", "cần nguyên liệu gì" -> Hiện ở Form chat thường kèm nút nhấn nhanh cách làm
+                    // Dự phòng nếu câu hỏi mông lung hơn nhưng vẫn sinh công thức: Hiện nút bấm nhanh
                     setChatHistory(prev => [...prev, { 
                         role: 'assistant', 
                         content: aiReply, 
                         products: recommendedProducts,
                         isRecipe: false,
-                        hasQuickRecipeLink: true, // 🌟 Cắm cờ sinh nút nhấn nhanh mở công thức nấu ăn
+                        hasQuickRecipeLink: true, 
                         savedData: newRecipeData
                     }]);
                 } else {
-                    // Hành vi 3: Hỏi đáp mua sắm sản phẩm thông thường đơn thuần
+                    // Hỏi đáp mua sắm sản phẩm thông thường đơn thuần
                     setChatHistory(prev => [...prev, { 
                         role: 'assistant', 
                         content: aiReply, 
@@ -167,7 +166,6 @@ const ChatbotAI = () => {
                                 }`}>
                                     {chat.content}
                                     
-                                    {/* 📦 HÀNH VI GỢI Ý THẺ SẢN PHẨM TRỰC TIẾP TRONG CHAT FORM */}
                                     {chat.role === 'assistant' && chat.products && chat.products.length > 0 && !chat.isRecipe && (
                                         <div className="mt-3 pt-2 border-t border-gray-100 space-y-2">
                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Sản phẩm có sẵn:</p>
@@ -187,7 +185,6 @@ const ChatbotAI = () => {
                                         </div>
                                     )}
 
-                                    {/* 🌟 NÚT NHẤN NHANH XEM CÁCH CHẾ BIẾN (Dành cho câu hỏi dạng "có những gì") */}
                                     {chat.role === 'assistant' && chat.hasQuickRecipeLink && (
                                         <div className="mt-2.5 pt-2 border-t border-slate-100">
                                             <button
@@ -199,17 +196,12 @@ const ChatbotAI = () => {
                                         </div>
                                     )}
 
-                                    {/* NÚT XEM LẠI CÔNG THỨC TRONG LỊCH SỬ CHAT NẾU LÀ CÂU HỎI TRA CỨU ĐÍCH DANH */}
                                     {chat.role === 'assistant' && chat.isRecipe && (
                                         <div className="mt-2.5 pt-2 border-t border-slate-100">
                                             <button
                                                 onClick={() => handleReopenModal(chat.savedData)}
                                                 className="w-full flex items-center justify-center space-x-1 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-[11px] transition-colors"
                                             >
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.3} stroke="currentColor" className="h-3.5 w-3.5">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                                                </svg>
                                                 <span>Xem chi tiết công thức</span>
                                             </button>
                                         </div>
@@ -220,14 +212,13 @@ const ChatbotAI = () => {
                         {isLoading && (
                             <div className="flex justify-start">
                                 <div className="bg-white border border-gray-100 text-gray-400 rounded-2xl px-3 py-2 text-xs">
-                                    <span>Demi AI đang tìm kho...</span>
+                                    <span>Demi AI đang xử lý...</span>
                                 </div>
                             </div>
                         )}
                         <div ref={chatEndRef} />
                     </div>
 
-                    {/* BOX NHẬP LIỆU GỬI TIN NHẮN */}
                     <form onSubmit={handleSendMessage} className="p-2 sm:p-3 border-t border-gray-100 flex bg-white flex-shrink-0">
                         <input 
                             type="text" 
@@ -250,7 +241,6 @@ const ChatbotAI = () => {
                 </div>
             )}
 
-            {/* RECIPE MODAL POPUP COMPONENT */}
             <RecipeModal 
                 show={showModal} 
                 onClose={() => setShowModal(false)} 
