@@ -36,7 +36,12 @@ const MainLayout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Header onOpenMenu={() => setIsSidebarOpen(true)} />
-      <div className="flex flex-1 pt-[112px] w-full relative bg-white"> 
+      
+      {/* 🌟 ĐÃ SỬA: Thay thế class pt-[112px] tĩnh bằng inline-style dùng biến CSS động */}
+      <div 
+        className="flex flex-1 w-full relative bg-white transition-all duration-300 ease-in-out"
+        style={{ paddingTop: "var(--header-height, 112px)" }}
+      > 
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         <div className="flex-1 flex flex-col min-w-0 border-l border-gray-100 bg-white"> 
           <main className="flex-1 overflow-x-hidden bg-white"><Outlet /></main>

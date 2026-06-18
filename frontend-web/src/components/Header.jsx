@@ -47,7 +47,6 @@ export default function Header({ onOpenMenu }) {
 
   // --- LOGIC BANNER & ĐẾM NGƯỢC ---
   const [showBanner, setShowBanner] = useState(true);
-  // Thiết lập đếm ngược giả lập: 11 giờ, 59 phút, 23 giây
   const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
 
   useEffect(() => {
@@ -72,6 +71,27 @@ export default function Header({ onOpenMenu }) {
   };
 
   const timeChunks = formatTime(timeLeft);
+
+  // --- TỰ ĐỘNG ĐO CHIỀU CAO HEADER VÀ ĐẨY LAYOUT PHÍA DƯỚI ---
+  const headerRef = useRef(null);
+
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        // Lấy chính xác chiều cao thực tế của Header tại thời điểm hiện tại
+        const height = headerRef.current.offsetHeight;
+        // Bắn giá trị chiều cao này ra ngoài phạm vi toàn trang thông qua biến CSS
+        document.documentElement.style.setProperty("--header-height", `${height}px`);
+      }
+    };
+
+    // Chạy cập nhật khi component mount hoặc khi showBanner thay đổi trạng thái
+    updateHeaderHeight();
+
+    // Lắng nghe sự kiện resize màn hình để tính toán lại chiều cao responsive chuẩn xác
+    window.addEventListener("resize", updateHeaderHeight);
+    return () => window.removeEventListener("resize", updateHeaderHeight);
+  }, [showBanner]);
 
   // --- 1. ĐỒNG BỘ USER & AVATAR TỨC THÌ ---
   const [displayUser, setDisplayUser] = useState(() => {
@@ -145,7 +165,10 @@ export default function Header({ onOpenMenu }) {
   const isAuthPage = ["/login", "/signup", "/forgot-password"].includes(location.pathname);
 
   return (
-    <header className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md">
+    <header 
+      ref={headerRef}
+      className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
+    >
       
       {/* --- BANNER THÔNG BÁO KHUYẾN MÃI (MÀU VÀNG THƯƠNG HIỆU) --- */}
       {showBanner && (

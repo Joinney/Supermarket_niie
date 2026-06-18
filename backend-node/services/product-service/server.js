@@ -18,6 +18,7 @@ const PORT = process.env.PORT_PRODUCT || 5002;
 
 // --- 3. Import Routes (PHẢI CÓ .js VÀ ĐÚNG ĐƯỜNG DẪN) ---
 import productRoutes from './routes/productRoutes.js';
+import chatbotRoutes from './routes/chatbotRoutes.js'; // 🌟 THÊM: Import Router Chatbot mới tách biệt
 import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
 
 const app = express();
@@ -27,9 +28,9 @@ const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
         info: {
-            title: 'Demi Mart - Product Service API',
+            title: 'Demi Mart - Product & Chatbot Service API',
             version: '1.0.0',
-            description: 'Tài liệu API quản lý sản phẩm cho Demi Mart',
+            description: 'Tài liệu API quản lý sản phẩm và trợ lý ảo AI cho Demi Mart',
         },
         servers: [{ url: `http://localhost:${PORT}` }],
     },
@@ -50,12 +51,11 @@ app.use(cors({
     credentials: true
 }));
 
-
 // --- 6. Middleware ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Log check request để Demi dễ debug
+// Log check request để dễ debug
 app.use((req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] [Product-Service] ${req.method} -> ${req.url}`);
     next();
@@ -66,13 +66,14 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // --- 8. Đăng ký Route API ---
 app.use('/api/products', productRoutes);
+app.use('/api/chatbot', chatbotRoutes); // 🌟 THÊM: Đăng ký endpoint gốc cho Chatbot AI
 
 // Bổ sung thêm route này để Uptime Kuma ping không bị 404
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(`
         <div style="text-align: center; margin-top: 50px; font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
-            <h1 style="color: #006c49; font-size: 2.5rem;">Demi Mart Product Service</h1>
+            <h1 style="color: #006c49; font-size: 2.5rem;">Demi Mart Product & AI Service</h1>
             <p style="color: #64748b; font-size: 1.2rem;">Hệ thống đang hoạt động xanh mướt! 🚀</p>
             <div style="margin-top: 20px;">
                 <a href="/api-docs" style="background-color: #006c49; color: white; padding: 12px 24px; border-radius: 10px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(0, 108, 73, 0.2);">Vào Swagger xem API →</a>
@@ -80,6 +81,7 @@ app.get('/', (req, res) => {
         </div>
     `);
 });
+
 // --- 9. Xử lý lỗi tập trung (Bắt lỗi để server không sập) ---
 app.use((err, req, res, next) => {
     console.error('❌ Lỗi Server:', err.stack);
@@ -89,10 +91,11 @@ app.use((err, req, res, next) => {
 // --- 10. Khởi chạy server ---
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('===========================================');
-    console.log(`📦 PRODUCT SERVICE IS RUNNING RỰC RỠ`);
+    console.log(`📦 PRODUCT & CHATBOT SERVICE IS RUNNING`);
     console.log(`📡 Port: ${PORT}`);
-    console.log(`🔗 API: http://localhost:${PORT}/api/products`);
-    console.log(`📝 Swagger: http://localhost:${PORT}/api-docs`);
+    console.log(`🔗 API Products: http://localhost:${PORT}/api/products`);
+    console.log(`🔗 API Chatbot:  http://localhost:${PORT}/api/chatbot`);
+    console.log(`📝 Swagger:      http://localhost:${PORT}/api-docs`);
     console.log('===========================================');
     
     // Start periodic description generation scheduler
@@ -104,6 +107,7 @@ server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
         console.error(`❌ Cổng ${PORT} đã bị chiếm dụng!`);
     } else {
+        // ✨ ĐÃ SỬA: Sửa cú pháp lỗi hệ thống "else {a" từ phiên bản trước
         console.error('❌ Lỗi hệ thống:', e);
     }
 });
