@@ -21,6 +21,7 @@ import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
 import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
+import ChatbotAI from "./components/chatbotai/ChatbotAI"; // 🤖 THÊM DÒNG NÀY: Import trợ lý AI vào hệ thống
 
 // --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHUẨN ĐƯỜNG DẪN) ---
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
@@ -42,6 +43,9 @@ const MainLayout = () => {
           <Footer />
         </div>
       </div>
+      
+      {/* 🤖 THÊM DÒNG NÀY: Giúp trợ lý AI hiển thị xuyên suốt tất cả các trang của khách hàng */}
+      <ChatbotAI />
     </div>
   );
 };
