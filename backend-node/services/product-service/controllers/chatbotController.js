@@ -1,12 +1,17 @@
 import pool from '../configs/database.js';
 import axios from 'axios';
 
-// =========================================================================
-// 0. CHATBOT AI GỢI Ý & TƯ VẤN SẢN PHẨM REALTIME (BẢN AN TOÀN TUYỆT ĐỐI)
-// =========================================================================
+// Tập hợp các model chạy khỏe, ổn định nhất để hệ thống tự động xoay vòng phân tải
+const AUTO_MODELS = [
+    "DeepSeek-V4-Flash", 
+    "glm-4.7", 
+    "Qwen3.6-35B-A3B", 
+    "step-3.5-flash"
+];
+
 export const getAIChatRecommendation = async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message } = req.body; // Loại bỏ hoàn toàn việc nhận biến "model" từ Frontend
         const countryCode = (req.query.country || 'VN').toUpperCase();
 
         if (!message || message.trim() === "") {
@@ -49,30 +54,12 @@ export const getAIChatRecommendation = async (req, res) => {
             });
         }
 
-        // 2. Cấu hình URL liên thông Python AI Microservice
-        const aiServiceUrl = process.env.AI_SERVICE_URL || 'https://ai-service-0zyu.onrender.com';
-        let aiReply = "";
+        // Tạo chuỗi ngữ cảnh sản phẩm phòng trường hợp nhảy vào mạch Direct API dự phòng
+        const contextStr = productsData.map(p => 
+            `[ID: ${p.id}] Tên: ${p.name}, Giá: ${p.price} VNĐ, Danh mục: ${p.category}, Tình trạng: ${p.stock > 0 ? 'Còn hàng' : 'Hết hàng'}`
+        ).join('\n');
 
-        try {
-            const aiResponse = await axios.post(`${aiServiceUrl}/ai/recommend`, {
-                message: message,
-                products_data: productsData 
-            }, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 25000 
-            });
-
-            if (aiResponse.data && aiResponse.data.reply) {
-                aiReply = aiResponse.data.reply;
-            }
-        } catch (pyError) {
-            console.error("⚠️ Tầng Python lỗi hoặc ngủ đông. Kích hoạt Direct DeepSeek dự phòng...");
-            
-            const contextStr = productsData.map(p => 
-                `[ID: ${p.id}] Tên: ${p.name}, Giá: ${p.price} VNĐ, Danh mục: ${p.category}, Tình trạng: ${p.stock > 0 ? 'Còn hàng' : 'Hết hàng'}`
-            ).join('\n');
-
-            const systemPrompt = `Bạn là chuyên gia ẩm thực kiêm trợ lý bán hàng AI của siêu thị Demi Mart.
+        const systemPrompt = `Bạn là chuyên gia ẩm thực kiêm trợ lý bán hàng AI của siêu thị Demi Mart.
 
 QUY TẮC PHÂN CHIA NGỮ CẢNH PHẢN HỒI:
 1. Trường hợp Khách hỏi mua sắm / tìm sản phẩm thông thường (Ví dụ: "có mì tôm không", "bên mình có nước ngọt không",...):
@@ -91,30 +78,87 @@ QUY TẮC ĐÍNH KÈM THẺ SẢN PHẨM (ÁP DỤNG CHO CẢ 2 TRƯỜNG HỢP)
 DANH SÁCH SẢN PHẨM TRONG KHO CỦA SHOP:
 ${contextStr}`;
 
-            const deepSeekResponse = await axios.post('https://api.iamhc.cn/v1/chat/completions', {
-                model: "DeepSeek-V4-Flash", 
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: message }
-                ],
-                temperature: 0.1
-            }, {
-                headers: {
-                    'Authorization': 'Bearer sk-zKO6CNAi13P5S7N57Z1wNbpOoUir4ZX5A2MWpYanqkbbBOIZ',
-                    'Content-Type': 'application/json'
-                },
-                timeout: 20000 
-            });
+        // Tráo ngẫu nhiên thứ tự mảng model để phân phối tải đều, tránh ép một model liên tục
+        const shuffledModels = [...AUTO_MODELS].sort(() => 0.5 - Math.random());
+        
+        const aiServiceUrl = process.env.AI_SERVICE_URL || 'https://ai-service-0zyu.onrender.com';
+        let aiReply = "";
+        let isSuccess = false;
 
-            if (deepSeekResponse.data && deepSeekResponse.data.choices) {
-                aiReply = deepSeekResponse.data.choices[0].message.content;
+        // =========================================================================
+        // MẠCH 1: THỬ KẾT NỐI QUA TẦNG PYTHON AI MICROSERVICE (CÓ XOAY VÒNG MODEL)
+        // =========================================================================
+        for (const targetModel of shuffledModels) {
+            try {
+                const aiResponse = await axios.post(`${aiServiceUrl}/ai/recommend`, {
+                    message: message,
+                    products_data: productsData,
+                    model: targetModel // Gửi model tự động xuống Python
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 12000 // Timeout tối ưu cho mỗi model ở tầng Python
+                });
+
+                if (aiResponse.data && aiResponse.data.reply) {
+                    aiReply = aiResponse.data.reply;
+                    isSuccess = true;
+                    break; // Thành công thì ngắt vòng lặp ngay
+                }
+            } catch (pyError) {
+                const errStatus = pyError.response ? pyError.response.status : "TIMEOUT/NETWORK";
+                console.warn(`⚠️ Tầng Python với model [${targetModel}] báo lỗi [${errStatus}]. Đang thử model tiếp theo...`);
             }
         }
 
-        // 3. XỬ LÝ TRÍCH XUẤT AN TOÀN
+        // =========================================================================
+        // MẠCH 2: DỰ PHÒNG THẲNG ĐẾN DIRECT API GATEWAY (KHI TẦNG PYTHON THẤT BẠI)
+        // =========================================================================
+        if (!isSuccess) {
+            console.error("⚠️ Toàn bộ tầng Python gặp sự cố hoặc timeout. Kích hoạt Direct API Gateway xoay vòng...");
+            
+            const aiGatewayUrl = process.env.AI_GATEWAY_URL || 'https://api.iamhc.cn/v1/chat/completions';
+            const aiGatewayKey = process.env.AI_GATEWAY_KEY;
+
+            if (!aiGatewayKey) {
+                console.error("❌ Thiếu cấu hình AI_GATEWAY_KEY trong file .env!");
+                return res.status(500).json({ success: false, message: "Hệ thống trợ lý AI dự phòng chưa sẵn sàng cấu hình." });
+            }
+
+            // Tiếp tục xoay vòng danh sách mô hình trực tiếp qua API Gateway để cứu cánh
+            for (const backupModel of shuffledModels) {
+                try {
+                    console.log(`🚀 Thử kết nối Direct API Gateway với model: ${backupModel}...`);
+                    const deepSeekResponse = await axios.post(aiGatewayUrl, {
+                        model: backupModel, 
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: message }
+                        ],
+                        temperature: 0.1
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${aiGatewayKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 15000 
+                    });
+
+                    if (deepSeekResponse.data && deepSeekResponse.data.choices) {
+                        aiReply = deepSeekResponse.data.choices[0].message.content;
+                        isSuccess = true;
+                        break; // Thoát mạch dự phòng khi lấy được dữ liệu thành công
+                    }
+                } catch (gatewayError) {
+                    const gateStatus = gatewayError.response ? gatewayError.response.status : "TIMEOUT";
+                    console.error(`❌ Mạch Direct API với model [${backupModel}] thất bại [Mã lỗi: ${gateStatus}].`);
+                }
+            }
+        }
+
+        // 3. XỬ LÝ TRÍCH XUẤT AN TOÀN TRUYỀN THỐNG
         let finalProducts = [];
-        try {
-            if (aiReply && aiReply.trim() !== "") {
+        if (isSuccess && aiReply && aiReply.trim() !== "") {
+            try {
                 const recommendRegex = /\[RECOMMEND:\s*([^\]]+)\]/;
                 const match = aiReply.match(recommendRegex);
 
@@ -132,28 +176,26 @@ ${contextStr}`;
                         return strictKeywords.length > 0 && strictKeywords.every(keyword => productNameLower.includes(keyword));
                     });
                 }
+            } catch (extractError) {
+                console.error("⚠️ Lỗi trích xuất thẻ sản phẩm:", extractError.message);
+                finalProducts = [];
             }
-        } catch (extractError) {
-            console.error("⚠️ Lỗi trích xuất thẻ sản phẩm:", extractError.message);
-            finalProducts = [];
-        }
 
-        if (aiReply && aiReply.trim() !== "") {
             return res.status(200).json({
                 success: true,
                 reply: aiReply,
                 products: finalProducts.slice(0, 3)
             });
-        } else {
-            return res.status(200).json({
-                success: false,
-                reply: "Hệ thống AI của Demi Mart đang xử lý dữ liệu, Demi vui lòng thử gửi lại nhé!",
-                products: []
-            });
         }
 
+        // Trường hợp xấu nhất khi toàn bộ các model và endpoint đều dính rate limit cùng lúc
+        return res.status(429).json({
+            success: false,
+            message: "Hệ thống trợ lý AI hiện đang bận do lượt truy cập quá tải. Bạn vui lòng thử lại sau vài giây nhé!"
+        });
+
     } catch (error) {
-        console.error("❌ Lỗi Microservice kết nối AI Service:", error.message);
+        console.error("❌ Lỗi nghiêm trọng tại Gateway Controller:", error.message);
         return res.status(500).json({ success: false, message: "Hệ thống trợ lý AI liên thông trục trặc.", error: error.message });
     }
 };
