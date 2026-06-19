@@ -21,11 +21,11 @@ import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
 import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
-import ChatbotAI from "./components/chatbotai/ChatbotAI"; // 🤖 THÊM DÒNG NÀY: Import trợ lý AI vào hệ thống
+import ChatbotAI from "./components/chatbotai/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHUẨN ĐƯỜNG DẪN) ---
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
-import Dashboard from "./admindb/pages/Dashboard"; // SỬA: Đúng vị trí src/admindb/pages/Dashboard.jsx
+import Dashboard from "./admindb/pages/Dashboard"; 
 import AdminProtect from "./admindb/components/AdminProtect"; // Bộ lọc bảo vệ admin
 
 /**

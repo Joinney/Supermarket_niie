@@ -46,7 +46,7 @@ export const getAllProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT)
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ BỔ SUNG THUỘC TÍNH JSONB
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
@@ -66,6 +66,7 @@ export const getProductById = async (req, res) => {
                             'ten_bien_the', bt.ten_bien_the,
                             'sku', bt.sku,
                             'gia_ban_le', bt.gia_ban_le,
+                            'thuoc_tinh', bt.thuoc_tinh,
                             'ton_kho', COALESCE((
                                 SELECT tk.so_luong 
                                 FROM ton_kho_quoc_gia tk 
