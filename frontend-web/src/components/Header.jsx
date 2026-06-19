@@ -5,6 +5,7 @@ import { AuthContext } from "../context/AuthContext";
 import Logo from "../assets/Demi Mart.png";
 import { productApi } from "../api/axios";
 import { useLanguage } from "../context/LanguageContext";
+import { useStore } from "../context/StoreContext"; 
 import { 
   Globe, ChevronDown, Check, Search, LogOut, MapPin, 
   ShoppingCart, Calendar, User, Gift, Menu, X 
@@ -33,6 +34,28 @@ export default function Header({ onOpenMenu }) {
   const suggestRef = useRef(null);
   const suggestTimer = useRef(null);
   
+  const { currentLanguage, changeLanguage, languages, t } = useLanguage();
+  const { currentStore } = useStore(); // Lấy thông tin cửa hàng hiện tại
+  const [isLangOpen, setIsLangOpen] = useState(false);
+  const langRef = useRef(null);
+  const [currentDate, setCurrentDate] = useState("Đang tải...");
+
+  // =====================================================================
+  // HÀM ĐỔI TIỀN TỆ TỰ ĐỘNG THEO STORE
+  // =====================================================================
+  const formatCurrency = (amountVND) => {
+    if (!amountVND) return "0đ";
+    const storeCode = currentStore?.code?.toLowerCase() || 'vn';
+    
+    if (storeCode === 'us') {
+      return "$" + (amountVND / 25000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (storeCode === 'cn') {
+      return "¥" + (amountVND / 3500).toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    }
+    return amountVND.toLocaleString('vi-VN') + "đ";
+  };
+
   const handleSearch = () => {
     if (searchKeyword.trim()) {
       navigate(`/search?keyword=${encodeURIComponent(searchKeyword.trim())}`);
@@ -40,11 +63,6 @@ export default function Header({ onOpenMenu }) {
     }
   };
   
-  const { currentLanguage, changeLanguage, languages, t } = useLanguage();
-  const [isLangOpen, setIsLangOpen] = useState(false);
-  const langRef = useRef(null);
-  const [currentDate, setCurrentDate] = useState("Đang tải...");
-
   // --- LOGIC BANNER & ĐẾM NGƯỢC ---
   const [showBanner, setShowBanner] = useState(true);
   const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
@@ -72,23 +90,17 @@ export default function Header({ onOpenMenu }) {
 
   const timeChunks = formatTime(timeLeft);
 
-  // --- TỰ ĐỘNG ĐO CHIỀU CAO HEADER VÀ ĐẨY LAYOUT PHÍA DƯỚI ---
+  // --- TỰ ĐỘNG ĐO CHIỀU CAO HEADER ---
   const headerRef = useRef(null);
 
   useEffect(() => {
     const updateHeaderHeight = () => {
       if (headerRef.current) {
-        // Lấy chính xác chiều cao thực tế của Header tại thời điểm hiện tại
         const height = headerRef.current.offsetHeight;
-        // Bắn giá trị chiều cao này ra ngoài phạm vi toàn trang thông qua biến CSS
         document.documentElement.style.setProperty("--header-height", `${height}px`);
       }
     };
-
-    // Chạy cập nhật khi component mount hoặc khi showBanner thay đổi trạng thái
     updateHeaderHeight();
-
-    // Lắng nghe sự kiện resize màn hình để tính toán lại chiều cao responsive chuẩn xác
     window.addEventListener("resize", updateHeaderHeight);
     return () => window.removeEventListener("resize", updateHeaderHeight);
   }, [showBanner]);
@@ -170,37 +182,25 @@ export default function Header({ onOpenMenu }) {
       className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
     >
       
-      {/* --- BANNER THÔNG BÁO KHUYẾN MÃI (MÀU VÀNG THƯƠNG HIỆU) --- */}
+      {/* --- BANNER THÔNG BÁO --- */}
       {showBanner && (
         <div className="w-full bg-[#fea619] text-slate-900 h-10 md:h-11 flex items-center justify-between px-4 relative overflow-hidden text-xs md:text-sm font-bold tracking-wide shadow-sm">
-          {/* Nút đóng Banner màu tối tương phản tốt trên nền vàng */}
-          <button 
-            onClick={() => setShowBanner(false)} 
-            className="text-slate-800 hover:text-black transition-colors p-1 z-10"
-          >
+          <button onClick={() => setShowBanner(false)} className="text-slate-800 hover:text-black transition-colors p-1 z-10">
             <X size={18} strokeWidth={2.5} />
           </button>
-
-          {/* Cụm Nội Dung Chính Căn Giữa */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 whitespace-nowrap">
             <span>Giao hàng miễn phí cho 5 đơn hàng đầu tiên của bạn</span>
-            
-            {/* Bộ Đếm Ngược: Ô đen chữ trắng nổi bật trên nền vàng */}
             <div className="flex items-center gap-1 font-black text-white text-[11px] md:text-xs">
-              {/* Giờ */}
               <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.h[0]}</span>
               <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.h[1]}</span>
               <span className="text-slate-900 font-black -mt-0.5 mx-0.5">:</span>
-              {/* Phút */}
               <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.m[0]}</span>
               <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.m[1]}</span>
               <span className="text-slate-900 font-black -mt-0.5 mx-0.5">:</span>
-              {/* Giây */}
               <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.s[0]}</span>
               <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">{timeChunks.s[1]}</span>
             </div>
           </div>
-
           <div className="w-5 opacity-0 pointer-events-none"></div>
         </div>
       )}
@@ -230,7 +230,9 @@ export default function Header({ onOpenMenu }) {
                 if (v.trim()) {
                   suggestTimer.current = setTimeout(async () => {
                     try {
-                      const res = await productApi.get(`/products/search?keyword=${encodeURIComponent(v)}&limit=8`);
+                      // Truyền thêm country hiện tại để API lọc đúng giá theo Store
+                      const currentCountryCode = currentStore?.code || 'vn';
+                      const res = await productApi.get(`/products/search?keyword=${encodeURIComponent(v)}&limit=10&country=${currentCountryCode}`);
                       setSuggestions(res.data || []);
                       setIsSuggestOpen(true);
                     } catch (err) {
@@ -248,7 +250,7 @@ export default function Header({ onOpenMenu }) {
                   e.preventDefault();
                   if (isSuggestOpen && suggestions.length > 0) {
                     const p = suggestions[0];
-                    const country = p.country_code || 'vn';
+                    const country = p.country_code || currentStore?.code || 'vn';
                     const category = p.slug_danh_muc || 'san-pham';
                     navigate(`/${country}/product/${category}/${p.ma_san_pham}`);
                     setSearchKeyword('');
@@ -267,20 +269,28 @@ export default function Header({ onOpenMenu }) {
               <Search size={16} strokeWidth={3} />
             </button>
 
+            {/* BẢNG GỢI Ý ĐÃ ĐƯỢC THÊM THANH CUỘN VÀ FORMAT TIỀN */}
             {isSuggestOpen && suggestions.length > 0 && (
-              <div ref={suggestRef} className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-lg z-50 p-2">
+              <div 
+                ref={suggestRef} 
+                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 max-h-[320px] overflow-y-auto overscroll-contain scrollbar-hide"
+              >
                 {suggestions.map(s => (
-                  <button key={s.ma_san_pham} onClick={() => {
-                    const country = s.country_code || 'vn';
-                    const category = s.slug_danh_muc || 'san-pham';
-                    navigate(`/${country}/product/${category}/${s.ma_san_pham}`);
-                    setIsSuggestOpen(false);
-                    setSearchKeyword('');
-                  }} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 text-left">
-                    <img src={s.hinh_anh_chinh || 'https://placehold.co/60x60'} className="w-10 h-10 object-contain rounded" alt={s.ten_san_pham} />
-                    <div className="flex-1">
-                      <div className="font-bold text-sm text-slate-700">{s.ten_san_pham}</div>
-                      <div className="text-xs text-slate-400">{(s.gia_ban_thap_nhat||0).toLocaleString()}đ</div>
+                  <button 
+                    key={s.ma_san_pham} 
+                    onClick={() => {
+                      const country = s.country_code || currentStore?.code || 'vn';
+                      const category = s.slug_danh_muc || 'san-pham';
+                      navigate(`/${country}/product/${category}/${s.ma_san_pham}`);
+                      setIsSuggestOpen(false);
+                      setSearchKeyword('');
+                    }} 
+                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0"
+                  >
+                    <img src={s.hinh_anh_chinh || 'https://placehold.co/60x60'} className="w-12 h-12 object-contain rounded-lg border border-slate-100" alt={s.ten_san_pham} />
+                    <div className="flex-1 overflow-hidden">
+                      <div className="font-bold text-sm text-slate-700 truncate">{s.ten_san_pham}</div>
+                      <div className="text-xs font-black text-[#006c49]">{formatCurrency(s.gia_ban_thap_nhat || 0)}</div>
                     </div>
                   </button>
                 ))}

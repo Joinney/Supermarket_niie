@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { ChevronRight, Home, AlertCircle, Plus, Search } from 'lucide-react';
 import { productApi } from '../../api/axios';
-import ProductCard from '../../components/ProductCard';
+import ProductCard from '../../components/Product/ProductCard';
 import { useLanguage } from '../../context/LanguageContext';
 import { useStore } from '../../context/StoreContext';
 

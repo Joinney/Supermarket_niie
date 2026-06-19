@@ -1,12 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
+import { formatCurrency } from '../../utils/currency';
+import { useStore } from '../../context/StoreContext';
 
 const ProductCard = ({ p }) => {
+  // 1. GỌI CONTEXT STORE RA ĐỂ LẤY QUỐC GIA HIỆN TẠI
+  const { currentStore } = useStore();
+
   const defaultImage = "https://placehold.co/300x300?text=Demi+Mart";
   const mainImage = p.hinh_anh_chinh || defaultImage;
   const currentPrice = Number(p.gia_ban_thap_nhat) || 0;
-  const country = p.country_code || 'vn'; 
+  
+  // 2. Ưu tiên đường dẫn link chạy theo store người dùng đang chọn
+  const country = currentStore?.code || p.country_code || 'vn'; 
   const category = p.slug_danh_muc || 'san-pham';
   const stockCount = p.tong_ton_kho || 0;
 
@@ -30,7 +37,10 @@ const ProductCard = ({ p }) => {
         </div>
         <div className="space-y-1 px-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-[#ff4d4f] font-black text-lg leading-none">{currentPrice.toLocaleString()}đ</span>
+            {/* 3. BỌC HÀM TIỀN TỆ VÀO ĐÂY */}
+            <span className="text-[#ff4d4f] font-black text-lg leading-none">
+              {formatCurrency(currentPrice, currentStore?.code)}
+            </span>
           </div>
           <p className="text-[13px] text-[#161b22] leading-tight line-clamp-2 h-8 font-bold group-hover:text-[#006c49] transition-colors">{p.ten_san_pham}</p>
           <div className="flex gap-1 items-center pt-0.5">
