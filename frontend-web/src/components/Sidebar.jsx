@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { useStore } from '../context/StoreContext'; // 1. IMPORT THÊM CONTEXT MỚI
+import { useStore } from '../context/StoreContext'; 
 import { Search, Tag, Flame, X, MapPin, Check } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 
@@ -8,11 +8,13 @@ export default function Sidebar({ isOpen, onClose }) {
   const navigate = useNavigate(); 
   const { t } = useLanguage();
   
-  // 2. LẤY DATA TỪ STORE CONTEXT THAY VÌ USESTATE CỤC BỘ
   const { currentStore, setCurrentStore, stores } = useStore(); 
   const [isStoreOpen, setIsStoreOpen] = useState(false);
 
   const [activeCategory, setActiveCategory] = useState('search');
+  const [activeSubCategory, setActiveSubCategory] = useState(''); 
+  const [openDropdown, setOpenDropdown] = useState(null);          
+
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
 
@@ -30,22 +32,151 @@ export default function Sidebar({ isOpen, onClose }) {
     { slug: 'bestseller', key: 'sidebar.main.bestseller', i: <Flame size={20} /> },
   ];
 
+  // --- ĐÃ MOCK TOÀN BỘ DANH MỤC CON ĐẦY ĐỦ CHO TẤT CẢ CÁC MỤC ---
   const categories = [
-    { i: "🍜", slug: "do-an-lien" }, 
-    { i: "🥐", slug: "banh-mi" }, 
-    { i: "🥨", slug: "do-an-vat" },
-    { i: "🥤", slug: "do-uong" }, 
-    { i: "🥚", slug: "sua-va-trung" }, 
-    { i: "🥗", slug: "do-chay" },
-    { i: "🧴", slug: "gia-vi" }, 
-    { i: "🥫", slug: "do-dong-hop" }, 
-    { i: "🥡", slug: "gao-va-do-kho" },
-    { i: "🧼", slug: "cham-soc-ca-nhan" }, 
-    { i: "🏠", slug: "do-gia-dung" }, 
-    { i: "🍷", slug: "ruou-bia" },
-    { i: "🍱", slug: "so-che-san", hot: true }, 
-    { i: "🥯", slug: "banh-tuoi", hot: true },
-    { i: "💊", slug: "suc-khoe" }
+    { 
+      i: "🍜", 
+      slug: "do-an-lien",
+      children: [
+        { slug: "mi-goi", name: "Mì gói & mì ly" },
+        { slug: "pho-bun-lien", name: "Phở & Bún ăn liền" },
+        { slug: "chao-linh", name: "Cháo ăn liền" },
+        { slug: "com-hop", name: "Cơm hộp ăn liền" }
+      ]
+    }, 
+    { 
+      i: "🥐", 
+      slug: "banh-mi",
+      children: [
+        { slug: "banh-mi-goi", name: "Bánh mì gối" },
+        { slug: "banh-sừng-bo", name: "Bánh sừng bò" },
+        { slug: "banh-sandwich", name: "Bánh Sandwich" }
+      ]
+    }, 
+    { 
+      i: "🥨", 
+      slug: "do-an-vat",
+      children: [
+        { slug: "snack-khoai-tay", name: "Snack khoai tây" },
+        { slug: "kẹo-deo", name: "Kẹo dẻo & Kẹo cứng" },
+        { slug: "socola", name: "Sô-cô-la" },
+        { slug: "hat-sấy", name: "Hạt & Trái cây sấy" }
+      ]
+    },
+    { 
+      i: "🥤", 
+      slug: "do-uong",
+      children: [
+        { slug: "nuoc-ngot", name: "Nước ngọt có ga" },
+        { slug: "tra-sua-chai", name: "Trà đóng chai" },
+        { slug: "nuoc-khoang", name: "Nước khoáng tinh khiết" },
+        { slug: "nuoc-trai-cay", name: "Nước ép trái cây" }
+      ]
+    }, 
+    { 
+      i: "🥚", 
+      slug: "sua-va-trung",
+      children: [
+        { slug: "sua-kem-sua", name: "Sữa & kem sữa" },
+        { slug: "trung", name: "Trứng" },
+        { slug: "sua-chua", name: "Sữa chua" },
+        { slug: "bo", name: "Bơ" },
+        { slug: "pho-mai", name: "Phô mai" }
+      ]
+    }, 
+    { 
+      i: "🥗", 
+      slug: "do-chay",
+      children: [
+        { slug: "dau-hu-chay", name: "Đậu hũ & Đồ tương" },
+        { slug: "mi-chay", name: "Mì ăn liền chay" },
+        { slug: "thit-thuc-vat", name: "Thịt thực vật" }
+      ]
+    },
+    { 
+      i: "🧴", 
+      slug: "gia-vi",
+      children: [
+        { slug: "nuoc-mam", name: "Nước mắm ngon" },
+        { slug: "dau-an", name: "Dầu ăn thực vật" },
+        { slug: "tuong-ot-ca", name: "Tương ớt & Tương cà" },
+        { slug: "hat-nem-duong", name: "Hạt nêm, Muối, Đường" }
+      ]
+    }, 
+    { 
+      i: "🥫", 
+      slug: "do-dong-hop",
+      children: [
+        { slug: "ca-hop", name: "Cá mòi, Cá ngừ hộp" },
+        { slug: "thit-hop", name: "Thịt heo, Thịt bò hộp" },
+        { slug: "rau-cu-hop", name: "Rau củ ngâm hộp" }
+      ]
+    }, 
+    { 
+      i: "🥡", 
+      slug: "gao-va-do-kho",
+      children: [
+        { slug: "gao-te", name: "Gạo tẻ & Gạo nếp" },
+        { slug: "cac-loai-dau", name: "Các loại đậu hạt khô" },
+        { slug: "mien-moc-nhi", name: "Miến, Mộc nhĩ, Nấm khô" }
+      ]
+    },
+    { 
+      i: "🧼", 
+      slug: "cham-soc-ca-nhan",
+      children: [
+        { slug: "dau-goi-xa", name: "Dầu gội & Dầu xả" },
+        { slug: "sua-tam", name: "Sữa tắm dưỡng ẩm" },
+        { slug: "kem-danh-rang", name: "Kem & Bàn chải đánh răng" }
+      ]
+    }, 
+    { 
+      i: "🏠", 
+      slug: "do-gia-dung",
+      children: [
+        { slug: "nuoc-rua-chen", name: "Nước rửa chén" },
+        { slug: "giay-ve-sinh", name: "Giấy vệ sinh, Khăn giấy" },
+        { slug: "tui-rac", name: "Túi rác & Đồ tiện ích" }
+      ]
+    }, 
+    { 
+      i: "🍷", 
+      slug: "ruou-bia",
+      children: [
+        { slug: "bia-lon", name: "Bia lon & Bia chai" },
+        { slug: "ruou-vang", name: "Rượu vang đỏ/trắng" },
+        { slug: "ruou-manh", name: "Rượu mạnh nội ngoại" }
+      ]
+    },
+    { 
+      i: "🍱", 
+      slug: "so-che-san", 
+      hot: true,
+      children: [
+        { slug: "set-lau", name: "Set nguyên liệu lẩu" },
+        { slug: "rau-so-che", name: "Rau củ cắt thái sẵn" },
+        { slug: "thit-tam-uop", name: "Thịt cá tẩm ướp sẵn" }
+      ]
+    }, 
+    { 
+      i: "🥯", 
+      slug: "banh-tuoi", 
+      hot: true,
+      children: [
+        { slug: "banh-kem", name: "Bánh kem mini" },
+        { slug: "banh-su-kem", name: "Bánh su kem" },
+        { slug: "banh-tart", name: "Bánh tart trứng" }
+      ]
+    },
+    { 
+      i: "💊", 
+      slug: "suc-khoe",
+      children: [
+        { slug: "khau-trang", name: "Khẩu trang y tế" },
+        { slug: "vitamin", name: "Vitamin & Thực phẩm bổ sung" },
+        { slug: "dau-gio", name: "Dầu gió & Băng cá nhân" }
+      ]
+    }
   ];
 
   const footerLinks = [
@@ -61,9 +192,21 @@ export default function Sidebar({ isOpen, onClose }) {
         searchInput.focus();
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-    } else {
-      if(window.innerWidth < 1024) onClose();
     }
+  };
+
+  const handleCategoryClick = (category) => {
+    setActiveCategory(category.slug);
+    navigate(`/category/${category.slug}`); // Vừa chuyển trang cha lớn
+    
+    if (category.children) {
+      setOpenDropdown(openDropdown === category.slug ? null : category.slug); // Vừa trượt sổ menu con
+    } else {
+      setOpenDropdown(null);
+      setActiveSubCategory(''); 
+    }
+
+    if(window.innerWidth < 1024) onClose();
   };
 
   return (
@@ -86,7 +229,7 @@ export default function Sidebar({ isOpen, onClose }) {
           <X size={20} strokeWidth={3} />
         </button>
 
-        {/* --- KHU VỰC CHỌN CỬA HÀNG --- */}
+        {/* --- CHỌN CỬA HÀNG --- */}
         <div className="mb-4 mt-8 lg:mt-0 relative">
           <div 
             onClick={() => setIsStoreOpen(!isStoreOpen)}
@@ -96,35 +239,34 @@ export default function Sidebar({ isOpen, onClose }) {
             <div className="flex items-center justify-center gap-2">
               <MapPin size={16} className="text-[#006c49]" />
               <span className="text-[14px] font-black text-[#161b22] tracking-tight group-hover:text-[#006c49] transition-colors line-clamp-1">
-                {currentStore.name} {/* 3. HIỂN THỊ TÊN TỪ CONTEXT */}
+                {currentStore?.name}
               </span>
               <span className={`text-[10px] text-slate-400 transition-transform duration-300 ${isStoreOpen ? 'rotate-180' : ''}`}>▼</span>
             </div>
           </div>
 
-          {/* Menu Dropdown */}
           <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isStoreOpen ? 'max-h-[200px] mt-2 opacity-100' : 'max-h-0 opacity-0'}`}>
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-2 flex flex-col gap-1">
-              {stores.map(store => (
+              {stores?.map(store => (
                 <div 
                   key={store.code}
                   onClick={() => {
-                    setCurrentStore(store); // 4. CẬP NHẬT CONTEXT KHI CLICK
+                    setCurrentStore(store);
                     setIsStoreOpen(false);
                   }}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-[13px] font-bold transition-all
-                    ${currentStore.code === store.code ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                    ${currentStore?.code === store.code ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
                   `}
                 >
                   {store.name}
-                  {currentStore.code === store.code && <Check size={16} />}
+                  {currentStore?.code === store.code && <Check size={16} />}
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* 2. MENU CHÍNH (Gắn hàm handleMainMenuClick) */}
+        {/* MENU CHÍNH */}
         <nav className="space-y-1 mb-4 pb-4 border-b border-slate-200/60 shrink-0">
           {mainMenus.map(m => (
             <div 
@@ -146,36 +288,67 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* 3. DANH MỤC SẢN PHẨM */}
         <div className="space-y-1 flex-1 pb-6">
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-3 ml-1">{t('sidebar.product_catalog')}</p>
-          {categories.map(c => (
-            <div 
-              key={c.slug} 
-              // 4. BỔ SUNG LỆNH NAVIGATE ĐỂ ĐIỀU HƯỚNG SANG TRANG CATEGORY
-              onClick={() => { 
-                setActiveCategory(c.slug); 
-                navigate(`/category/${c.slug}`); 
-                if(window.innerWidth < 1024) onClose(); 
-              }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all group
-                ${activeCategory === c.slug ? 'bg-white shadow-sm' : 'hover:bg-white/60'}`}
-            >
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shadow-sm transition-all duration-300
-                ${activeCategory === c.slug ? 'bg-[#006c49] text-white scale-105 shadow-[#006c49]/20' : 'bg-white group-hover:bg-[#e6f0ed] group-hover:text-[#006c49]'}`}>
-                {c.i}
+          {categories.map(c => {
+            const isDropdownOpen = openDropdown === c.slug;
+            const isParentActive = activeCategory === c.slug;
+
+            return (
+              <div key={c.slug} className="flex flex-col">
+                <div 
+                  onClick={() => handleCategoryClick(c)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all relative group
+                    ${isParentActive ? 'bg-[#006c49] text-white shadow-md shadow-[#006c49]/15' : 'hover:bg-white/60 text-slate-600'}`}
+                >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base shadow-sm transition-all duration-300 border
+                    ${isParentActive 
+                      ? 'bg-white text-[#006c49] border-transparent scale-105' 
+                      : 'bg-white border-slate-100 group-hover:bg-[#e6f0ed] text-black'}`}>
+                    {c.i}
+                  </div>
+                  <span className={`text-[14.5px] flex-1 transition-colors ${isParentActive ? 'font-black text-white' : 'font-bold text-slate-600 group-hover:text-slate-800'}`}>
+                    {t(`sidebar.categories.${c.slug}`)}
+                  </span>
+                  {c.hot && (
+                    <span className="bg-[#fea619] text-[8px] text-[#684000] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter shadow-sm">{t('sidebar.hot')}</span>
+                  )}
+                </div>
+
+                {/* KHỐI KẾT XUẤT DANH MỤC CON ĐỒNG BỘ ĐẸP TOÀN DIỆN */}
+                {c.children && isDropdownOpen && (
+                  <div className="flex flex-col gap-1 mt-1.5 mb-2 pl-4 pr-1 animate-fadeIn select-none">
+                    {c.children.map(sub => {
+                      const isSubActive = activeSubCategory === sub.slug;
+                      return (
+                        <button
+                          key={sub.slug}
+                          onClick={() => {
+                            setActiveSubCategory(sub.slug);
+                            navigate(`/category/${c.slug}/${sub.slug}`);
+                            if(window.innerWidth < 1024) onClose();
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-[14px] transition-all duration-200 outline-none
+                            ${isSubActive 
+                              ? 'bg-[#e6f0ed] text-[#006c49] font-bold shadow-sm' 
+                              : 'text-slate-500 hover:text-slate-800 hover:bg-gray-50/80 font-medium'}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
+                            ${isSubActive ? 'bg-[#006c49]' : 'bg-slate-300'}`}
+                          />
+                          <span>{sub.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <span className={`text-[13.5px] flex-1 transition-colors ${activeCategory === c.slug ? 'font-black text-[#161b22]' : 'font-bold text-slate-500 group-hover:text-slate-700'}`}>
-                {t(`sidebar.categories.${c.slug}`)}
-              </span>
-              {c.hot && (
-                <span className="bg-[#fea619] text-[8px] text-[#684000] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter shadow-sm">{t('sidebar.hot')}</span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* 4. LIÊN KẾT PHỤ */}
         <div className="pt-6 border-t border-slate-200/60 space-y-3 px-3 shrink-0">
           <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {footerLinks.map((linkKey, idx) => (
+            {footerLinks.map((linkKey) => (
               <a key={linkKey} href="#" className="text-[10px] text-slate-400 font-black uppercase tracking-widest hover:text-[#006c49] transition-colors leading-tight">
                 {t(linkKey)}
               </a>
