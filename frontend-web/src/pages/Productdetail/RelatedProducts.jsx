@@ -4,7 +4,7 @@ import { ChevronRight, ArrowRight, AlertCircle } from 'lucide-react';
 import { productApi } from '../../api/axios';
 
 // Giả định component ProductCard nằm ở đường dẫn tương đối này, bạn hãy điều chỉnh lại cho đúng dự án của mình
-import ProductCard from '../../components/ProductCard'; 
+import ProductCard from '../../components/Product/ProductCard';
 
 export default function RelatedProducts({ currentProduct }) {
   const { country } = useParams();

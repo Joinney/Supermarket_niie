@@ -4,7 +4,7 @@ import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { OrderProvider } from "./context/OrderContext";
 import { LanguageProvider } from "./context/LanguageContext";
-import { ProtectedRoute } from "./components/ProtectedRoute"; // Bảo vệ route khách hàng
+import { ProtectedRoute } from "./components/Auth/ProtectedRoute";
 
 // --- IMPORTS GIAO DIỆN KHÁCH HÀNG ---
 import Checkout from "./pages/Checkout/Checkout";

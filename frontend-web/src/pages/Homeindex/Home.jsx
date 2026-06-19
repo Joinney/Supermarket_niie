@@ -7,8 +7,7 @@ import {
 import { useLanguage } from '../../context/LanguageContext';
 import { useStore } from '../../context/StoreContext';
 import { productApi } from '../../api/axios';
-import ProductCard from '../../components/ProductCard';
-
+import ProductCard from '../../components/Product/ProductCard';
 // Import component quảng cáo vừa tách riêng ở đây
 import QuangCao from './quangcao';
 
