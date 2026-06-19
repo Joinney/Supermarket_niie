@@ -11,8 +11,9 @@ export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // 1. Quản lý trạng thái đóng/mở của các mục lớn (Dropdowns)
-  // Đã sửa 'settings: false' để mặc định tự thu lại, không tự ý mở tag con khi chưa nhấn
+  // Mặc định ban đầu mở sẵn menu Dashboard
   const [openDropdowns, setOpenDropdowns] = useState({
+    dashboard: true,
     sanPham: false,
     donHang: false,
     khoHang: false,
@@ -20,21 +21,35 @@ export default function Sidebar() {
     settings: false, 
   });
 
-  // 2. State lưu trữ mục đang được click chọn (active)
-  const [activeItem, setActiveItem] = useState("/admin/dashboard");
+  // 2. Mặc định kích hoạt sẵn menu con "Thống kê sản phẩm" ban đầu
+  const [activeItem, setActiveItem] = useState("/admin/dashboard/products");
 
-  // Xử lý khi click vào MỤC LỚN: Chỉ đổi màu và bật/tắt menu con (Không chuyển trang)
+  // Xử lý khi click vào MỤC LỚN Dashboard
   const handleMainMenuClick = (menuKey, identityPath) => {
     if (isCollapsed) {
       setIsCollapsed(false);
     }
+    
     toggleDropdown(menuKey);
-    setActiveItem(identityPath);
+
+    // Khi nhấn vào Dashboard cha lớn, CHỈ đổi trạng thái active sang nút con, đứng im không navigate đi đâu
+    if (menuKey === "dashboard") {
+      setActiveItem("/admin/dashboard/products");
+    } else {
+      setActiveItem(identityPath);
+    }
   };
 
-  // Xử lý khi click vào MỤC CON: Đổi màu active và điều hướng chuyển trang thực tế
+  // ĐÃ SỬA: Xử lý khi click vào MỤC CON
   const handleSubMenuClick = (path) => {
     setActiveItem(path);
+    
+    // Nếu bấm vào trang "Thống kê sản phẩm" thì ĐỨNG IM tại chỗ (không gọi navigate)
+    if (path === "/admin/dashboard/products") {
+      return; 
+    }
+
+    // Các trang con khác thì vẫn chuyển trang bình thường
     if (path && path.startsWith("/admin")) {
       navigate(path);
     }
@@ -53,15 +68,18 @@ export default function Sidebar() {
     navigate("/admin/login");
   };
 
-  // Hàm helper để render class cho các MỤC LỚN khi được active (Màu đậm #006c49)
+  // Hàm render class màu cho MỤC CHA (Dashboard luôn đậm khi có mục con của nó được active)
   const getMainMenuStyle = (path) => {
-    if (activeItem === path) {
+    if (
+      activeItem === path || 
+      (path === "/admin/dashboard" && activeItem.startsWith("/admin/dashboard/"))
+    ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
     }
     return "text-gray-600 hover:text-slate-900 hover:bg-gray-50/70";
   };
 
-  // Hàm helper để render class cho các MỤC CON khi được active (Màu nhạt #e6f0ed)
+  // Hàm render class màu cho MỤC CON (Active ra màu xanh nhạt #e6f0ed)
   const getSubMenuStyle = (path) => {
     if (activeItem === path) {
       return "bg-[#e6f0ed] font-bold text-[#006c49]";
@@ -124,18 +142,41 @@ export default function Sidebar() {
           <div className="space-y-1">
             
             {/* Dashboard */}
-            <button 
-              onClick={() => handleSubMenuClick("/admin/dashboard")}
-              className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm font-medium transition duration-150 group ${getMainMenuStyle("/admin/dashboard")}`}
-              title={isCollapsed ? "Dashboard" : ""}
-            >
-              <div className="flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 transition-colors">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-                </svg>
-                {!isCollapsed && <span className="animate-fadeIn">Dashboard</span>}
-              </div>
-            </button>
+            <div>
+              <button 
+                onClick={() => handleMainMenuClick("dashboard", "/admin/dashboard")}
+                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm font-medium transition duration-150 group ${getMainMenuStyle("/admin/dashboard")}`}
+                title={isCollapsed ? "Dashboard" : ""}
+              >
+                <div className="flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 transition-colors">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                  </svg>
+                  {!isCollapsed && <span className="animate-fadeIn">Dashboard</span>}
+                </div>
+                {!isCollapsed && <span className={`text-[10px] transition-transform duration-200 ${openDropdowns.dashboard ? "rotate-90" : ""}`}>❯</span>}
+              </button>
+
+              {/* Các menu con của Dashboard */}
+              {openDropdowns.dashboard && !isCollapsed && (
+                <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+                  <button onClick={() => handleSubMenuClick("/admin/dashboard/products")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/products")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/products" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Thống kê sản phẩm</span>
+                  </button>
+
+                  <button onClick={() => handleSubMenuClick("/admin/dashboard/orders")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/orders")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/orders" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Thống kê đơn hàng</span>
+                  </button>
+
+                  <button onClick={() => handleSubMenuClick("/admin/dashboard/customers")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/customers")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/customers" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Thống kê khách hàng</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Danh sách sản phẩm */}
             <div>

@@ -1,6 +1,6 @@
 import React from "react";
-import Sidebar from "../components/Sidebar";
-import Header from "../components/Header";
+import Sidebar from "../../components/Sidebar";
+import Header from "../../components/Header";
 
 export default function Dashboard() {
   // 1. Dữ liệu cho 4 thẻ Tổng quan trên cùng

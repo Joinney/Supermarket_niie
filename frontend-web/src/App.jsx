@@ -25,7 +25,7 @@ import ChatbotAI from "./components/chatbotai/ChatbotAI"; // 🤖 THÊM DÒNG N�
 
 // --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHUẨN ĐƯỜNG DẪN) ---
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
-import Dashboard from "./admindb/pages/Dashboard"; // SỬA: Đúng vị trí src/admindb/pages/Dashboard.jsx
+import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham";// SỬA: Đúng vị trí src/admindb/pages/Dashboard.jsx
 import AdminProtect from "./admindb/components/AdminProtect"; // Bộ lọc bảo vệ admin
 
 /**
