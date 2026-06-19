@@ -10,7 +10,21 @@ import { useStore } from '../../context/StoreContext';
 
 import Feedback from './Feedback';
 import RelatedProducts from './RelatedProducts';
+<<<<<<< HEAD
 import RecommendedProducts from './RecommendedProducts'; // Import component mới vào đây
+=======
+import { formatCurrency } from '../../utils/currency';
+
+// ==============================================================================
+// HÀM HỖ TRỢ: CHUYỂN ĐỔI LINK YOUTUBE SANG DẠNG EMBED CHO IFRAME
+// ==============================================================================
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}?autoplay=0` : null;
+};
+>>>>>>> 4b269089e3363fc118aade344e93fa190547a889
 
 export default function ProductDetail() {
   const { country, category, id, variantId } = useParams();
@@ -195,7 +209,7 @@ export default function ProductDetail() {
                   }`}
                 >
                   {m.loai_media === 'video' 
-                    ? <div className="w-full h-full bg-slate-100 flex items-center justify-center text-[8px] font-bold">VIDEO</div>
+                    ? <div className="w-full h-full bg-slate-100 flex items-center justify-center text-[8px] font-bold text-slate-500 rounded-md">VIDEO</div>
                     : <img src={m.duong_dan_url} className="w-full h-full object-cover rounded-md" alt="thumb" />
                   }
                 </button>
@@ -204,7 +218,24 @@ export default function ProductDetail() {
 
             <div className="flex-1 relative aspect-square sm:aspect-[4/5] max-h-[45vh] lg:max-h-[65vh] rounded-[16px] lg:rounded-[32px] bg-[#f9f9f9] border border-slate-50 overflow-hidden flex items-center justify-center shadow-sm">
               {mainMedia?.loai_media === 'video' ? (
-                 <video src={mainMedia.duong_dan_url} controls className="w-full h-full object-contain p-4 bg-black rounded-lg" />
+                // =====================================================================
+                // LOGIC RENDER VIDEO MỚI (HỖ TRỢ CẢ YOUTUBE VÀ FILE MP4)
+                // =====================================================================
+                getYouTubeEmbedUrl(mainMedia.duong_dan_url) ? (
+                  <iframe 
+                    src={getYouTubeEmbedUrl(mainMedia.duong_dan_url)} 
+                    title="YouTube video player"
+                    className="w-full h-full object-cover rounded-[16px] lg:rounded-[32px] p-2"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                ) : (
+                  <video 
+                    src={mainMedia.duong_dan_url} 
+                    controls 
+                    className="w-full h-full object-contain p-4 bg-black rounded-[16px] lg:rounded-[32px]" 
+                  />
+                )
               ) : (
                 <img 
                   src={mainMedia?.duong_dan_url} 
@@ -229,12 +260,12 @@ export default function ProductDetail() {
             </div>
 
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
-              <span className="text-2xl lg:text-3xl 2xl:text-5xl font-black text-[#006c49] tracking-tighter">
-                {currentPrice.toLocaleString()}đ
-              </span>
+                <span className="text-2xl lg:text-3xl 2xl:text-5xl font-black text-[#006c49] tracking-tighter">
+                  {formatCurrency(currentPrice, currentStore?.code)}
+                </span>
               {originalPrice && (
                 <span className="text-xs 2xl:text-lg text-slate-300 line-through font-bold">
-                  {originalPrice.toLocaleString()}đ
+                  {formatCurrency(originalPrice, currentStore?.code)}
                 </span>
               )}
             </div>
@@ -327,7 +358,9 @@ export default function ProductDetail() {
                 </div>
                 <div className="text-right">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tạm tính</p>
-                  <p className="text-xl lg:text-3xl font-black text-[#1a1a1a] tracking-tighter">{(currentPrice * quantity).toLocaleString()}đ</p>
+                  <p className="text-xl lg:text-3xl font-black text-[#1a1a1a] tracking-tighter">
+                      {formatCurrency(currentPrice * quantity, currentStore?.code)}
+                  </p>
                 </div>
               </div>
 
