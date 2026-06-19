@@ -10,6 +10,7 @@ import { useStore } from '../../context/StoreContext';
 
 import Feedback from './Feedback';
 import RelatedProducts from './RelatedProducts';
+import RecommendedProducts from './RecommendedProducts'; // Import component mới vào đây
 
 export default function ProductDetail() {
   const { country, category, id, variantId } = useParams();
@@ -23,7 +24,7 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  // Lưu trữ state các thuộc tính user đang chọn (VD: {"Đóng gói": "Gói 85g", "Vị": "Vị bò cay"})
+  // State các thuộc tính user chọn
   const [selectedAttributes, setSelectedAttributes] = useState({});
 
   useEffect(() => {
@@ -59,7 +60,6 @@ export default function ProductDetail() {
           setSelectedVariant(targetVariant);
           setQuantity(1);
           
-          // Tự động set selectedAttributes dựa trên variant mặc định
           if (targetVariant?.thuoc_tinh) {
             setSelectedAttributes(targetVariant.thuoc_tinh);
           }
@@ -77,9 +77,7 @@ export default function ProductDetail() {
       });
   }, [id, country]);
 
-  // ==============================================================================
-  // THUẬT TOÁN MỚI: TỰ ĐỘNG PHÂN RÃ THUỘC TÍNH TỪ JSONB
-  // ==============================================================================
+  // PHÂN RÃ THUỘC TÍNH TỪ JSONB
   const nhomPhanLoai = useMemo(() => {
     if (!product?.bien_the) return {};
     const groups = {};
@@ -100,12 +98,10 @@ export default function ProductDetail() {
     return groups;
   }, [product]);
 
-  // Xử lý khi user bấm chọn 1 nút thuộc tính
   const handleAttributeSelect = (key, value) => {
     const newAttributes = { ...selectedAttributes, [key]: value };
     setSelectedAttributes(newAttributes);
 
-    // Tìm Variant khớp với toàn bộ thuộc tính đang chọn
     if (product?.bien_the) {
       const matchedVariant = product.bien_the.find(bt => {
         if (!bt.thuoc_tinh) return false;
@@ -123,7 +119,6 @@ export default function ProductDetail() {
       }
     }
   };
-  // ==============================================================================
 
   const currentPrice = selectedVariant?.gia_khuyen_mai || selectedVariant?.gia_ban_le || 0;
   const originalPrice = selectedVariant?.gia_khuyen_mai ? selectedVariant?.gia_ban_le : null;
@@ -171,13 +166,13 @@ export default function ProductDetail() {
     </div>
   );
 
-  // Kiểm tra xem sản phẩm có thuộc tính đa tầng không
   const isMultiTier = Object.keys(nhomPhanLoai).length > 0;
 
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10 transition-all duration-300">
         
+        {/* BREADCRUMB */}
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
           <Link to="/" className="hover:text-slate-900 flex-shrink-0">Home</Link>
           <ChevronRight size={10} className="text-slate-300" />
@@ -186,8 +181,8 @@ export default function ProductDetail() {
           <span className="text-[#006c49] truncate font-black italic">{product.ten_san_pham}</span>
         </nav>
 
+        {/* TOP SECTION: GALLERY & CHI TIẾT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
-          
           {/* GALLERY */}
           <div className="lg:col-span-6 xl:col-span-7 flex flex-col-reverse sm:flex-row gap-2 lg:gap-4">
             <div className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto scrollbar-hide py-1">
@@ -249,10 +244,8 @@ export default function ProductDetail() {
                   "{product.mo_ta || "Sản phẩm tuyển chọn từ Demi Mart."}"
               </p>
               
-              {/* VÙNG RENDER PHÂN TẦNG ATTRIBUTES */}
               <div className="pt-2 space-y-4">
                 {isMultiTier ? (
-                  // Kịch bản 1: Có JSONB Đa tầng -> Render kiểu Shopee
                   Object.entries(nhomPhanLoai).map(([tenThuocTinh, danhSachGiaTri]) => (
                     <div key={tenThuocTinh} className="space-y-2">
                       <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{tenThuocTinh}</p>
@@ -277,7 +270,6 @@ export default function ProductDetail() {
                     </div>
                   ))
                 ) : (
-                  // Kịch bản 2: Sản phẩm đơn tầng (Không có JSONB) -> Render mặc định
                   <div className="flex flex-wrap gap-1.5 lg:gap-2">
                     {product.bien_the?.map((v, i) => (
                       <button 
@@ -360,8 +352,29 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        <Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} />
-        <RelatedProducts currentProduct={product} countryCode={country} />
+        {/* ============================================================================== */}
+        {/* BOTTOM SECTION: ĐÃ KHỚP HÀNG NGANG CHẰN CHẶN CỦA HAI KHỐI HỘP */}
+        {/* ============================================================================== */}
+        <div className="mt-12 lg:mt-16 pt-8 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
+          
+          {/* Cột bên trái: Feedback */}
+          <div className="lg:col-span-8">
+            <Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} />
+          </div>
+
+          {/* Cột bên phải: Sản phẩm liên quan hàng dọc mini neo dính màn hình */}
+          <div className="lg:col-span-4 lg:sticky lg:top-6">
+            <RelatedProducts currentProduct={product} countryCode={country} />
+          </div>
+
+        </div>
+
+        {/* ============================================================================== */}
+        {/* LỚP DƯỚI CÙNG TRANG: ĐỀ XUẤT CHO BẠN (TRẢI DÀI TOÀN MÀN HÌNH DẠNG GRID Ô VUÔNG) */}
+        {/* ============================================================================== */}
+        <div className="w-full mt-12">
+          <RecommendedProducts currentProduct={product} />
+        </div>
 
       </div>
     </div>

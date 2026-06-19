@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { Star, ThumbsUp, Video, Calendar, Box, MessageSquare } from 'lucide-react';
 
 export default function Feedback({ selectedVariant, mainMedia }) {
-  // Quản lý trạng thái bộ lọc đang chọn (Mặc định là 'all')
   const [activeFilter, setActiveFilter] = useState('all');
-  // Quản lý ảnh đang được chọn để xem lớn cho từng review (key-value: reviewId - imageIndex)
   const [activeImageMap, setActiveImageMap] = useState({});
 
-  // Danh sách cấu hình các nút bấm bộ lọc
   const filterOptions = [
     { id: 'all', label: 'Tất Cả', count: null },
     { id: '5star', label: '5 Sao', count: '12,1k' },
@@ -19,7 +16,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
     { id: 'media', label: 'Có Hình Ảnh / Video', count: '1,5k' },
   ];
 
-  // Dữ liệu đánh giá mẫu dữ liệu gốc của bạn
   const staticReviews = [
     {
       id: 1,
@@ -58,27 +54,25 @@ export default function Feedback({ selectedVariant, mainMedia }) {
     }
   ];
 
-  // Hàm xử lý khi click chọn xem ảnh trong bài review
   const handleImageClick = (reviewId, imgIndex) => {
     setActiveImageMap(prev => ({
       ...prev,
-      // Nếu click lại đúng ảnh đang mở thì đóng lại (set null), ngược lại thì mở ảnh đó
       [reviewId]: prev[reviewId] === imgIndex ? null : imgIndex
     }));
   };
 
   return (
-    <div className="mt-16 bg-white border border-slate-100 rounded-2xl p-5 sm:p-8 text-left shadow-sm">
-      <div className="flex items-center gap-2.5 mb-6 border-b border-slate-100 pb-4">
-        <MessageSquare size={20} className="text-slate-700" />
-        <h2 className="text-base sm:text-lg font-black text-slate-800 uppercase tracking-wider">
+    <div className="mt-0 bg-white border border-slate-100 rounded-2xl p-5 sm:p-8 text-left shadow-sm">
+      {/* 🎯 ĐỒNG BỘ: min-h-[40px] giúp ép chung mặt sàn ngang đối xứng với hộp bên phải */}
+      <div className="flex items-center gap-2.5 mb-6 border-b border-slate-100 pb-4 min-h-[40px]">
+        <MessageSquare size={20} className="text-slate-700 flex-shrink-0" />
+        <h2 className="text-base sm:text-lg font-black text-slate-800 uppercase tracking-wider m-0 leading-none">
           Đánh giá sản phẩm
         </h2>
       </div>
       
-      {/* 1. HỘP TỔNG QUAN & BỘ LỌC ĐÁNH GIÁ ĐỒNG BỘ MÀU XANH #006c49 */}
+      {/* 1. HỘP TỔNG QUAN */}
       <div className="bg-[#f4faf7] border border-[#d6ede4] rounded-xl p-6 flex flex-col lg:flex-row gap-6 items-center mb-8 shadow-sm">
-        {/* Điểm số tổng quát bên trái */}
         <div className="text-center lg:pr-8 lg:border-r lg:border-[#d6ede4] flex flex-col items-center justify-center min-w-[160px]">
           <div className="text-3xl sm:text-4xl font-extrabold text-[#006c49] flex items-baseline gap-1">
             4.8 <span className="text-sm font-normal text-slate-400">/ 5</span>
@@ -91,7 +85,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
           <p className="text-[11px] text-slate-400 mt-2 font-medium">(13,8k đánh giá thực tế)</p>
         </div>
 
-        {/* Tiến trình phân bổ sao trực quan ở giữa */}
         <div className="hidden sm:flex flex-col gap-1 w-full max-w-[200px] text-[11px] text-slate-500">
           {[5, 4, 3, 2, 1].map((star) => (
             <div key={star} className="flex items-center gap-2">
@@ -107,7 +100,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
           ))}
         </div>
 
-        {/* Các nút bấm Filter Động màu #006c49 */}
         <div className="flex-1 flex flex-wrap gap-2 w-full">
           {filterOptions.map((filter) => {
             const isActive = activeFilter === filter.id;
@@ -128,20 +120,18 @@ export default function Feedback({ selectedVariant, mainMedia }) {
         </div>
       </div>
 
-      {/* 2. DANH SÁCH CÁC BÌNH LUẬN CHI TIẾT */}
+      {/* 2. DANH SÁCH BÌNH LUẬN */}
       <div className="space-y-6 divide-y divide-slate-100">
         {staticReviews.map((review) => {
           const currentActiveImgIdx = activeImageMap[review.id];
 
           return (
             <div key={review.id} className="flex gap-4 pt-6 first:pt-0">
-              {/* Avatar người dùng */}
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex-shrink-0 flex items-center justify-center text-slate-500 font-bold text-sm uppercase shadow-inner">
                 {review.username.charAt(0)}
               </div>
               
               <div className="flex-1 space-y-2">
-                {/* Tên tài khoản & Sao hệ màu vàng gold chuẩn tinh tế */}
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-slate-800 hover:text-[#006c49] cursor-pointer transition-colors">
@@ -155,7 +145,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                   </div>
                 </div>
 
-                {/* Meta info: Thời gian & Phân loại hàng */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400 font-medium">
                   <span className="flex items-center gap-1">
                     <Calendar size={12} strokeWidth={1.8} />
@@ -168,7 +157,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                   </span>
                 </div>
 
-                {/* Tiêu chí đặc tính đánh giá dạng Tag Chips màu lục nhẹ */}
                 {review.criteria.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {review.criteria.map((criterion, idx) => (
@@ -179,15 +167,12 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                   </div>
                 )}
 
-                {/* Nội dung text bình luận của khách */}
                 <p className="text-xs sm:text-sm text-slate-800 pt-1 leading-relaxed font-normal">
                   {review.comment}
                 </p>
 
-                {/* Khối Ảnh / Video đính kèm review có tương tác click zoom */}
                 {review.images.length > 0 && (
                   <div className="space-y-3 pt-1">
-                    {/* Hàng ảnh Thumbnails */}
                     <div className="flex gap-2 flex-wrap">
                       {review.images.map((imgUrl, idx) => {
                         const isVideoThumb = idx === 0 && review.hasVideo;
@@ -202,8 +187,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                             }`}
                           >
                             <img src={imgUrl} className="w-full h-full object-cover" alt={`review-thumb-${idx}`} />
-                            
-                            {/* Nhãn hiển thị nếu là video */}
                             {isVideoThumb && (
                               <span className="absolute bottom-1 left-1 text-[9px] font-medium bg-black/60 text-white px-1.5 py-0.5 rounded flex items-center gap-1 backdrop-blur-[1px]">
                                 <Video size={10} className="fill-white" />
@@ -215,9 +198,8 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                       })}
                     </div>
 
-                    {/* Vùng hiển thị ảnh phóng to mượt mà khi người dùng click chọn */}
                     {currentActiveImgIdx !== undefined && currentActiveImgIdx !== null && (
-                      <div className="w-full max-w-[340px] aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-900 shadow-md relative animate-fadeIn">
+                      <div className="w-full max-w-[340px] aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-900 shadow-md relative">
                         <img 
                           src={review.images[currentActiveImgIdx]} 
                           className="w-full h-full object-contain" 
@@ -234,7 +216,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                   </div>
                 )}
 
-                {/* Phần phản hồi của người bán tinh tế màu nền dịu mắt */}
                 {review.sellerReply && (
                   <div className="bg-[#fcfcfc] border border-slate-100 p-4 rounded-xl mt-3 text-xs space-y-1.5 text-left relative before:absolute before:left-4 before:-top-2 before:w-3 before:h-3 before:bg-[#fcfcfc] before:border-l before:border-t before:border-slate-100 before:rotate-45">
                     <span className="font-bold text-slate-700 block tracking-wide uppercase text-[10px] border-l-2 border-[#006c49] pl-1.5">
@@ -246,7 +227,6 @@ export default function Feedback({ selectedVariant, mainMedia }) {
                   </div>
                 )}
 
-                {/* Nút thích đánh giá (Like button) */}
                 <div className="pt-2">
                   <button className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-all duration-200 ${
                     review.likes > 0 
@@ -263,12 +243,12 @@ export default function Feedback({ selectedVariant, mainMedia }) {
         })}
       </div>
 
-      {/* 3. PHÂN TRANG ĐÁNH GIÁ ĐỒNG BỘ MÀU #006c49 */}
+      {/* 3. PHÂN TRANG */}
       <div className="flex items-center justify-center gap-1.5 mt-10 pt-5 border-t border-slate-100">
         <button className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-[#006c49] hover:bg-slate-50 rounded transition-colors text-sm font-light">
           &lt;
         </button>
-        <button className="w-8 h-8 bg-[#006c49] text-white rounded text-xs font-bold flex items-center justify-center shadow-sm shadow-emerald-100 transition-transform active:scale-95">
+        <button className="w-8 h-8 bg-[#006c49] text-white rounded text-xs font-bold flex items-center justify-center shadow-sm shadow-emerald-100">
           1
         </button>
         {[2, 3, 4, 5].map((page) => (
