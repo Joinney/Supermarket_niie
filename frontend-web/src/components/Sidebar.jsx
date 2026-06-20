@@ -29,6 +29,7 @@ export default function Sidebar({ isOpen, onClose }) {
       try {
         const response = await productApi.get('/products/categories');
         const data = response.data; 
+
         
         if (data && data.length > 0) {
           setCategories(data);
@@ -78,7 +79,7 @@ export default function Sidebar({ isOpen, onClose }) {
     navigate(`/category/${category.slug}`); 
     
     if (category.children) {
-      setOpenDropdown(openDropdown === category.slug ? null : category.slug);
+      setOpenDropdown(openDropdown === category.slug ? null : category.slug); 
     } else {
       setOpenDropdown(null);
       setActiveSubCategory(''); 
