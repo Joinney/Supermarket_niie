@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useStore } from '../context/StoreContext'; 
 import { Search, Tag, Flame, X, MapPin, Check } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
+import { productApi } from "../api/axios";
 
 export default function Sidebar({ isOpen, onClose }) {
   const navigate = useNavigate(); 
@@ -22,12 +23,12 @@ export default function Sidebar({ isOpen, onClose }) {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 2. GỌI API LẤY DANH MỤC (CẤU TRÚC CÂY) KHI COMPONENT MOUNT
+    // 2. GỌI API LẤY DANH MỤC THÔNG QUA AXIOS INSTANCE ĐÃ ĐỒNG BỘ MIỀN
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch('http://localhost:5002/api/products/categories');
-        const data = await response.json();
+        const response = await productApi.get('/products/categories');
+        const data = response.data; 
         
         if (data && data.length > 0) {
           setCategories(data);
@@ -74,10 +75,10 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const handleCategoryClick = (category) => {
     setActiveCategory(category.slug);
-    navigate(`/category/${category.slug}`); // Vừa chuyển trang cha lớn
+    navigate(`/category/${category.slug}`); 
     
     if (category.children) {
-      setOpenDropdown(openDropdown === category.slug ? null : category.slug); // Vừa trượt sổ menu con
+      setOpenDropdown(openDropdown === category.slug ? null : category.slug);
     } else {
       setOpenDropdown(null);
       setActiveSubCategory(''); 
@@ -199,7 +200,7 @@ export default function Sidebar({ isOpen, onClose }) {
                     )}
                   </div>
 
-                  {/* KHỐI KẾT XUẤT DANH MỤC CON ĐỒNG BỘ ĐẸP TOÀN DIỆN */}
+                  {/* KHỐI KẾT XUẤT DANH MỤC CON */}
                   {c.children && isDropdownOpen && (
                     <div className="flex flex-col gap-1 mt-1.5 mb-2 pl-4 pr-1 animate-fadeIn select-none">
                       {c.children.map(sub => {
@@ -207,6 +208,7 @@ export default function Sidebar({ isOpen, onClose }) {
                         return (
                           <button
                             key={sub.slug}
+                            type="button"
                             onClick={() => {
                               setActiveSubCategory(sub.slug);
                               navigate(`/category/${c.slug}/${sub.slug}`);
@@ -220,7 +222,6 @@ export default function Sidebar({ isOpen, onClose }) {
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors
                               ${isSubActive ? 'bg-[#006c49]' : 'bg-slate-300'}`}
                             />
-                            {/* Dùng thẳng sub.name vì tên danh mục con tiếng Việt đã lấy thẳng từ DB */}
                             <span>{sub.name}</span>
                           </button>
                         );

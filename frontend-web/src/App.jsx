@@ -81,8 +81,9 @@ const AppRoutes = () => (
     <Route element={<MainLayout />}>
       <Route path="/" element={<Home />} />
       <Route path="/category/:slug" element={<CategoryPage />} />
+      <Route path="/category/:parentSlug/:slug" element={<CategoryPage />} />
       <Route path="/search" element={<SearchPage />} />
-      <Route path="/:country_code/product/:category_slug/:id/:variantId?" element={<ProductDetail />} />
+      <Route path="/:country_code/product/:category_slug/:id" element={<ProductDetail />} />
       <Route path="/cart" element={<Cart />} />
       <Route path="/checkout" element={
         <ProtectedRoute>

@@ -10,12 +10,9 @@ import { useStore } from '../../context/StoreContext';
 
 import Feedback from './Feedback';
 import RelatedProducts from './RelatedProducts';
-import RecommendedProducts from './RecommendedProducts'; // Import component mới vào đây
+import RecommendedProducts from './RecommendedProducts'; 
 import { formatCurrency } from '../../utils/currency';
 
-// ==============================================================================
-// HÀM HỖ TRỢ: CHUYỂN ĐỔI LINK YOUTUBE SANG DẠNG EMBED CHO IFRAME
-// ==============================================================================
 const getYouTubeEmbedUrl = (url) => {
   if (!url) return null;
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -24,7 +21,9 @@ const getYouTubeEmbedUrl = (url) => {
 };
 
 export default function ProductDetail() {
-  const { country, category, id, variantId } = useParams();
+  const { country_code, category_slug, id } = useParams(); 
+  const country = country_code;
+  const category = category_slug;
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { currentStore } = useStore();
@@ -34,17 +33,14 @@ export default function ProductDetail() {
   const [mainMedia, setMainMedia] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
-
-  // State các thuộc tính user chọn
   const [selectedAttributes, setSelectedAttributes] = useState({});
 
   useEffect(() => {
     if (currentStore?.code && currentStore.code !== country && product) {
       const cSlug = category || product?.slug_danh_muc || 'product';
-      const vId = variantId || selectedVariant?.ma_bien_the || '';
-      navigate(`/${currentStore.code}/product/${cSlug}/${id}${vId ? `/${vId}` : ''}`, { replace: true });
+      navigate(`/${currentStore.code}/product/${cSlug}/${id}`, { replace: true });
     }
-  }, [currentStore, country, id, category, variantId, navigate, product]);
+  }, [currentStore, country, id, category, navigate, product]);
 
   useEffect(() => {
     if (!id || id === 'undefined') {
@@ -64,9 +60,8 @@ export default function ProductDetail() {
         if (productData && productData.ma_san_pham) {
           setProduct(productData);
           
-          const targetVariant = productData.bien_the?.find(v => v.ma_bien_the === variantId) || 
-                                productData.bien_the?.find(v => v.la_ban_chay) || 
-                                productData.bien_the?.[0];
+          // Mặc định chọn biến thể bán chạy nhất
+          const targetVariant = productData.bien_the?.find(v => v.la_ban_chay) || productData.bien_the?.[0];
           
           setSelectedVariant(targetVariant);
           setQuantity(1);
@@ -88,11 +83,9 @@ export default function ProductDetail() {
       });
   }, [id, country]);
 
-  // PHÂN RÃ THUỘC TÍNH TỪ JSONB
   const nhomPhanLoai = useMemo(() => {
     if (!product?.bien_the) return {};
     const groups = {};
-    
     product.bien_the.forEach(bt => {
       if (bt.thuoc_tinh && Object.keys(bt.thuoc_tinh).length > 0) {
         Object.entries(bt.thuoc_tinh).forEach(([key, value]) => {
@@ -101,11 +94,7 @@ export default function ProductDetail() {
         });
       }
     });
-
-    Object.keys(groups).forEach(key => {
-      groups[key] = Array.from(groups[key]);
-    });
-    
+    Object.keys(groups).forEach(key => { groups[key] = Array.from(groups[key]); });
     return groups;
   }, [product]);
 
@@ -123,10 +112,6 @@ export default function ProductDetail() {
         setSelectedVariant(matchedVariant);
         const vMedia = product.media?.find(m => m.ma_bien_the === matchedVariant.ma_bien_the);
         if (vMedia) setMainMedia(vMedia);
-
-        const cCode = country || product.country_code || 'vn';
-        const cSlug = category || product.slug_danh_muc || 'product';
-        navigate(`/${cCode}/product/${cSlug}/${id}/${matchedVariant.ma_bien_the}`, { replace: true });
       }
     }
   };
