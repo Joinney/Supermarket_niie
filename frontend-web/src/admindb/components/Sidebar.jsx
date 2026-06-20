@@ -22,7 +22,7 @@ export default function Sidebar() {
   });
 
   // 2. Mặc định kích hoạt sẵn menu con "Thống kê sản phẩm" ban đầu
-  const [activeItem, setActiveItem] = useState("/admin/dashboard/products");
+  const [activeItem, setActiveItem] = useState("/admin/dashboard/thongkesanpham");
 
   // Xử lý khi click vào MỤC LỚN Dashboard
   const handleMainMenuClick = (menuKey, identityPath) => {
@@ -32,24 +32,18 @@ export default function Sidebar() {
     
     toggleDropdown(menuKey);
 
-    // Khi nhấn vào Dashboard cha lớn, CHỈ đổi trạng thái active sang nút con, đứng im không navigate đi đâu
+    // Khi nhấn vào Dashboard cha lớn, tự động active mục đầu tiên và điều hướng sang trang đó
     if (menuKey === "dashboard") {
-      setActiveItem("/admin/dashboard/products");
+      setActiveItem("/admin/dashboard/thongkesanpham");
+      navigate("/admin/dashboard/thongkesanpham");
     } else {
       setActiveItem(identityPath);
     }
   };
 
-  // ĐÃ SỬA: Xử lý khi click vào MỤC CON
+  // Xử lý khi click vào MỤC CON
   const handleSubMenuClick = (path) => {
     setActiveItem(path);
-    
-    // Nếu bấm vào trang "Thống kê sản phẩm" thì ĐỨNG IM tại chỗ (không gọi navigate)
-    if (path === "/admin/dashboard/products") {
-      return; 
-    }
-
-    // Các trang con khác thì vẫn chuyển trang bình thường
     if (path && path.startsWith("/admin")) {
       navigate(path);
     }
@@ -68,18 +62,20 @@ export default function Sidebar() {
     navigate("/admin/login");
   };
 
-  // Hàm render class màu cho MỤC CHA (Dashboard luôn đậm khi có mục con của nó được active)
+  // Hàm render class màu cho MỤC CHA
   const getMainMenuStyle = (path) => {
     if (
       activeItem === path || 
-      (path === "/admin/dashboard" && activeItem.startsWith("/admin/dashboard/"))
+      (path === "/admin/dashboard" && activeItem.startsWith("/admin/dashboard/")) ||
+      (path === "/admin/products" && activeItem.startsWith("/admin/products/")) ||
+      (path === "/admin/settings-auth" && (activeItem.startsWith("/admin/settings/") || activeItem.startsWith("/admin/AuthZ/")))
     ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
     }
     return "text-gray-600 hover:text-slate-900 hover:bg-gray-50/70";
   };
 
-  // Hàm render class màu cho MỤC CON (Active ra màu xanh nhạt #e6f0ed)
+  // Hàm render class màu cho MỤC CON
   const getSubMenuStyle = (path) => {
     if (activeItem === path) {
       return "bg-[#e6f0ed] font-bold text-[#006c49]";
@@ -160,18 +156,18 @@ export default function Sidebar() {
               {/* Các menu con của Dashboard */}
               {openDropdowns.dashboard && !isCollapsed && (
                 <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-                  <button onClick={() => handleSubMenuClick("/admin/dashboard/products")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/products")}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/products" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                  <button onClick={() => handleSubMenuClick("/admin/dashboard/thongkesanpham")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/thongkesanpham" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                     <span>Thống kê sản phẩm</span>
                   </button>
 
-                  <button onClick={() => handleSubMenuClick("/admin/dashboard/orders")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/orders")}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/orders" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                  <button onClick={() => handleSubMenuClick("/admin/dashboard/thongkedonhang")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkedonhang")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/thongkedonhang" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                     <span>Thống kê đơn hàng</span>
                   </button>
 
-                  <button onClick={() => handleSubMenuClick("/admin/dashboard/customers")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/customers")}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/customers" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                  <button onClick={() => handleSubMenuClick("/admin/dashboard/thongkekhachhang")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkekhachhang")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/thongkekhachhang" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                     <span>Thống kê khách hàng</span>
                   </button>
                 </div>
@@ -181,7 +177,7 @@ export default function Sidebar() {
             {/* Danh sách sản phẩm */}
             <div>
               <button 
-                onClick={() => handleMainMenuClick("sanPham", "/admin/products")}
+                onClick={() => handleMainMenuClick("sanPham", "/admin/products/Danhsachsanpham")}
                 className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm transition group ${getMainMenuStyle("/admin/products")}`}
                 title={isCollapsed ? "Danh sách sản phẩm" : ""}
               >
@@ -196,8 +192,8 @@ export default function Sidebar() {
               
               {openDropdowns.sanPham && !isCollapsed && (
                 <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-                  <button onClick={() => handleSubMenuClick("/admin/products/all")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/products/all")}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/all" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                  <button onClick={() => handleSubMenuClick("/admin/products/Danhsachsanpham")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/products/Danhsachsanpham")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/Danhsachsanpham" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                     <span>Tất cả sản phẩm</span>
                   </button>
                 </div>
@@ -238,7 +234,7 @@ export default function Sidebar() {
                 title={isCollapsed ? "Kho Hàng" : ""}
               >
                 <div className="flex items-center gap-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/xl" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 transition-colors">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                   </svg>
                   {!isCollapsed && <span className="animate-fadeIn">Kho Hàng</span>}
@@ -321,8 +317,9 @@ export default function Sidebar() {
                       <span>Danh sách quản lý nội bộ</span>
                     </button>
 
-                    <button onClick={() => handleSubMenuClick("/admin/settings/role-list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/role-list")}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/settings/role-list" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    {/* ĐÃ SỬA ĐƯỜNG DẪN TẠI ĐÂY */}
+                    <button onClick={() => handleSubMenuClick("/admin/AuthZ/Danhsachvaitro")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/AuthZ/Danhsachvaitro")}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/AuthZ/Danhsachvaitro" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                       <span>Danh sách vai trò</span>
                     </button>
                   </div>
