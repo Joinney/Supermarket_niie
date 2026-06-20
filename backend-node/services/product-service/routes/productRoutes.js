@@ -1,6 +1,7 @@
 import express from 'express';
 import {
     getAllProducts,
+    getAllCategories,
     getProductById,
     getProductsByCategorySlug,
     searchProducts,
@@ -37,6 +38,19 @@ const router = express.Router();
  *         description: Danh sách sản phẩm tìm được
  */
 router.get('/search', searchProducts);
+
+/**
+ * @swagger
+ * /api/products/categories:
+ *   get:
+ *     summary: Lấy danh sách danh mục (Cấu trúc Cây Cha - Con)
+ *     tags:
+ *       - Products
+ *     responses:
+ *       200:
+ *         description: Danh sách danh mục đa cấp
+ */
+router.get('/categories', getAllCategories);
 
 /**
  * @swagger

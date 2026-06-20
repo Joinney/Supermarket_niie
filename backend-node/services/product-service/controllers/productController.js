@@ -46,7 +46,55 @@ export const getAllProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ BỔ SUNG THUỘC TÍNH JSONB
+// 1.5 LẤY TẤT CẢ DANH MỤC (DẠNG CÂY CHA - CON CHO SIDEBAR)
+// =========================================================================
+export const getAllCategories = async (req, res) => {
+    try {
+        const query = `SELECT * FROM danh_muc ORDER BY ma_danh_muc ASC;`;
+        const { rows } = await pool.query(query);
+
+        const categoryMap = {};
+        const tree = [];
+
+        // Chuyển đổi dữ liệu DB sang chuẩn format của Frontend Sidebar
+        rows.forEach(row => {
+            categoryMap[row.ma_danh_muc] = {
+                id: row.ma_danh_muc,
+                name: row.ten_danh_muc,
+                slug: row.duong_dan_seo,
+                i: row.bieu_tuong || "", 
+                hot: row.la_danh_muc_hot || false, 
+                parentId: row.ma_danh_muc_cha,
+                children: [] 
+            };
+        });
+
+        // Thuật toán nhét "Con" vào trong "Cha"
+        Object.values(categoryMap).forEach(cat => {
+            if (cat.parentId && categoryMap[cat.parentId]) {
+                categoryMap[cat.parentId].children.push(cat);
+            } else {
+                tree.push(cat);
+            }
+        });
+
+        // Dọn dẹp mảng children rỗng
+        const cleanTree = tree.map(cat => {
+            if (cat.children.length === 0) {
+                delete cat.children;
+            }
+            return cat;
+        });
+
+        res.status(200).json(cleanTree);
+    } catch (error) {
+        console.error("Lỗi API getAllCategories:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// =========================================================================
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT)
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
@@ -100,7 +148,7 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC (SLUG)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (SLUG) - TỰ ĐỘNG GOM SẢN PHẨM CON VÀO CHA
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
@@ -132,7 +180,8 @@ export const getProductsByCategorySlug = async (req, res) => {
         const params = [countryCode];
 
         if (slug !== 'tat-ca') {
-            query += ` AND dm.duong_dan_seo = $2`;
+            // Lấy cả sản phẩm của thư mục đó HOẶC của các thư mục con của nó
+            query += ` AND (dm.duong_dan_seo = $2 OR dm.ma_danh_muc_cha = (SELECT ma_danh_muc FROM danh_muc WHERE duong_dan_seo = $2 LIMIT 1))`;
             params.push(slug);
         }
 
