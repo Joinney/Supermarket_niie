@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useNavigate, Link, useLocation, useParams } from "react-router-dom";
 import { useCart } from "../context/CartContext"; 
 import { AuthContext } from "../context/AuthContext";
 import Logo from "../assets/Demi Mart.png";
@@ -14,46 +14,67 @@ import {
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const AUTH_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://authservice-sz4p.onrender.com';
 
-const getCleanImage = (url) => {
-  if (!url) return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200';
-  let cleanUrl = url.split('?')[0];
-  if (cleanUrl.includes('cloudinary.com')) {
-    return `${cleanUrl}?t=${Date.now()}`;
-  }
-  return cleanUrl;
-};
-
 export default function Header({ onOpenMenu }) {
   const { user: authUser, logout } = useContext(AuthContext);
   const { cart } = useCart(); 
   const navigate = useNavigate();
   const location = useLocation();
+  const { country_code } = useParams(); 
+  
   const [searchKeyword, setSearchKeyword] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const suggestRef = useRef(null);
   const suggestTimer = useRef(null);
   
-  const { currentLanguage, changeLanguage, languages, t } = useLanguage();
-  const { currentStore } = useStore(); // Lấy thông tin cửa hàng hiện tại
+  const { currentLanguage, changeLanguage, t } = useLanguage();
+  const { currentStore, setCurrencyStore, stores, formatPrice } = useStore(); 
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langRef = useRef(null);
   const [currentDate, setCurrentDate] = useState("Đang tải...");
 
-  // =====================================================================
-  // HÀM ĐỔI TIỀN TỆ TỰ ĐỘNG THEO STORE
-  // =====================================================================
   const formatCurrency = (amountVND) => {
-    if (!amountVND) return "0đ";
-    const storeCode = currentStore?.code?.toLowerCase() || 'vn';
-    
-    if (storeCode === 'us') {
-      return "$" + (amountVND / 25000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatPrice ? formatPrice(amountVND) : `${amountVND.toLocaleString()}đ`;
+  };
+
+  // 🛠️ ĐÃ CẬP NHẬT: Luôn đẩy Việt Nam (VN) lên vị trí đầu danh sách Dropdown dịch trang
+  const sortedStores = stores && stores.length > 0 
+    ? [...stores].sort((a, b) => (a.code?.toUpperCase() === 'VN' ? -1 : b.code?.toUpperCase() === 'VN' ? 1 : 0))
+    : [];
+
+  // =====================================================================
+  // 🛠️ ĐÃ SỬA DỨT ĐIỂM: Sửa lỗi map mã ngôn ngữ 'VI' thành mã quốc gia 'VN'
+  // =====================================================================
+  const handleLanguageAndStoreChange = (langCode) => {
+    changeLanguage(langCode);
+
+    // Chuẩn hóa chuẩn xác mã ngôn ngữ sang mã vùng quốc gia quản lý tiền tệ trong DB
+    let targetStoreCode = langCode.toUpperCase(); 
+    if (targetStoreCode === 'VI') targetStoreCode = 'VN'; // 🛠️ SỬA LỖI TẠI ĐÂY: Biến 'VI' thành 'VN'
+    if (targetStoreCode === 'EN') targetStoreCode = 'US';
+    if (targetStoreCode === 'ZH') targetStoreCode = 'CN';
+
+    // Tìm kiếm cấu hình tỷ giá (Bọc toàn bộ toUpperCase để bảo đảm độ khớp)
+    if (stores && stores.length > 0) {
+      const matchedStore = stores.find(s => s.code?.toUpperCase() === targetStoreCode.toUpperCase());
+      if (matchedStore) {
+        setCurrencyStore(matchedStore); // Cập nhật tỷ giá và biểu tượng tiền ngay lập tức
+      }
     }
-    if (storeCode === 'cn') {
-      return "¥" + (amountVND / 3500).toLocaleString('zh-CN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+    // Giữ nguyên vùng cửa hàng hiện tại trên thanh URL, chỉ dịch chữ và đổi tỷ giá tiền
+    const activeStoreCode = currentStore?.code?.toLowerCase() || 'vn';
+    const currentPath = location.pathname;
+    const pathSegments = currentPath.split('/');
+
+    if (country_code && pathSegments[1] === country_code) {
+      pathSegments[1] = activeStoreCode;
+      navigate(pathSegments.join('/'));
+    } else {
+      navigate(`/${activeStoreCode}${currentPath === '/' ? '' : currentPath}`);
     }
-    return amountVND.toLocaleString('vi-VN') + "đ";
+
+    setIsLangOpen(false);
   };
 
   const handleSearch = () => {
@@ -63,7 +84,6 @@ export default function Header({ onOpenMenu }) {
     }
   };
   
-  // --- LOGIC BANNER & ĐẾM NGƯỢC ---
   const [showBanner, setShowBanner] = useState(true);
   const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
 
@@ -89,8 +109,6 @@ export default function Header({ onOpenMenu }) {
   };
 
   const timeChunks = formatTime(timeLeft);
-
-  // --- TỰ ĐỘNG ĐO CHIỀU CAO HEADER ---
   const headerRef = useRef(null);
 
   useEffect(() => {
@@ -105,12 +123,9 @@ export default function Header({ onOpenMenu }) {
     return () => window.removeEventListener("resize", updateHeaderHeight);
   }, [showBanner]);
 
-  // --- 1. ĐỒNG BỘ USER & AVATAR TỨC THÌ ---
   const [displayUser, setDisplayUser] = useState(() => {
     const saved = localStorage.getItem('user');
-    try {
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) { return null; }
+    try { return saved ? JSON.parse(saved) : null; } catch (e) { return null; }
   });
 
   useEffect(() => {
@@ -123,7 +138,6 @@ export default function Header({ onOpenMenu }) {
     else setDisplayUser(null);
   }, [authUser]);
 
-  // --- 2. LOGIC NGÀY THÁNG & ĐÓNG DROPDOWN OUTSIDE ---
   useEffect(() => {
     const options = { weekday: 'long', day: 'numeric', month: 'numeric' };
     const dateStr = new Date().toLocaleDateString('vi-VN', options);
@@ -148,7 +162,6 @@ export default function Header({ onOpenMenu }) {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  // --- 3. HÀM XỬ LÝ AVATAR ĐỘNG ---
   const getAvatarSrc = (userObj) => {
     if (!userObj) return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
     const url = userObj.avatar_url || userObj.avatar;
@@ -177,12 +190,7 @@ export default function Header({ onOpenMenu }) {
   const isAuthPage = ["/login", "/signup", "/forgot-password"].includes(location.pathname);
 
   return (
-    <header 
-      ref={headerRef}
-      className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
-    >
-      
-      {/* --- BANNER THÔNG BÁO --- */}
+    <header ref={headerRef} className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300">
       {showBanner && (
         <div className="w-full bg-[#fea619] text-slate-900 h-10 md:h-11 flex items-center justify-between px-4 relative overflow-hidden text-xs md:text-sm font-bold tracking-wide shadow-sm">
           <button onClick={() => setShowBanner(false)} className="text-slate-800 hover:text-black transition-colors p-1 z-10">
@@ -205,7 +213,6 @@ export default function Header({ onOpenMenu }) {
         </div>
       )}
 
-      {/* --- TẦNG 1: LOGO, SEARCH BAR, USER ACTIONS --- */}
       <div className="h-[60px] md:h-[72px] px-3 md:px-10 flex items-center justify-between gap-2 border-b border-slate-50">
         <div className="flex items-center gap-1 md:gap-4 flex-shrink-0 min-w-[130px] md:min-w-[170px]">
           <button onClick={onOpenMenu} className="lg:hidden p-1.5 text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
@@ -230,7 +237,6 @@ export default function Header({ onOpenMenu }) {
                 if (v.trim()) {
                   suggestTimer.current = setTimeout(async () => {
                     try {
-                      // Truyền thêm country hiện tại để API lọc đúng giá theo Store
                       const currentCountryCode = currentStore?.code || 'vn';
                       const res = await productApi.get(`/products/search?keyword=${encodeURIComponent(v)}&limit=10&country=${currentCountryCode}`);
                       setSuggestions(res.data || []);
@@ -269,12 +275,8 @@ export default function Header({ onOpenMenu }) {
               <Search size={16} strokeWidth={3} />
             </button>
 
-            {/* BẢNG GỢI Ý ĐÃ ĐƯỢC THÊM THANH CUỘN VÀ FORMAT TIỀN */}
             {isSuggestOpen && suggestions.length > 0 && (
-              <div 
-                ref={suggestRef} 
-                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 max-h-[320px] overflow-y-auto overscroll-contain scrollbar-hide"
-              >
+              <div ref={suggestRef} className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 max-h-[320px] overflow-y-auto overscroll-contain scrollbar-hide">
                 {suggestions.map(s => (
                   <button 
                     key={s.ma_san_pham} 
@@ -309,16 +311,25 @@ export default function Header({ onOpenMenu }) {
             
             {isLangOpen && (
               <div className="absolute right-0 mt-4 w-48 bg-white border border-slate-100 rounded-xl shadow-2xl p-1 animate-fadeIn border-t-4 border-t-[#006c49]">
-                {languages.map((l) => (
-                  <button 
-                    key={l.code} 
-                    onClick={() => { changeLanguage(l.code); setIsLangOpen(false); }} 
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentLanguage.code === l.code ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <div className="flex items-center gap-2"><span>{l.flag}</span>{l.name}</div>
-                    {currentLanguage.code === l.code && <Check size={14} strokeWidth={3} />}
-                  </button>
-                ))}
+                {sortedStores.map((store) => {
+                  let langCode = store.code.toLowerCase();
+                  if (langCode === 'us') langCode = 'en';
+                  if (langCode === 'cn') langCode = 'zh';
+
+                  return (
+                    <button 
+                      key={store.code} 
+                      onClick={() => handleLanguageAndStoreChange(langCode)} 
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentLanguage.code === langCode ? 'bg-[#e6f0ed] text-[#006c49]' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{store.flag}</span>
+                        {store.name}
+                      </div>
+                      {currentLanguage.code === langCode && <Check size={14} strokeWidth={3} />}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -368,7 +379,6 @@ export default function Header({ onOpenMenu }) {
         </div>
       </div>
 
-      {/* --- TẦNG 2: DANH MỤC NAV, VỊ TRÍ, NGÀY THÁNG ĐỘNG --- */}
       <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto scrollbar-hide">
         <nav className="flex items-center gap-5 md:gap-8 whitespace-nowrap min-w-max">
           {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => (
@@ -393,13 +403,6 @@ export default function Header({ onOpenMenu }) {
           </div>
         </div>
       </div>
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fadeIn { animation: fadeIn 0.2s ease-out forwards; }
-      `}} />
     </header>
   );
 }

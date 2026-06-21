@@ -82,9 +82,16 @@ const AppRoutes = () => (
   <Routes>
     {/* ================= ROUTES CHO KHÁCH HÀNG ================= */}
     <Route element={<MainLayout />}>
+      {/* Hỗ trợ cả trang chủ không có và có tiền tố quốc gia (/vn, /us, /cn) */}
       <Route path="/" element={<Home />} />
+      <Route path="/:country_code" element={<Home />} />
+
+      {/* Hỗ trợ các trang danh mục chuẩn quốc tế có đính kèm mã quốc gia */}
       <Route path="/category/:slug" element={<CategoryPage />} />
       <Route path="/category/:parentSlug/:slug" element={<CategoryPage />} />
+      <Route path="/:country_code/category/:slug" element={<CategoryPage />} />
+      <Route path="/:country_code/category/:parentSlug/:slug" element={<CategoryPage />} />
+
       <Route path="/search" element={<SearchPage />} />
       <Route path="/:country_code/product/:category_slug/:id" element={<ProductDetail />} />
       <Route path="/cart" element={<Cart />} />
@@ -119,15 +126,15 @@ const AppRoutes = () => (
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
       </Route>
 
-      {/* 🌟 ĐÃ ĐỔI: Toàn bộ mục thiết lập tài khoản & phân quyền gom hết vào cụm AuthZ */}
+      {/* Toàn bộ mục thiết lập tài khoản & phân quyền gom hết vào cụm AuthZ */}
       <Route path="AuthZ">
         {/* URL: /admin/AuthZ -> tự nhảy vào trang danh sách quản lý nội bộ trước */}
         <Route index element={<Navigate to="InternalList" replace />} />
         
-        {/* URL thực tế: http://localhost:5173/admin/AuthZ/InternalList */}
+        {/* URL thực tế: /admin/AuthZ/InternalList */}
         <Route path="InternalList" element={<Danhsachquanlynoibo />} />
         
-        {/* URL thực tế: http://localhost:5173/admin/AuthZ/Danhsachvaitro */}
+        {/* URL thực tế: /admin/AuthZ/Danhsachvaitro */}
         <Route path="Danhsachvaitro" element={<Danhsachvaitro />} />
       </Route>
 

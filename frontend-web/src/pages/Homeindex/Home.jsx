@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { 
   ChevronRight, ArrowRight, Star, QrCode, Zap, AlertCircle,
   Flame, Timer, Trophy, Sparkles, TrendingUp, ShoppingBag
@@ -14,6 +14,7 @@ import QuangCao from './quangcao';
 export default function Home() {
   const { t } = useLanguage(); 
   const { currentStore } = useStore(); 
+  const { country_code } = useParams(); // Lấy mã quốc gia từ URL params
   
   const [apiProducts, setApiProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,14 +51,17 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // LOGIC FETCH SẢN PHẨM GỐC CỦA BẠN (GIỮ NGUYÊN)
+  // ĐỒNG BỘ ĐỔI DATA THEO URL HOẶC STORE CONTEXT
   useEffect(() => {
     window.scrollTo(0, 0);
 
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await productApi.get(`/products?limit=12&country=${currentStore.code}`);
+        // Ưu tiên lấy country từ URL parameter, nếu không có mới dùng code của Context
+        const targetCountry = country_code || currentStore?.code || 'vn';
+        
+        const response = await productApi.get(`/products?limit=12&country=${targetCountry}`);
         setApiProducts(response.data);
         setError(null);
       } catch (err) {
@@ -69,9 +73,9 @@ export default function Home() {
     };
 
     fetchProducts();
-  }, [currentStore.code]);
+  }, [country_code, currentStore?.code]); // Chạy lại khi URL country_code hoặc Store thay đổi
 
-  // LOGIC AUTO-SCROLL CAROUSEL GỐC CỦA BẠN (GIỮ NGUYÊN)
+  // LOGIC AUTO-SCROLL CAROUSEL GỐC (GIỮ NGUYÊN)
   useEffect(() => {
     const container = favRef.current;
     if (!container) return;
@@ -371,7 +375,7 @@ export default function Home() {
                     #{index + 1}
                   </div>
                   
-                  {/* Card Sản Phẩm Gốc */}
+                  {/* Huy hiệu Card Sản Phẩm Gốc */}
                   <div className="bg-white rounded-[28px] p-1 border border-slate-100 shadow-sm overflow-hidden">
                     <ProductCard p={p} />
                   </div>

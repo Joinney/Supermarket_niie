@@ -1,32 +1,60 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
-export const StoreContext = createContext();
+const StoreContext = createContext();
 
 export const StoreProvider = ({ children }) => {
-  // Định nghĩa danh sách cửa hàng kèm mã quốc gia (code) để gửi xuống API
   const stores = [
-    { name: "Demi Việt Nam", code: "vn" },
-    { name: "Demi US (Mỹ)", code: "us" },
-    { name: "Demi China (Trung Quốc)", code: "cn" }
+    { code: 'VN', name: 'Việt Nam', currency: 'VND', symbol: '₫', locale: 'vi-VN', rate: 1 },
+    { code: 'US', name: 'United States', currency: 'USD', symbol: '$', locale: 'en-US', rate: 0.00004 }, 
+    { code: 'CN', name: 'China', currency: 'CNY', symbol: '¥', locale: 'zh-CN', rate: 0.00029 }
   ];
 
-  // Khôi phục cửa hàng đã chọn từ LocalStorage (để F5 không bị mất)
-  const [currentStore, setCurrentStore] = useState(() => {
-    const saved = localStorage.getItem('demi_current_store');
-    return saved ? JSON.parse(saved) : stores[0];
-  });
+  const [currentStore, setCurrentStore] = useState(stores[0]);
+  const [currencyStore, setCurrencyStore] = useState(stores[0]);
 
-  // Lưu lại mỗi khi người dùng đổi cửa hàng
+  // Đồng bộ lại Store và Tiền tệ theo URL khi người dùng F5
   useEffect(() => {
-    localStorage.setItem('demi_current_store', JSON.stringify(currentStore));
-  }, [currentStore]);
+    const pathSegments = window.location.pathname.split('/');
+    const urlCountry = pathSegments[1]?.toUpperCase(); // Ép về viết hoa chuẩn (VN, US, CN)
+    
+    const matchedStore = stores.find(s => s.code === urlCountry);
+    if (matchedStore) {
+      setCurrentStore(matchedStore);
+      setCurrencyStore(matchedStore); 
+    }
+  }, []);
+
+  // Hàm quy đổi giá tiền ăn theo currencyStore
+  const formatPrice = (priceInVnd) => {
+    if (!priceInVnd && priceInVnd !== 0) return '';
+    
+    const convertedPrice = priceInVnd * currencyStore.rate;
+
+    return new Intl.NumberFormat(currencyStore.locale, {
+      style: 'currency',
+      currency: currencyStore.currency,
+      minimumFractionDigits: currencyStore.currency === 'VND' ? 0 : 2
+    }).format(convertedPrice);
+  };
 
   return (
-    <StoreContext.Provider value={{ currentStore, setCurrentStore, stores }}>
+    <StoreContext.Provider value={{ 
+      currentStore, 
+      setCurrentStore, 
+      currencyStore, 
+      // 💡 Bọc thêm lớp .toUpperCase() khi setState tiền tệ để bảo vệ dữ liệu, chấp mọi loại chữ hoa/thường truyền vào từ Header/Sidebar
+      setCurrencyStore: (storeObj) => {
+        if (storeObj?.code) {
+          const cleanStore = stores.find(s => s.code === storeObj.code.toUpperCase());
+          if (cleanStore) setCurrencyStore(cleanStore);
+        }
+      }, 
+      stores, 
+      formatPrice 
+    }}>
       {children}
     </StoreContext.Provider>
   );
 };
 
-// Custom hook để gọi nhanh
 export const useStore = () => useContext(StoreContext);

@@ -7,11 +7,11 @@ import { useStore } from '../../context/StoreContext';
 
 /**
  * --- TRANG DANH MỤC NÂNG CẤP HOÀN CHỈNH ---
- * Tích hợp API Cây Danh Mục để render thanh danh mục con tự động
+ * Tích hợp API Cây Danh Mục để render thanh danh mục con tự động và đồng bộ đa quốc gia
  */
 export default function CategoryPage() {
-  // Lấy cả parentSlug (danh mục cha) và slug (danh mục con) từ URL
-  const { parentSlug, slug } = useParams();
+  // Lấy thêm country_code từ URL cấu hình bên App.jsx
+  const { country_code, parentSlug, slug } = useParams();
   const navigate = useNavigate();
   const { currentStore } = useStore();
   
@@ -36,22 +36,24 @@ export default function CategoryPage() {
 
   const formatSlugName = (s) => s === 'tat-ca' ? 'Tất cả sản phẩm' : s?.replace(/-/g, ' ') || '';
 
-  // 1. Reset trang khi đổi filter
+  // 1. Reset trang khi đổi bất kỳ bộ lọc nào
   useEffect(() => {
     setCurrentPage(1);
-  }, [slug, parentSlug, selectedSort, selectedPrice, selectedOrigin, activeSubCategory, shippingMethod]);
+  }, [slug, parentSlug, country_code, selectedSort, selectedPrice, selectedOrigin, activeSubCategory, shippingMethod]);
 
   // 2. GỌI API LẤY DANH MỤC CON THEO DANH MỤC CHA
   useEffect(() => {
     const fetchSubCategories = async () => {
       try {
-        const targetParentSlug = parentSlug || slug; // Nếu bấm ở ngoài Sidebar vào, nó là slug. Nếu bấm từ menu con, nó là parentSlug
-        if (targetParentSlug === 'tat-ca') {
+        const targetParentSlug = parentSlug || slug; 
+        if (targetParentSlug === 'tat-ca' || !targetParentSlug) {
             setSubCategories([]);
             return;
         }
 
-        const response = await productApi.get('/products/categories');
+        const targetCountry = country_code || currentStore?.code || 'vn';
+        // Đồng bộ gửi thêm mã quốc gia khi lấy cây danh mục
+        const response = await productApi.get(`/products/categories?country=${targetCountry}`);
         const allCategories = response.data;
         
         // Tìm đúng danh mục cha đang được chọn
@@ -67,9 +69,9 @@ export default function CategoryPage() {
       }
     };
     fetchSubCategories();
-  }, [parentSlug, slug]);
+  }, [parentSlug, slug, country_code, currentStore?.code]);
 
-  // 3. ĐỒNG BỘ: Chọn sẵn danh mục con nếu URL có chứa
+  // 3. ĐỒNG BỘ: Chọn sẵn danh mục con nếu URL có chứa cả parentSlug và slug
   useEffect(() => {
     if (parentSlug && slug) {
       setActiveSubCategory(slug);
@@ -78,15 +80,14 @@ export default function CategoryPage() {
     }
   }, [parentSlug, slug]);
 
-  // 4. CALL API LẤY DỮ LIỆU SẢN PHẨM (Dùng slug cuối cùng)
+  // 4. CALL API LẤY DỮ LIỆU SẢN PHẨM (Ưu tiên country_code từ URL)
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const fetchCategoryProducts = async () => {
       try {
         setLoading(true);
-        const currentCountry = currentStore?.code || 'vn';
-        
-        // Gửi cái slug cuối cùng (hoặc là cha, hoặc là con) lên API
+        // Ưu tiên country_code từ URL, nếu không có mới lấy từ Context Store
+        const currentCountry = country_code || currentStore?.code || 'vn';
         const targetSlug = slug || 'tat-ca'; 
         
         const response = await productApi.get(`/products/category/${targetSlug}`, {
@@ -120,7 +121,7 @@ export default function CategoryPage() {
     };
 
     fetchCategoryProducts();
-  }, [slug, parentSlug, currentStore?.code, selectedSort, selectedPrice, selectedOrigin, currentPage]);
+  }, [slug, parentSlug, country_code, currentStore?.code, selectedSort, selectedPrice, selectedOrigin, currentPage]);
 
   const handleScroll = (direction) => {
     if (sliderRef.current) {
@@ -136,16 +137,18 @@ export default function CategoryPage() {
     }
   };
 
-  // Hàm chuyển hướng khi click vào mục con
+  // Hàm chuyển hướng khi click vào mục con (Giữ nguyên cấu trúc URL quốc gia)
   const handleSubCategoryClick = (subSlug) => {
-      const mainSlug = parentSlug || slug;
-      if (activeSubCategory === subSlug) {
-          // Bỏ chọn -> Quay về danh mục cha
-          navigate(`/category/${mainSlug}`);
-      } else {
-          // Chọn mục con mới
-          navigate(`/category/${mainSlug}/${subSlug}`);
-      }
+    const mainSlug = parentSlug || slug;
+    const prefix = country_code ? `/${country_code}` : '';
+
+    if (activeSubCategory === subSlug) {
+      // Bỏ chọn -> Quay về danh mục cha
+      navigate(`${prefix}/category/${mainSlug}`);
+    } else {
+      // Chọn mục con mới
+      navigate(`${prefix}/category/${mainSlug}/${subSlug}`);
+    }
   };
 
   return (
@@ -153,7 +156,7 @@ export default function CategoryPage() {
       
       {/* 1. BREADCRUMBS */}
       <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-4 uppercase tracking-wider">
-        <Link to="/" className="hover:text-[#006c49] flex items-center gap-1 transition-colors">
+        <Link to={country_code ? `/${country_code}` : "/"} className="hover:text-[#006c49] flex items-center gap-1 transition-colors">
           <Home size={14} /> Trang chủ
         </Link>
         <ChevronRight size={14} />
@@ -162,7 +165,7 @@ export default function CategoryPage() {
         <span className="text-[#006c49] font-semibold">{categoryName || formatSlugName(slug)}</span>
       </div>
 
-      {/* 2. THẺ DANH MỤC CON */}
+      {/* 2. THỂ DANH MỤC CON */}
       {subCategories.length > 0 && (
         <div className="relative w-full mb-6 group/subnav">
           <button 

@@ -34,18 +34,25 @@ const swaggerOptions = {
         },
         servers: [{ url: `http://localhost:${PORT}` }],
     },
-    // 🔥 ĐÃ SỬA: Nạp trực tiếp bằng biến thay vì quét chuỗi string pattern để tránh lỗi môi trường
     apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js'], 
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
 // --- 5. Cấu hình CORS ---
-const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').map(url => url.trim());
+// 🛠️ ĐÃ TỐI ƯU: Thêm trực tiếp địa chỉ local vào mảng fallback phòng hờ file .env chưa nhận diện kịp
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    ...((process.env.FRONTEND_URL || '').split(',').map(url => url.trim()).filter(Boolean))
+];
+
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+        // Chấp nhận request không có origin (như Postman/Mobile app) hoặc nằm trong danh sách được phép
+        if (!origin || allowedOrigins.includes(origin) || !process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
+            console.error(`[CORS Blocked] Origin từ chối: ${origin}`);
             callback(new Error('CORS không cho phép truy cập Product Service!'));
         }
     },
@@ -65,7 +72,7 @@ app.use((req, res, next) => {
 // --- 7. Đăng ký Swagger UI ---
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// 🛠️ BỔ SUNG: Endpoint phụ để phục vụ kiểm tra JSON thô nếu giao diện UI gặp trục trặc thụt lề JSDoc
+// BỔ SUNG: Endpoint phụ để phục vụ kiểm tra JSON thô nếu giao diện UI gặp trục trặc thụt lề JSDoc
 app.get('/api-docs-json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.status(200).send(swaggerDocs);
