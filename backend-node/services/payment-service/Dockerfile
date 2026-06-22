@@ -1,27 +1,28 @@
 FROM ruby:3.2-alpine
 
-# Cài đặt các thư viện hệ thống cần thiết
+# Cài đặt các thư viện hệ thống cần thiết để biên dịch gem 'pg'
 RUN apk add --no-cache build-base postgresql-dev tzdata nodejs
 
 WORKDIR /app
 
-# Thiết lập biến môi trường để bundle cài vào nơi hệ thống dễ tìm thấy
 ENV BUNDLE_PATH /usr/local/bundle
 
-COPY Gemfile Gemfile.lock ./
-RUN gem install bundler && bundle install
+# Copy toàn bộ file cấu hình cài đặt vào trước
+COPY Gemfile* ./
 
+# 🎯 ĐOẠN CRITICAL: Xóa sạch file lock cũ (nếu có) và bắt buộc bundler sinh lại file lock chuẩn Linux Musl
+RUN gem install bundler && \
+    rm -f Gemfile.lock && \
+    bundle install
+
+# Copy toàn bộ source code còn lại vào container
 COPY . .
 
-# XÓA DÒNG RUN chmod +x bin/* NÀY ĐI
-# Nếu bạn không có thư mục bin, dòng này sẽ gây lỗi
+# Xóa thêm một lần nữa ở tầng source code vừa copy để đảm bảo không bị ghi đè file lock cũ từ Windows vào
+RUN rm -f Gemfile.lock
 
-# Cấu hình lại PATH
 ENV PATH="/usr/local/bundle/bin:$PATH"
 
 EXPOSE 5004
 
-# Chạy server
-# Nếu là Sinatra, thông thường sẽ chạy bằng "bundle exec rackup" hoặc file chính
-# Tôi để lệnh này mặc định, nếu không chạy hãy kiểm tra file chạy chính của bạn
 CMD ["bundle", "exec", "ruby", "app.rb", "-o", "0.0.0.0", "-p", "5004"]

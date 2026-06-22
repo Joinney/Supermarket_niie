@@ -1,8 +1,15 @@
 source 'https://rubygems.org'
 
 gem 'sinatra'
-gem 'sinatra-contrib'
-gem 'puma'
-gem 'rackup'
+gem 'thin'
+gem 'pg'
+gem 'sequel'
+gem 'dotenv'
 gem 'json'
-gem 'rack-cors' # Cần thiết để React gọi được API
+
+# 🌟 Khắc phục lỗi Sinatra khởi động (Thiếu máy chủ web)
+gem 'rackup'
+gem 'puma'
+
+# 🌟 Định nghĩa tài liệu cấu trúc API cho hệ thống
+gem 'swagger-blocks'

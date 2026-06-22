@@ -52,13 +52,13 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 1. TỰ ĐỘNG LẤY DANH SÁCH TỈNH/THÀNH PHỐ
+  // 1. TỰ ĐỘNG LẤY DANH SÁCH TỈNH/THÀNH PHỐ TỪ ORDER SERVICE (PORT 5005)
   useEffect(() => {
     if (isFormOpen) {
       const fetchProvinces = async () => {
         try {
           setLoadingGeography(true);
-          const res = await axios.get('http://localhost:5001/api/addresses/locations/provinces');
+          const res = await axios.get('http://localhost:5005/api/orders/locations/provinces');
           if (res.data && res.data.success) {
             setProvinces(res.data.data || []);
           }
@@ -74,7 +74,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
   if (!isOpen) return null;
 
-  // --- XỬ LÝ CHỌN VÀ FETCH DỮ LIỆU LỒNG NHAU ---
+  // --- XỬ LÝ CHỌN VÀ FETCH DỮ LIỆU LỒNG NHAU (PORT 5005) ---
   const selectProvince = async (id, name) => {
     setDistricts([]);
     setWards([]);
@@ -92,7 +92,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
     setLoadingGeography(true);
     try {
-      const res = await axios.get(`http://localhost:5001/api/addresses/locations/districts?province_id=${id}`);
+      const res = await axios.get(`http://localhost:5005/api/orders/locations/districts?province_id=${id}`);
       if (res.data && res.data.success) {
         setDistricts(res.data.data || []);
       }
@@ -117,7 +117,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
     setLoadingGeography(true);
     try {
-      const res = await axios.get(`http://localhost:5001/api/addresses/locations/wards?district_id=${id}`);
+      const res = await axios.get(`http://localhost:5005/api/orders/locations/wards?district_id=${id}`);
       if (res.data && res.data.success) {
         setWards(res.data.data || []);
       }
@@ -140,18 +140,18 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
   // --- FILTER DỮ LIỆU THEO TỪ KHÓA ĐANG GÕ ---
   const filteredProvinces = provinces.filter(p =>
-    p.ProvinceName.toLowerCase().includes(searchTerm.toLowerCase())
+    p.ProvinceName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredDistricts = districts.filter(d =>
-    d.DistrictName.toLowerCase().includes(searchTerm.toLowerCase())
+    d.DistrictName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredWards = wards.filter(w =>
-    w.WardName.toLowerCase().includes(searchTerm.toLowerCase())
+    w.WardName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Kích hoạt sửa địa chỉ
+  // Kích hoạt sửa địa chỉ và bốc đệm danh mục tương ứng
   const handleEditClick = async (e, addr) => {
     e.stopPropagation(); 
     setEditingAddressId(addr.address_id);
@@ -173,11 +173,11 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
     if (addr.province_id) {
       try {
         setLoadingGeography(true);
-        const distRes = await axios.get(`http://localhost:5001/api/addresses/locations/districts?province_id=${addr.province_id}`);
+        const distRes = await axios.get(`http://localhost:5005/api/orders/locations/districts?province_id=${addr.province_id}`);
         if (distRes.data.success) setDistricts(distRes.data.data || []);
         
         if (addr.district_id) {
-          const wardRes = await axios.get(`http://localhost:5001/api/addresses/locations/wards?district_id=${addr.district_id}`);
+          const wardRes = await axios.get(`http://localhost:5005/api/orders/locations/wards?district_id=${addr.district_id}`);
           if (wardRes.data.success) setWards(wardRes.data.data || []);
         }
       } catch (err) {
@@ -265,7 +265,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6 relative shadow-2xl border border-white/20">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 relative shadow-2xl border border-white/20 border-l-4 border-l-[#006c49]">
         
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors">
           <X size={24} />
@@ -275,12 +275,12 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
           <>
             <h2 className="font-black text-xl mb-6 text-[#006c49]">Chọn địa chỉ nhận hàng</h2>
             <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-              {currentAddresses.length > 0 ? (
+              {currentAddresses && currentAddresses.length > 0 ? (
                 currentAddresses.map((addr) => (
                   <div 
                     key={addr.address_id} 
                     onClick={() => { onSelect(addr); onClose(); }}
-                    className={`p-4 border-2 rounded-xl cursor-pointer transition-all relative group ${
+                    className={`p-4 border-2 rounded-xl cursor-pointer transition-all relative group text-left ${
                       selectedAddressId === addr.address_id ? 'border-[#006c49] bg-emerald-50/50 shadow-sm' : 'border-gray-100 hover:border-gray-300 hover:bg-slate-50'
                     }`}
                   >
@@ -310,10 +310,10 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
           <>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-black text-xl text-[#006c49]">{editingAddressId ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ giao hàng mới'}</h2>
-              {loadingGeography && <div className="flex items-center gap-1 text-xs text-amber-600 font-bold"><Loader2 className="animate-spin" size={14} /> Đang nạp dữ liệu...</div>}
+              {loadingGeography && <div className="flex items-center gap-1 text-xs text-amber-600 font-bold"><Loader2 className="animate-spin" size={14} /> Đang nạp địa chính...</div>}
             </div>
             
-            <form onSubmit={handleSubmitForm} className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            <form onSubmit={handleSubmitForm} className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 text-left">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Tên người nhận</label>
@@ -332,7 +332,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                   onClick={() => { setOpenDropdown(openDropdown === 'province' ? null : 'province'); setSearchTerm(''); }}
                   className="w-full border p-2.5 rounded-xl text-sm flex justify-between items-center bg-white cursor-pointer hover:border-gray-400 focus:border-[#006c49]"
                 >
-                  <span className={formData.province_name ? 'text-black' : 'text-gray-400'}>
+                  <span className={formData.province_name ? 'text-black font-semibold' : 'text-gray-400'}>
                     {formData.province_name || '-- Gõ để tìm kiếm Tỉnh / Thành --'}
                   </span>
                   <ChevronDown size={16} className="text-gray-500" />
@@ -357,7 +357,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                           <div 
                             key={p.ProvinceID}
                             onClick={() => selectProvince(p.ProvinceID, p.ProvinceName)}
-                            className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-medium cursor-pointer transition-colors"
+                            className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left"
                           >
                             {p.ProvinceName}
                           </div>
@@ -371,19 +371,19 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* 🎯 SEARCHABLE DROPDOWN 2: QUẬN / HUYỆN */}
+                /* 🎯 SEARCHABLE DROPDOWN 2: QUẬN / HUYỆN */
                 <div className="relative" ref={districtRef}>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Quận / Huyện</label>
                   <div 
                     onClick={() => {
-                      if (!formData.province_id) return;
+                      if (!formData.province_id) return alert("Vui lòng lựa chọn Tỉnh/Thành phố trước!");
                       setOpenDropdown(openDropdown === 'district' ? null : 'district');
                       setSearchTerm('');
                     }}
                     className={`w-full border p-2.5 rounded-xl text-sm flex justify-between items-center bg-white cursor-pointer ${!formData.province_id ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:border-gray-400'}`}
                   >
-                    <span className={formData.district_name ? 'text-black' : 'text-gray-400'}>
-                      {formData.district_name || '-- Chọn Quận/Huyện --'}
+                    <span className={formData.district_name ? 'text-black font-semibold' : 'text-gray-400'}>
+                      {formData.district_name || '-- Chọn Huyện --'}
                     </span>
                     <ChevronDown size={16} className="text-gray-500" />
                   </div>
@@ -407,7 +407,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                             <div 
                               key={d.DistrictID}
                               onClick={() => selectDistrict(d.DistrictID, d.DistrictName)}
-                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-medium cursor-pointer transition-colors"
+                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left"
                             >
                               {d.DistrictName}
                             </div>
@@ -420,19 +420,19 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                   )}
                 </div>
 
-                {/* 🎯 SEARCHABLE DROPDOWN 3: PHƯỜNG / XÃ */}
+                /* 🎯 SEARCHABLE DROPDOWN 3: PHƯỜNG / XÃ */
                 <div className="relative" ref={wardRef}>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Phường / Xã</label>
                   <div 
                     onClick={() => {
-                      if (!formData.district_id) return;
+                      if (!formData.district_id) return alert("Vui lòng lựa chọn Quận/Huyện trước!");
                       setOpenDropdown(openDropdown === 'ward' ? null : 'ward');
                       setSearchTerm('');
                     }}
                     className={`w-full border p-2.5 rounded-xl text-sm flex justify-between items-center bg-white cursor-pointer ${!formData.district_id ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:border-gray-400'}`}
                   >
-                    <span className={formData.ward_name ? 'text-black' : 'text-gray-400'}>
-                      {formData.ward_name || '-- Chọn Phường/Xã --'}
+                    <span className={formData.ward_name ? 'text-black font-semibold' : 'text-gray-400'}>
+                      {formData.ward_name || '-- Chọn Phường --'}
                     </span>
                     <ChevronDown size={16} className="text-gray-500" />
                   </div>
@@ -456,7 +456,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                             <div 
                               key={w.WardCode}
                               onClick={() => selectWard(w.WardCode, w.WardName)}
-                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-medium cursor-pointer transition-colors"
+                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left"
                             >
                               {w.WardName}
                             </div>

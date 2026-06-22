@@ -1,4 +1,6 @@
 import express from 'express';
+import { getInternalVariants } from '../controllers/productController.js';
+
 import {
     getAllProducts,
     getAllCategories,
@@ -277,4 +279,5 @@ router.post('/', createProduct);
  */
 router.get('/:id', getProductById);
 
+router.post('/products/internal/variants', getInternalVariants);
 export default router;

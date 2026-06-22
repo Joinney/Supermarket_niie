@@ -1,17 +1,18 @@
 require 'sequel'
+require 'pg'
 
-# Đọc URL kết nối từ biến môi trường (đã cấu hình trong docker-compose)
-# Định dạng: postgres://user:password@hostname:port/database_name
-DB_URL = ENV['DATABASE_URL'] || 'postgres://supermarket_db_exvs_user:u0tGq1rZG5nb84Ek2siWlqzIDb9W8qO7@db:5432/supermarket_db_exvs'
+# Kết nối trực tiếp đến AWS Cloud Pooler của Supabase thông qua biến môi trường
+DB = Sequel.connect(
+  adapter:  'postgres',
+  host:     ENV['DB_HOST'] || 'aws-1-ap-southeast-1.pooler.supabase.com',
+  port:     ENV['DB_PORT'] || 5432,
+  user:     ENV['DB_USER'] || 'postgres.aiesurvlmtrrgdiwxtma',
+  password: ENV['DB_PASSWORD'] || 'demimart@2026',
+  database: ENV['DB_NAME'] || 'demi_payment_db'
+)
 
-begin
-  # Thiết lập kết nối
-  DB = Sequel.connect(DB_URL)
-  
-  # Kiểm tra kết nối
-  DB.test_connection
-  puts "Kết nối Database thành công!"
-rescue => e
-  puts "Lỗi kết nối Database: #{e.message}"
-  exit
+def db_connect
+  DB
 end
+# 🌟 Tự động nạp Model giao dịch thanh toán
+require_relative '../models/payment_transaction'

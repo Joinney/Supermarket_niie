@@ -469,7 +469,7 @@ export const schedulePeriodicDescriptionGeneration = () => {
 };
 
 // =========================================================================
-// 10. 🛠️ ĐÃ BỔ SUNG: LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
+// 10. LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
 // =========================================================================
 export const getAllCountries = async (req, res) => {
     try {
@@ -495,7 +495,7 @@ export const getAllCountries = async (req, res) => {
 };
 
 // =========================================================================
-// 11. BỔ SUNG: TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
+// 11. TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
 // =========================================================================
 export const searchCategories = async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -511,7 +511,7 @@ export const searchCategories = async (req, res) => {
             
             UNION ALL
             
-            SELECT ma_dm_con AS ma_danh_muc, ten_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
+            SELECT ma_dm_con AS ma_danh_muc, text_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
             FROM public.danh_muc_con
             WHERE trang_thai = true AND ma_quoc_gia = $2 
               AND unaccent(ten_danh_muc_con) ILIKE unaccent($1)
@@ -524,5 +524,42 @@ export const searchCategories = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API searchCategories:", error.message);
         res.status(500).json({ error: "Lỗi hệ thống khi tìm kiếm danh mục." });
+    }
+};
+
+// =========================================================================
+// 🚀 12. BỔ SUNG: ENDPOINT NỘI BỘ (INTERNAL) PHỤC VỤ SNAPSHOT ĐƠN HÀNG
+// Độc lập liên kết chéo cho order-service bốc dữ liệu phi chuẩn hóa
+// =========================================================================
+export const getInternalVariants = async (req, res) => {
+    try {
+        const { variant_ids } = req.body;
+
+        if (!variant_ids || !Array.isArray(variant_ids) || variant_ids.length === 0) {
+            return res.status(400).json({ success: false, message: 'Danh sách variant_ids không được rỗng.' });
+        }
+
+        const query = `
+            SELECT 
+                bt.ma_bien_the AS variant_id,
+                sp.ten_san_pham AS product_name,
+                bt.ten_bien_the AS variant_name,
+                bt.gia_ban_le AS price,
+                COALESCE(
+                    (SELECT duong_dan_url 
+                     FROM public.media_san_pham 
+                     WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true 
+                     LIMIT 1), ''
+                ) AS image_url
+            FROM public.bien_the_san_pham bt
+            INNER JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
+            WHERE bt.ma_bien_the = ANY($1::text[]) AND bt.trang_thai = true;
+        `;
+
+        const { rows: variants } = await pool.query(query, [variant_ids]);
+        return res.status(200).json({ success: true, data: variants });
+    } catch (error) {
+        console.error("❌ Lỗi API nội bộ getInternalVariants:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi máy chủ phân hệ sản phẩm." });
     }
 };

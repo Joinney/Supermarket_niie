@@ -33,7 +33,6 @@ const createInstance = (baseURL) => {
             if (error.response?.status === 401) {
                 console.warn(`⚠️ Phát hiện lỗi 401 tại API: ${baseURL}. Đang xử lý đổi Token ngầm...`);
 
-                // Kiểm tra xem có refreshToken dự phòng trong localStorage để cứu phiên không
                 const localRefreshToken = localStorage.getItem("refreshToken");
                 
                 if (localRefreshToken && !originalRequest._retry) {
@@ -54,7 +53,6 @@ const createInstance = (baseURL) => {
                         return instance(originalRequest);
                     } catch (refreshError) {
                         console.error("❌ Đổi Token ngầm thất bại. Phiên làm việc đã hết hạn hoàn toàn!");
-                        // Xóa sạch dữ liệu lỗi thời để Header không bị kẹt tài khoản
                         localStorage.removeItem("token");
                         localStorage.removeItem("refreshToken");
                         localStorage.removeItem("user");
@@ -64,8 +62,6 @@ const createInstance = (baseURL) => {
                     localStorage.removeItem("user");
                 }
 
-                // 🎯 THAY ĐỔI QUAN TRỌNG: Nếu các service khác (Cart, Product) báo lỗi 401 do mất database local,
-                // chỉ ghi nhận log chứ không tự ý xóa sạch token và đá Demi ra ngoài nữa.
                 console.log("Giữ lại phiên làm việc, không tự động Logout do lỗi data trống.");
             }
 
@@ -80,7 +76,7 @@ const createInstance = (baseURL) => {
     return instance;
 };
 
-// --- GIỮ NGUYÊN CẤU HÌNH ĐƯỜNG DẪN ĐIỀU HƯỚNG CỦA BẠN ---
+// --- CẤU HÌNH ĐƯỜNG DẪN ĐIỀU HƯỚNG ---
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 export const authApi = createInstance(
@@ -91,13 +87,17 @@ export const productApi = createInstance(
     isLocal ? 'http://localhost:5002/api' : 'https://productservice-n87v.onrender.com/api'
 );
 
-// Đặt baseURL là /api, khi gọi fetchCart() dùng "/cart" là chuẩn nhất
 export const cartApi = createInstance(
     isLocal ? 'http://localhost:5003/api' : 'https://cartservice-i6s1.onrender.com/api'
 );
 
 export const orderApi = createInstance(
     isLocal ? 'http://localhost:5005/api' : 'https://orderservice-url.onrender.com/api'
+);
+
+// ✨ BỔ SUNG: Khởi tạo paymentApi kết nối đến cổng 5004 của Ruby service mới tách
+export const paymentApi = createInstance(
+    isLocal ? 'http://localhost:5004/api' : 'https://paymentservice-url.onrender.com/api'
 );
 
 export default authApi;
