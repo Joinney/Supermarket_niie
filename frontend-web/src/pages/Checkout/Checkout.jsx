@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { MapPin, Truck, Tag, CreditCard, Loader2 } from 'lucide-react';
 import { useOrder } from '../../context/OrderContext';
-import { authApi, orderApi } from '../../api/axios';
+import { authApi, orderApi, paymentApi } from '../../api/axios'; 
 import AddressModal from '../Checkout/AddressModal'; 
 import ShippingModal from '../Checkout/ShippingModal'; 
-// 🚀 COMPONENT NÚT PAYPAL THÔNG MINH
 import PayPalButton from '../Checkout/PayPalButton';
 
 export default function Checkout() {
@@ -16,6 +15,16 @@ export default function Checkout() {
 
   const [checkoutCart, setCheckoutCart] = useState([]);
   const [isPlacing, setIsPlacing] = useState(false);
+
+  const mockCart = [
+    {
+      variantId: 'v1',
+      name: 'Quay tròn 360 độ Máy dọa chim (Phiên bản âm thanh)',
+      price: 203700,
+      quantity: 2,
+      image: 'https://images.unsplash.com/photo-1594498652286-66770e28f000?w=100'
+    }
+  ];
 
   useEffect(() => {
     const selectedItems = JSON.parse(localStorage.getItem('checkoutItems') || '[]');
@@ -111,16 +120,6 @@ export default function Checkout() {
 
     fetchShippingFees();
   }, [address]);
-
-  const mockCart = [
-    {
-      variantId: 'v1',
-      name: 'Quay tròn 360 độ Máy dọa chim (Phiên bản âm thanh)',
-      price: 203700,
-      quantity: 2,
-      image: 'https://images.unsplash.com/photo-1594498652286-66770e28f000?w=100'
-    }
-  ];
   
   const [selectedPayment, setSelectedPayment] = useState('COD');
   const [isEditingPayment, setIsEditingPayment] = useState(false);
@@ -130,13 +129,22 @@ export default function Checkout() {
   const xuDiscount = 500;
   const finalTotal = itemTotal + shippingFee - xuDiscount;
 
+  const finalizeOrderCleanup = async () => {
+    const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
+    if (clearPurchasedItems) {
+      await clearPurchasedItems(boughtVariantIds);
+    } else if (clearCart) {
+      await clearCart(); 
+    }
+    localStorage.removeItem('checkoutItems');
+  };
+
   // ========================================================
-  // 🎯 LUỒNG XỬ LÝ LƯU ĐƠN CHUNG (TỐI ƯU CHO LOCAL & RENDER CLOUD)
+  // 🎯 LUỒNG XỬ LÝ LƯU ĐƠN CHUNG (MICROSERVICES ĐỒNG BỘ)
   // ========================================================
   const executePlaceOrder = async (extraPaymentInfo = {}) => {
     if (!address) return alert("Vui lòng chọn địa chỉ giao hàng hợp lệ!");
 
-    // Trích xuất an toàn các mã định danh địa chỉ tránh lỗi hiển thị NaN ngầm sang backend
     const targetDistrictId = address.district_id || address.to_district_id || address.districtId;
     const targetWardCode = address.ward_code || address.to_ward_code || address.wardCode || address.ward_id;
 
@@ -166,68 +174,92 @@ export default function Checkout() {
     };
 
     try {
-      // Tự động điều hướng kết nối API linh hoạt theo môi trường thực thi của Order Context
+      // Bước 1: Khởi tạo hóa đơn thô (Pending) tại order-service
       const result = placeOrder ? await placeOrder(orderData) : await orderApi.post('/orders/place-order', orderData);
       const cleanResult = result?.data || result; 
       
       if (cleanResult && cleanResult.success) {
-        
-        // 🚀 LUỒNG THANH TOÁN VNPAY: Ép bẻ cache trình duyệt bằng nonce timestamp
-        if (cleanResult.phuong_thuc_thanh_toan === 'VNPay' && cleanResult.paymentUrl) {
+        const maDonHangText = cleanResult.ma_don_hang || cleanResult.data?.ma_don_hang;
+        const tongThanhToanNum = cleanResult.tong_thanh_toan || finalTotal;
+
+        // 🚀 Luồng 1: Nếu người dùng chọn thanh toán VNPay
+        if (selectedPayment === 'VNPay') {
           const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
           localStorage.setItem('vnpay_pending_variants', JSON.stringify(boughtVariantIds));
-          
-          const finalPaymentUrl = `${cleanResult.paymentUrl}&vnp_BrowserNonce=${new Date().getTime()}`;
-          window.location.href = finalPaymentUrl;
-          return;
+
+          const paymentRes = await paymentApi.post('/payments/create-transaction', {
+            ma_don_hang: maDonHangText,
+            tong_thanh_toan: tongThanhToanNum,
+            phuong_thuc_thanh_toan: 'VNPay'
+          });
+
+          if (paymentRes.data && paymentRes.data.paymentUrl) {
+            window.location.href = `${paymentRes.data.paymentUrl}&vnp_BrowserNonce=${new Date().getTime()}`;
+            return true;
+          } else {
+            throw new Error("Không lấy được link từ cổng thanh toán Payment Service!");
+          }
         }
 
-        // Luồng dọn dẹp giỏ hàng khi đặt hàng thành công (COD và PayPal)
-        alert(`🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart: ${cleanResult.ma_don_hang || cleanResult.data?.ma_don_hang || "DM-OK"}`);
-        const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
-        
-        if (clearPurchasedItems) {
-          await clearPurchasedItems(boughtVariantIds);
-        } else if (clearCart) {
-          await clearCart(); 
-        }
-        
-        localStorage.removeItem('checkoutItems');
-        navigate('/profile/orders'); 
+        // 🚀 Luồng 2: Trả về mã đơn hàng phục vụ cho việc nạp dữ liệu PayPal
+        return maDonHangText;
       } else {
-        alert("Có sự cố nhỏ từ máy chủ đơn hàng, Demi kiểm tra lại nhé!");
+        alert("Có sự cố từ máy chủ đơn hàng, Demi kiểm tra lại nhé!");
+        return false;
       }
     } catch (error) {
-      console.error("🔥 Lỗi đặt hàng tại Checkout:", error.response?.data || error.message);
-      alert(error.response?.data?.message || "Đặt hàng thất bại. Vui lòng kiểm tra lại tồn kho!");
+      console.error("🔥 Lỗi đặt đơn hoặc thanh toán tại Checkout:", error.response?.data || error.message);
+      alert(error.response?.data?.message || "Xử lý đơn hàng thất bại. Vui lòng kiểm tra lại hệ thống!");
+      return false;
     }
   };
 
-  // Hàm click xử lý đặt hàng thủ công cho COD / Banking / VNPay
   const handlePlaceOrder = async () => {
     if (!address) return alert("Vui lòng chọn địa chỉ giao hàng!");
     if (!selectedShipping) return alert("Vui lòng chọn phương thức vận chuyển!");
     if (checkoutCart.length === 0) return alert("Giỏ hàng thanh toán đang trống!");
 
     setIsPlacing(true);
-    await executePlaceOrder();
+    const orderSuccess = await executePlaceOrder();
+    if (orderSuccess && selectedPayment === 'COD') {
+      alert("🎉 Đặt hàng thành công! Đơn hàng thanh toán khi nhận hàng (COD) đã ghi nhận.");
+      await finalizeOrderCleanup();
+      navigate('/profile/orders');
+    }
     setIsPlacing(false);
   };
 
-  // 🚀 CALLBACK PAYPAL HOÀN TẤT: Đồng bộ ghi nhận mã PayPal Transaction ID an toàn
+  // Luồng xử lý bất đồng bộ sau khi SDK PayPal phản hồi Captures thành công
   const handlePayPalSuccess = async (details) => {
     try {
       setIsPlacing(true);
       const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
-      console.log("🔑 Bốc được mã PayPal Transaction ID lưu database:", transactionId);
 
-      await executePlaceOrder({
+      // 1. Lưu thông tin đơn hàng thô lên order-service, nhận về ma_don_hang tương ứng
+      const maDonHangText = await executePlaceOrder({
         trang_thai_thanh_toan: "completed",
         paypal_transaction_id: transactionId,
         paypal_order_id: details.id
       });
+
+      if (maDonHangText) {
+        // 2. Gọi đồng bộ chéo sang payment-service để ghi dữ liệu bảng payment_transactions
+        await paymentApi.post('/payments/create-transaction', {
+          ma_don_hang: maDonHangText,
+          tong_thanh_toan: finalTotal,
+          phuong_thuc_thanh_toan: 'PayPal',
+          gateway_transaction_id: transactionId,
+          gateway_order_id: details.id,
+          trang_thai: 'completed'
+        });
+
+        alert(`🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart: ${maDonHangText}`);
+        await finalizeOrderCleanup();
+        navigate('/profile/orders');
+      }
     } catch (err) {
       console.error("Lỗi callback xử lý hậu PayPal:", err);
+      alert("Giao dịch PayPal thành công nhưng ghi nhận lịch sử hệ thống thất bại!");
     } finally {
       setIsPlacing(false);
     }
@@ -255,17 +287,16 @@ export default function Checkout() {
               </div>
             ) : address ? (
               <div className="text-sm font-bold flex flex-wrap items-center gap-3">
-                <p className="text-slate-900">{address.receiver_name || address.receiverName} <span className="font-mono text-[#006c49] bg-emerald-50 px-1.5 py-0.5 rounded text-xs ml-1">(+84) {address.receiver_phone || address.receiverPhone}</span></p>
+                <div className="text-slate-900">{address.receiver_name || address.receiverName} <span className="font-mono text-[#006c49] bg-emerald-50 px-1.5 py-0.5 rounded text-xs ml-1">(+84) {address.receiver_phone || address.receiverPhone}</span></div>
                 <p className="text-gray-500 font-medium">{address.detail_address || address.detailAddress}, {address.ward_name || address.wardName}, {address.district_name || address.districtName}, {address.province_name || address.provinceName}</p>
-                {Boolean(address.is_default) && <span className="text-[10px] bg-red-50 text-red-500 font-black px-2 py-0.5 rounded uppercase tracking-wider">Mặc định</span>}
+                {address.is_default && <span className="text-[10px] bg-red-50 text-red-500 font-black px-2 py-0.5 rounded uppercase tracking-wider">Mặc định</span>}
               </div>
             ) : (
               <div className="text-sm font-bold flex items-center justify-between">
                 <p className="text-red-500">Bạn chưa có địa chỉ nhận hàng nào trong hệ thống.</p>
                 <button onClick={() => navigate('/profile/address')} className="bg-[#006c49] text-white px-4 py-2 rounded-xl text-xs font-black uppercase">Thêm địa chỉ</button>
               </div>
-            )
-          }
+            )}
           </section>
 
           {/* 2. SẢN PHẨM */}
@@ -282,9 +313,9 @@ export default function Checkout() {
                   <img src={getCleanImage(item.image)} className="w-12 h-12 rounded-xl object-cover border" alt={item.name} />
                   <span className="truncate pr-4">{item.name}</span>
                 </div>
-                <div className="col-span-2 text-center font-semibold text-slate-600 text-sm">{(item.price || 0).toLocaleString()}đ</div>
+                <div className="col-span-2 text-center font-semibold text-slate-600 text-sm">{item.price.toLocaleString()}đ</div>
                 <div className="col-span-2 text-center font-bold text-slate-800 text-sm">{item.quantity}</div>
-                <div className="col-span-2 text-right font-black text-[#006c49] text-sm">{((item.price || 0) * (item.quantity || 1)).toLocaleString()}đ</div>
+                <div className="col-span-2 text-right font-black text-[#006c49] text-sm">{(item.price * item.quantity).toLocaleString()}đ</div>
               </div>
             ))}
           </section>
@@ -359,7 +390,7 @@ export default function Checkout() {
             </div>
             <p className="text-[10px] text-gray-400 text-center leading-relaxed">Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân thủ theo các chính sách bảo mật và Điều khoản mua sắm của Demi Mart.</p>
             
-            {/* 🚀 KHỐI HIỂN THỊ NÚT THANH TOÁN ĐỘNG QUY CHUẨN */}
+            {/* KHỐI HIỂN THỊ NÚT THANH TOÁN ĐỘNG */}
             {selectedPayment === 'PayPal' ? (
               <div className="w-full pt-2">
                 <PayPalButton 
