@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { useLanguage } from './LanguageContext';
 
 const StoreContext = createContext();
 
@@ -8,7 +9,7 @@ export const StoreProvider = ({ children }) => {
     { code: 'US', name: 'United States', currency: 'USD', symbol: '$', locale: 'en-US', rate: 0.00004 }, 
     { code: 'CN', name: 'China', currency: 'CNY', symbol: '¥', locale: 'zh-CN', rate: 0.00029 }
   ];
-
+  
   const [currentStore, setCurrentStore] = useState(stores[0]);
   const [currencyStore, setCurrencyStore] = useState(stores[0]);
 
