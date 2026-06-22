@@ -51,11 +51,23 @@ export const StoreProvider = ({ children }) => {
 
     const convertedPrice = priceInVnd * currentCurrency.rate;
 
-    return new Intl.NumberFormat(currentCurrency.locale, {
-      style: "currency",
-      currency: currentCurrency.currency,
+    // Chỉ dùng Intl để định dạng số thập phân và dấu phẩy (vd: 1,000.50 hoặc 15.000)
+    // KHÔNG dùng style: "currency" để tránh trình duyệt tự in chữ sai
+    const formattedNumber = new Intl.NumberFormat(currentCurrency.locale, {
       minimumFractionDigits: currentCurrency.currency === "VND" ? 0 : 2,
+      maximumFractionDigits: currentCurrency.currency === "VND" ? 0 : 2,
     }).format(convertedPrice);
+
+    // Tự tay gắn Symbol để đảm bảo 100% hiển thị đúng
+    switch (currentCurrency.currency) {
+      case "USD":
+        return `$${formattedNumber}`;
+      case "CNY":
+        return `¥${formattedNumber}`;
+      case "VND":
+      default:
+        return `${formattedNumber}đ`;
+    }
   };
 
   return (

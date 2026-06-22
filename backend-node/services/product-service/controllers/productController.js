@@ -195,7 +195,7 @@ export const getProductsByCategorySlug = async (req, res) => {
 };
 
 // =========================================================================
-// 4. TÌM KIẾM SẢN PHẨM THEO TỪ KHÓA
+// 4. TÌM KIẾM SẢN PHẨM THEO TỪ KHÓA - HỖ TRỢ TÌM KHÔNG DẤU
 // =========================================================================
 export const searchProducts = async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -213,7 +213,7 @@ export const searchProducts = async (req, res) => {
             WHERE sp.trang_thai = true 
               AND dmc.trang_thai = true
               AND sp.ma_quoc_gia = $2
-              AND (sp.ten_san_pham ILIKE $1 OR sp.mo_ta ILIKE $1)
+              AND (unaccent(sp.ten_san_pham) ILIKE unaccent($1) OR unaccent(sp.mo_ta) ILIKE unaccent($1))
             ORDER BY sp.ngay_tao DESC;
         `;
         
@@ -455,5 +455,38 @@ export const getAllCountries = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API getAllCountries:", error.message);
         res.status(500).json({ error: "Gặp sự cố hệ thống, không thể tải danh sách quốc gia." });
+    }
+};
+
+// =========================================================================
+// 11. BỔ SUNG: TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
+// =========================================================================
+export const searchCategories = async (req, res) => {
+    const keyword = req.query.keyword || '';
+    const countryCode = (req.query.country || 'VN').toUpperCase();
+
+    try {
+        const searchTerm = `%${keyword}%`;
+        const query = `
+            SELECT ma_dm_cha AS ma_danh_muc, ten_danh_muc_cha AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'cha' AS loai_danh_muc
+            FROM public.danh_muc_cha
+            WHERE trang_thai = true AND ma_quoc_gia = $2 
+              AND unaccent(ten_danh_muc_cha) ILIKE unaccent($1)
+            
+            UNION ALL
+            
+            SELECT ma_dm_con AS ma_danh_muc, ten_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
+            FROM public.danh_muc_con
+            WHERE trang_thai = true AND ma_quoc_gia = $2 
+              AND unaccent(ten_danh_muc_con) ILIKE unaccent($1)
+            
+            LIMIT 12;
+        `;
+        
+        const { rows: categories } = await pool.query(query, [searchTerm, countryCode]);
+        res.status(200).json(categories);
+    } catch (error) {
+        console.error("❌ Lỗi API searchCategories:", error.message);
+        res.status(500).json({ error: "Lỗi hệ thống khi tìm kiếm danh mục." });
     }
 };

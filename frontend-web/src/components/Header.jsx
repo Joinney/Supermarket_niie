@@ -35,11 +35,27 @@ export default function Header({ onOpenMenu }) {
   const location = useLocation();
   const { country_code } = useParams();
 
+  // State cho Tìm kiếm
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
+  const [suggestions, setSuggestions] = useState([]); // Sản phẩm (>= 3 ký tự)
+  const [categorySuggestions, setCategorySuggestions] = useState([]); // Danh mục (1-2 ký tự)
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const suggestRef = useRef(null);
   const suggestTimer = useRef(null);
+
+  // Dữ liệu Tìm kiếm phổ biến (Hardcode theo yêu cầu)
+  const popularSearches = [
+    { text: "nước mắm", hot: true },
+    { text: "rau", hot: true },
+    { text: "bánh tráng", hot: true },
+    { text: "cá", hot: false },
+    { text: "danh sách mua sắm", hot: false },
+    { text: "bún", hot: false },
+    { text: "tôm", hot: false },
+    { text: "gà", hot: false },
+    { text: "giá", hot: false },
+    { text: "gạo", hot: false },
+  ];
 
   const { currentLanguage, changeLanguage, t } = useLanguage();
   const { currentStore, setCurrencyStore, stores, formatPrice } = useStore();
@@ -53,7 +69,6 @@ export default function Header({ onOpenMenu }) {
       : `${amountVND.toLocaleString()}đ`;
   };
 
-  // 🛠️ ĐÃ CẬP NHẬT: Luôn đẩy Việt Nam (VN) lên vị trí đầu danh sách Dropdown dịch trang
   const sortedStores =
     stores && stores.length > 0
       ? [...stores].sort((a, b) =>
@@ -65,10 +80,6 @@ export default function Header({ onOpenMenu }) {
         )
       : [];
 
-  // =====================================================================
-  // 🛠️ ĐÃ SỬA DỨT ĐIỂM: Sửa lỗi map mã ngôn ngữ 'VI' thành mã quốc gia 'VN'
-  // =====================================================================
-  // Đổi tên và bỏ phần logic điều hướng
   const handleLanguageChange = (langCode) => {
     changeLanguage(langCode);
 
@@ -105,10 +116,18 @@ export default function Header({ onOpenMenu }) {
     setIsLangOpen(false);
   };
 
+  // Hàm xử lý khi click vào nút "Tìm kiếm phổ biến"
+  const handlePopularSearchClick = (keyword) => {
+    setSearchKeyword(keyword);
+    setIsSuggestOpen(false);
+    navigate(`/search?keyword=${encodeURIComponent(keyword)}`);
+  };
+
   const handleSearch = () => {
     if (searchKeyword.trim()) {
       navigate(`/search?keyword=${encodeURIComponent(searchKeyword.trim())}`);
       setSearchKeyword("");
+      setIsSuggestOpen(false);
     }
   };
 
@@ -127,7 +146,6 @@ export default function Header({ onOpenMenu }) {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-
     const pad = (num) => String(num).padStart(2, "0");
     return {
       h: pad(hours).split(""),
@@ -208,9 +226,8 @@ export default function Header({ onOpenMenu }) {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
     }
     const cleanUrl = url.split("?")[0];
-    if (cleanUrl.startsWith("http")) {
+    if (cleanUrl.startsWith("http"))
       return `${cleanUrl}?t=${new Date().getTime()}`;
-    }
     const cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
     return `${AUTH_BASE_URL}${cleanPath}?t=${new Date().getTime()}`;
   };
@@ -235,6 +252,7 @@ export default function Header({ onOpenMenu }) {
       ref={headerRef}
       className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
     >
+      {/* Banner Khuyến Mãi */}
       {showBanner && (
         <div className="w-full bg-[#fea619] text-slate-900 h-10 md:h-11 flex items-center justify-between px-4 relative overflow-hidden text-xs md:text-sm font-bold tracking-wide shadow-sm">
           <button
@@ -276,6 +294,7 @@ export default function Header({ onOpenMenu }) {
         </div>
       )}
 
+      {/* Thanh Header Chính */}
       <div className="h-[60px] md:h-[72px] px-3 md:px-10 flex items-center justify-between gap-2 border-b border-slate-50">
         <div className="flex items-center gap-1 md:gap-4 flex-shrink-0 min-w-[130px] md:min-w-[170px]">
           <button
@@ -297,6 +316,8 @@ export default function Header({ onOpenMenu }) {
             />
           </Link>
         </div>
+
+        {/* Ô Tìm Kiếm - Trung Tâm */}
         {!isAuthPage && (
           <div className="flex-1 max-w-xl relative group hidden sm:block min-h-[45px]">
             <input
@@ -304,99 +325,184 @@ export default function Header({ onOpenMenu }) {
               type="text"
               placeholder={t("search_placeholder")}
               value={searchKeyword}
+              onFocus={() => setIsSuggestOpen(true)} // Mở bảng khi focus
               onChange={(e) => {
                 const v = e.target.value;
                 setSearchKeyword(v);
+                setIsSuggestOpen(true);
+
                 if (suggestTimer.current) clearTimeout(suggestTimer.current);
-                if (v.trim()) {
-                  suggestTimer.current = setTimeout(async () => {
-                    try {
-                      const currentCountryCode = currentStore?.code || "vn";
+
+                // Nếu người dùng xóa sạch ô tìm kiếm -> Trả về màn Phổ Biến
+                if (v.trim().length === 0) {
+                  setSuggestions([]);
+                  setCategorySuggestions([]);
+                  return;
+                }
+
+                // Debounce gọi API 250ms
+                suggestTimer.current = setTimeout(async () => {
+                  const currentCountryCode = currentStore?.code || "vn";
+                  try {
+                    // Logic phân nhánh độ dài
+                    if (v.trim().length > 0 && v.trim().length < 3) {
+                      // Gõ 1-2 ký tự: Gọi API Danh Mục
+                      const res = await productApi.get(
+                        `/products/categories/search?keyword=${encodeURIComponent(v)}&country=${currentCountryCode}`,
+                      );
+                      setCategorySuggestions(res.data || []);
+                      setSuggestions([]);
+                    } else if (v.trim().length >= 3) {
+                      // Gõ >= 3 ký tự: Gọi API Sản Phẩm
                       const res = await productApi.get(
                         `/products/search?keyword=${encodeURIComponent(v)}&limit=10&country=${currentCountryCode}`,
                       );
                       setSuggestions(res.data || []);
-                      setIsSuggestOpen(true);
-                    } catch (err) {
-                      setSuggestions([]);
-                      setIsSuggestOpen(false);
+                      setCategorySuggestions([]);
                     }
-                  }, 250);
-                } else {
-                  setSuggestions([]);
-                  setIsSuggestOpen(false);
-                }
+                  } catch (err) {
+                    setSuggestions([]);
+                    setCategorySuggestions([]);
+                  }
+                }, 250);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  if (isSuggestOpen && suggestions.length > 0) {
-                    const p = suggestions[0];
-                    const country =
-                      p.country_code || currentStore?.code || "vn";
-                    const category = p.slug_danh_muc || "san-pham";
-                    navigate(
-                      `/${country}/product/${category}/${p.ma_san_pham}`,
-                    );
-                    setSearchKeyword("");
-                    setIsSuggestOpen(false);
-                  } else {
-                    handleSearch();
-                  }
-                } else if (e.key === "ArrowDown") {
-                  const first = suggestRef.current?.querySelector("button");
-                  if (first) first.focus();
-                }
+                if (e.key === "Enter") handleSearch();
               }}
               className="w-full bg-[#f3f6f9] border-2 border-transparent py-2 md:py-2.5 pl-5 pr-12 rounded-full outline-none focus:bg-white focus:border-[#006c49] transition-all text-xs md:text-sm font-bold text-slate-700 shadow-inner"
             />
             <button
               onClick={handleSearch}
-              className="absolute right-1 top-1 bottom-1 w-10 md:w-12 flex items-center justify-center bg-[#006c49] text-white rounded-full transition-transform active:scale-90"
+              className="absolute right-1 top-1 bottom-1 w-10 md:w-12 flex items-center justify-center bg-[#006c49] text-white rounded-full transition-transform active:scale-90 z-10"
             >
               <Search size={16} strokeWidth={3} />
             </button>
 
-            {isSuggestOpen && suggestions.length > 0 && (
+            {/* Bảng Gợi Ý Tìm Kiếm (3 Trạng thái) */}
+            {isSuggestOpen && (
               <div
                 ref={suggestRef}
-                className="absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 max-h-[320px] overflow-y-auto overscroll-contain scrollbar-hide"
+                className="absolute left-0 right-0 mt-3 bg-white border border-slate-100 rounded-3xl shadow-xl z-50 p-4 max-h-[450px] overflow-y-auto overscroll-contain scrollbar-hide"
               >
-                {suggestions.map((s) => (
-                  <button
-                    key={s.ma_san_pham}
-                    onClick={() => {
-                      const country =
-                        s.country_code || currentStore?.code || "vn";
-                      const category = s.slug_danh_muc || "san-pham";
-                      navigate(
-                        `/${country}/product/${category}/${s.ma_san_pham}`,
-                      );
-                      setIsSuggestOpen(false);
-                      setSearchKeyword("");
-                    }}
-                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0"
-                  >
-                    <img
-                      src={s.hinh_anh_chinh || "https://placehold.co/60x60"}
-                      className="w-12 h-12 object-contain rounded-lg border border-slate-100"
-                      alt={s.ten_san_pham}
-                    />
-                    <div className="flex-1 overflow-hidden">
-                      <div className="font-bold text-sm text-slate-700 truncate">
-                        {s.ten_san_pham}
-                      </div>
-                      <div className="text-xs font-black text-[#006c49]">
-                        {formatCurrency(s.gia_ban_thap_nhat || 0)}
-                      </div>
+                {/* 1. KHI CHƯA GÕ GÌ -> Hiển thị Tìm kiếm phổ biến */}
+                {searchKeyword.trim().length === 0 && (
+                  <div className="animate-fadeIn">
+                    <h4 className="text-[13px] font-bold text-slate-800 mb-3 ml-1">
+                      Những tìm kiếm phổ biến
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {popularSearches.map((item, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handlePopularSearchClick(item.text)}
+                          className="px-3.5 py-1.5 border border-slate-200 rounded-full text-xs font-semibold text-slate-600 hover:border-[#006c49] hover:text-[#006c49] transition-all flex items-center gap-1 active:scale-95 bg-white hover:bg-[#f3f6f9]"
+                        >
+                          {item.hot && (
+                            <span className="text-red-500 text-sm leading-none">
+                              🔥
+                            </span>
+                          )}
+                          {item.text}
+                        </button>
+                      ))}
                     </div>
-                  </button>
-                ))}
+                  </div>
+                )}
+
+                {/* 2. GÕ TỪ 1 ĐẾN 2 KÝ TỰ -> Hiển thị Danh mục (Dạng Grid Icon) */}
+                {searchKeyword.trim().length > 0 &&
+                  searchKeyword.trim().length < 3 && (
+                    <div className="animate-fadeIn">
+                      {categorySuggestions.length > 0 ? (
+                        <div className="grid grid-cols-4 md:grid-cols-5 gap-y-4 gap-x-2">
+                          {categorySuggestions.map((cat) => (
+                            <button
+                              key={`${cat.loai_danh_muc}-${cat.ma_danh_muc}`}
+                              onClick={() => {
+                                const currentCountryCode =
+                                  currentStore?.code || "vn";
+                                navigate(
+                                  `/${currentCountryCode}/category/${cat.slug}`,
+                                );
+                                setIsSuggestOpen(false);
+                                setSearchKeyword("");
+                              }}
+                              className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity group"
+                            >
+                              <div className="w-16 h-16 bg-[#f8fafc] rounded-2xl flex items-center justify-center p-2 group-hover:shadow-md transition-shadow border border-slate-50">
+                                <img
+                                  src={
+                                    cat.hinh_anh || "https://placehold.co/60x60"
+                                  }
+                                  alt={cat.ten_danh_muc}
+                                  className="w-full h-full object-contain mix-blend-multiply"
+                                />
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-700 text-center line-clamp-2 px-1 leading-tight group-hover:text-[#006c49]">
+                                {cat.ten_danh_muc}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-sm font-semibold text-slate-400 py-6">
+                          Không tìm thấy danh mục liên quan.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {/* 3. GÕ TỪ 3 KÝ TỰ TRỞ LÊN -> Hiển thị Sản phẩm (Dạng Danh sách Dọc) */}
+                {searchKeyword.trim().length >= 3 && (
+                  <div className="animate-fadeIn">
+                    {suggestions.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {suggestions.map((s) => (
+                          <button
+                            key={s.ma_san_pham}
+                            onClick={() => {
+                              const country =
+                                s.country_code || currentStore?.code || "vn";
+                              const category = s.slug_danh_muc || "san-pham";
+                              navigate(
+                                `/${country}/product/${category}/${s.ma_san_pham}`,
+                              );
+                              setIsSuggestOpen(false);
+                              setSearchKeyword("");
+                            }}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f8fafc] transition-colors text-left border border-transparent hover:border-slate-100"
+                          >
+                            <img
+                              src={
+                                s.hinh_anh_chinh || "https://placehold.co/60x60"
+                              }
+                              className="w-14 h-14 object-contain rounded-xl border border-slate-100 bg-white p-1"
+                              alt={s.ten_san_pham}
+                            />
+                            <div className="flex-1 overflow-hidden">
+                              <div className="font-bold text-sm text-slate-800 truncate mb-0.5">
+                                {s.ten_san_pham}
+                              </div>
+                              <div className="text-xs font-black text-[#006c49] bg-[#e6f0ed] inline-block px-2 py-0.5 rounded-md">
+                                {formatCurrency(s.gia_ban_thap_nhat || 0)}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-sm font-semibold text-slate-400 py-6">
+                        Không tìm thấy sản phẩm nào.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
+        {/* Khối Giao diện Phải (Ngôn ngữ, User, Giỏ hàng) */}
         <div className="flex items-center gap-2 md:gap-6 flex-shrink-0 min-w-[160px] md:min-w-[300px] justify-end">
           <div className="relative" ref={langRef}>
             <button
@@ -517,6 +623,7 @@ export default function Header({ onOpenMenu }) {
         </div>
       </div>
 
+      {/* Thanh Menu Phụ */}
       <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto scrollbar-hide">
         <nav className="flex items-center gap-5 md:gap-8 whitespace-nowrap min-w-max">
           {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => (

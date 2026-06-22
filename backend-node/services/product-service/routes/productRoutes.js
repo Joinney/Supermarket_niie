@@ -5,6 +5,7 @@ import {
     getProductById,
     getProductsByCategorySlug,
     searchProducts,
+    searchCategories,
     batchGenerateDescriptionsController,
     getProductsWithoutDescriptions,
     refreshEmptyDescriptions,
@@ -73,6 +74,30 @@ router.get('/search', searchProducts);
  *         description: Trả về dữ liệu cây danh mục thành công
  */
 router.get('/categories', getAllCategories);
+
+/**
+ * @swagger
+ * /api/products/categories/search:
+ *   get:
+ *     summary: Tìm kiếm danh mục (Cha và Con) bằng từ khóa (Gõ 1-2 ký tự)
+ *     tags:
+ *       - Products
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         schema:
+ *           type: string
+ *         description: "Từ khóa tìm kiếm (VD: b, bá)"
+ *       - in: query
+ *         name: country
+ *         schema:
+ *           type: string
+ *         description: "Mã quốc gia (VD: VN, US)"
+ *     responses:
+ *       200:
+ *         description: Trả về danh sách danh mục phù hợp
+ */
+router.get('/categories/search', searchCategories);
 
 /**
  * @swagger
