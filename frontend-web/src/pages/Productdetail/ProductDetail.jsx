@@ -120,6 +120,18 @@ export default function ProductDetail() {
     return groups;
   }, [product]);
 
+  // THUẬT TOÁN KIỂM TRA SỰ TỒN TẠI CỦA THUỘC TÍNH CHÉO
+  const isOptionValid = (key, value) => {
+    if (!product?.bien_the) return false;
+    const tempAttributes = { ...selectedAttributes, [key]: value };
+    return product.bien_the.some((bt) => {
+      if (!bt.thuoc_tinh) return false;
+      return Object.keys(tempAttributes).every(
+        (k) => bt.thuoc_tinh[k] === tempAttributes[k],
+      );
+    });
+  };
+
   const handleAttributeSelect = (key, value) => {
     const newAttributes = { ...selectedAttributes, [key]: value };
     setSelectedAttributes(newAttributes);
@@ -333,16 +345,24 @@ export default function ProductDetail() {
                           {danhSachGiaTri.map((giaTri) => {
                             const isSelected =
                               selectedAttributes[tenThuocTinh] === giaTri;
+
+                            // GỌI HÀM KIỂM TRA ĐỂ KHÓA NÚT KHI KHÔNG CÓ TRONG DATA
+                            const isValid = isOptionValid(tenThuocTinh, giaTri);
+
                             return (
                               <button
                                 key={giaTri}
                                 onClick={() =>
+                                  isValid &&
                                   handleAttributeSelect(tenThuocTinh, giaTri)
                                 }
+                                disabled={!isValid} // VÔ HIỆU HÓA NÚT NẾU KHÔNG HỢP LỆ
                                 className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 ${
                                   isSelected
                                     ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
-                                    : "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
+                                    : isValid
+                                      ? "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
+                                      : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-50" // MÀU NÚT BỊ KHÓA
                                 }`}
                               >
                                 {giaTri}

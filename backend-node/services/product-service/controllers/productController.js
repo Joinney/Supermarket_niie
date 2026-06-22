@@ -16,6 +16,8 @@ const sanitizePagination = (pageInput, limitInput) => {
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
+        const result = await pool.query('...');
+        res.status(200).json(result.rows);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         const countryCode = (req.query.country || 'VN').toUpperCase(); 
 
@@ -107,7 +109,7 @@ export const getAllCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT)
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - FIX LỖI 500
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
@@ -132,8 +134,12 @@ export const getProductById = async (req, res) => {
                 COALESCE(
                     (SELECT json_agg(
                         json_build_object(
-                            'ma_media', m.ma_media, 'duong_dan_url', m.duong_dan_url, 'la_anh_chinh', m.la_anh_chinh,
-                            'loai_media', m.loai_media, 'thoi_luong_video', m.thoi_luong_video
+                            'ma_media', m.ma_media, 
+                            'ma_bien_the', m.ma_bien_the, /* 🛠️ CHỈ BỔ SUNG ĐÚNG DÒNG NÀY ĐỂ ĐỔI ẢNH */
+                            'duong_dan_url', m.duong_dan_url, 
+                            'la_anh_chinh', m.la_anh_chinh,
+                            'loai_media', m.loai_media, 
+                            'thoi_luong_video', m.thoi_luong_video
                         )
                     ) FROM public.media_san_pham m WHERE m.ma_san_pham = sp.ma_san_pham AND m.trang_thai = true), '[]'
                 ) as media
@@ -157,34 +163,64 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC (SLUG)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (CÓ XỬ LÝ LỌC & SẮP XẾP)
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
     const countryCode = (req.query.country || 'VN').toUpperCase();
+    
+    // Nhận params từ Frontend
+    const sort = req.query.sort || 'noi-bat';
+    const price = req.query.price || 'tat-ca';
 
     try {
         let query = `
+            WITH ProductMinPrice AS (
+                SELECT ma_san_pham, MIN(gia_ban_le) as gia_ban_thap_nhat
+                FROM public.bien_the_san_pham
+                WHERE trang_thai = true
+                GROUP BY ma_san_pham
+            )
             SELECT 
-                sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
+                sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                COALESCE(pmp.gia_ban_thap_nhat, 0) AS gia_ban_thap_nhat,
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+            LEFT JOIN ProductMinPrice pmp ON sp.ma_san_pham = pmp.ma_san_pham
             WHERE sp.trang_thai = true
               AND dmc.trang_thai = true
               AND sp.ma_quoc_gia = $1
         `;
         
         const params = [countryCode];
+        let paramIndex = 2;
 
         if (slug !== 'tat-ca') {
-            query += ` AND (dmc.duong_dan_seo = $2 OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $2 AND trang_thai = true LIMIT 1))`;
+            query += ` AND (dmc.duong_dan_seo = $${paramIndex} OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $${paramIndex} AND trang_thai = true LIMIT 1))`;
             params.push(slug);
+            paramIndex++;
         }
 
-        query += ` ORDER BY sp.ngay_tao DESC;`;
+        // Xử lý Lọc theo giá
+        if (price !== 'tat-ca') {
+            if (price === '0-50000') query += ` AND pmp.gia_ban_thap_nhat < 50000`;
+            else if (price === '50000-100000') query += ` AND pmp.gia_ban_thap_nhat BETWEEN 50000 AND 100000`;
+            else if (price === '100000-200000') query += ` AND pmp.gia_ban_thap_nhat BETWEEN 100000 AND 200000`;
+            else if (price === '200000-up') query += ` AND pmp.gia_ban_thap_nhat >= 200000`;
+        }
+
+        // Xử lý Sắp xếp
+        if (sort === 'gia-thap') {
+            query += ` ORDER BY pmp.gia_ban_thap_nhat ASC`;
+        } else if (sort === 'gia-cao') {
+            query += ` ORDER BY pmp.gia_ban_thap_nhat DESC`;
+        } else if (sort === 'ban-chay') {
+            query += ` ORDER BY sp.ngay_cap_nhat DESC`; // Nếu có cột luot_ban thì thay vào đây
+        } else {
+            query += ` ORDER BY sp.ngay_tao DESC`; // noi-bat (mặc định)
+        }
 
         const { rows: products } = await pool.query(query, params);
         res.status(200).json(products);
