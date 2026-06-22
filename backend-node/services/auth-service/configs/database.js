@@ -8,7 +8,9 @@ const { Pool } = pg;
 const pool = new Pool({
   // 1. LUÔN ƯU TIÊN DÒNG NÀY (Trên Render hãy dán Connection String vào biến DATABASE_URL)
   connectionString: process.env.DATABASE_URL,
-
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
   // 2. Thông số dự phòng (Nếu DATABASE_URL trống)
   user: process.env.DB_USER || 'postgres.aiesurvlmtrrgdiwxtma',
   host: process.env.DB_HOST || 'aws-1-ap-southeast-1.pooler.supabase.com', 
