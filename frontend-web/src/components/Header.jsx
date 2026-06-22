@@ -68,35 +68,38 @@ export default function Header({ onOpenMenu }) {
   // =====================================================================
   // 🛠️ ĐÃ SỬA DỨT ĐIỂM: Sửa lỗi map mã ngôn ngữ 'VI' thành mã quốc gia 'VN'
   // =====================================================================
-  const handleLanguageAndStoreChange = (langCode) => {
+  // Đổi tên và bỏ phần logic điều hướng
+  const handleLanguageChange = (langCode) => {
     changeLanguage(langCode);
 
-    // Chuẩn hóa chuẩn xác mã ngôn ngữ sang mã vùng quốc gia quản lý tiền tệ trong DB
-    let targetStoreCode = langCode.toUpperCase();
-    if (targetStoreCode === "VI") targetStoreCode = "VN";
-    if (targetStoreCode === "EN") targetStoreCode = "US";
-    if (targetStoreCode === "ZH") targetStoreCode = "CN";
-
-    // Tìm kiếm cấu hình tỷ giá (Bọc toàn bộ toUpperCase để bảo đảm độ khớp)
-    if (stores && stores.length > 0) {
-      const matchedStore = stores.find(
-        (s) => s.code?.toUpperCase() === targetStoreCode.toUpperCase(),
-      );
-      if (matchedStore) {
-        setCurrencyStore(matchedStore); // Cập nhật tỷ giá và biểu tượng tiền ngay lập tức
-      }
+    if (langCode === "vi") {
+      setCurrencyStore({
+        code: "VN",
+        currency: "VND",
+        symbol: "₫",
+        locale: "vi-VN",
+        rate: 1,
+      });
     }
 
-    // Giữ nguyên vùng cửa hàng hiện tại trên thanh URL, chỉ dịch chữ và đổi tỷ giá tiền
-    const activeStoreCode = currentStore?.code?.toLowerCase() || "vn";
-    const currentPath = location.pathname;
-    const pathSegments = currentPath.split("/");
+    if (langCode === "en") {
+      setCurrencyStore({
+        code: "US",
+        currency: "USD",
+        symbol: "$",
+        locale: "en-US",
+        rate: 0.00004,
+      });
+    }
 
-    if (country_code && pathSegments[1] === country_code) {
-      pathSegments[1] = activeStoreCode;
-      navigate(pathSegments.join("/"));
-    } else {
-      navigate(`/${activeStoreCode}${currentPath === "/" ? "" : currentPath}`);
+    if (langCode === "zh") {
+      setCurrencyStore({
+        code: "CN",
+        currency: "CNY",
+        symbol: "¥",
+        locale: "zh-CN",
+        rate: 0.00029,
+      });
     }
 
     setIsLangOpen(false);
@@ -414,13 +417,17 @@ export default function Header({ onOpenMenu }) {
               <div className="absolute right-0 mt-4 w-48 bg-white border border-slate-100 rounded-xl shadow-2xl p-1 animate-fadeIn border-t-4 border-t-[#006c49]">
                 {sortedStores.map((store) => {
                   let langCode = store.code.toLowerCase();
+                  if (langCode === "vn") langCode = "vi";
                   if (langCode === "us") langCode = "en";
                   if (langCode === "cn") langCode = "zh";
 
                   return (
                     <button
                       key={store.code}
-                      onClick={() => handleLanguageAndStoreChange(langCode)}
+                      onClick={() => {
+                        handleLanguageChange(langCode);
+                        setIsLangOpen(false);
+                      }}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentLanguage.code === langCode ? "bg-[#e6f0ed] text-[#006c49]" : "text-slate-600 hover:bg-slate-50"}`}
                     >
                       <div className="flex items-center gap-2">

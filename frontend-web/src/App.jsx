@@ -1,5 +1,11 @@
 import React, { useState, useContext } from "react";
-import { BrowserRouter as Router, Routes, Route, Outlet, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Outlet,
+  Navigate,
+} from "react-router-dom";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { OrderProvider } from "./context/OrderContext";
@@ -18,36 +24,72 @@ import ForgotPassword from "./pages/Auth/ForgotPassword";
 import Profile from "./pages/Profile/Profile";
 import CategoryPage from "./pages/Category/CategoryPage";
 import ProductDetail from "./pages/Productdetail/ProductDetail";
-import Cart from "./pages/Giohang/Cart"; 
+import Cart from "./pages/Giohang/Cart";
 import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
 import ChatbotAI from "./components/chatbotai/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
-import SidebarAdmin from "./admindb/components/Sidebar"; 
-import HeaderAdmin from "./admindb/components/Header";   
-import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham"; 
-import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang"; 
-import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang"; 
+import SidebarAdmin from "./admindb/components/Sidebar";
+import HeaderAdmin from "./admindb/components/Header";
+import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham";
+import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang";
+import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
-import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang"; 
+import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
 import Danhsachnoibo from "./admindb/pages/AuthZ/Danhsachnoibo"; // Import trang giao diện quản lý tài khoản thật
 
 // Các component phục vụ giao diện tĩnh cho mục Settings
-const Danhsachvaitro = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách vai trò</div>;
-const SettingsGeneral = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Cấu hình chung (General Settings)</div>;
+const Danhsachvaitro = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Danh sách vai trò
+  </div>
+);
+const SettingsGeneral = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Cấu hình chung (General Settings)
+  </div>
+);
 
 // --- COMPONENT MOCK PHỤC VỤ CHO MỤC KHO HÀNG ---
-const Danhsachnhapkho = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách nhập kho</div>;
-const Quanlylohang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Quản lý lô hàng</div>;
-const Quanlytonkho = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Quản lý tồn kho</div>;
-const Dieuchuyenkho = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Điều chuyển kho</div>;
+const Danhsachnhapkho = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Danh sách nhập kho
+  </div>
+);
+const Quanlylohang = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Quản lý lô hàng
+  </div>
+);
+const Quanlytonkho = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Quản lý tồn kho
+  </div>
+);
+const Dieuchuyenkho = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Điều chuyển kho
+  </div>
+);
 
 // --- COMPONENT MOCK PHỤC VỤ CHO MỤC KHÁCH HÀNG (QUẢN TRỊ) ---
-const GiaoDienDanhSachKhachHang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách khách hàng</div>;
-const GiaoDienNhomKhachHang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Nhóm khách hàng</div>;
-const GiaoDienLoaiKhachHang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Loại khách hàng</div>;
+const GiaoDienDanhSachKhachHang = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Danh sách khách hàng
+  </div>
+);
+const GiaoDienNhomKhachHang = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Nhóm khách hàng
+  </div>
+);
+const GiaoDienLoaiKhachHang = () => (
+  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
+    Trang Giao Diện: Loại khách hàng
+  </div>
+);
 
 /**
  * 1. LAYOUTS (KHÁCH HÀNG & ADMIN)
@@ -57,10 +99,18 @@ const MainLayout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <HeaderKhachHang onOpenMenu={() => setIsSidebarOpen(true)} />
-      <div className="flex flex-1 w-full relative bg-white" style={{ paddingTop: "var(--header-height, 112px)" }}> 
-        <SidebarKhachHang isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        <div className="flex-1 flex flex-col min-w-0 border-l border-gray-100 bg-white"> 
-          <main className="flex-1 overflow-x-hidden bg-white"><Outlet /></main>
+      <div
+        className="flex flex-1 w-full relative bg-white"
+        style={{ paddingTop: "var(--header-height, 112px)" }}
+      >
+        <SidebarKhachHang
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+        <div className="flex-1 flex flex-col min-w-0 border-l border-gray-100 bg-white">
+          <main className="flex-1 overflow-x-hidden bg-white">
+            <Outlet />
+          </main>
           <Footer />
         </div>
       </div>
@@ -70,17 +120,19 @@ const MainLayout = () => {
 };
 
 const AuthLayout = () => (
-  <div className="min-h-screen w-full bg-white flex items-center justify-center"><Outlet /></div>
+  <div className="min-h-screen w-full bg-white flex items-center justify-center">
+    <Outlet />
+  </div>
 );
 
 const AdminDashboardLayout = () => {
   return (
     <div className="flex h-screen w-screen bg-[#fafafa] overflow-hidden font-sans">
-      <SidebarAdmin /> 
+      <SidebarAdmin />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <HeaderAdmin /> 
+        <HeaderAdmin />
         <main className="flex-1 overflow-y-auto p-6 bg-[#fafafa]">
-          <Outlet /> 
+          <Outlet />
         </main>
       </div>
     </div>
@@ -100,12 +152,25 @@ const AppRoutes = () => (
       <Route path="/category/:slug" element={<CategoryPage />} />
       <Route path="/category/:parentSlug/:slug" element={<CategoryPage />} />
       <Route path="/:country_code/category/:slug" element={<CategoryPage />} />
-      <Route path="/:country_code/category/:parentSlug/:slug" element={<CategoryPage />} />
+      <Route
+        path="/:country_code/category/:parentSlug/:slug"
+        element={<CategoryPage />}
+      />
 
       <Route path="/search" element={<SearchPage />} />
-      <Route path="/:country_code/product/:category_slug/:id" element={<ProductDetail />} />
+      <Route
+        path="/:country_code/product/:category_slug/:id"
+        element={<ProductDetail />}
+      />
       <Route path="/cart" element={<Cart />} />
-      <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} /> 
+      <Route
+        path="/checkout"
+        element={
+          <ProtectedRoute>
+            <Checkout />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/profile/:tab?" element={<Profile />} />
     </Route>
 
@@ -117,17 +182,20 @@ const AppRoutes = () => (
 
     {/* ================= ROUTES BIỆT LẬP CHO ADMIN ================= */}
     <Route path="/admin/login" element={<AdminLogin />} />
-    
+
     <Route path="/admin" element={<AdminDashboardLayout />}>
       {/* Tự động nhảy vào trang thống kê khi vào /admin gốc */}
-      <Route index element={<Navigate to="dashboard/thongkesanpham" replace />} />
-      
+      <Route
+        index
+        element={<Navigate to="dashboard/thongkesanpham" replace />}
+      />
+
       {/* Nhóm: dashboard */}
       <Route path="dashboard">
         <Route index element={<Navigate to="thongkesanpham" replace />} />
         <Route path="thongkesanpham" element={<Dashboard />} />
-        <Route path="thongkedonhang" element={<ThongKeDonHang />} /> 
-        <Route path="thongkekhachhang" element={<ThongKeKhachHang />} /> 
+        <Route path="thongkedonhang" element={<ThongKeDonHang />} />
+        <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
       </Route>
 
       {/* Nhóm: products */}
@@ -200,17 +268,17 @@ const AppContent = () => {
 function App({ initialLanguage }) {
   return (
     <AuthProvider>
-      <StoreProvider>
-        <CartProvider>
-          <OrderProvider>
-            <LanguageProvider initialLanguage={initialLanguage}>
+      <LanguageProvider initialLanguage={initialLanguage}>
+        <StoreProvider>
+          <CartProvider>
+            <OrderProvider>
               <Router>
                 <AppContent />
               </Router>
-            </LanguageProvider>
-          </OrderProvider>
-        </CartProvider>
-      </StoreProvider>
+            </OrderProvider>
+          </CartProvider>
+        </StoreProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

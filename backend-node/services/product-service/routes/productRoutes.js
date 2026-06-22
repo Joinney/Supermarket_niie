@@ -15,7 +15,7 @@ import {
 const router = express.Router();
 
 // =========================================================================
-// 1. NHÓM ROUTE TĨNH (STATIC ROUTES) - LUÔN LUÔN ĐẶT TRÊN ĐẦU
+// 1. NHÓM ROUTE TĨNH (STATIC ROUTES)
 // =========================================================================
 
 /**
@@ -43,12 +43,12 @@ router.get('/countries', getAllCountries);
  *         name: keyword
  *         schema:
  *           type: string
- *         description: Từ khóa tìm kiếm (hỗ trợ tiếng Việt không dấu)
+ *         description: "Từ khóa tìm kiếm (hỗ trợ tiếng Việt không dấu)"
  *       - in: query
  *         name: country
  *         schema:
  *           type: string
- *         description: Mã quốc gia (VD: VN, US)
+ *         description: "Mã quốc gia (VD: VN, US)"
  *     responses:
  *       200:
  *         description: Trả về danh sách sản phẩm phù hợp
@@ -67,7 +67,7 @@ router.get('/search', searchProducts);
  *         name: country
  *         schema:
  *           type: string
- *         description: Mã quốc gia để lọc danh mục
+ *         description: "Mã quốc gia để lọc danh mục"
  *     responses:
  *       200:
  *         description: Trả về dữ liệu cây danh mục thành công
@@ -147,14 +147,14 @@ router.post('/batch-generate-descriptions', batchGenerateDescriptionsController)
 router.post('/refresh-empty-descriptions', refreshEmptyDescriptions);
 
 // =========================================================================
-// 2. NHÓM ROUTE CHỨA PARAM ĐỘNG (DYNAMIC ROUTES) - ĐẶT Ở DƯỚI CÙNG
+// 2. NHÓM ROUTE ĐỘNG (DYNAMIC ROUTES)
 // =========================================================================
 
 /**
  * @swagger
  * /api/products/category/{slug}:
  *   get:
- *     summary: Lấy danh sách sản phẩm dựa theo đường dẫn danh mục (Slug)
+ *     summary: Lấy danh sách sản phẩm theo slug danh mục
  *     tags:
  *       - Products
  *     parameters:
@@ -231,7 +231,7 @@ router.post('/', createProduct);
  * @swagger
  * /api/products/{id}:
  *   get:
- *     summary: Lấy thông tin chi tiết kèm biến thể và media của một sản phẩm
+ *     summary: Lấy thông tin chi tiết sản phẩm
  *     tags:
  *       - Products
  *     parameters:
@@ -253,4 +253,3 @@ router.post('/', createProduct);
 router.get('/:id', getProductById);
 
 export default router;
-
