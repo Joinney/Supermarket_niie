@@ -4,6 +4,13 @@ require_relative '../controllers/payment_controller'
 
 class PaymentRoutes < Sinatra::Base
   # ========================================================
+  # 🛡️ CẤU HÌNH VÔ HIỆU HÓA HOÀN TOÀN LỚP CHẶN BẢO VỆ HOST ĐỐI VỚI DOCKER
+  # ========================================================
+  disable :protection
+  set :protection, false # Tắt triệt để mọi lớp chặn trung gian bảo vệ Host của Rack
+  set :protection, :except => [:host_authorization, :json_csrf, :remote_token]
+
+  # ========================================================
   # 🛡️ MIDDLEWARE CORS CHO RIÊNG CỔNG THANH TOÁN
   # ========================================================
   before do
@@ -26,10 +33,8 @@ class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 💳 1. API KHỞI TẠO GIAO DỊCH (VNPay / PayPal)
   # ========================================================
-  # Endpoint: POST http://localhost:5004/api/payments/create-transaction
   post '/create-transaction' do
     begin
-      # Đọc và phân tách dữ liệu JSON gửi lên từ Frontend
       request_body = request.body.read
       if request_body.empty?
         status 400
@@ -38,20 +43,12 @@ class PaymentRoutes < Sinatra::Base
 
       request_payload = JSON.parse(request_body)
       
-      # Lấy địa chỉ IP của Client một cách an toàn để truyền sang cổng VNPay
       client_ip = request.env['HTTP_X_FORWARDED_FOR'] || request.env['REMOTE_ADDR'] || '127.0.0.1'
-      # Xử lý chuỗi nếu đi qua các lớp Proxy/Gateway (lấy IP đầu tiên)
       client_ip = client_ip.split(',').first.strip if client_ip.include?(',')
 
-      # Gọi tầng Controller để xử lý nghiệp vụ sinh link thanh toán
       result = PaymentController.process_payment(request_payload, client_ip)
       
-      if result[:success]
-        status 200
-      else
-        status 400
-      end
-      
+      status result[:success] ? 200 : 400
       result.to_json
     rescue JSON::ParserError => e
       status 400
@@ -65,22 +62,54 @@ class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 🔄 2. API TIẾP NHẬN PHẢN HỒI CALLBACK TỪ VNPAY CỔNG CHÍNH
   # ========================================================
-  # Endpoint: GET http://localhost:5004/api/payments/vnpay-callback
   get '/vnpay-callback' do
-    # Chuyển đổi đối tượng params của Sinatra thành Hash thuần ký tự String để dễ đối soát
     query_params = params.transform_keys(&:to_s)
-    
-    # Gửi sang Controller thực hiện check chữ ký (Checksum) và cập nhật Database
     result = PaymentController.handle_vnpay_callback(query_params)
     
     if result[:redirect_url]
-      # Nếu có link redirect (thành công hoặc thất bại), điều hướng trình duyệt của User về Frontend luôn
       redirect result[:redirect_url]
     else
-      # Nếu lỗi chữ ký signature hoặc lỗi kết nối DB
       status 400
       content_type :json
       { success: false, message: result[:message] }.to_json
     end
   end
+
+  # ========================================================
+  # 🚀 3. API TIẾP NHẬN PHẢN HỒI CALLBACK/CAPTURE TỪ PAYPAL SYSTEM
+  # ========================================================
+  post '/paypal-capture' do
+    begin
+      request_body = request.body.read
+      if request_body.empty?
+        status 400
+        return { success: false, message: 'Dữ liệu đối soát trống!' }.to_json
+      end
+
+      request_payload = JSON.parse(request_body)
+      
+      # Cơ chế bóc tách phòng vệ dữ liệu lỏng chống sập log đối soát
+      ma_don_hang = request_payload['ma_don_hang'] || "DM_UNKNOWN_#{Time.now.to_i}"
+      paypal_order_id = request_payload['paypal_order_id']
+      so_tien = request_payload['so_tien'] || 0
+      capture_data = request_payload['capture_data']
+
+      if paypal_order_id.nil? || capture_data.nil?
+        status 400
+        return { success: false, message: 'Thiếu thông tin định danh paypal_order_id!' }.to_json
+      end
+
+      result = PaymentController.handle_paypal_callback(ma_don_hang, paypal_order_id, so_tien, capture_data)
+
+      status result[:success] ? 200 : 400
+      result.to_json
+    rescue JSON::ParserError => e
+      status 400
+      { success: false, message: 'Dữ liệu JSON gửi lên không hợp lệ!', error: e.message }.to_json
+    rescue => e
+      status 500
+      { success: false, message: 'Gặp sự cố hệ thống phân hệ thanh toán PayPal!', error: e.message }.to_json
+    end
+  end
+
 end

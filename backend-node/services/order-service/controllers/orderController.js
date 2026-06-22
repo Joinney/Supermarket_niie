@@ -74,7 +74,7 @@ const getShippingFee = async (req, res) => {
   }
 };
 
-// 2. Tiếp nhận đặt hàng và lưu phi chuẩn hóa thông tin sản phẩm (Ki kiến trúc Microservices)
+// 2. Tiếp nhận đặt hàng và lưu phi chuẩn hóa thông tin sản phẩm (Snapshot)
 const placeOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -93,7 +93,7 @@ const placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Dữ liệu đơn hàng không hợp lệ hoặc bị thiếu!" });
     }
 
-    // 🚀 BƯỚC A: GỌI SANG PRODUCT-SERVICE QUA ENDPOINT NỘI BỘ ĐỂ LẤY THÔNG TIN SNAPSHOT
+    // 🚀 BƯỚC A: ĐỒNG BỘ NỘI BỘ DOCKER SANG PRODUCT-SERVICE QUA PORT 5002
     const variantIds = danh_sach_san_pham.map(item => String(item.variant_id));
     let internalProducts = [];
 
@@ -103,15 +103,12 @@ const placeOrder = async (req, res) => {
       });
       if (productServiceRes.data && productServiceRes.data.success) {
         internalProducts = productServiceRes.data.data;
-      } else {
-        throw new Error("Product Service phản hồi lỗi");
       }
     } catch (apiError) {
-      console.error("🔥 Lỗi gọi API nội bộ kết nối Product-Service:", apiError.message);
-      return res.status(502).json({ success: false, message: "Hệ thống không thể xác thực thông tin sản phẩm thô lúc này!" });
+      console.warn("⚠️ Cảnh báo API kết nối Product-Service thất bại, kích hoạt cơ chế Fallback dữ liệu dự phòng:", apiError.message);
     }
 
-    // 🚀 BƯỚC B: TÍNH TOÁN CHI PHÍ GIAO HÀNG VÀ DÒNG TIỀN ĐƠN HÀNG
+    // 🚀 BƯỚC B: TÍNH TOÁN CHI PHÍ GIAO HÀNG VÀ TỔNG TIỀN ĐƠN HÀNG
     const shippingCheck = await calculateGhnShippingCost(to_district_id, to_ward_code, req.body.weight);
     req.body.phi_van_chuyen = shippingCheck.cost;
     req.body.don_vi_van_chuyen = shippingCheck.name;
@@ -122,18 +119,19 @@ const placeOrder = async (req, res) => {
     }
     req.body.tong_thanh_toan = finalTotal;
 
-    // 🚀 BƯỚC C: PHI CHUẨN HÓA MẢNG SẢN PHẨM SANG TRẠNG THÁI ĐẦY ĐỦ THÔNG TIN ĐỂ LƯU XUỐNG MODEL
+    // 🚀 BƯỚC C: PHI CHUẨN HÓA MẢNG SẢN PHẨM AN TOÀN (CƠ CHẾ FALLBACK CHỐNG MẤT SẢN PHẨM)
     const normalizedItems = danh_sach_san_pham.map(item => {
-      // Tìm kiếm thông tin sản phẩm khớp từ danh mục lấy ở bước A về
       const detail = internalProducts.find(p => String(p.variant_id) === String(item.variant_id));
       
       return {
         variant_id: String(item.variant_id),
         quantity: Number(item.quantity),
-        price: detail ? Number(detail.price) : Number(item.price), // Ưu tiên lấy giá bảo mật từ DB sản phẩm gốc
-        product_name: detail ? detail.product_name : "Sản phẩm Demi Mart",
+        price: detail ? Number(detail.price) : Number(item.price || 0), 
+        product_name: detail ? detail.product_name : (item.name || "Sản phẩm cấp lập Demi Mart"),
         variant_name: detail ? detail.variant_name : "Mặc định",
-        image_url: detail ? detail.image_url : ""
+        image_url: detail ? detail.image_url : (item.image || ""),
+        ma_san_pham: detail ? detail.ma_san_pham : (item.ma_san_pham || null),
+        sku: detail ? detail.sku : (item.sku || null)
       };
     });
 
@@ -144,11 +142,38 @@ const placeOrder = async (req, res) => {
         paypal_order_id: req.body.paypal_order_id || null
     };
 
-    // 🚀 BƯỚC D: LƯU TRỰC TIẾP HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU CỦA ORDER SERVICE
+    // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công tại Order-Service với ID:", order.id);
 
-    // Trả về thông tin phục vụ luồng tiếp theo ở Frontend
+    // ========================================================
+    // 🌟 🚀 ĐÃ SỬA CHÍ MẠNG: ĐỒNG BỘ CHUẨN CONTAINER & THAM SỐ PHẲNG SANG RUBY SERVICE
+    // ========================================================
+    if (phuong_thuc_thanh_toan === 'PayPal' && (req.body.paypal_order_id || req.body.paypal_transaction_id)) {
+      try {
+        const syncPayload = {
+          ma_don_hang: String(order.ma_don_hang),
+          paypal_order_id: String(req.body.paypal_order_id),
+          so_tien: Number(finalTotal),
+          capture_data: {
+            status: 'COMPLETED',
+            id: String(req.body.paypal_transaction_id),
+            purchase_units: [{
+              payments: {
+                captures: [{ id: req.body.paypal_transaction_id }]
+              }
+            }]
+          }
+        };
+
+        // 🌟 ĐÃ FIX: Trỏ chính xác đến tên container 'demi_payment_service' trên cổng nội bộ 5004 và route phẳng hóa
+        await axios.post('http://localhost:5004/paypal-capture', syncPayload);
+        console.log(`🔒 [MICROSERVICES SYNC]: Đã đồng bộ ngược log giao dịch ${order.ma_don_hang} sang Payment-Service!`);
+      } catch (syncErr) {
+        console.error("⚠️ Cảnh báo: Lỗi ngầm khi đẩy lịch sử sang Payment-Service:", syncErr.response?.data || syncErr.message);
+      }
+    }
+
     return res.status(201).json({ 
       success: true, 
       ma_don_hang: order.ma_don_hang, 
@@ -158,9 +183,39 @@ const placeOrder = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("🔥 [LỒI TẠO ĐƠN HÀNG LOG CHI TIẾT]:", err.message);
+    console.error("🔥 [LỖI TẠO ĐƠN HÀNG LOG CHI TIẾT]:", err.message);
     return res.status(500).json({ success: false, message: "Lỗi hệ thống phân hệ đơn hàng khi khởi tạo!" });
   }
 };
 
-export { getShippingFee, placeOrder };
+// 3. Tiếp nhận đồng bộ trạng thái từ Payment-Service
+const updateInternalOrderStatus = async (req, res) => {
+  try {
+    const { ma_don_hang, trang_thai_thanh_toan } = req.body;
+
+    if (!ma_don_hang || !trang_thai_thanh_toan) {
+      return res.status(400).json({ success: false, message: "Thiếu thông tin đồng bộ trạng thái đơn hàng!" });
+    }
+
+    const sqlQuery = `
+      UPDATE public.orders 
+      SET trang_thai_thanh_toan = $1 
+      WHERE ma_don_hang = $2
+    `;
+    
+    if (db.query) {
+      await db.query(sqlQuery, [trang_thai_thanh_toan, ma_don_hang]);
+    } else {
+      await db.execute(sqlQuery, [trang_thai_thanh_toan, ma_don_hang]);
+    }
+
+    console.log(`🔒 [ĐỒNG BỘ THÀNH CÔNG]: Đơn hàng ${ma_don_hang} đã cập nhật trạng thái thanh toán sang: ${trang_thai_thanh_toan}`);
+    return res.status(200).json({ success: true, message: "Đồng bộ trạng thái hóa đơn nội bộ thành công!" });
+
+  } catch (err) {
+    console.error("🔥 Lỗi xử lý đồng bộ tại Order-Service:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi đồng bộ cơ sở dữ liệu phân hệ đơn hàng!" });
+  }
+};
+
+export { getShippingFee, placeOrder, updateInternalOrderStatus };

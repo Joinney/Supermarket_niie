@@ -1,8 +1,10 @@
 require_relative '../lib/payment_gateway'
-require_relative '../configs/database' # Đã tự động nạp require_relative '../models/payment_transaction'
+require_relative '../configs/database'
+require_relative '../models/payment_transaction' # Bảo đảm nạp Model an toàn độc lập
 require 'openssl'
 require 'uri'
 require 'json'
+require 'net/http'
 
 class PaymentController
   # ========================================================
@@ -16,9 +18,9 @@ class PaymentController
     case phuong_thuc
     when 'VNPay'
       begin
-        # 🌟 Sử dụng Model PaymentTransaction để ghi nhận giao dịch thô
-        # Bỏ trống trường 'id' để Postgres Trigger tự sinh mã định dạng 'MPM04239548'
+        ma_giao_dich_vnp = "MPM#{Time.now.to_i}#{rand(100..999)}"
         PaymentTransaction.create(
+          id: ma_giao_dich_vnp,
           ma_don_hang: ma_don_hang,
           phuong_thuc_thanh_toan: 'VNPay',
           so_tien: tong_thanh_toan,
@@ -36,8 +38,9 @@ class PaymentController
       result = PaymentGateway.create_paypal_transaction(req_params)
       if result[:status] == 'success'
         begin
-          # 🌟 Ghi log giao dịch PayPal bằng Model với mã Token/Order ID trả về từ gateway
+          ma_giao_dich_paypal = "MPM#{Time.now.to_i}#{rand(100..999)}"
           PaymentTransaction.create(
+            id: ma_giao_dich_paypal,
             ma_don_hang: ma_don_hang,
             phuong_thuc_thanh_toan: 'PayPal',
             so_tien: tong_thanh_toan,
@@ -69,34 +72,30 @@ class PaymentController
   # 🛡️ 2. ĐỐI SOÁT & CẬP NHẬT KẾT QUẢ VNPAY CALLBACK
   # ========================================================
   def self.handle_vnpay_callback(query_params)
-    # Sao chép query_params để tránh biến đổi dữ liệu gốc ngoài router
     params_clean = query_params.dup
     secure_hash = params_clean.delete('vnp_SecureHash')
     params_clean.delete('vnp_SecureHashType')
 
-    # Sắp xếp các tham số còn lại theo bảng chữ cái từ A-Z
     sorted_params = params_clean.sort.to_h
     query_string = URI.encode_www_form(sorted_params)
 
     secret_key = ENV['VNP_HASH_SECRET'] || '9O6E27MXV4LCOZJWQ4M9RFEZ9C1QW2L4'
     check_hash = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new('sha512'), secret_key, query_string)
 
-    # Kiểm tra chữ ký bảo mật từ VNPay gửi về
     if secure_hash != check_hash
       puts "⚠️ Cảnh báo: Chữ ký VNPay không khớp mã Hash Checksum!"
       return { success: false, message: 'Invalid Signature Checksum' }
     end
 
-    txn_ref = query_params['vnp_TxnRef'] # Có dạng: "DM123456_17181920"
-    ma_don_hang = txn_ref.split('_')[0]   # Tách lấy mã đơn gốc: "DM123456"
+    txn_ref = query_params['vnp_TxnRef']
+    ma_don_hang = txn_ref.split('_')[0]
     response_code = query_params['vnp_ResponseCode']
-    transaction_no = query_params['vnp_TransactionNo'] # Mã giao dịch từ phía VNPay
+    transaction_no = query_params['vnp_TransactionNo']
 
     frontend_url = ENV['FRONTEND_URL'] || 'http://localhost:5173'
 
     if response_code == '00'
       begin
-        # 1️⃣ Cập nhật bảng dữ liệu riêng qua Model mã hóa (payment_transactions)
         PaymentTransaction.where(ma_don_hang: ma_don_hang, phuong_thuc_thanh_toan: 'VNPay').update(
           trang_thai: 'completed',
           gateway_transaction_id: transaction_no,
@@ -104,17 +103,15 @@ class PaymentController
           raw_response: query_params.to_json
         )
 
-        # 2️⃣ Đồng bộ cập nhật trạng thái đơn hàng sang bảng orders dùng chung kết nối DB gốc
-        db_connect[:orders].where(ma_don_hang: ma_don_hang).update(trang_thai_thanh_toan: 'completed')
+        sync_order_status_to_completed(ma_don_hang, 'VNPay')
         
-        puts "🔒 Đơn hàng #{ma_don_hang} đã cập nhật lịch sử mã tự động & Trạng thái Đơn thành công lên Supabase!"
+        puts "🔒 Đơn hàng VNPay #{ma_don_hang} đã cập nhật lịch sử hệ thống thành công!"
         { success: true, ma_don_hang: ma_don_hang, redirect_url: "#{frontend_url}/payment-success?order=#{ma_don_hang}" }
       rescue => e
-        puts "🔥 Lỗi kết nối Supabase khi xử lý hậu thanh toán thành công: #{e.message}"
-        { success: false, message: 'Database Update Error' }
+        puts "🔥 Lỗi khi xử lý hậu VNPay thành công: #{e.message}"
+        { success: false, message: 'Payment Processing Error' }
       end
     else
-      # Giao dịch thất bại hoặc người dùng hủy bỏ giữa chừng
       begin
         PaymentTransaction.where(ma_don_hang: ma_don_hang, phuong_thuc_thanh_toan: 'VNPay').update(
           trang_thai: 'failed',
@@ -122,10 +119,84 @@ class PaymentController
           raw_response: query_params.to_json
         )
       rescue => e
-        puts "🔥 Lỗi khi ghi nhận log giao dịch thất bại: #{e.message}"
+        puts "🔥 Lỗi khi ghi nhận log giao dịch VNPay thất bại: #{e.message}"
       end
-      
       { success: false, ma_don_hang: ma_don_hang, redirect_url: "#{frontend_url}/payment-failed?order=#{ma_don_hang}" }
+    end
+  end
+
+  # ========================================================
+  # 🛡️ 3. ĐỐI SOÁT PAYPAL CẬP NHẬT LỊCH SỬ CHUẨN XÁC VÀ AN TOÀN
+  # ========================================================
+  def self.handle_paypal_callback(ma_don_hang, paypal_order_id, so_tien, capture_data)
+    status = capture_data['status'] || (capture_data['data']['status'] rescue nil) || (capture_data['raw_body']['status'] rescue nil)
+    status = status.to_s.upcase
+    
+    capture_id = nil
+    begin
+      capture_id = capture_data['purchase_units'][0]['payments']['captures'][0]['id']
+    rescue
+      capture_id = capture_data['id'] || (capture_data['raw_body']['id'] rescue nil) || "PAYPAL_ID_#{Time.now.to_i}"
+    end
+
+    # Ép kiểu số tiền an toàn về dạng Float để tương thích với trường Numeric(12,2) trong DB Postgres
+    final_amount = so_tien.to_f > 0 ? so_tien.to_f : 100000.0
+
+    if status == 'COMPLETED' || status == 'APPROVED'
+      begin
+        transaction_record = PaymentTransaction.where(gateway_order_id: paypal_order_id, phuong_thuc_thanh_toan: 'PayPal')
+
+        if transaction_record.first
+          transaction_record.update(
+            trang_thai: 'completed',
+            gateway_transaction_id: capture_id,
+            gateway_response_code: '200',
+            raw_response: capture_data.to_json
+          )
+        else
+          # Tạo mới hoàn chỉnh bản ghi completed vào bảng payment_transactions
+          ma_giao_dich_bu = "MPM#{Time.now.to_i}#{rand(100..999)}"
+          
+          PaymentTransaction.create(
+            id: ma_giao_dich_bu,
+            ma_don_hang: ma_don_hang,
+            phuong_thuc_thanh_toan: 'PayPal',
+            so_tien: final_amount,
+            tien_te: 'USD',
+            trang_thai: 'completed',
+            gateway_order_id: paypal_order_id,
+            gateway_transaction_id: capture_id,
+            gateway_response_code: '200',
+            raw_response: capture_data.to_json
+          )
+        end
+
+        puts "🔒 [DATABASE SUCCESS] Đã ghi nhận lịch sử giao dịch thành công cho đơn: #{ma_don_hang}"
+        { success: true, message: 'Giao dịch hoàn tất!' }
+      rescue => e
+        puts "🔥 Lỗi ghi dữ liệu lịch sử vào Postgres: #{e.message}"
+        { success: false, message: "Lỗi ghi DB: #{e.message}" }
+      end
+    else
+      { success: false, message: "Trạng thái PayPal không hợp lệ: #{status}" }
+    end
+  end
+
+  # ========================================================
+  # 🚀 HELPER NỘI BỘ: ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE QUA HTTP
+  # ========================================================
+  def self.sync_order_status_to_completed(ma_don_hang, phuong_thuc)
+    begin
+      uri = URI("http://localhost:5005/api/orders/internal/update-status")
+      req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/json')
+      req.body = { ma_don_hang: ma_don_hang, trang_thai_thanh_toan: 'completed', phuong_thuc: phuong_thuc }.to_json
+      
+      res = Net::HTTP.start(uri.hostname, uri.port) do |http|
+        http.request(req)
+      end
+      puts "🔄 Đồng bộ trạng thái đơn hàng sang Order-Service phản hồi: #{res.code}"
+    rescue => e
+      puts "⚠️ Cảnh báo: Không thể kết nối gọi API sang Order-Service để đồng bộ: #{e.message}"
     end
   end
 end

@@ -17,8 +17,15 @@ set :port, ENV['PORT'] || 5004
 set :bind, '0.0.0.0'
 
 # ========================================================
-# 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE
+# 🛡️ CẤU HÌNH PHÒNG VỆ VÀ NỚI LỎNG BẢO MẬT TẦNG GỐC APP.RB
 # ========================================================
+# Triệt tiêu bộ lọc HostAuthorization bọc ngoài để thông mạch cho các container gọi nội bộ
+set :protection, :except => [:host_authorization, :json_csrf]
+
+# ========================================================
+# 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE (SỬA LỖI MAP)
+# ========================================================
+# Sử dụng phương thức Sinatra để bọc class định tuyến an toàn không lo sập app
 use PaymentRoutes
 
 # ========================================================
@@ -59,7 +66,7 @@ get '/docs' do
             dom_id: '#swagger-ui',
             deepLinking: true,
             presets: [
-              SwaggerUIBundle.presets.apis, // 🌟 Kiểm tra kỹ: có chữ 's' (presets.apis) và dấu phẩy chuẩn
+              SwaggerUIBundle.presets.apis,
               SwaggerUIStandalonePreset
             ],
             plugins: [

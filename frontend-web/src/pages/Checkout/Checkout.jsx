@@ -174,7 +174,6 @@ export default function Checkout() {
     };
 
     try {
-      // Bước 1: Khởi tạo hóa đơn thô (Pending) tại order-service
       const result = placeOrder ? await placeOrder(orderData) : await orderApi.post('/orders/place-order', orderData);
       const cleanResult = result?.data || result; 
       
@@ -182,7 +181,6 @@ export default function Checkout() {
         const maDonHangText = cleanResult.ma_don_hang || cleanResult.data?.ma_don_hang;
         const tongThanhToanNum = cleanResult.tong_thanh_toan || finalTotal;
 
-        // 🚀 Luồng 1: Nếu người dùng chọn thanh toán VNPay
         if (selectedPayment === 'VNPay') {
           const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
           localStorage.setItem('vnpay_pending_variants', JSON.stringify(boughtVariantIds));
@@ -200,8 +198,6 @@ export default function Checkout() {
             throw new Error("Không lấy được link từ cổng thanh toán Payment Service!");
           }
         }
-
-        // 🚀 Luồng 2: Trả về mã đơn hàng phục vụ cho việc nạp dữ liệu PayPal
         return maDonHangText;
       } else {
         alert("Có sự cố từ máy chủ đơn hàng, Demi kiểm tra lại nhé!");
@@ -229,31 +225,43 @@ export default function Checkout() {
     setIsPlacing(false);
   };
 
-  // Luồng xử lý bất đồng bộ sau khi SDK PayPal phản hồi Captures thành công
+  // Luồng xử lý bất đồng bộ sau khi SDK PayPal phản hồi Captures thành công ở Frontend
   const handlePayPalSuccess = async (details) => {
     try {
       setIsPlacing(true);
       const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
 
-      // 1. Lưu thông tin đơn hàng thô lên order-service, nhận về ma_don_hang tương ứng
+      console.log("🚀 PayPal capture thành công ở Client, tiến hành lưu hóa đơn hệ thống...");
+
+      // 1. Lưu thông tin hóa đơn chính thức lên order-service
       const maDonHangText = await executePlaceOrder({
         trang_thai_thanh_toan: "completed",
-        paypal_transaction_id: transactionId,
-        paypal_order_id: details.id
+        paypal_transaction_id: String(transactionId),
+        paypal_order_id: String(details.id)
       });
 
       if (maDonHangText) {
-        // 2. Gọi đồng bộ chéo sang payment-service để ghi dữ liệu bảng payment_transactions
-        await paymentApi.post('/payments/create-transaction', {
-          ma_don_hang: maDonHangText,
-          tong_thanh_toan: finalTotal,
-          phuong_thuc_thanh_toan: 'PayPal',
-          gateway_transaction_id: transactionId,
-          gateway_order_id: details.id,
-          trang_thai: 'completed'
-        });
+        try {
+          console.log("💥 Bắn gói tin đối soát phẳng hóa cấu trúc sang payment-service...");
+          
+          // 2. Nạp đầy đủ 4 tham số định danh phẳng sang đúng endpoint của payment-service (Ruby)
+          await paymentApi.post('/payments/paypal-capture', {
+            ma_don_hang: String(maDonHangText),
+            paypal_order_id: String(details.id),
+            so_tien: Number(finalTotal),
+            capture_data: {
+              status: String(details.status),
+              id: String(transactionId),
+              raw_body: details
+            }
+          });
+          console.log("🔒 Đồng bộ sang Payment Service thành công!");
+        } catch (syncErr) {
+          console.warn("⚠️ Ghi nhận lịch sử payment_transactions chạy ngầm gặp độ trễ:", syncErr.response?.data || syncErr.message);
+        }
 
-        alert(`🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart: ${maDonHangText}`);
+        // Đơn hàng phía orders đã chốt hoàn tất an toàn, chuyển hướng người dùng
+        alert(`🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart của bạn là: ${maDonHangText}`);
         await finalizeOrderCleanup();
         navigate('/profile/orders');
       }
@@ -396,7 +404,7 @@ export default function Checkout() {
                 <PayPalButton 
                   amount={finalTotal} 
                   onSuccess={handlePayPalSuccess}
-                  onError={() => alert("Giao dịch PayPal bị gián đoạn, Demi vui lòng kiểm tra lại cấu hình Client ID nhé!")}
+                  onError={() => alert("Giao dịch PayPal bị gián đoạn, Demi vui lòng kiểm tra lại cấu hình hệ thống nhé!")}
                 />
               </div>
             ) : (

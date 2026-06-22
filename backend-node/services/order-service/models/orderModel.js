@@ -22,10 +22,13 @@ export const create = async (userId, data) => {
   // 1. Khởi tạo mã đơn hàng dựa trên thời gian
   const ma_don_hang = 'DM' + Date.now();
   
-  // 2. Lấy client từ pool để chạy Transaction độc lập
-  const client = await db.connect(); 
+  // 2. Khai báo biến client trước khối try để phạm vi biến (scope) bao quát được finally
+  let client; 
 
   try {
+    // Lấy client từ pool để chạy Transaction độc lập
+    client = await db.connect(); 
+    
     await client.query('BEGIN');
 
     // 3. Chèn dữ liệu vào bảng 'orders'
@@ -60,14 +63,13 @@ export const create = async (userId, data) => {
       ? JSON.stringify(thong_tin_giao_hang) 
       : String(thong_tin_giao_hang || '{}');
 
-    // Khởi tạo mảng danh sách sản phẩm an toàn định dạng JSON cho Postgres
+    // Khởi tạo mảng danh sách sản phẩm an toàn định dạng mảng cho Postgres xử lý vòng lặp
     const normalizedProductList = Array.isArray(danh_sach_san_pham) ? danh_sach_san_pham : [];
 
-    // ✅ ĐÃ XOÁ CHỮ "JavaScript" THỪA GÂY LỖI REFERENCEERROR
     const orderValues = [
       String(ma_don_hang),
-      userId,                                      // Đảm bảo map trúng vào cột $2 (user_id)
-      Number(to_district_id || 2194),              // Đã fix lỗi đọc biến trực tiếp
+      userId,                                     // Đảm bảo map trúng vào cột $2 (user_id)
+      Number(to_district_id || 2194),              // Đã định dạng số an toàn
       String(to_ward_code || "220713"), 
       Number(tong_tien_hang || 0),
       Number(phi_van_chuyen || 0),
@@ -83,11 +85,11 @@ export const create = async (userId, data) => {
     const orderRes = await client.query(orderQuery, orderValues);
     const newOrderUuid = orderRes.rows[0].id;
 
-    // 4. Chèn chi tiết từng sản phẩm vào bảng liên kết phụ 'order_items'
+    // 4. Chèn chi tiết từng sản phẩm vào bảng liên kết phụ 'order_items' với đầy đủ thông tin Snapshot
     if (normalizedProductList.length > 0) {
       const itemQuery = `
-        INSERT INTO order_items (order_id, variant_id, quantity, price) 
-        VALUES ($1, $2, $3, $4);
+        INSERT INTO order_items (order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
       `;
 
       for (const item of normalizedProductList) {
@@ -97,7 +99,12 @@ export const create = async (userId, data) => {
             newOrderUuid, 
             String(variantId), 
             Number(item.quantity || 1), 
-            Number(item.price || 0)
+            Number(item.price || 0),
+            item.product_name ? String(item.product_name) : null,
+            item.variant_name ? String(item.variant_name) : null,
+            item.image_url ? String(item.image_url) : null,
+            item.ma_san_pham ? String(item.ma_san_pham) : null,
+            item.sku ? String(item.sku) : null
           ]);
         }
       }
@@ -109,7 +116,9 @@ export const create = async (userId, data) => {
 
   } catch (error) {
     // 6. Hoàn tác dữ liệu (Rollback) lập tức nếu có bất kỳ lỗi xung đột nào xảy ra ngầm
-    await client.query('ROLLBACK');
+    if (client) {
+      await client.query('ROLLBACK');
+    }
     console.error("❌ Lỗi Database chi tiết khi thực thi Transaction:", {
       message: error.message,
       detail: error.detail,
@@ -117,7 +126,9 @@ export const create = async (userId, data) => {
     });
     throw error;
   } finally {
-    // 🔴 LUÔN LUÔN GIẢI PHÓNG KẾT NỐI
-    client.release();
+    // 🌟 ĐÃ FIX: Chỉ giải phóng khi kết nối client thực sự tồn tại, chống lỗi sập app lãng phí
+    if (client) {
+      client.release();
+    }
   }
 };

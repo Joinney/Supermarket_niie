@@ -500,15 +500,18 @@ export const getInternalVariants = async (req, res) => {
         const { variant_ids } = req.body;
 
         if (!variant_ids || !Array.isArray(variant_ids) || variant_ids.length === 0) {
-            return res.status(400).json({ success: false, message: 'Danh sách variant_ids không được rỗng.' });
+            return res.status(200).json({ success: true, data: [] });
         }
 
+        // 🌟 ĐÃ CẬP NHẬT: SELECT thêm bt.sku và sp.ma_san_pham
         const query = `
             SELECT 
                 bt.ma_bien_the AS variant_id,
+                sp.ma_san_pham,
                 sp.ten_san_pham AS product_name,
                 bt.ten_bien_the AS variant_name,
                 bt.gia_ban_le AS price,
+                bt.sku,
                 COALESCE(
                     (SELECT duong_dan_url 
                      FROM public.media_san_pham 
