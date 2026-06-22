@@ -12,12 +12,43 @@ const sanitizePagination = (pageInput, limitInput) => {
 };
 
 // =========================================================================
+// 0. API NỘI BỘ: LẤY THÔNG TIN CHI TIẾT BIẾN THỂ CHO CÁC SERVICE KHÁC
+// =========================================================================
+export const getInternalVariants = async (req, res) => {
+    try {
+        const { variantIds } = req.body;
+
+        if (!variantIds || !Array.isArray(variantIds) || variantIds.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Danh sách mã biến thể (variantIds) không được trống.' 
+            });
+        }
+
+        const query = `
+            SELECT ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, gia_khuyen_mai, ton_kho, trang_thai
+            FROM public.bien_the_san_pham
+            WHERE ma_bien_the = ANY($1::text[]) 
+              AND trang_thai = true;
+        `;
+
+        const { rows: variants } = await pool.query(query, [variantIds]);
+        
+        res.status(200).json(variants);
+    } catch (error) {
+        console.error('❌ Lỗi API getInternalVariants:', error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Sự cố máy chủ khi truy xuất dữ liệu biến thể nội bộ.' 
+        });
+    }
+};
+
+// =========================================================================
 // 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME) - Lọc chuẩn theo quốc gia trực tiếp
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
-        const result = await pool.query('...');
-        res.status(200).json(result.rows);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         const countryCode = (req.query.country || 'VN').toUpperCase(); 
 
@@ -35,6 +66,10 @@ export const getAllProducts = async (req, res) => {
             ORDER BY sp.ngay_tao DESC
             LIMIT $2 OFFSET $3;
         `;
+
+        console.log("=== ĐANG CHẠY CODE MỚI NHẤT ===");
+        console.log("💡 CÂU QUERY THỰC TẾ:", query);
+        console.log("💡 PARAMS:", [countryCode, limit, offset]);
 
         const { rows: products } = await pool.query(query, [countryCode, limit, offset]);
         res.status(200).json(products);
@@ -163,64 +198,34 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC (CÓ XỬ LÝ LỌC & SẮP XẾP)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (SLUG)
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
     const countryCode = (req.query.country || 'VN').toUpperCase();
-    
-    // Nhận params từ Frontend
-    const sort = req.query.sort || 'noi-bat';
-    const price = req.query.price || 'tat-ca';
 
     try {
         let query = `
-            WITH ProductMinPrice AS (
-                SELECT ma_san_pham, MIN(gia_ban_le) as gia_ban_thap_nhat
-                FROM public.bien_the_san_pham
-                WHERE trang_thai = true
-                GROUP BY ma_san_pham
-            )
             SELECT 
-                sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
+                sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                COALESCE(pmp.gia_ban_thap_nhat, 0) AS gia_ban_thap_nhat,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            LEFT JOIN ProductMinPrice pmp ON sp.ma_san_pham = pmp.ma_san_pham
             WHERE sp.trang_thai = true
               AND dmc.trang_thai = true
               AND sp.ma_quoc_gia = $1
         `;
         
         const params = [countryCode];
-        let paramIndex = 2;
 
         if (slug !== 'tat-ca') {
-            query += ` AND (dmc.duong_dan_seo = $${paramIndex} OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $${paramIndex} AND trang_thai = true LIMIT 1))`;
+            query += ` AND (dmc.duong_dan_seo = $2 OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $2 AND trang_thai = true LIMIT 1))`;
             params.push(slug);
-            paramIndex++;
         }
 
-        // Xử lý Lọc theo giá
-        if (price !== 'tat-ca') {
-            if (price === '0-50000') query += ` AND pmp.gia_ban_thap_nhat < 50000`;
-            else if (price === '50000-100000') query += ` AND pmp.gia_ban_thap_nhat BETWEEN 50000 AND 100000`;
-            else if (price === '100000-200000') query += ` AND pmp.gia_ban_thap_nhat BETWEEN 100000 AND 200000`;
-            else if (price === '200000-up') query += ` AND pmp.gia_ban_thap_nhat >= 200000`;
-        }
-
-        // Xử lý Sắp xếp
-        if (sort === 'gia-thap') {
-            query += ` ORDER BY pmp.gia_ban_thap_nhat ASC`;
-        } else if (sort === 'gia-cao') {
-            query += ` ORDER BY pmp.gia_ban_thap_nhat DESC`;
-        } else if (sort === 'ban-chay') {
-            query += ` ORDER BY sp.ngay_cap_nhat DESC`; // Nếu có cột luot_ban thì thay vào đây
-        } else {
-            query += ` ORDER BY sp.ngay_tao DESC`; // noi-bat (mặc định)
-        }
+        query += ` ORDER BY sp.ngay_tao DESC;`;
 
         const { rows: products } = await pool.query(query, params);
         res.status(200).json(products);
@@ -469,7 +474,7 @@ export const schedulePeriodicDescriptionGeneration = () => {
 };
 
 // =========================================================================
-// 10. LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
+// 10. 🛠️ ĐÃ BỔ SUNG: LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
 // =========================================================================
 export const getAllCountries = async (req, res) => {
     try {
@@ -495,7 +500,7 @@ export const getAllCountries = async (req, res) => {
 };
 
 // =========================================================================
-// 11. TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
+// 11. BỔ SUNG: TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
 // =========================================================================
 export const searchCategories = async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -511,7 +516,7 @@ export const searchCategories = async (req, res) => {
             
             UNION ALL
             
-            SELECT ma_dm_con AS ma_danh_muc, text_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
+            SELECT ma_dm_con AS ma_danh_muc, ten_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
             FROM public.danh_muc_con
             WHERE trang_thai = true AND ma_quoc_gia = $2 
               AND unaccent(ten_danh_muc_con) ILIKE unaccent($1)
@@ -524,45 +529,5 @@ export const searchCategories = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API searchCategories:", error.message);
         res.status(500).json({ error: "Lỗi hệ thống khi tìm kiếm danh mục." });
-    }
-};
-
-// =========================================================================
-// 🚀 12. BỔ SUNG: ENDPOINT NỘI BỘ (INTERNAL) PHỤC VỤ SNAPSHOT ĐƠN HÀNG
-// Độc lập liên kết chéo cho order-service bốc dữ liệu phi chuẩn hóa
-// =========================================================================
-export const getInternalVariants = async (req, res) => {
-    try {
-        const { variant_ids } = req.body;
-
-        if (!variant_ids || !Array.isArray(variant_ids) || variant_ids.length === 0) {
-            return res.status(200).json({ success: true, data: [] });
-        }
-
-        // 🌟 ĐÃ CẬP NHẬT: SELECT thêm bt.sku và sp.ma_san_pham
-        const query = `
-            SELECT 
-                bt.ma_bien_the AS variant_id,
-                sp.ma_san_pham,
-                sp.ten_san_pham AS product_name,
-                bt.ten_bien_the AS variant_name,
-                bt.gia_ban_le AS price,
-                bt.sku,
-                COALESCE(
-                    (SELECT duong_dan_url 
-                     FROM public.media_san_pham 
-                     WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true 
-                     LIMIT 1), ''
-                ) AS image_url
-            FROM public.bien_the_san_pham bt
-            INNER JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
-            WHERE bt.ma_bien_the = ANY($1::text[]) AND bt.trang_thai = true;
-        `;
-
-        const { rows: variants } = await pool.query(query, [variant_ids]);
-        return res.status(200).json({ success: true, data: variants });
-    } catch (error) {
-        console.error("❌ Lỗi API nội bộ getInternalVariants:", error.message);
-        return res.status(500).json({ success: false, message: "Lỗi máy chủ phân hệ sản phẩm." });
     }
 };
