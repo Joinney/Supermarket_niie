@@ -31,11 +31,23 @@ import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham";
 import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang"; 
 import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang"; 
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
+import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang"; 
+import Danhsachnoibo from "./admindb/pages/AuthZ/Danhsachnoibo"; // Import trang giao diện quản lý tài khoản thật
 
-// Các component tạm thời phục vụ giao diện tĩnh cho mục Settings
-const Danhsachquanlynoibo = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách quản lý nội bộ</div>;
+// Các component phục vụ giao diện tĩnh cho mục Settings
 const Danhsachvaitro = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách vai trò</div>;
 const SettingsGeneral = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Cấu hình chung (General Settings)</div>;
+
+// --- COMPONENT MOCK PHỤC VỤ CHO MỤC KHO HÀNG ---
+const Danhsachnhapkho = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách nhập kho</div>;
+const Quanlylohang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Quản lý lô hàng</div>;
+const Quanlytonkho = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Quản lý tồn kho</div>;
+const Dieuchuyenkho = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Điều chuyển kho</div>;
+
+// --- COMPONENT MOCK PHỤC VỤ CHO MỤC KHÁCH HÀNG (QUẢN TRỊ) ---
+const GiaoDienDanhSachKhachHang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Danh sách khách hàng</div>;
+const GiaoDienNhomKhachHang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Nhóm khách hàng</div>;
+const GiaoDienLoaiKhachHang = () => <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">Trang Giao Diện: Loại khách hàng</div>;
 
 /**
  * 1. LAYOUTS (KHÁCH HÀNG & ADMIN)
@@ -76,17 +88,15 @@ const AdminDashboardLayout = () => {
 };
 
 /**
- * 2. CẤU HÌNH ROUTES (Quy hoạch toàn bộ cụm quản trị về AuthZ)
+ * 2. CẤU HÌNH ROUTES
  */
 const AppRoutes = () => (
   <Routes>
     {/* ================= ROUTES CHO KHÁCH HÀNG ================= */}
     <Route element={<MainLayout />}>
-      {/* Hỗ trợ cả trang chủ không có và có tiền tố quốc gia (/vn, /us, /cn) */}
       <Route path="/" element={<Home />} />
       <Route path="/:country_code" element={<Home />} />
 
-      {/* Hỗ trợ các trang danh mục chuẩn quốc tế có đính kèm mã quốc gia */}
       <Route path="/category/:slug" element={<CategoryPage />} />
       <Route path="/category/:parentSlug/:slug" element={<CategoryPage />} />
       <Route path="/:country_code/category/:slug" element={<CategoryPage />} />
@@ -126,20 +136,41 @@ const AppRoutes = () => (
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
       </Route>
 
-      {/* Toàn bộ mục thiết lập tài khoản & phân quyền gom hết vào cụm AuthZ */}
-      <Route path="AuthZ">
-        {/* URL: /admin/AuthZ -> tự nhảy vào trang danh sách quản lý nội bộ trước */}
-        <Route index element={<Navigate to="InternalList" replace />} />
-        
-        {/* URL thực tế: /admin/AuthZ/InternalList */}
-        <Route path="InternalList" element={<Danhsachquanlynoibo />} />
-        
-        {/* URL thực tế: /admin/AuthZ/Danhsachvaitro */}
-        <Route path="Danhsachvaitro" element={<Danhsachvaitro />} />
+      {/* Nhóm: Donhang */}
+      <Route path="Donhang">
+        <Route index element={<Navigate to="Danhsachdonhang" replace />} />
+        <Route path="Danhsachdonhang" element={<Danhsachdonhang />} />
       </Route>
 
-      {/* Settings tổng quát giữ nguyên */}
-      <Route path="settings/general" element={<SettingsGeneral />} />
+      {/* Nhóm: inventory (Kho Hàng) */}
+      <Route path="inventory">
+        <Route index element={<Navigate to="import-list" replace />} />
+        <Route path="import-list" element={<Danhsachnhapkho />} />
+        <Route path="batches" element={<Quanlylohang />} />
+        <Route path="stock" element={<Quanlytonkho />} />
+        <Route path="transfer" element={<Dieuchuyenkho />} />
+      </Route>
+
+      {/* Nhóm: customers (Khách Hàng) */}
+      <Route path="customers">
+        <Route index element={<Navigate to="list" replace />} />
+        <Route path="list" element={<GiaoDienDanhSachKhachHang />} />
+        <Route path="groups" element={<GiaoDienNhomKhachHang />} />
+        <Route path="types" element={<GiaoDienLoaiKhachHang />} />
+      </Route>
+
+      {/* Nhóm: settings */}
+      <Route path="settings">
+        <Route index element={<Navigate to="general" replace />} />
+        <Route path="general" element={<SettingsGeneral />} />
+      </Route>
+
+      {/* Nhóm: AuthZ (Cập nhật đường dẫn chuẩn khớp với Sidebar) */}
+      <Route path="AuthZ">
+        <Route index element={<Navigate to="Danhsachnoibo" replace />} />
+        <Route path="Danhsachnoibo" element={<Danhsachnoibo />} />
+        <Route path="Danhsachvaitro" element={<Danhsachvaitro />} />
+      </Route>
     </Route>
 
     {/* Điều hướng dự phòng */}

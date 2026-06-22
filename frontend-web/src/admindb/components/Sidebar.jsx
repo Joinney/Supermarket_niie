@@ -24,7 +24,7 @@ export default function Sidebar() {
   // 2. Mặc định kích hoạt sẵn menu con "Thống kê sản phẩm" ban đầu
   const [activeItem, setActiveItem] = useState("/admin/dashboard/thongkesanpham");
 
-  // Xử lý khi click vào MỤC LỚN Dashboard
+  // Xử lý khi click vào MỤC LỚN
   const handleMainMenuClick = (menuKey, identityPath) => {
     if (isCollapsed) {
       setIsCollapsed(false);
@@ -32,10 +32,23 @@ export default function Sidebar() {
     
     toggleDropdown(menuKey);
 
-    // Khi nhấn vào Dashboard cha lớn, tự động active mục đầu tiên và điều hướng sang trang đó
+    // Tự động active mục con đầu tiên và điều hướng
     if (menuKey === "dashboard") {
       setActiveItem("/admin/dashboard/thongkesanpham");
       navigate("/admin/dashboard/thongkesanpham");
+    } else if (menuKey === "donHang") {
+      setActiveItem("/admin/Donhang/Danhsachdonhang");
+      navigate("/admin/Donhang/Danhsachdonhang");
+    } else if (menuKey === "khoHang") {
+      setActiveItem("/admin/inventory/import-list");
+      navigate("/admin/inventory/import-list");
+    } else if (menuKey === "khachHang") {
+      setActiveItem("/admin/customers/list");
+      navigate("/admin/customers/list");
+    } else if (menuKey === "settings") {
+      // Tự động chuyển đến Danh sách quản lý nội bộ mới khi nhấn mục lớn Settings
+      setActiveItem("/admin/AuthZ/Danhsachnoibo");
+      navigate("/admin/AuthZ/Danhsachnoibo");
     } else {
       setActiveItem(identityPath);
     }
@@ -68,6 +81,9 @@ export default function Sidebar() {
       activeItem === path || 
       (path === "/admin/dashboard" && activeItem.startsWith("/admin/dashboard/")) ||
       (path === "/admin/products" && activeItem.startsWith("/admin/products/")) ||
+      (path === "/admin/Donhang" && activeItem.startsWith("/admin/Donhang/")) || 
+      (path === "/admin/inventory" && activeItem.startsWith("/admin/inventory/")) || 
+      (path === "/admin/customers" && activeItem.startsWith("/admin/customers/")) || 
       (path === "/admin/settings-auth" && (activeItem.startsWith("/admin/settings/") || activeItem.startsWith("/admin/AuthZ/")))
     ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
@@ -203,8 +219,8 @@ export default function Sidebar() {
             {/* Đơn Hàng */}
             <div>
               <button 
-                onClick={() => handleMainMenuClick("donHang", "/admin/orders")}
-                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm transition group ${getMainMenuStyle("/admin/orders")}`}
+                onClick={() => handleMainMenuClick("donHang", "/admin/Donhang")}
+                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm transition group ${getMainMenuStyle("/admin/Donhang")}`}
                 title={isCollapsed ? "Đơn Hàng" : ""}
               >
                 <div className="flex items-center gap-3">
@@ -218,9 +234,9 @@ export default function Sidebar() {
 
               {openDropdowns.donHang && !isCollapsed && (
                 <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-                  <button onClick={() => handleSubMenuClick("/admin/orders/pending")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/orders/pending")}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/orders/pending" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
-                    <span>Đơn chờ xử lý</span>
+                  <button onClick={() => handleSubMenuClick("/admin/Donhang/Danhsachdonhang")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/Donhang/Danhsachdonhang")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/Donhang/Danhsachdonhang" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Danh sách đơn hàng</span>
                   </button>
                 </div>
               )}
@@ -244,9 +260,24 @@ export default function Sidebar() {
 
               {openDropdowns.khoHang && !isCollapsed && (
                 <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+                  <button onClick={() => handleSubMenuClick("/admin/inventory/import-list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/import-list")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/import-list" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Nhập kho</span>
+                  </button>
+
+                  <button onClick={() => handleSubMenuClick("/admin/inventory/batches")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/batches")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/batches" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Lô hàng</span>
+                  </button>
+
                   <button onClick={() => handleSubMenuClick("/admin/inventory/stock")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/stock")}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/stock" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                     <span>Tồn kho</span>
+                  </button>
+
+                  <button onClick={() => handleSubMenuClick("/admin/inventory/transfer")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/transfer")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/transfer" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Chuyển kho</span>
                   </button>
                 </div>
               )}
@@ -273,6 +304,16 @@ export default function Sidebar() {
                   <button onClick={() => handleSubMenuClick("/admin/customers/list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/customers/list")}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/customers/list" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                     <span>Danh sách khách hàng</span>
+                  </button>
+
+                  <button onClick={() => handleSubMenuClick("/admin/customers/groups")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/customers/groups")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/customers/groups" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Nhóm khách hàng</span>
+                  </button>
+
+                  <button onClick={() => handleSubMenuClick("/admin/customers/types")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/customers/types")}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/customers/types" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    <span>Loại khách hàng</span>
                   </button>
                 </div>
               )}
@@ -312,12 +353,12 @@ export default function Sidebar() {
                 {/* Các menu con Dropdown */}
                 {openDropdowns.settings && !isCollapsed && (
                   <div className="mt-1 space-y-1 animate-fadeIn pl-2">
-                    <button onClick={() => handleSubMenuClick("/admin/settings/internal-list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/internal-list")}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/settings/internal-list" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    {/* ĐÃ SỬA ĐƯỜNG DẪN TẠI ĐÂY */}
+                    <button onClick={() => handleSubMenuClick("/admin/AuthZ/Danhsachnoibo")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/AuthZ/Danhsachnoibo")}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/AuthZ/Danhsachnoibo" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                       <span>Danh sách quản lý nội bộ</span>
                     </button>
 
-                    {/* ĐÃ SỬA ĐƯỜNG DẪN TẠI ĐÂY */}
                     <button onClick={() => handleSubMenuClick("/admin/AuthZ/Danhsachvaitro")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/AuthZ/Danhsachvaitro")}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/AuthZ/Danhsachvaitro" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                       <span>Danh sách vai trò</span>
