@@ -32,7 +32,7 @@ export default function Sidebar() {
     
     toggleDropdown(menuKey);
 
-    // Tự động active mục con đầu tiên và điều hướng
+    // Tự động active mục con đầu tiên và điều hướng đúng cấu trúc mới
     if (menuKey === "dashboard") {
       setActiveItem("/admin/dashboard/thongkesanpham");
       navigate("/admin/dashboard/thongkesanpham");
@@ -46,9 +46,9 @@ export default function Sidebar() {
       setActiveItem("/admin/customers/list");
       navigate("/admin/customers/list");
     } else if (menuKey === "settings") {
-      // Tự động chuyển đến Danh sách quản lý nội bộ mới khi nhấn mục lớn Settings
-      setActiveItem("/admin/AuthZ/Danhsachnoibo");
-      navigate("/admin/AuthZ/Danhsachnoibo");
+      // ĐÃ CẬP NHẬT: Tự động chuyển đến Danh sách quản lý nội bộ theo URL lồng nhau mới
+      setActiveItem("/admin/settings/quanlynoibo/danhsachnoibo");
+      navigate("/admin/settings/quanlynoibo/danhsachnoibo");
     } else {
       setActiveItem(identityPath);
     }
@@ -84,7 +84,8 @@ export default function Sidebar() {
       (path === "/admin/Donhang" && activeItem.startsWith("/admin/Donhang/")) || 
       (path === "/admin/inventory" && activeItem.startsWith("/admin/inventory/")) || 
       (path === "/admin/customers" && activeItem.startsWith("/admin/customers/")) || 
-      (path === "/admin/settings-auth" && (activeItem.startsWith("/admin/settings/") || activeItem.startsWith("/admin/AuthZ/")))
+      // ĐÃ CẬP NHẬT: Gom logic active chuẩn xác cho nhóm settings/quanlynoibo hoặc settings/quanlyvaitro
+      (path === "/admin/settings-auth" && (activeItem.startsWith("/admin/settings/quanlynoibo") || activeItem.startsWith("/admin/settings/quanlyvaitro")))
     ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
     }
@@ -250,7 +251,7 @@ export default function Sidebar() {
                 title={isCollapsed ? "Kho Hàng" : ""}
               >
                 <div className="flex items-center gap-3">
-                  <svg xmlns="http://www.w3.org/2000/xl" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 transition-colors">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                   </svg>
                   {!isCollapsed && <span className="animate-fadeIn">Kho Hàng</span>}
@@ -353,14 +354,15 @@ export default function Sidebar() {
                 {/* Các menu con Dropdown */}
                 {openDropdowns.settings && !isCollapsed && (
                   <div className="mt-1 space-y-1 animate-fadeIn pl-2">
-                    {/* ĐÃ SỬA ĐƯỜNG DẪN TẠI ĐÂY */}
-                    <button onClick={() => handleSubMenuClick("/admin/AuthZ/Danhsachnoibo")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/AuthZ/Danhsachnoibo")}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/AuthZ/Danhsachnoibo" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    {/* ĐÃ ĐỒNG BỘ: Cấu trúc lồng nhau quản lý nội bộ */}
+                    <button onClick={() => handleSubMenuClick("/admin/settings/quanlynoibo/danhsachnoibo")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/quanlynoibo/danhsachnoibo")}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/settings/quanlynoibo/danhsachnoibo" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                       <span>Danh sách quản lý nội bộ</span>
                     </button>
 
-                    <button onClick={() => handleSubMenuClick("/admin/AuthZ/Danhsachvaitro")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/AuthZ/Danhsachvaitro")}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/AuthZ/Danhsachvaitro" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                    {/* ĐÃ ĐỒNG BỘ: Cấu trúc lồng nhau quản lý vai trò */}
+                    <button onClick={() => handleSubMenuClick("/admin/settings/quanlyvaitro/danhsachvaitro")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/quanlyvaitro/danhsachvaitro")}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/settings/quanlyvaitro/danhsachvaitro" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
                       <span>Danh sách vai trò</span>
                     </button>
                   </div>

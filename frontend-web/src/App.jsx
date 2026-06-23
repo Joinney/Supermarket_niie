@@ -34,13 +34,15 @@ import AdminProtect from "./admindb/components/AdminProtect";
 import AdminProfile from "./admindb/pages/Profile/AdminProfile";
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
 import SidebarAdmin from "./admindb/components/Sidebar";
-import HeaderAdmin from "./admindb/components/Header";
+import HeaderAdmin from "./admindb/components/Header"; 
 import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham";
 import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang";
 import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
 import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
-import Danhsachnoibo from "./admindb/pages/AuthZ/Danhsachnoibo"; // Import trang giao diện quản lý tài khoản thật
+
+// ĐÃ CẬP NHẬT: Sửa lại đường dẫn import chính xác theo thư mục Settings mới
+import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo"; 
 
 // Các component phục vụ giao diện tĩnh cho mục Settings
 const Danhsachvaitro = () => (
@@ -185,16 +187,19 @@ const AppRoutes = () => (
     {/* ================= ROUTES BIỆT LẬP CHO ADMIN ================= */}
     <Route path="/admin/login" element={<AdminLogin />} />
 
-    {/* BỌC ADMIN PROTECT TẠI ĐÂY */}
-    <Route path="/admin" element={
-      <AdminProtect>
-        <AdminDashboardLayout />
-      </AdminProtect>
-    }>
-      {/* Gắn trang hồ sơ cá nhân vào đây */}
+    {/* ĐÃ GHÉP NỐI: Bọc AdminProtect bảo vệ toàn bộ trang Dashboard nội bộ của Admin */}
+    <Route 
+      path="/admin" 
+      element={
+        <AdminProtect>
+          <AdminDashboardLayout />
+        </AdminProtect>
+      }
+    >
+      {/* Hồ sơ cá nhân của Admin */}
       <Route path="profile" element={<AdminProfile />} />
-      {/* Cập nhật luôn đích Navigate mặc định khi gõ /admin gốc */}
 
+      {/* Điều hướng mặc định khi truy cập /admin */}
       <Route
         index
         element={<Navigate to="dashboard/thongkesanpham" replace />}
@@ -241,13 +246,17 @@ const AppRoutes = () => (
       <Route path="settings">
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<SettingsGeneral />} />
-      </Route>
+        
+        {/* Cấu trúc Route lồng nhau khớp hoàn toàn với SidebarAdmin */}
+        <Route path="quanlynoibo">
+          <Route index element={<Navigate to="danhsachnoibo" replace />} />
+          <Route path="danhsachnoibo" element={<Danhsachnoibo />} />
+        </Route>
 
-      {/* Nhóm: AuthZ (Cập nhật đường dẫn chuẩn khớp với Sidebar) */}
-      <Route path="AuthZ">
-        <Route index element={<Navigate to="Danhsachnoibo" replace />} />
-        <Route path="Danhsachnoibo" element={<Danhsachnoibo />} />
-        <Route path="Danhsachvaitro" element={<Danhsachvaitro />} />
+        <Route path="quanlyvaitro">
+          <Route index element={<Navigate to="danhsachvaitro" replace />} />
+          <Route path="danhsachvaitro" element={<Danhsachvaitro />} />
+        </Route>
       </Route>
     </Route>
 
