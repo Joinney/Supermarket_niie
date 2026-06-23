@@ -16,12 +16,21 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Hàm đăng nhập giả lập cho Khách hàng
-  const login = async (username, password) => {
-    // Tạm thời cho phép đăng nhập thành công với bất kỳ tài khoản nào để test giao diện
+ const login = async (username, password) => {
+    // Giả lập hoặc gọi API thật cho Khách hàng tại đây
     if (username && password) {
+      
+      // BƯỚC QUAN TRỌNG: Xóa sạch sành sanh tàn dư của bộ khung Admin cũ
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminRefreshToken');
+      localStorage.removeItem('adminRole');
+      localStorage.removeItem('adminInfo');
+
+      // Sau đó mới lưu thông tin Khách hàng mới
       const mockUser = { name: username, role: "user" };
       localStorage.setItem("user", JSON.stringify(mockUser));
       setUser(mockUser);
+      
       return { success: true };
     }
     return { success: false, message: "Sai tài khoản hoặc mật khẩu" };

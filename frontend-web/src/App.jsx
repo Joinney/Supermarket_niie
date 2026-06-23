@@ -30,6 +30,7 @@ import { StoreProvider } from "./context/StoreContext";
 import ChatbotAI from "./components/chatbotai/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN ---
+import AdminProtect from "./admindb/components/AdminProtect";
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin from "./admindb/components/Header";
@@ -183,8 +184,14 @@ const AppRoutes = () => (
     {/* ================= ROUTES BIỆT LẬP CHO ADMIN ================= */}
     <Route path="/admin/login" element={<AdminLogin />} />
 
-    <Route path="/admin" element={<AdminDashboardLayout />}>
-      {/* Tự động nhảy vào trang thống kê khi vào /admin gốc */}
+    {/* BỌC ADMIN PROTECT TẠI ĐÂY */}
+    <Route path="/admin" element={
+      <AdminProtect>
+        <AdminDashboardLayout />
+      </AdminProtect>
+    }>
+
+      {/* Cập nhật luôn đích Navigate mặc định khi gõ /admin gốc */}
       <Route
         index
         element={<Navigate to="dashboard/thongkesanpham" replace />}

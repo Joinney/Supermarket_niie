@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from "../../../api/axios"; 
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -7,16 +8,37 @@ export default function AdminLogin() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (email === 'admin@gmail.com' && password === '123456') {
-      localStorage.setItem('adminToken', 'mock_token_key_demimart_2026');
-      localStorage.setItem('adminRole', 'superadmin');
-      navigate('/admin/dashboard');
-    } else {
-      setError('Tài khoản hoặc mật khẩu không chính xác!');
+    try {
+      const response = await axios.post('http://localhost:5001/api/auth/signin', { 
+        username: email, 
+        password: password 
+      }, { withCredentials: true });
+
+      const { token, refreshToken, user } = response.data;
+      const adminRoles = ['Admin', 'Manager', 'Staff'];
+
+      if (adminRoles.includes(user.role)) {
+        
+        // BƯỚC QUAN TRỌNG: Xóa sạch tàn dư của tài khoản Khách hàng trước đó
+        localStorage.removeItem('user'); 
+        localStorage.removeItem('token'); // Nếu sau này bên Khách hàng có lưu token riêng
+
+        // Sau đó mới lưu bộ key của Admin
+        localStorage.setItem('adminToken', token);
+        localStorage.setItem('adminRefreshToken', refreshToken);
+        localStorage.setItem('adminRole', user.role); 
+        localStorage.setItem('adminInfo', JSON.stringify(user));
+
+        navigate('/admin/dashboard/thongkesanpham');
+      } else {
+        setError('Tài khoản của bạn là Khách hàng, không có quyền truy cập Quản trị!');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Lỗi kết nối máy chủ!');
     }
   };
 

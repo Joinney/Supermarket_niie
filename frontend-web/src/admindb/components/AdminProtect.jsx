@@ -5,8 +5,10 @@ const AdminProtect = ({ children }) => {
   const adminToken = localStorage.getItem('adminToken');
   const role = localStorage.getItem('adminRole');
 
-  // Nếu không có token hoặc không phải admin, đá ngay về trang login admin độc lập
-  if (!adminToken || role !== 'superadmin') {
+  // Danh sách các vai trò được phép đứng trong khu vực /admin
+  const allowedRoles = ['Admin', 'Manager', 'Staff'];
+
+  if (!adminToken || !allowedRoles.includes(role)) {
     return <Navigate to="/admin/login" replace />;
   }
 

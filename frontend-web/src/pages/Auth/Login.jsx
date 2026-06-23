@@ -27,23 +27,38 @@ export default function Login() {
         }
     }, [user, navigate]);
 
-    // 🎯 CẬP NHẬT: Xử lý đăng nhập cưỡng chế luồng điều hướng trang
+    // 🎯 CẬP NHẬT: Xử lý đăng nhập, dọn dẹp chéo Admin & gộp giỏ hàng
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
         setLoading(true);
-        
+
+        // 1. LỘT BỎ TÀN DƯ ADMIN (Tránh xung đột Axios Interceptors sau này)
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("adminRefreshToken");
+        localStorage.removeItem("adminRole");
+        localStorage.removeItem("adminInfo");
+
         try {
             const result = await login(username, password);
-            
+
             if (result && result.success) {
-                console.log("🚀 Login thành công! Tiến hành điều hướng an toàn...");
-                
-                // 🎯 Sử dụng replace cứng của window để làm mới trạng thái DOM, 
-                // giúp cố định 3 key (token, refreshToken, user) vững chắc trong localStorage
-                window.location.replace("/");
+                console.log("🚀 Login thành công! Tiến hành đồng bộ dữ liệu...");
+
+                // 2. GỘP GIỎ HÀNG (Guest Cart -> Member Cart)
+                if (typeof mergeCart === "function") {
+                    try {
+                        await mergeCart();
+                        console.log("🛒 Đã gộp giỏ hàng Local vào Database thành công!");
+                    } catch (cartErr) {
+                        console.error("Lỗi đồng bộ giỏ hàng:", cartErr);
+                    }
+                }
+
+                // 3. ĐIỀU HƯỚNG VỀ TRANG CHỦ MƯỢT MÀ
+                navigate("/", { replace: true });
             } else {
-                setError(result.message || "Email hoặc mật khẩu không đúng");
+                setError(result?.message || "Email hoặc mật khẩu không đúng");
                 setLoading(false);
             }
         } catch (err) {
@@ -55,6 +70,13 @@ export default function Login() {
 
     const handleGoogleLogin = () => {
         setLoading(true);
+
+        // Dọn dẹp tàn dư Admin trước khi rẽ nhánh sang OAuth Google
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("adminRefreshToken");
+        localStorage.removeItem("adminRole");
+        localStorage.removeItem("adminInfo");
+
         const apiBaseUrl = import.meta.env.VITE_API_AUTH_URL || "http://localhost:5001";
         setTimeout(() => {
             window.location.href = `${apiBaseUrl}/api/auth/google`;
