@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # 1. Database
   db:
@@ -98,6 +100,7 @@ services:
       - auth-service
       - product-service
       - cart-service
+      - inventory-service # Thêm dependency để frontend đợi cả dịch vụ kho
     networks:
       - demi_network
     restart: always
@@ -129,7 +132,21 @@ services:
       - demi_network
     restart: on-failure
 
-    # 10. AI SERVICE (Cổng 8000)
+  # 10. INVENTORY SERVICE (Cổng 5006 - Viết bằng Go) 🚀
+  inventory-service:
+    build: ./backend-node/services/inventory-service
+    container_name: demi_inventory_service
+    ports:
+      - "5006:5006"
+    env_file:
+      - ./backend-node/services/inventory-service/.env
+    depends_on:
+      - db
+    networks:
+      - demi_network
+    restart: on-failure
+
+  # 11. AI SERVICE (Cổng 8000)
   ai-service:
     build: ./ai-service
     container_name: demi_ai_service
