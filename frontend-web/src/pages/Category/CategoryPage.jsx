@@ -209,48 +209,81 @@ export default function CategoryPage() {
         </span>
       </div>
 
-      {subCategories.length > 0 && (
-        <div className="relative w-full mb-6 group/subnav">
+    {subCategories.length > 0 && (
+  <div className="relative w-full mb-6 group/subnav">
+    {/* Nút scroll bên trái */}
+    <button
+      onClick={() => handleScroll("left")}
+      className="absolute left-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
+    >
+      <ChevronLeft size={20} strokeWidth={3} />
+    </button>
+
+    {/* Thanh Slider trượt ngang */}
+    <div
+      ref={sliderRef}
+      className="flex gap-3.5 overflow-x-auto pb-3 pt-1 snap-x scroll-smooth"
+      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+    >
+      <style>{`div::-webkit-scrollbar { display: none !important; }`}</style>
+
+      {subCategories.map((sub) => {
+        const isActive = activeSubCategory === sub.slug;
+        const imageUrl = sub.Hinh_anh || sub.image || sub.hinhanh;
+
+        return (
           <button
-            onClick={() => handleScroll("left")}
-            className="absolute left-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-20 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
+            key={sub.id || sub.ma_dm_con}
+            onClick={() => handleSubCategoryClick(sub.slug)}
+            className={`flex items-center justify-between rounded-2xl border min-w-[215px] max-w-[215px] h-[74px] flex-shrink-0 transition-all snap-start text-left relative overflow-hidden group
+              ${
+                isActive
+                  ? "border-[#006c49] ring-2 ring-[#006c49]/20 shadow-md"
+                  : "border-slate-100 bg-[#f4f6fa] hover:bg-slate-200/50 hover:border-slate-200 shadow-sm"
+              }`}
           >
-            <ChevronLeft size={20} strokeWidth={3} />
+            {/* 1. Phần ảnh chiếm TRỌN VẸN 100% diện tích của toàn bộ thẻ (Full Screen) */}
+            <div className="absolute inset-0 w-full h-full z-0 bg-white">
+              {imageUrl && imageUrl !== "[null]" ? (
+                <img
+                  src={imageUrl}
+                  alt={sub.name || sub.ten_danh_muc_con}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://placehold.co/200x100/f1f5f9/94a3b8?text=No+Image";
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200" />
+              )}
+            </div>
+
+            {/* 2. Hiệu ứng kính TRONG SUỐT một tí (điều chỉnh bg-white/50 và backdrop-blur-sm) */}
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 max-w-[140px] z-10">
+              <span className="inline-block bg-white/50 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-2 rounded-xl border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.05)] line-clamp-2 leading-tight">
+                {sub.name || sub.ten_danh_muc_con}
+              </span>
+            </div>
+
+            {/* Thanh highlight nhỏ chỉ định khi đang được chọn (Active) */}
+            {isActive && (
+              <span className="absolute bottom-0 left-0 right-0 h-1.5 bg-[#006c49] z-20 rounded-b-2xl" />
+            )}
           </button>
+        );
+      })}
+    </div>
 
-          <div
-            ref={sliderRef}
-            className="flex gap-2.5 overflow-x-auto pb-1 snap-x scroll-smooth"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            <style>{`div::-webkit-scrollbar { display: none !important; }`}</style>
-
-            {subCategories.map((sub) => (
-              <button
-                key={sub.id}
-                onClick={() => handleSubCategoryClick(sub.slug)}
-                className={`flex items-center justify-between pl-4 pr-2 py-2 rounded-xl border min-w-[215px] max-w-[215px] h-[64px] flex-shrink-0 transition-all snap-start text-left
-                  ${
-                    activeSubCategory === sub.slug
-                      ? "border-[#006c49] bg-emerald-50/40 text-[#006c49] ring-1 ring-[#006c49]"
-                      : "border-slate-100 bg-[#f4f6fa] hover:bg-slate-200/60"
-                  }`}
-              >
-                <span className="text-xs font-bold text-slate-800 line-clamp-2 pr-1">
-                  {sub.name}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => handleScroll("right")}
-            className="absolute right-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-20 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
-          >
-            <ChevronRight size={20} strokeWidth={3} />
-          </button>
-        </div>
-      )}
+    {/* Nút scroll bên phải */}
+    <button
+      onClick={() => handleScroll("right")}
+      className="absolute right-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
+    >
+      <ChevronRight size={20} strokeWidth={3} />
+    </button>
+  </div>
+)}
 
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
         <div className="text-sm font-semibold text-slate-600">
