@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom"; // 🛠️ Đã thêm useSearchParams
 import {
   ChevronRight,
   ChevronLeft,
@@ -16,27 +21,24 @@ export default function CategoryPage() {
   const { country_code, parentSlug, slug } = useParams();
   const navigate = useNavigate();
 
-  // 🛠️ Bổ sung formatPrice từ useStore
   const { currentStore, formatPrice } = useStore();
+
+  // 1. SỬ DỤNG BỘ LỌC TỪ URL (Single Source of Truth)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedSort = searchParams.get("sort") || "noi-bat";
+  const selectedPrice = searchParams.get("price") || "tat-ca";
+  const selectedOrigin = searchParams.get("origin") || "tat-ca";
+  const freshShipping = searchParams.get("fresh") === "true";
+  const globalShipping = searchParams.get("global") === "true";
+  const currentPage = parseInt(searchParams.get("page")) || 1;
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [categoryName, setCategoryName] = useState("");
-
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
   const [subCategories, setSubCategories] = useState([]);
   const [activeSubCategory, setActiveSubCategory] = useState(null);
-
-  const [selectedSort, setSelectedSort] = useState("noi-bat");
-  const [selectedPrice, setSelectedPrice] = useState("tat-ca");
-  const [selectedOrigin, setSelectedOrigin] = useState("tat-ca");
-  const [shippingMethod, setShippingMethod] = useState({
-    fresh: false,
-    global: false,
-  });
 
   const sliderRef = useRef(null);
 
@@ -58,18 +60,36 @@ export default function CategoryPage() {
     { label: `Trên ${formatPrice(200000)}`, value: "200000-up" },
   ];
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    slug,
-    parentSlug,
-    country_code,
-    selectedSort,
-    selectedPrice,
-    selectedOrigin,
-    activeSubCategory,
-    shippingMethod,
-  ]);
+  // 2. HÀM CẬP NHẬT BỘ LỌC LÊN URL
+  const updateFilter = (key, value) => {
+    const currentParams = Object.fromEntries([...searchParams]);
+
+    // Bỏ tham số khỏi URL nếu nó là mặc định hoặc false để URL gọn gàng
+    if (
+      !value ||
+      value === "tat-ca" ||
+      value === "noi-bat" ||
+      value === false
+    ) {
+      delete currentParams[key];
+    } else {
+      currentParams[key] = String(value);
+    }
+
+    // Luôn reset về trang 1 khi thay đổi bất kỳ bộ lọc nào khác ngoài 'page'
+    if (key !== "page") {
+      delete currentParams.page;
+    }
+
+    setSearchParams(currentParams);
+  };
+
+  // Hàm chuyển trang
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      updateFilter("page", pageNumber);
+    }
+  };
 
   useEffect(() => {
     const fetchSubCategories = async () => {
@@ -118,6 +138,7 @@ export default function CategoryPage() {
         const currentCountry = country_code || currentStore?.code || "vn";
         const targetSlug = slug || "tat-ca";
 
+        // GỌI API LẤY SẢN PHẨM DỰA VÀO CÁC STATE TỪ URL
         const response = await productApi.get(
           `/products/category/${targetSlug}`,
           {
@@ -126,6 +147,8 @@ export default function CategoryPage() {
               sort: selectedSort,
               price: selectedPrice,
               origin: selectedOrigin,
+              fresh: freshShipping,
+              global: globalShipping,
               page: currentPage,
               limit: 20,
             },
@@ -160,6 +183,8 @@ export default function CategoryPage() {
     selectedSort,
     selectedPrice,
     selectedOrigin,
+    freshShipping,
+    globalShipping,
     currentPage,
   ]);
 
@@ -175,16 +200,11 @@ export default function CategoryPage() {
     }
   };
 
-  const handlePageChange = (pageNumber) => {
-    if (pageNumber >= 1 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
-    }
-  };
-
   const handleSubCategoryClick = (subSlug) => {
     const mainSlug = parentSlug || slug;
-    const prefix = country_code ? `/${country_code}` : "";
+    const prefix = country_code ? `/${String(country_code).toLowerCase()}` : "";
 
+    // Khi chuyển danh mục, bộ lọc trên URL sẽ tự động được xóa sạch để hiển thị toàn bộ
     if (activeSubCategory === subSlug) {
       navigate(`${prefix}/category/${mainSlug}`);
     } else {
@@ -196,7 +216,7 @@ export default function CategoryPage() {
     <div className="max-w-[1400px] mx-auto p-4 md:p-6 font-sans bg-white min-h-screen">
       <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-4 uppercase tracking-wider">
         <Link
-          to={country_code ? `/${country_code}` : "/"}
+          to={country_code ? `/${String(country_code).toLowerCase()}` : "/"}
           className="hover:text-[#006c49] flex items-center gap-1 transition-colors"
         >
           <Home size={14} /> Trang chủ
@@ -209,81 +229,76 @@ export default function CategoryPage() {
         </span>
       </div>
 
-    {subCategories.length > 0 && (
-  <div className="relative w-full mb-6 group/subnav">
-    {/* Nút scroll bên trái */}
-    <button
-      onClick={() => handleScroll("left")}
-      className="absolute left-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
-    >
-      <ChevronLeft size={20} strokeWidth={3} />
-    </button>
-
-    {/* Thanh Slider trượt ngang */}
-    <div
-      ref={sliderRef}
-      className="flex gap-3.5 overflow-x-auto pb-3 pt-1 snap-x scroll-smooth"
-      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-    >
-      <style>{`div::-webkit-scrollbar { display: none !important; }`}</style>
-
-      {subCategories.map((sub) => {
-        const isActive = activeSubCategory === sub.slug;
-        const imageUrl = sub.Hinh_anh || sub.image || sub.hinhanh;
-
-        return (
+      {subCategories.length > 0 && (
+        <div className="relative w-full mb-6 group/subnav">
           <button
-            key={sub.id || sub.ma_dm_con}
-            onClick={() => handleSubCategoryClick(sub.slug)}
-            className={`flex items-center justify-between rounded-2xl border min-w-[215px] max-w-[215px] h-[74px] flex-shrink-0 transition-all snap-start text-left relative overflow-hidden group
-              ${
-                isActive
-                  ? "border-[#006c49] ring-2 ring-[#006c49]/20 shadow-md"
-                  : "border-slate-100 bg-[#f4f6fa] hover:bg-slate-200/50 hover:border-slate-200 shadow-sm"
-              }`}
+            onClick={() => handleScroll("left")}
+            className="absolute left-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
           >
-            {/* 1. Phần ảnh chiếm TRỌN VẸN 100% diện tích của toàn bộ thẻ (Full Screen) */}
-            <div className="absolute inset-0 w-full h-full z-0 bg-white">
-              {imageUrl && imageUrl !== "[null]" ? (
-                <img
-                  src={imageUrl}
-                  alt={sub.name || sub.ten_danh_muc_con}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = "https://placehold.co/200x100/f1f5f9/94a3b8?text=No+Image";
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200" />
-              )}
-            </div>
-
-            {/* 2. Hiệu ứng kính TRONG SUỐT một tí (điều chỉnh bg-white/50 và backdrop-blur-sm) */}
-            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 max-w-[140px] z-10">
-              <span className="inline-block bg-white/50 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-2 rounded-xl border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.05)] line-clamp-2 leading-tight">
-                {sub.name || sub.ten_danh_muc_con}
-              </span>
-            </div>
-
-            {/* Thanh highlight nhỏ chỉ định khi đang được chọn (Active) */}
-            {isActive && (
-              <span className="absolute bottom-0 left-0 right-0 h-1.5 bg-[#006c49] z-20 rounded-b-2xl" />
-            )}
+            <ChevronLeft size={20} strokeWidth={3} />
           </button>
-        );
-      })}
-    </div>
 
-    {/* Nút scroll bên phải */}
-    <button
-      onClick={() => handleScroll("right")}
-      className="absolute right-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
-    >
-      <ChevronRight size={20} strokeWidth={3} />
-    </button>
-  </div>
-)}
+          <div
+            ref={sliderRef}
+            className="flex gap-3.5 overflow-x-auto pb-3 pt-1 snap-x scroll-smooth"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            <style>{`div::-webkit-scrollbar { display: none !important; }`}</style>
+
+            {subCategories.map((sub) => {
+              const isActive = activeSubCategory === sub.slug;
+              const imageUrl = sub.Hinh_anh || sub.image || sub.hinhanh;
+
+              return (
+                <button
+                  key={sub.id || sub.ma_dm_con}
+                  onClick={() => handleSubCategoryClick(sub.slug)}
+                  className={`flex items-center justify-between rounded-2xl border min-w-[215px] max-w-[215px] h-[74px] flex-shrink-0 transition-all snap-start text-left relative overflow-hidden group
+                    ${
+                      isActive
+                        ? "border-[#006c49] ring-2 ring-[#006c49]/20 shadow-md"
+                        : "border-slate-100 bg-[#f4f6fa] hover:bg-slate-200/50 hover:border-slate-200 shadow-sm"
+                    }`}
+                >
+                  <div className="absolute inset-0 w-full h-full z-0 bg-white">
+                    {imageUrl && imageUrl !== "[null]" ? (
+                      <img
+                        src={imageUrl}
+                        alt={sub.name || sub.ten_danh_muc_con}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src =
+                            "https://placehold.co/200x100/f1f5f9/94a3b8?text=No+Image";
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200" />
+                    )}
+                  </div>
+
+                  <div className="absolute left-2.5 top-1/2 -translate-y-1/2 max-w-[140px] z-10">
+                    <span className="inline-block bg-white/50 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-2 rounded-xl border border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.05)] line-clamp-2 leading-tight">
+                      {sub.name || sub.ten_danh_muc_con}
+                    </span>
+                  </div>
+
+                  {isActive && (
+                    <span className="absolute bottom-0 left-0 right-0 h-1.5 bg-[#006c49] z-20 rounded-b-2xl" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => handleScroll("right")}
+            className="absolute right-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
+          >
+            <ChevronRight size={20} strokeWidth={3} />
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
         <div className="text-sm font-semibold text-slate-600">
@@ -293,7 +308,7 @@ export default function CategoryPage() {
           <span className="text-xs text-slate-400">Sắp xếp:</span>
           <select
             value={selectedSort}
-            onChange={(e) => setSelectedSort(e.target.value)}
+            onChange={(e) => updateFilter("sort", e.target.value)}
             className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#006c49]"
           >
             <option value="noi-bat">Nổi bật (mặc định)</option>
@@ -364,7 +379,11 @@ export default function CategoryPage() {
                   <button
                     key={pageNum}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`w-9 h-9 rounded-lg border text-xs font-bold transition-all ${currentPage === pageNum ? "bg-[#006c49] border-[#006c49] text-white shadow-sm shadow-emerald-700/20" : "border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"}`}
+                    className={`w-9 h-9 rounded-lg border text-xs font-bold transition-all ${
+                      currentPage === pageNum
+                        ? "bg-[#006c49] border-[#006c49] text-white shadow-sm shadow-emerald-700/20"
+                        : "border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+                    }`}
                   >
                     {pageNum}
                   </button>
@@ -392,16 +411,13 @@ export default function CategoryPage() {
           <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
             <h3 className="font-bold text-slate-800 text-sm">Chọn lọc</h3>
             <button
-              onClick={() => {
-                setSelectedPrice("tat-ca");
-                setSelectedOrigin("tat-ca");
-                setShippingMethod({ fresh: false, global: false });
-              }}
+              onClick={() => setSearchParams({})}
               className="text-xs text-slate-400 hover:text-red-500 transition-colors"
             >
               Đặt lại
             </button>
           </div>
+
           <div className="mb-5">
             <h4 className="text-xs font-bold text-slate-700 mb-2">
               Phương thức giao hàng
@@ -410,13 +426,8 @@ export default function CategoryPage() {
               <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={shippingMethod.fresh}
-                  onChange={(e) =>
-                    setShippingMethod({
-                      ...shippingMethod,
-                      fresh: e.target.checked,
-                    })
-                  }
+                  checked={freshShipping}
+                  onChange={(e) => updateFilter("fresh", e.target.checked)}
                   className="rounded text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
                 />{" "}
                 Giao hàng hoả tốc
@@ -424,13 +435,8 @@ export default function CategoryPage() {
               <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={shippingMethod.global}
-                  onChange={(e) =>
-                    setShippingMethod({
-                      ...shippingMethod,
-                      global: e.target.checked,
-                    })
-                  }
+                  checked={globalShipping}
+                  onChange={(e) => updateFilter("global", e.target.checked)}
                   className="rounded text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
                 />{" "}
                 <span className="bg-orange-500 text-white text-[10px] px-1 rounded font-black scale-90">
@@ -439,10 +445,10 @@ export default function CategoryPage() {
               </label>
             </div>
           </div>
+
           <div className="mb-5">
             <h4 className="text-xs font-bold text-slate-700 mb-2">Giá bán</h4>
             <div className="space-y-2">
-              {/* 🛠️ Sử dụng mảng động priceFilters đã tạo ở trên */}
               {priceFilters.map((item) => (
                 <label
                   key={item.value}
@@ -453,7 +459,7 @@ export default function CategoryPage() {
                     name="price-filter"
                     value={item.value}
                     checked={selectedPrice === item.value}
-                    onChange={() => setSelectedPrice(item.value)}
+                    onChange={() => updateFilter("price", item.value)}
                     className="text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
                   />{" "}
                   {item.label}
@@ -461,6 +467,7 @@ export default function CategoryPage() {
               ))}
             </div>
           </div>
+
           <div>
             <h4 className="text-xs font-bold text-slate-700 mb-2">Xuất Xứ</h4>
             <div className="space-y-2">
@@ -480,7 +487,7 @@ export default function CategoryPage() {
                     name="origin-filter"
                     value={item.value}
                     checked={selectedOrigin === item.value}
-                    onChange={() => setSelectedOrigin(item.value)}
+                    onChange={() => updateFilter("origin", item.value)}
                     className="text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
                   />{" "}
                   {item.label}

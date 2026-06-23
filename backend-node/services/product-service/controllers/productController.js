@@ -198,14 +198,23 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC (SLUG)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (HỖ TRỢ BỘ LỌC, SẮP XẾP, PHÂN TRANG)
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
     const countryCode = (req.query.country || 'VN').toUpperCase();
+    
+    // 1. Nhận tham số bộ lọc từ Frontend (URL Query)
+    const sort = req.query.sort || 'noi-bat';
+    const price = req.query.price || 'tat-ca';
+    const origin = req.query.origin || 'tat-ca';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
 
     try {
-        let query = `
+        // 2. Câu truy vấn gốc lấy thông tin cơ bản
+        let baseQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
@@ -219,16 +228,67 @@ export const getProductsByCategorySlug = async (req, res) => {
         `;
         
         const params = [countryCode];
+        let paramIndex = 2; // Bắt đầu đếm biến môi trường từ $2
 
+        // Lọc theo Danh mục
         if (slug !== 'tat-ca') {
-            query += ` AND (dmc.duong_dan_seo = $2 OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $2 AND trang_thai = true LIMIT 1))`;
+            baseQuery += ` AND (dmc.duong_dan_seo = $${paramIndex} OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $${paramIndex} AND trang_thai = true LIMIT 1))`;
             params.push(slug);
+            paramIndex++;
         }
 
-        query += ` ORDER BY sp.ngay_tao DESC;`;
+        // Lọc theo Xuất Xứ (⚠️ Yêu cầu bảng san_pham phải có cột xuat_xu)
+        // Nếu Database của bạn chưa có cột này, hãy comment khối lệnh IF này lại nhé!
+        if (origin !== 'tat-ca') {
+            baseQuery += ` AND sp.xuat_xu = $${paramIndex}`;
+            params.push(origin); // Các giá trị từ UI: vn, nhap-khau, jp, kr...
+            paramIndex++;
+        }
 
-        const { rows: products } = await pool.query(query, params);
-        res.status(200).json(products);
+        // 3. Sử dụng CTE (Bảng tạm) để tối ưu việc lọc và sắp xếp dựa trên Giá
+        let finalQuery = `WITH ProductList AS (${baseQuery}) SELECT * FROM ProductList WHERE 1=1`;
+
+        // Lọc theo Khoảng giá
+        if (price !== 'tat-ca') {
+            if (price === '0-50000') {
+                finalQuery += ` AND gia_ban_thap_nhat < 50000`;
+            } else if (price === '50000-100000') {
+                finalQuery += ` AND gia_ban_thap_nhat >= 50000 AND gia_ban_thap_nhat <= 100000`;
+            } else if (price === '100000-200000') {
+                finalQuery += ` AND gia_ban_thap_nhat >= 100000 AND gia_ban_thap_nhat <= 200000`;
+            } else if (price === '200000-up') {
+                finalQuery += ` AND gia_ban_thap_nhat > 200000`;
+            }
+        }
+
+        // 4. Tính toán tổng số lượng sản phẩm để Phân trang (Pagination)
+        const countQuery = `SELECT COUNT(*) as total FROM (${finalQuery}) as count_table`;
+        const { rows: countResult } = await pool.query(countQuery, params);
+        const totalItems = parseInt(countResult[0].total);
+        const totalPages = Math.ceil(totalItems / limit);
+
+        // 5. Áp dụng Sắp xếp (Order By)
+        if (sort === 'gia-thap') {
+            finalQuery += ` ORDER BY gia_ban_thap_nhat ASC, ngay_tao DESC`;
+        } else if (sort === 'gia-cao') {
+            finalQuery += ` ORDER BY gia_ban_thap_nhat DESC, ngay_tao DESC`;
+        } else {
+            finalQuery += ` ORDER BY ngay_tao DESC`;
+        }
+
+        // 6. Áp dụng Phân trang (Limit & Offset)
+        finalQuery += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1};`;
+        params.push(limit, offset);
+
+        const { rows: products } = await pool.query(finalQuery, params);
+        
+        // 7. Trả về đúng Format mà Frontend đang mong đợi
+        res.status(200).json({
+            products,
+            totalPages,
+            currentPage: page,
+            totalItems
+        });
     } catch (error) {
         console.error("❌ Lỗi API getProductsByCategorySlug:", error.message);
         res.status(500).json({ error: "Lỗi khi lấy danh sách sản phẩm theo danh mục." });
