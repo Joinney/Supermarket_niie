@@ -29,7 +29,7 @@ const getYouTubeEmbedUrl = (url) => {
 
 export default function ProductDetail() {
   const { country_code, category_slug, id } = useParams();
-  const country = country_code;
+  const country = String(country_code || "vn").toLowerCase();
   const category = category_slug;
   const navigate = useNavigate();
   const { addToCart } = useCart();
@@ -45,9 +45,11 @@ export default function ProductDetail() {
   const [selectedAttributes, setSelectedAttributes] = useState({});
 
   useEffect(() => {
-    if (currentStore?.code && currentStore.code !== country && product) {
+    const storeCodeLowerCase = String(currentStore?.code || "vn").toLowerCase();
+
+    if (currentStore?.code && storeCodeLowerCase !== country && product) {
       const cSlug = category || product?.slug_danh_muc || "product";
-      navigate(`/${currentStore.code}/product/${cSlug}/${id}`, {
+      navigate(`/${storeCodeLowerCase}/product/${cSlug}/${id}`, {
         replace: true,
       });
     }
@@ -218,7 +220,10 @@ export default function ProductDetail() {
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10 transition-all duration-300">
         {/* BREADCRUMB */}
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
-          <Link to="/" className="hover:text-slate-900 flex-shrink-0">
+          <Link
+            to={`/${country}`}
+            className="hover:text-slate-900 flex-shrink-0"
+          >
             Home
           </Link>
           <ChevronRight size={10} className="text-slate-300" />

@@ -304,7 +304,7 @@ export default function Header({ onOpenMenu }) {
             <Menu size={22} />
           </button>
           <Link
-            to={country_code ? `/${country_code}` : "/"}
+            to={country_code ? `/${country_code.toLowerCase()}` : "/vn"}
             className="transition-transform active:scale-95 flex-shrink-0 block"
             onClick={() => window.scrollTo(0, 0)}
           >
@@ -419,8 +419,9 @@ export default function Header({ onOpenMenu }) {
                             <button
                               key={`${cat.loai_danh_muc}-${cat.ma_danh_muc}`}
                               onClick={() => {
-                                const currentCountryCode =
-                                  currentStore?.code || "vn";
+                                const currentCountryCode = String(
+                                  currentStore?.code || "vn",
+                                ).toLowerCase();
                                 navigate(
                                   `/${currentCountryCode}/category/${cat.slug}`,
                                 );
@@ -461,8 +462,9 @@ export default function Header({ onOpenMenu }) {
                           <button
                             key={s.ma_san_pham}
                             onClick={() => {
-                              const country =
-                                s.country_code || currentStore?.code || "vn";
+                              const country = String(
+                                s.country_code || currentStore?.code || "vn",
+                              ).toLowerCase();
                               const category = s.slug_danh_muc || "san-pham";
                               navigate(
                                 `/${country}/product/${category}/${s.ma_san_pham}`,
@@ -629,7 +631,7 @@ export default function Header({ onOpenMenu }) {
           {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => (
             <Link
               key={item}
-              to={country_code ? `/${country_code}` : "/"}
+              to={country_code ? `/${country_code.toLowerCase()}` : "/vn"}
               className="text-[10px] md:text-[11px] font-black text-slate-500 hover:text-[#006c49] uppercase tracking-widest transition-colors"
             >
               {item}
