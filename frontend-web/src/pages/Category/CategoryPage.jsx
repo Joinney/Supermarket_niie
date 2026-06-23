@@ -4,7 +4,7 @@ import {
   Link,
   useNavigate,
   useSearchParams,
-} from "react-router-dom"; // 🛠️ Đã thêm useSearchParams
+} from "react-router-dom";
 import {
   ChevronRight,
   ChevronLeft,
@@ -150,7 +150,7 @@ export default function CategoryPage() {
               fresh: freshShipping,
               global: globalShipping,
               page: currentPage,
-              limit: 20,
+              limit: 12,
             },
           },
         );

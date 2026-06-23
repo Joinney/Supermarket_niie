@@ -603,6 +603,7 @@ export default function Header({ onOpenMenu }) {
           </div>
 
           <Link
+            id="cart-icon"
             to="/cart"
             className="bg-[#006c49] text-white p-2 md:px-5 md:py-2.5 rounded-full md:rounded-2xl flex items-center gap-2 shadow-lg shadow-[#006c49]/20 active:scale-95 transition-all flex-shrink-0 min-w-[44px] md:min-w-[120px] justify-center group"
           >

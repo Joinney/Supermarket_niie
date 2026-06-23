@@ -89,3 +89,46 @@ img {
   left: 0;
   z-index: 99999;
 }
+
+/* ========================================================== */
+/* HIỆU ỨNG THÊM GIỎ HÀNG (FLYING DOT & TOAST POPUP) BỔ SUNG  */
+/* ========================================================== */
+
+/* Hạt sáng màu vàng cam bay vào giỏ hàng */
+.flying-dot {
+  position: fixed;
+  width: 18px;
+  height: 18px;
+  background: #ffb800;
+  border-radius: 50%;
+  box-shadow: 0 0 15px #ffb800, 0 0 30px #ffb800;
+  pointer-events: none;
+  z-index: 999999;
+  transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Hiệu ứng Popup thông báo trượt mượt mà từ trên xuống */
+@keyframes slideDownAndFade {
+  0% { opacity: 0; transform: translate(-50%, -50px) scale(0.9); }
+  10% { opacity: 1; transform: translate(-50%, 20px) scale(1.05); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -20px) scale(0.9); }
+}
+
+.custom-toast {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border-left: 6px solid #006c49;
+  padding: 16px 24px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 100000;
+  animation: slideDownAndFade 3s forwards;
+}

@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useStore } from "../context/StoreContext";
 import { Search, Tag, Flame, X, MapPin, Check } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { productApi } from "../api/axios";
 
 export default function Sidebar({ isOpen, onClose }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const { country_code } = useParams();
 
@@ -23,13 +24,33 @@ export default function Sidebar({ isOpen, onClose }) {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🛠️ SẮP XẾP ĐỘNG: Đẩy Việt Nam (VN) lên vị trí đầu tiên trong danh sách chọn cửa hàng ở Sidebar
   const sortedStores =
     stores && stores.length > 0
       ? [...stores].sort((a, b) =>
           a.code === "VN" ? -1 : b.code === "VN" ? 1 : 0,
         )
       : [];
+
+  useEffect(() => {
+    const pathParts = location.pathname.split("/").filter(Boolean);
+
+    if (pathParts[1] === "category") {
+      const parentSlug = pathParts[2];
+      const childSlug = pathParts[3];
+
+      setActiveCategory(parentSlug);
+      setOpenDropdown(parentSlug);
+
+      if (childSlug) {
+        setActiveSubCategory(childSlug);
+      } else {
+        setActiveSubCategory("");
+      }
+    } else {
+      setActiveSubCategory("");
+      setOpenDropdown(null);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -167,7 +188,6 @@ export default function Sidebar({ isOpen, onClose }) {
             className={`overflow-hidden transition-all duration-300 ease-in-out ${isStoreOpen ? "max-h-[200px] mt-2 opacity-100" : "max-h-0 opacity-0"}`}
           >
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-2 flex flex-col gap-1">
-              {/* 🛠️ ĐÃ ĐỔI: Sử dụng mảng sortedStores để đẩy Việt Nam lên đầu */}
               {sortedStores?.map((store) => (
                 <div
                   key={store.code}
@@ -278,7 +298,7 @@ export default function Sidebar({ isOpen, onClose }) {
                             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-[14px] transition-all duration-200 outline-none
                               ${
                                 isSubActive
-                                  ? "bg-[#e6f0ed] text-[#006c49] font-bold shadow-sm"
+                                  ? "bg-[#e6f0ed] text-[#006c49] font-bold shadow-sm" // 🛠️ Dòng CSS tô màu xanh đậm cho category con được chọn
                                   : "text-slate-500 hover:text-slate-800 hover:bg-gray-50/80 font-medium"
                               }`}
                           >

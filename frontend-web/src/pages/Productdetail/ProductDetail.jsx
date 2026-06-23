@@ -172,7 +172,7 @@ export default function ProductDetail() {
     });
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (e) => {
     if (!product || !selectedVariant) return;
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
@@ -186,7 +186,50 @@ export default function ProductDetail() {
       variantName: selectedVariant.ten_bien_the,
     };
     addToCart(itemToCart);
-    alert("Đã thêm vào giỏ hàng Demi Mart!");
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const cartIcon = document.getElementById("cart-icon");
+    let endX = window.innerWidth - 100;
+    let endY = 50;
+
+    if (cartIcon) {
+      const cartRect = cartIcon.getBoundingClientRect();
+      endX = cartRect.left + cartRect.width / 2;
+      endY = cartRect.top + cartRect.height / 2;
+    }
+
+    const dot = document.createElement("div");
+    dot.className = "flying-dot";
+    dot.style.left = `${startX}px`;
+    dot.style.top = `${startY}px`;
+    document.body.appendChild(dot);
+
+    setTimeout(() => {
+      dot.style.left = `${endX}px`;
+      dot.style.top = `${endY}px`;
+      dot.style.transform = "scale(0.2)";
+    }, 10);
+
+    setTimeout(() => {
+      dot.remove();
+    }, 800);
+
+    const toast = document.createElement("div");
+    toast.className = "custom-toast";
+    toast.innerHTML = `
+      <img src="${mainMedia?.duong_dan_url || "https://placehold.co/300x300?text=Demi+Mart"}" style="width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;">
+      <div>
+        <h4 style="margin: 0; color: #006c49; font-size: 15px; font-weight: 900; letter-spacing: -0.5px;">Thêm thành công!</h4>
+        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">Cảm ơn khách hàng đã mua <b style="color: #334155;">${product.ten_san_pham}</b></p>
+      </div>
+    `;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
   };
 
   if (loading)
