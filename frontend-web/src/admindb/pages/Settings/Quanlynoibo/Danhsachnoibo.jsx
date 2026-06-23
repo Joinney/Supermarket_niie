@@ -436,8 +436,9 @@ export default function Danhsachnoibo() {
                         </svg>
                       </button>
                       
+                      {/* ĐÃ SỬA ĐỔI CHÍNH XÁC: Điều hướng mượt mà đến trang chi tiết độc lập và truyền dữ liệu */}
                       <button 
-                        onClick={() => navigate(`/admin/settings/quanlynoibo/danhsachnoibo/${user.email}`)}
+                        onClick={() => navigate("/admin/settings/quanlynoibo/danhsachnoibo/chitietnoibo", { state: { user } })}
                         className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition duration-150"
                         title="Xem trang chi tiết riêng biệt"
                       >
@@ -554,8 +555,6 @@ export default function Danhsachnoibo() {
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4 text-sm">
-              
-              {/* Khu vực thông tin user & Bộ nút điều khiển đồng bộ chuẩn Line-Art */}
               <div className="bg-slate-50/50 p-4 rounded-2xl border border-gray-100">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -571,7 +570,6 @@ export default function Danhsachnoibo() {
                     </div>
                   </div>
 
-                  {/* 3 Nút chức năng với icon SVG vẽ mảnh, khớp chuẩn 100% với hệ thống */}
                   <div className="flex flex-wrap items-center gap-2 lg:gap-2.5 self-start sm:self-center">
                     <button 
                       type="button" 
@@ -608,7 +606,6 @@ export default function Danhsachnoibo() {
                 </div>
               </div>
 
-              {/* Hộp cảnh báo nghiệp vụ hệ thống - Giữ nguyên vẹn box và icon tam giác vàng cảnh báo */}
               <div className="bg-[#fffbeb] border border-[#fef3c7] rounded-xl p-4 flex gap-3 text-left">
                 <svg className="w-5 h-5 text-[#d97706] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -619,7 +616,6 @@ export default function Danhsachnoibo() {
                 </div>
               </div>
 
-              {/* Ma trận bảng phân quyền */}
               <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm bg-white">
                 <table className="w-full border-collapse text-left text-xs">
                   <thead>

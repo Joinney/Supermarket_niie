@@ -41,8 +41,9 @@ import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
 import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
 
-// ĐÃ CẬP NHẬT: Sửa lại đường dẫn import chính xác theo thư mục Settings mới
+// Nhóm quản lý nội bộ (Danh sách & Chi tiết biệt lập)
 import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo"; 
+import Chitietnoibo from "./admindb/pages/Settings/Quanlynoibo/Chitietnoibo";
 
 // Các component phục vụ giao diện tĩnh cho mục Settings
 const Danhsachvaitro = () => (
@@ -187,7 +188,6 @@ const AppRoutes = () => (
     {/* ================= ROUTES BIỆT LẬP CHO ADMIN ================= */}
     <Route path="/admin/login" element={<AdminLogin />} />
 
-    {/* ĐÃ GHÉP NỐI: Bọc AdminProtect bảo vệ toàn bộ trang Dashboard nội bộ của Admin */}
     <Route 
       path="/admin" 
       element={
@@ -247,10 +247,11 @@ const AppRoutes = () => (
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<SettingsGeneral />} />
         
-        {/* Cấu trúc Route lồng nhau khớp hoàn toàn với SidebarAdmin */}
+        {/* Cấu trúc định tuyến lồng nhau quản lý danh sách & chi tiết nội bộ biệt lập */}
         <Route path="quanlynoibo">
           <Route index element={<Navigate to="danhsachnoibo" replace />} />
           <Route path="danhsachnoibo" element={<Danhsachnoibo />} />
+          <Route path="danhsachnoibo/chitietnoibo" element={<Chitietnoibo />} />
         </Route>
 
         <Route path="quanlyvaitro">
