@@ -31,6 +31,7 @@ import ChatbotAI from "./components/chatbotai/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminProtect from "./admindb/components/AdminProtect";
+import AdminProfile from "./admindb/pages/Profile/AdminProfile";
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin from "./admindb/components/Header";
@@ -190,8 +191,10 @@ const AppRoutes = () => (
         <AdminDashboardLayout />
       </AdminProtect>
     }>
-
+      {/* Gắn trang hồ sơ cá nhân vào đây */}
+      <Route path="profile" element={<AdminProfile />} />
       {/* Cập nhật luôn đích Navigate mặc định khi gõ /admin gốc */}
+
       <Route
         index
         element={<Navigate to="dashboard/thongkesanpham" replace />}

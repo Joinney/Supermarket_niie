@@ -1,20 +1,58 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Header() {
+  const navigate = useNavigate();
+  const [showDropdown, setShowDropdown] = useState(false);
+  
+  // Đã khôi phục lại thuộc tính 'role' vào State
+  const [adminData, setAdminData] = useState({
+    full_name: "Quản trị viên",
+    username: "admin",
+    email: "admin@demimart.com",
+    avatar_url: null,
+    status: "Đang hoạt động",
+    role: "Admin" 
+  });
+
+  useEffect(() => {
+    const info = localStorage.getItem("adminInfo");
+    if (info) {
+      try {
+        const parsed = JSON.parse(info);
+        const currentStatus = parsed.status === "inactive" ? "Tạm ngưng" : "Đang hoạt động";
+        setAdminData({
+          ...parsed,
+          status: currentStatus,
+          role: parsed.role || "Admin"
+        });
+      } catch (e) {
+        console.error("Lỗi đọc thông tin Admin:", e);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminRefreshToken");
+    localStorage.removeItem("adminRole");
+    localStorage.removeItem("adminInfo");
+    navigate("/admin/login", { replace: true });
+  };
+
   return (
-    <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 font-sans shrink-0 select-none">
+    <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 font-sans shrink-0 select-none relative z-30">
       
       {/* Cụm điều khiển bên trái */}
       <div className="flex items-center gap-4">
         <button className="p-2 hover:bg-gray-50 rounded-xl text-gray-500 hover:text-gray-800 transition-colors duration-150 flex items-center justify-center">
-          {/* Icon Hamburger Menu hiện đại */}
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
           </svg>
         </button>
       </div>
 
-      {/* Cụm công cụ bên phải (Search, Bell, User Profile) */}
+      {/* Cụm công cụ bên phải */}
       <div className="flex items-center gap-3">
         
         {/* Nút Tìm kiếm */}
@@ -29,32 +67,115 @@ export default function Header() {
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
           </svg>
-          {/* Chấm đỏ thông báo nhỏ gọn tinh tế */}
           <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full ring-2 ring-white"></span>
         </button>
 
-        {/* Đường vạch chia line-gray ngăn cách */}
-        <div className="h-5 w-[1px] bg-gray-200 mx-2"></div>
+        <div className="h-5 w-[1px] bg-gray-200 mx-1"></div>
 
-        {/* Dropdown Profile Người dùng */}
-        <div className="flex items-center gap-2.5 cursor-pointer group py-1.5 px-2 rounded-xl hover:bg-gray-50/80 transition-colors duration-150">
+        {/* ================= KHU VỰC DROPDOWN PROFILE ================= */}
+        <div className="relative">
           
-          {/* Avatar mô phỏng đúng quả địa cầu ADMIN theo ảnh của bạn */}
-          <div className="w-8 h-8 rounded-full bg-[#f0f9ff] border border-sky-100 flex items-center justify-center text-sky-600 transition-transform group-hover:scale-105 duration-150 overflow-hidden shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9s2.015-9 4.5-9m0 18c-1.315 0-2.545-.835-3.484-2.32A14.95 14.95 0 013.3 12.373m15.4 0c-.062-.51-.137-1.01-.225-1.5M3.3 12.373A14.95 14.95 0 014.284 6.74M3.3 12.373a14.935 14.935 0 001.484 5.319m14.416-5.319a14.95 14.95 0 00-1.423-5.632m1.423 5.632a14.95 14.95 0 01-1.423 5.632M12 3a9.004 9.004 0 018.716 2.253M12 3a9.004 9.004 0 00-8.716 2.253m0 0A14.95 14.95 0 017.3 11.627m0 0c.346-.017.697-.027 1.055-.027 1.542 0 2.992.176 4.254.492" />
-            </svg>
-          </div>
+          <div 
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="flex items-center gap-2.5 cursor-pointer py-1 px-2 rounded-xl hover:bg-gray-50 transition-all duration-150 border border-transparent hover:border-gray-100"
+          >
+            {adminData.avatar_url ? (
+              <img 
+                src={adminData.avatar_url} 
+                alt="avatar" 
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-[#006c49]/20"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#006c49] text-white font-black flex items-center justify-center text-xs shadow-inner shrink-0">
+                {(adminData.full_name || adminData.username || "A").charAt(0).toUpperCase()}
+              </div>
+            )}
 
-          {/* Tên hiển thị và mũi tên mũi xuống nhỏ gọn */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-bold text-gray-700 group-hover:text-gray-900 transition-colors">
-              Admin
-            </span>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3 text-gray-400 group-hover:text-gray-600 transition-transform duration-200 group-hover:translate-y-0.5">
+            {/* HIỂN THỊ STATUS Ở BÊN NGOÀI */}
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-black text-gray-800 max-w-[120px] truncate leading-tight">
+                {adminData.full_name || adminData.username}
+              </span>
+              <span className="text-[10px] font-bold text-emerald-600 tracking-wider flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                {adminData.status}
+              </span>
+            </div>
+
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              strokeWidth={2.5} 
+              stroke="currentColor" 
+              className={`w-3 h-3 text-gray-400 transition-transform duration-200 ml-0.5 shrink-0 ${showDropdown ? 'rotate-180' : ''}`}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
             </svg>
           </div>
+
+          {showDropdown && (
+            <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)}></div>
+          )}
+
+          {/* BẢNG MENU w-48 */}
+          {showDropdown && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2.5 px-2 z-50 animate-fadeIn">
+              
+              <div className="px-2.5 py-1.5 border-b border-gray-50 mb-1 text-left">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Signed in as</p>
+                <p className="text-xs font-black text-gray-900 truncate mt-0.5">{adminData.email || `${adminData.username}@demimart.com`}</p>
+                
+                {/* ĐÃ ĐỔI THÀNH ROLE VỚI TÔNG MÀU XANH DƯƠNG (SKY) TÁCH BIỆT VỚI MÀU STATUS */}
+                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-100 max-w-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0"></span>
+                  <span className="truncate">Role: {adminData.role}</span>
+                </div>
+              </div>
+
+              {/* Nhóm chức năng */}
+              <div className="space-y-0.5 pt-1 text-left">
+                
+                {/* 1. NÚT HỒ SƠ CÁ NHÂN (Ai đăng nhập vào cũng được xem) */}
+                <button 
+                  onClick={() => { setShowDropdown(false); navigate('/admin/profile'); }} 
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors text-left"
+                >
+                  <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="truncate">Hồ sơ cá nhân</span>
+                </button>
+
+                {/* 2. NÚT CÀI ĐẶT QUẢN TRỊ -> CHỈ DUY NHẤT 'Admin' MỚI ĐƯỢC RENDER */}
+                {adminData.role === "Admin" && (
+                  <button 
+                    onClick={() => { setShowDropdown(false); navigate('/admin/authz/danhsachvaitro'); }} 
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors text-left"
+                  >
+                    <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="truncate">Cài đặt quản trị</span>
+                  </button>
+                )}
+
+              </div>
+
+              <div className="h-[1px] bg-gray-100 my-1 mx-1"></div>
+
+              <button 
+                onClick={handleLogout} 
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-black text-red-600 hover:bg-red-50 rounded-xl transition-all text-left"
+              >
+                <svg className="w-3.5 h-3.5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span className="truncate">Đăng xuất</span>
+              </button>
+
+            </div>
+          )}
 
         </div>
 
