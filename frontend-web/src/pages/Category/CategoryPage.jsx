@@ -57,7 +57,22 @@ export default function CategoryPage() {
       label: `${formatPrice(100000)} - ${formatPrice(200000)}`,
       value: "100000-200000",
     },
-    { label: `Trên ${formatPrice(200000)}`, value: "200000-up" },
+    {
+      label: `${formatPrice(200000)} - ${formatPrice(500000)}`,
+      value: "200000-500000",
+    },
+    {
+      label: `${formatPrice(500000)} - ${formatPrice(800000)}`,
+      value: "500000-800000",
+    },
+    {
+      label: `${formatPrice(800000)} - ${formatPrice(1000000)}`,
+      value: "800000-1000000",
+    },
+    {
+      label: `Trên ${formatPrice(1000000)}`,
+      value: "1000000-up",
+    },
   ];
 
   // 2. HÀM CẬP NHẬT BỘ LỌC LÊN URL

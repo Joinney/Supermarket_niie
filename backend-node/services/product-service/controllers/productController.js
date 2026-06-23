@@ -170,7 +170,7 @@ export const getProductById = async (req, res) => {
                     (SELECT json_agg(
                         json_build_object(
                             'ma_media', m.ma_media, 
-                            'ma_bien_the', m.ma_bien_the, /* 🛠️ CHỈ BỔ SUNG ĐÚNG DÒNG NÀY ĐỂ ĐỔI ẢNH */
+                            'ma_bien_the', m.ma_bien_the,
                             'duong_dan_url', m.duong_dan_url, 
                             'la_anh_chinh', m.la_anh_chinh,
                             'loai_media', m.loai_media, 
@@ -237,18 +237,17 @@ export const getProductsByCategorySlug = async (req, res) => {
             paramIndex++;
         }
 
-        // Lọc theo Xuất Xứ (⚠️ Yêu cầu bảng san_pham phải có cột xuat_xu)
-        // Nếu Database của bạn chưa có cột này, hãy comment khối lệnh IF này lại nhé!
+        // Lọc theo Xuất Xứ
         if (origin !== 'tat-ca') {
             baseQuery += ` AND sp.xuat_xu = $${paramIndex}`;
-            params.push(origin); // Các giá trị từ UI: vn, nhap-khau, jp, kr...
+            params.push(origin); 
             paramIndex++;
         }
 
         // 3. Sử dụng CTE (Bảng tạm) để tối ưu việc lọc và sắp xếp dựa trên Giá
         let finalQuery = `WITH ProductList AS (${baseQuery}) SELECT * FROM ProductList WHERE 1=1`;
 
-        // Lọc theo Khoảng giá
+        // 🛠️ ĐÃ CẬP NHẬT CHUẨN: Lọc theo các khoảng giá mới cấu hình từ Frontend
         if (price !== 'tat-ca') {
             if (price === '0-50000') {
                 finalQuery += ` AND gia_ban_thap_nhat < 50000`;
@@ -256,8 +255,14 @@ export const getProductsByCategorySlug = async (req, res) => {
                 finalQuery += ` AND gia_ban_thap_nhat >= 50000 AND gia_ban_thap_nhat <= 100000`;
             } else if (price === '100000-200000') {
                 finalQuery += ` AND gia_ban_thap_nhat >= 100000 AND gia_ban_thap_nhat <= 200000`;
-            } else if (price === '200000-up') {
-                finalQuery += ` AND gia_ban_thap_nhat > 200000`;
+            } else if (price === '200000-500000') {
+                finalQuery += ` AND gia_ban_thap_nhat >= 200000 AND gia_ban_thap_nhat <= 500000`;
+            } else if (price === '500000-800000') {
+                finalQuery += ` AND gia_ban_thap_nhat >= 500000 AND gia_ban_thap_nhat <= 800000`;
+            } else if (price === '800000-1000000') {
+                finalQuery += ` AND gia_ban_thap_nhat >= 800000 AND gia_ban_thap_nhat <= 1000000`;
+            } else if (price === '1000000-up') {
+                finalQuery += ` AND gia_ban_thap_nhat > 1000000`;
             }
         }
 
@@ -272,6 +277,8 @@ export const getProductsByCategorySlug = async (req, res) => {
             finalQuery += ` ORDER BY gia_ban_thap_nhat ASC, ngay_tao DESC`;
         } else if (sort === 'gia-cao') {
             finalQuery += ` ORDER BY gia_ban_thap_nhat DESC, ngay_tao DESC`;
+        } else if (sort === 'ban-chay') {
+            finalQuery += ` ORDER BY ngay_tao DESC`; // Tùy biến logic bán chạy nếu có cột dữ liệu riêng
         } else {
             finalQuery += ` ORDER BY ngay_tao DESC`;
         }
@@ -534,7 +541,7 @@ export const schedulePeriodicDescriptionGeneration = () => {
 };
 
 // =========================================================================
-// 10. 🛠️ ĐÃ BỔ SUNG: LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
+// 10. 🛠️ LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
 // =========================================================================
 export const getAllCountries = async (req, res) => {
     try {
