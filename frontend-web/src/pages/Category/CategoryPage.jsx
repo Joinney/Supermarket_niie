@@ -366,7 +366,13 @@ export default function CategoryPage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {products.map((p) => (
-                  <ProductCard key={p.ma_san_pham} p={p} />
+                  <ProductCard
+                    key={p.ma_san_pham}
+                    p={p}
+                    // 🟢 Truyền tên và slug danh mục hiện tại xuống cho ProductCard
+                    categoryName={categoryName || formatSlugName(slug)}
+                    categorySlug={slug || "tat-ca"}
+                  />
                 ))}
               </div>
             )}

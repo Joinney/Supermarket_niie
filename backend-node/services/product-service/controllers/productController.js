@@ -67,10 +67,6 @@ export const getAllProducts = async (req, res) => {
             LIMIT $2 OFFSET $3;
         `;
 
-        console.log("=== ĐANG CHẠY CODE MỚI NHẤT ===");
-        console.log("💡 CÂU QUERY THỰC TẾ:", query);
-        console.log("💡 PARAMS:", [countryCode, limit, offset]);
-
         const { rows: products } = await pool.query(query, [countryCode, limit, offset]);
         res.status(200).json(products);
     } catch (error) {
@@ -144,7 +140,7 @@ export const getAllCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - FIX LỖI 500
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT)
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
@@ -204,7 +200,6 @@ export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
     const countryCode = (req.query.country || 'VN').toUpperCase();
     
-    // 1. Nhận tham số bộ lọc từ Frontend (URL Query)
     const sort = req.query.sort || 'noi-bat';
     const price = req.query.price || 'tat-ca';
     const origin = req.query.origin || 'tat-ca';
@@ -213,7 +208,6 @@ export const getProductsByCategorySlug = async (req, res) => {
     const offset = (page - 1) * limit;
 
     try {
-        // 2. Câu truy vấn gốc lấy thông tin cơ bản
         let baseQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
@@ -228,74 +222,47 @@ export const getProductsByCategorySlug = async (req, res) => {
         `;
         
         const params = [countryCode];
-        let paramIndex = 2; // Bắt đầu đếm biến môi trường từ $2
+        let paramIndex = 2; 
 
-        // Lọc theo Danh mục
         if (slug !== 'tat-ca') {
             baseQuery += ` AND (dmc.duong_dan_seo = $${paramIndex} OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $${paramIndex} AND trang_thai = true LIMIT 1))`;
             params.push(slug);
             paramIndex++;
         }
 
-        // Lọc theo Xuất Xứ
         if (origin !== 'tat-ca') {
             baseQuery += ` AND sp.xuat_xu = $${paramIndex}`;
             params.push(origin); 
             paramIndex++;
         }
 
-        // 3. Sử dụng CTE (Bảng tạm) để tối ưu việc lọc và sắp xếp dựa trên Giá
         let finalQuery = `WITH ProductList AS (${baseQuery}) SELECT * FROM ProductList WHERE 1=1`;
 
-        // 🛠️ ĐÃ CẬP NHẬT CHUẨN: Lọc theo các khoảng giá mới cấu hình từ Frontend
         if (price !== 'tat-ca') {
-            if (price === '0-50000') {
-                finalQuery += ` AND gia_ban_thap_nhat < 50000`;
-            } else if (price === '50000-100000') {
-                finalQuery += ` AND gia_ban_thap_nhat >= 50000 AND gia_ban_thap_nhat <= 100000`;
-            } else if (price === '100000-200000') {
-                finalQuery += ` AND gia_ban_thap_nhat >= 100000 AND gia_ban_thap_nhat <= 200000`;
-            } else if (price === '200000-500000') {
-                finalQuery += ` AND gia_ban_thap_nhat >= 200000 AND gia_ban_thap_nhat <= 500000`;
-            } else if (price === '500000-800000') {
-                finalQuery += ` AND gia_ban_thap_nhat >= 500000 AND gia_ban_thap_nhat <= 800000`;
-            } else if (price === '800000-1000000') {
-                finalQuery += ` AND gia_ban_thap_nhat >= 800000 AND gia_ban_thap_nhat <= 1000000`;
-            } else if (price === '1000000-up') {
-                finalQuery += ` AND gia_ban_thap_nhat > 1000000`;
-            }
+            if (price === '0-50000') finalQuery += ` AND gia_ban_thap_nhat < 50000`;
+            else if (price === '50000-100000') finalQuery += ` AND gia_ban_thap_nhat >= 50000 AND gia_ban_thap_nhat <= 100000`;
+            else if (price === '100000-200000') finalQuery += ` AND gia_ban_thap_nhat >= 100000 AND gia_ban_thap_nhat <= 200000`;
+            else if (price === '200000-500000') finalQuery += ` AND gia_ban_thap_nhat >= 200000 AND gia_ban_thap_nhat <= 500000`;
+            else if (price === '500000-800000') finalQuery += ` AND gia_ban_thap_nhat >= 500000 AND gia_ban_thap_nhat <= 800000`;
+            else if (price === '800000-1000000') finalQuery += ` AND gia_ban_thap_nhat >= 800000 AND gia_ban_thap_nhat <= 1000000`;
+            else if (price === '1000000-up') finalQuery += ` AND gia_ban_thap_nhat > 1000000`;
         }
 
-        // 4. Tính toán tổng số lượng sản phẩm để Phân trang (Pagination)
         const countQuery = `SELECT COUNT(*) as total FROM (${finalQuery}) as count_table`;
         const { rows: countResult } = await pool.query(countQuery, params);
         const totalItems = parseInt(countResult[0].total);
         const totalPages = Math.ceil(totalItems / limit);
 
-        // 5. Áp dụng Sắp xếp (Order By)
-        if (sort === 'gia-thap') {
-            finalQuery += ` ORDER BY gia_ban_thap_nhat ASC, ngay_tao DESC`;
-        } else if (sort === 'gia-cao') {
-            finalQuery += ` ORDER BY gia_ban_thap_nhat DESC, ngay_tao DESC`;
-        } else if (sort === 'ban-chay') {
-            finalQuery += ` ORDER BY ngay_tao DESC`; // Tùy biến logic bán chạy nếu có cột dữ liệu riêng
-        } else {
-            finalQuery += ` ORDER BY ngay_tao DESC`;
-        }
+        if (sort === 'gia-thap') finalQuery += ` ORDER BY gia_ban_thap_nhat ASC, ngay_tao DESC`;
+        else if (sort === 'gia-cao') finalQuery += ` ORDER BY gia_ban_thap_nhat DESC, ngay_tao DESC`;
+        else finalQuery += ` ORDER BY ngay_tao DESC`;
 
-        // 6. Áp dụng Phân trang (Limit & Offset)
         finalQuery += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1};`;
         params.push(limit, offset);
 
         const { rows: products } = await pool.query(finalQuery, params);
         
-        // 7. Trả về đúng Format mà Frontend đang mong đợi
-        res.status(200).json({
-            products,
-            totalPages,
-            currentPage: page,
-            totalItems
-        });
+        res.status(200).json({ products, totalPages, currentPage: page, totalItems });
     } catch (error) {
         console.error("❌ Lỗi API getProductsByCategorySlug:", error.message);
         res.status(500).json({ error: "Lỗi khi lấy danh sách sản phẩm theo danh mục." });
@@ -303,7 +270,7 @@ export const getProductsByCategorySlug = async (req, res) => {
 };
 
 // =========================================================================
-// 4. TÌM KIẾM SẢN PHẨM THEO TỪ KHÓA - HỖ TRỢ TÌM KHÔNG DẤU
+// 4. TÌM KIẾM SẢN PHẨM THEO TỪ KHÓA
 // =========================================================================
 export const searchProducts = async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -541,7 +508,7 @@ export const schedulePeriodicDescriptionGeneration = () => {
 };
 
 // =========================================================================
-// 10. 🛠️ LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
+// 10. LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
 // =========================================================================
 export const getAllCountries = async (req, res) => {
     try {
@@ -567,7 +534,7 @@ export const getAllCountries = async (req, res) => {
 };
 
 // =========================================================================
-// 11. BỔ SUNG: TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
+// 11. TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
 // =========================================================================
 export const searchCategories = async (req, res) => {
     const keyword = req.query.keyword || '';
@@ -596,5 +563,108 @@ export const searchCategories = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API searchCategories:", error.message);
         res.status(500).json({ error: "Lỗi hệ thống khi tìm kiếm danh mục." });
+    }
+};
+
+// =========================================================================
+// 12. LẤY ĐÁNH GIÁ SẢN PHẨM (XỬ LÝ ĐỒNG BỘ MICROSERVICES GỌI SANG AUTH)
+// =========================================================================
+export const getReviewsByProduct = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // 1. Lấy danh sách đánh giá từ Product DB, kèm tên biến thể và media
+        const query = `
+            SELECT 
+                dg.ma_danh_gia, dg.user_id, dg.so_sao, dg.noi_dung, dg.ngay_tao,
+                dg.phan_hoi_nguoi_ban, dg.ngay_phan_hoi, dg.luot_huu_ich,
+                bt.ten_bien_the,
+                COALESCE(
+                    (SELECT json_agg(json_build_object('url', md.duong_dan_url, 'type', md.loai_media, 'duration', md.thoi_luong_video))
+                     FROM public.media_danh_gia md WHERE md.ma_danh_gia = dg.ma_danh_gia),
+                    '[]'
+                ) as media
+            FROM public.danh_gia_san_pham dg
+            LEFT JOIN public.bien_the_san_pham bt ON dg.ma_bien_the = bt.ma_bien_the
+            WHERE dg.ma_san_pham = $1 AND dg.trang_thai = true
+            ORDER BY dg.ngay_tao DESC;
+        `;
+        const { rows: reviews } = await pool.query(query, [id]);
+
+        if (reviews.length === 0) {
+            return res.status(200).json({ summary: { avgRating: 0, total: 0 }, reviews: [] });
+        }
+
+        // 2. TÍNH TOÁN THỐNG KÊ SUMMARY (Trung bình sao, số lượng từng mức)
+        const totalReviews = reviews.length;
+        const avgRating = (reviews.reduce((sum, r) => sum + r.so_sao, 0) / totalReviews).toFixed(1);
+        const starCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0, hasMedia: 0, hasComment: 0 };
+        
+        reviews.forEach(r => {
+            if (starCounts[r.so_sao] !== undefined) starCounts[r.so_sao]++;
+            if (r.media.length > 0) starCounts.hasMedia++;
+            if (r.noi_dung && r.noi_dung.trim() !== '') starCounts.hasComment++;
+        });
+
+        // 3. XỬ LÝ MICROSERVICES: GOM USER ID VÀ GỌI QUA AUTH SERVICE
+        const userIds = [...new Set(reviews.map(r => r.user_id))];
+        
+        // TODO: Mở comment phần này khi Auth Service có API get batch user info
+        /*
+        const axios = require('axios');
+        const userRes = await axios.post('http://demi_auth_service:5001/api/users/batch-info', { userIds });
+        const userInfoMap = userRes.data; 
+        */
+
+        // MOCK DATA TẠM THỜI (Để Frontend có dữ liệu hiển thị ngay)
+        const userInfoMap = {};
+        userIds.forEach(uid => {
+            userInfoMap[uid] = {
+                username: uid === 1 ? 'tukhanjluu' : `khachhang_${uid}`,
+                avatar_url: `https://ui-avatars.com/api/?name=User${uid}&background=f1f5f9&color=94a3b8`
+            };
+        });
+
+        // 4. Map thông tin User vào mảng Review để trả về
+        const finalReviews = reviews.map(r => ({
+            ...r,
+            user: userInfoMap[r.user_id] || { username: 'Người dùng ẩn danh', avatar_url: null }
+        }));
+
+        res.status(200).json({
+            summary: { avgRating, total: totalReviews, ...starCounts },
+            reviews: finalReviews
+        });
+    } catch (error) {
+        console.error("❌ Lỗi API getReviewsByProduct:", error.message);
+        res.status(500).json({ error: "Lỗi lấy dữ liệu đánh giá." });
+    }
+};
+
+// =========================================================================
+// 13. LẤY SẢN PHẨM LIÊN QUAN (CÙNG DANH MỤC CON)
+// =========================================================================
+export const getRelatedProducts = async (req, res) => {
+    const { id } = req.params;
+    const { category, limit = 5 } = req.query;
+
+    if (!category) return res.status(400).json({ error: "Thiếu thông tin danh mục con." });
+
+    try {
+        const query = `
+            SELECT 
+                sp.ma_san_pham, sp.ten_san_pham,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
+            FROM public.san_pham sp
+            WHERE sp.ma_dm_con = $1 AND sp.ma_san_pham != $2 AND sp.trang_thai = true
+            ORDER BY RANDOM() -- Lấy ngẫu nhiên cho đa dạng
+            LIMIT $3;
+        `;
+        const { rows: products } = await pool.query(query, [category, id, limit]);
+        res.status(200).json(products);
+    } catch (error) {
+        console.error("❌ Lỗi API getRelatedProducts:", error.message);
+        res.status(500).json({ error: "Lỗi lấy sản phẩm liên quan." });
     }
 };

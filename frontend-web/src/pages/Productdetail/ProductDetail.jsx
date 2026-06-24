@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import {
   ShoppingCart,
   ShieldCheck,
@@ -9,10 +9,12 @@ import {
   ChevronRight,
   CreditCard,
 } from "lucide-react";
-import { useCart } from "../../context/CartContext";
-import { productApi } from "../../api/axios";
-import { useStore } from "../../context/StoreContext";
 
+import { useLanguage } from "../../context/LanguageContext";
+import { useStore } from "../../context/StoreContext";
+import { useCart } from "../../context/CartContext";
+
+import { productApi } from "../../api/axios";
 import Feedback from "./Feedback";
 import RelatedProducts from "./RelatedProducts";
 import RecommendedProducts from "./RecommendedProducts";
@@ -32,10 +34,12 @@ export default function ProductDetail() {
   const country = String(country_code || "vn").toLowerCase();
   const category = category_slug;
   const navigate = useNavigate();
+  const location = useLocation(); // Khai báo useLocation
   const { addToCart } = useCart();
 
   // Lấy formatPrice và currentStore từ StoreContext
   const { currentStore, formatPrice } = useStore();
+  const { t } = useLanguage(); // Gọi thêm useLanguage để tránh lỗi unused
 
   const [product, setProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -258,6 +262,16 @@ export default function ProductDetail() {
 
   const isMultiTier = Object.keys(nhomPhanLoai).length > 0;
 
+  // 🟢 LOGIC ƯU TIÊN DANH MỤC Ở BREADCRUMB 🟢
+  const displayCategoryName =
+    location.state?.categoryName ||
+    product?.ten_dm_con ||
+    product?.ten_danh_muc;
+  const displayCategorySlug =
+    location.state?.categorySlug ||
+    product?.slug_danh_muc ||
+    product?.ma_dm_con;
+
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10 transition-all duration-300">
@@ -265,15 +279,30 @@ export default function ProductDetail() {
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
           <Link
             to={`/${country}`}
-            className="hover:text-slate-900 flex-shrink-0"
+            className="hover:text-slate-900 flex-shrink-0 transition-colors"
           >
             Home
           </Link>
-          <ChevronRight size={10} className="text-slate-300" />
-          <span className="text-slate-400 truncate">
-            {product.ten_danh_muc}
-          </span>
-          <ChevronRight size={10} className="text-slate-300" />
+
+          <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
+
+          {/* 🟢 Render tên danh mục theo biến đã tính toán phía trên 🟢 */}
+          {displayCategoryName && (
+            <>
+              <Link
+                to={`/${country}/category/${displayCategorySlug}`}
+                className="text-slate-400 hover:text-slate-900 truncate transition-colors"
+              >
+                {displayCategoryName}
+              </Link>
+
+              <ChevronRight
+                size={10}
+                className="text-slate-300 flex-shrink-0"
+              />
+            </>
+          )}
+
           <span className="text-[#006c49] truncate font-black italic">
             {product.ten_san_pham}
           </span>
@@ -283,7 +312,22 @@ export default function ProductDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
           {/* GALLERY */}
           <div className="lg:col-span-6 xl:col-span-7 flex flex-col-reverse sm:flex-row gap-2 lg:gap-4">
-            <div className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto scrollbar-hide py-1">
+            {/* 🟢 STYLE CHO THANH TRƯỢT MỎNG, TINH TẾ (NẰM BÊN TRÁI) 🟢 */}
+            <style>{`
+              .thumb-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+              .thumb-scrollbar::-webkit-scrollbar-track { background: transparent; }
+              .thumb-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+              .thumb-scrollbar::-webkit-scrollbar-thumb:hover { background: #006c49; }
+            `}</style>
+
+            {/* 🟢 KHỐI CHỨA ẢNH NHỎ ĐÃ ĐƯỢC GIỚI HẠN CHIỀU CAO (4 ẢNH) 🟢 */}
+            <div
+              className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto thumb-scrollbar py-1 sm:max-h-[280px] 2xl:max-h-[350px] pr-1"
+              style={{
+                scrollbarWidth: "thin",
+                scrollbarColor: "#cbd5e1 transparent",
+              }}
+            >
               {product.media?.map((m, i) => (
                 <button
                   key={i}
@@ -291,7 +335,7 @@ export default function ProductDetail() {
                   className={`aspect-square w-12 sm:w-full rounded-lg border-2 transition-all p-0.5 bg-white flex-shrink-0 ${
                     mainMedia?.ma_media === m.ma_media
                       ? "border-[#006c49] shadow-sm"
-                      : "border-slate-100 opacity-60"
+                      : "border-slate-100 opacity-60 hover:opacity-100 hover:border-slate-300"
                   }`}
                 >
                   {m.loai_media === "video" ? (
@@ -357,6 +401,13 @@ export default function ProductDetail() {
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>
+
+              {/* 🟢 HIỂN THỊ TÊN BIẾN THỂ TỰ ĐỘNG CẬP NHẬT 🟢 */}
+              {selectedVariant && selectedVariant.ten_bien_the && (
+                <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
+                  Phân loại: {selectedVariant.ten_bien_the}
+                </h2>
+              )}
             </div>
 
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
