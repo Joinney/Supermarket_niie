@@ -19,8 +19,27 @@ set :bind, '0.0.0.0'
 # ========================================================
 # 🛡️ CẤU HÌNH PHÒNG VỆ VÀ NỚI LỎNG BẢO MẬT TẦNG GỐC APP.RB
 # ========================================================
-# Triệt tiêu bộ lọc HostAuthorization bọc ngoài để thông mạch cho các container gọi nội bộ
-set :protection, :except => [:host_authorization, :json_csrf]
+# Kiểm tra nếu có PORT (môi trường Render/Docker deploy) hoặc production
+if ENV['PORT'] || ENV['RACK_ENV'] == 'production'
+  # Cho phép bỏ qua hoàn toàn các bộ lọc check host bảo mật của rack-protection
+  set :protection, :except => [:host_authorization, :json_csrf, :remote_token]
+else
+  # Cấu hình chuẩn khi dev mượt mà dưới máy local
+  set :protection, :except => [:json_csrf]
+
+  # Giải phóng bộ đệm terminal (Ép Docker xuất log puts ra màn hình ngay lập tức)
+  $stdout.sync = true
+
+  # Hiển thị tường minh đường dẫn localhost dễ dàng click trên terminal máy local
+  configure do
+    puts "\n"
+    puts "========================================================"
+    puts "🚀 Demi Mart Payment Service đã sẵn sàng dưới local!"
+    puts "👉 Truy cập Local ứng dụng tại: http://localhost:#{settings.port}"
+    puts "========================================================"
+    puts "\n"
+  end
+end
 
 # ========================================================
 # 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE (SỬA LỖI MAP)
