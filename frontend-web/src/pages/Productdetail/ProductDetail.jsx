@@ -283,7 +283,22 @@ export default function ProductDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
           {/* GALLERY */}
           <div className="lg:col-span-6 xl:col-span-7 flex flex-col-reverse sm:flex-row gap-2 lg:gap-4">
-            <div className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto scrollbar-hide py-1">
+            {/* 🟢 STYLE CHO THANH TRƯỢT MỎNG, TINH TẾ (NẰM BÊN TRÁI) 🟢 */}
+            <style>{`
+              .thumb-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+              .thumb-scrollbar::-webkit-scrollbar-track { background: transparent; }
+              .thumb-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+              .thumb-scrollbar::-webkit-scrollbar-thumb:hover { background: #006c49; }
+            `}</style>
+
+            {/* 🟢 KHỐI CHỨA ẢNH NHỎ ĐÃ ĐƯỢC GIỚI HẠN CHIỀU CAO (4 ẢNH) 🟢 */}
+            <div
+              className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto thumb-scrollbar py-1 sm:max-h-[280px] 2xl:max-h-[350px] pr-1"
+              style={{
+                scrollbarWidth: "thin",
+                scrollbarColor: "#cbd5e1 transparent",
+              }}
+            >
               {product.media?.map((m, i) => (
                 <button
                   key={i}
@@ -291,7 +306,7 @@ export default function ProductDetail() {
                   className={`aspect-square w-12 sm:w-full rounded-lg border-2 transition-all p-0.5 bg-white flex-shrink-0 ${
                     mainMedia?.ma_media === m.ma_media
                       ? "border-[#006c49] shadow-sm"
-                      : "border-slate-100 opacity-60"
+                      : "border-slate-100 opacity-60 hover:opacity-100 hover:border-slate-300"
                   }`}
                 >
                   {m.loai_media === "video" ? (
