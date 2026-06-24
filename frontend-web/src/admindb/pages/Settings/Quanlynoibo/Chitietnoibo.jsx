@@ -3,7 +3,10 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import axios from "axios";
 
 export default function Chitietnoibo() {
-  const { id } = useParams(); // Nhận user_id từ URL
+  // 🎯 FIX AN TOÀN TUYỆT ĐỐI: Bốc linh hoạt mọi biến thể đặt tên trên cấu hình Route
+  const params = useParams();
+  const id = params.id || params.user_id || params.userId; 
+  
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -51,54 +54,39 @@ export default function Chitietnoibo() {
     setError("");
     try {
       const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-      // Ưu tiên targetId từ URL params, nếu không có lấy từ state chuyển trang làm fallback
-      const targetId = id || location.state?.user?.user_id || "1";
+      // Ưu tiên targetId từ URL params bốc được, phòng hờ fallback sang state truyền trang
+      const targetId = id || (location.state?.user?.user_id ? String(location.state.user.user_id) : null) || location.state?.user?.id || "1";
+
+      console.log("🎯 ID nhân sự thực tế đang được gọi lên API:", targetId);
 
       // Khớp nối gọi API lấy thông tin chi tiết user và đồng nghiệp cùng vai trò
       const [userRes, groupRes] = await Promise.all([
-  axios.get(`${apiUrl}/api/auth/internal/users/${targetId}`),
-  axios.get(`${apiUrl}/api/auth/internal/users/role-group/${targetId}`)
-]);
+        axios.get(`${apiUrl}/api/auth/internal/users/${targetId}`),
+        axios.get(`${apiUrl}/api/auth/internal/users/role-group/${targetId}`)
+      ]);
 
       if (userRes.data) {
-  const dbUser = userRes.data;
-  console.log("👉 Dữ liệu thô từ API Users:", dbUser); // Dev xem ở Console F12 xem key trả về là gì
+        const dbUser = userRes.data;
+        console.log("👉 Dữ liệu thô từ API Users:", dbUser);
 
-  setUserInfo({
-    // Khớp 100% cột user_id hoặc userId
-    userId: dbUser.user_id !== undefined ? dbUser.user_id : dbUser.userId,
-    username: dbUser.username || "",
-    email: dbUser.email || "",
-    
-    // Khớp 100% cột full_name hoặc fullName
-    fullName: dbUser.full_name !== undefined ? dbUser.full_name : dbUser.fullName || "",
-    
-    // Khớp 100% cột phone_number hoặc phoneNumber
-    phoneNumber: dbUser.phone_number !== undefined ? dbUser.phone_number : dbUser.phoneNumber || "",
-    
-    // Khớp 100% cột address
-    address: dbUser.address || "",
-    
-    // Khớp 100% cột gender
-    gender: dbUser.gender || "Nam",
-    
-    // Xử lý chuẩn chuỗi ngày sinh 'YYYY-MM-DD' để nhét vừa thẻ <input type="date" />
-    birthday: dbUser.birthday ? dbUser.birthday.substring(0, 10) : "",
-    
-    // Khớp 100% cột role
-    role: dbUser.role || "Staff",
-    
-    // Khớp 100% cột status
-    status: dbUser.status || "active",
-    
-    // Khớp 100% cột avatar_url hoặc avatarUrl
-    avatarUrl: dbUser.avatar_url !== undefined ? dbUser.avatar_url : dbUser.avatarUrl || ""
-  });
+        setUserInfo({
+          userId: dbUser.user_id !== undefined ? dbUser.user_id : dbUser.userId,
+          username: dbUser.username || "",
+          email: dbUser.email || "",
+          fullName: dbUser.full_name !== undefined ? dbUser.full_name : dbUser.fullName || "",
+          phoneNumber: dbUser.phone_number !== undefined ? dbUser.phone_number : dbUser.phoneNumber || "",
+          address: dbUser.address || "",
+          gender: dbUser.gender || "Nam",
+          birthday: dbUser.birthday ? dbUser.birthday.substring(0, 10) : "",
+          role: dbUser.role || "Staff",
+          status: dbUser.status || "active",
+          avatarUrl: dbUser.avatar_url !== undefined ? dbUser.avatar_url : dbUser.avatarUrl || ""
+        });
 
-  if (dbUser.custom_permissions) {
-    setMatrixPermissions(dbUser.custom_permissions);
-  }
-}
+        if (dbUser.custom_permissions) {
+          setMatrixPermissions(dbUser.custom_permissions);
+        }
+      }
 
       if (groupRes.data && Array.isArray(groupRes.data)) {
         setAssignedUsers(groupRes.data.map(item => ({
@@ -116,44 +104,46 @@ export default function Chitietnoibo() {
     }
   };
 
+  // 🎯 FIX DEPDENDENCY: Lắng nghe chính xác sự thay đổi của biến id bốc từ params
   useEffect(() => {
     fetchUserData();
-  }, [id]);
+  }, [id, location.pathname]);
 
   // =========================================================================
   // 💾 TIẾN TRÌNH CẬP NHẬT DỮ LIỆU XUỐNG BẢNG PUBLIC.USERS
   // =========================================================================
   const handleSaveChanges = async () => {
-  setSubmitting(true);
-  try {
-    const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-    const targetId = userInfo.userId || id || "1";
+    setSubmitting(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
+      const targetId = userInfo.userId || id || "1";
 
-    // ĐÓNG GÓI CHUẨN TÊN CỘT THEO POSTGRES CỦA BẠN
-    const payload = {
-      full_name: userInfo.fullName,
-      phone_number: userInfo.phoneNumber,
-      address: userInfo.address,
-      gender: userInfo.gender,
-      birthday: userInfo.birthday,
-      role: userInfo.role,
-      status: userInfo.status,
-      avatar_url: userInfo.avatarUrl,
-      custom_permissions: matrixPermissions // Gửi kèm ma trận quyền
-    };
+      const payload = {
+        full_name: userInfo.fullName,
+        phone_number: userInfo.phoneNumber,
+        address: userInfo.address,
+        gender: userInfo.gender,
+        birthday: userInfo.birthday,
+        role: userInfo.role,
+        status: userInfo.status,
+        avatar_url: userInfo.avatarUrl,
+        custom_permissions: matrixPermissions 
+      };
 
-    await axios.put(`${apiUrl}/api/internal/users/${targetId}`, payload);
-    
-    setIsEditing(false);
-    alert("Hệ thống Demi Mart: Đã đồng bộ cập nhật xuống PostgreSQL thành công!");
-  } catch (err) {
-    console.error("Lỗi ghi đè CSDL:", err);
-    alert("Lỗi ghi dữ liệu! Vui lòng kiểm tra log API.");
-    setIsEditing(false);
-  } finally {
-    setSubmitting(false);
-  }
-};
+      await axios.put(`${apiUrl}/api/auth/internal/users/${targetId}`, payload);
+      
+      setIsEditing(false);
+      alert("Hệ thống Demi Mart: Đã đồng bộ cập nhật xuống PostgreSQL thành công!");
+      
+      fetchUserData();
+    } catch (err) {
+      console.error("Lỗi ghi đè CSDL:", err);
+      alert("Lỗi ghi dữ liệu! Vui lòng kiểm tra log API.");
+      setIsEditing(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleCheckboxChange = (id, field) => {
     if (!isEditing) return;
@@ -169,29 +159,22 @@ export default function Chitietnoibo() {
   const renderModuleIcon = (type) => {
     const iconClass = "w-[18px] h-[18px] text-slate-500/80 shrink-0";
     switch (type) {
-      case "dashboard": 
-        return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>;
-      case "products": 
-        return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>;
-      case "farm": 
-        return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>;
-      case "orders": 
-        return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2-2V6.75a2.25 2.25 0 0 0-2-2h-2.25m-3 0H7.5a2.25 2.25 0 0 0-2 2v12a2.25 2.25 0 0 0 2 2h2.25m3.75-16.5a1.5 1.5 0 0 0-3 0v1.5a1.5 1.5 0 0 0 3 0v-1.5Z" /></svg>;
-      case "inventory": 
-        return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-5.25v9" /></svg>;
-      case "customers": 
-        return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.265 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>;
-      case "settings": 
-        return <svg className="w-[18px] h-[18px] text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 3v6m0 4v8M4 9h4M12 3v2m0 4v12M10 5h4M18 3v10m0 4v4M16 13h4" /></svg>;
-      default: 
-        return null;
+      case "dashboard": return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>;
+      case "products": return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>;
+      case "farm": return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>;
+      case "orders": return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2-2V6.75a2.25 2.25 0 0 0-2-2h-2.25m-3 0H7.5a2.25 2.25 0 0 0-2 2v12a2.25 2.25 0 0 0 2 2h2.25m3.75-16.5a1.5 1.5 0 0 0-3 0v1.5a1.5 1.5 0 0 0 3 0v-1.5Z" /></svg>;
+      case "inventory": return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-5.25v9" /></svg>;
+      case "customers": return <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.265 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>;
+      case "settings": return <svg className="w-[18px] h-[18px] text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 3v6m0 4v8M4 9h4M12 3v2m0 4v12M10 5h4M18 3v10m0 4v4M16 13h4" /></svg>;
+      default: return null;
     }
   };
+
+  if (loading) return <div className="p-8 text-center text-sm text-[#006c49] font-bold animate-pulse">🔌 Đang tải hồ sơ nhân sự...</div>;
 
   return (
     <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left p-1 relative">
       
-      {/* TRẠM LIÊN KẾT CSDL */}
       <div className="absolute top-2 right-4 text-[10px] font-bold text-gray-400">
         {submitting ? "⏳ Đồng bộ Database..." : `🆔 Mã số: ${userInfo.userId || "Đang tải"}`}
       </div>
@@ -203,11 +186,7 @@ export default function Chitietnoibo() {
             Quản trị hồ sơ: {userInfo.fullName || "Loading..."}
           </h1>
           <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mt-1.5">
-            <span>Hệ thống quản trị</span>
-            <span>❯</span>
-            <span>Quản lý nội bộ</span>
-            <span>❯</span>
-            <span className="text-[#006c49] font-semibold">Chi tiết nhân sự</span>
+            <span>Hệ thống quản trị</span><span>❯</span><span>Quản lý nội bộ</span><span>❯</span><span className="text-[#006c49] font-semibold">Chi tiết nhân sự</span>
           </div>
         </div>
         
@@ -244,30 +223,31 @@ export default function Chitietnoibo() {
         </div>
       </div>
 
-      {/* CHUYỂN LOGIC 3 TAB NẰM TRONG GRID CONTAINER CHÍNH */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
         {/* CỘT TRÁI (CHIẾM 2 PHẦN) */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* PROFILE CARD: Khớp nối 100% cột database */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5">
             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-              <svg className="w-[18px] h-[18px] text-[#006c49]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 111.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0Zm-9-3.75h.008v.008H12V8.25Z" />
-              </svg>
+              <svg className="w-[18px] h-[18px] text-[#006c49]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6"><path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 111.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Thông tin hồ sơ nhân viên (`public.users`)</h3>
             </div>
 
             <div className="flex items-center gap-4">
-              <img src={userInfo.avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover border border-gray-200 shadow-sm bg-slate-50" />
+              {/* 🎯 FIX AVATAR ĐỘNG THEO USER_ID ĐÚNG NGHĨA */}
+              {userInfo.avatarUrl ? (
+                <img src={userInfo.avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover border border-emerald-100 shadow-sm bg-slate-50" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#006c49] font-black text-xl flex items-center justify-center border border-emerald-100 shadow-sm">
+                  {(userInfo.fullName || "NV").split(" ").pop().substring(0, 2).toUpperCase()}
+                </div>
+              )}
               <div>
                 <h4 className="text-base font-bold text-slate-800 uppercase">{userInfo.fullName || "Đang kết nối..."}</h4>
                 <p className="text-xs text-gray-400 mt-0.5">Vai trò hệ thống: <strong className="text-[#006c49] uppercase font-mono">{userInfo.role}</strong></p>
               </div>
             </div>
 
-            {/* Inputs hàng ngang mẫu mã đồng bộ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Họ và Tên (`full_name`)</label>

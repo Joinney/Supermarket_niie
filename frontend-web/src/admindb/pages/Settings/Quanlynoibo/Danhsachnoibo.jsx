@@ -36,7 +36,6 @@ const DEFAULT_PRESETS = {
 
 export default function Danhsachnoibo() {
   const navigate = useNavigate();
-  const { email: urlEmail } = useParams();
 
   // --- LIVE CSDL STATES ---
   const [users, setUsers] = useState([]);
@@ -47,7 +46,6 @@ export default function Danhsachnoibo() {
   // --- MANAGEMENT STATES ---
   const [isModalOpen, setIsCollapsedModal] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
-  const [isEditingRole, setIsEditingRole] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -185,9 +183,6 @@ export default function Danhsachnoibo() {
     }
   };
 
-  const isDetailPage = Boolean(urlEmail);
-  const detailUser = isDetailPage ? users.find((u) => u.email === urlEmail) : null;
-
   const filteredUsers = users.filter((u) => {
     const nameMatch = (u.full_name || "").toLowerCase().includes(searchTerm.toLowerCase());
     const emailMatch = (u.email || "").toLowerCase().includes(searchTerm.toLowerCase());
@@ -204,89 +199,6 @@ export default function Danhsachnoibo() {
     if (r === "MANAGER") return { class: "bg-blue-50 text-blue-600 border-blue-100", label: "MANAGER" };
     return { class: "bg-slate-50 text-slate-600 border-slate-200", label: "STAFF" };
   };
-
-  // =========================================================================
-  // VIEW CHI TIẾT VAI TRÒ (ĐÃ FIX KHÔI PHỤC HIỂN THỊ ẢNH AVATAR THẬT)
-  // =========================================================================
-  if (isDetailPage && detailUser) {
-    const roleMeta = getRoleColors(detailUser.role);
-    return (
-      <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left animate-fadeIn p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              {isEditingRole ? `Chỉnh sửa vai trò: ${roleMeta.label}` : `Chi tiết Vai trò: ${roleMeta.label}`}
-            </h1>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 mt-1">
-              <span>Dashboard</span> <span>▶</span> <span>Settings</span> <span>▶</span> <span>Quản lý nội bộ</span> <span>▶</span> <span className="text-[#006c49]">Chi tiết vai trò</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button onClick={() => navigate("/admin/settings/quanlynoibo/danhsachnoibo")} className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-600 transition shadow-sm">
-              ↩ Quay về danh sách
-            </button>
-            <button onClick={() => setIsEditingRole(!isEditingRole)} className={`flex items-center gap-2 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all ${isEditingRole ? "bg-[#22c55e]" : "bg-[#006c49]"}`}>
-              {isEditingRole ? "💾 Lưu thay đổi" : "✏ Chỉnh sửa vai trò"}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2 mb-5 border-b border-gray-50 pb-2">ℹ Thông tin Vai trò (Role Info)</h3>
-              <div className="flex items-center gap-4 mb-6">
-                
-                {/* 📌 VỊ TRÍ 1: FIX HIỂN THỊ AVATAR TRÊN TRANG CHI TIẾT */}
-                {detailUser.avatar_url ? (
-                  <img src={detailUser.avatar_url} alt="Avatar" className="w-16 h-16 rounded-full object-cover border-2 border-emerald-100 shadow-sm" />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#006c49] text-xl font-black flex items-center justify-center border-2 border-emerald-100">
-                    {(detailUser.full_name || "NV").split(" ").pop().substring(0,2).toUpperCase()}
-                  </div>
-                )}
-
-                <div>
-                  <h4 className="font-extrabold text-slate-900 text-lg">{detailUser.full_name}</h4>
-                  <p className="text-xs text-gray-400 mt-0.5">{detailUser.email}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Tên hiển thị nhân sự</label><p className="text-sm font-bold text-slate-800 mt-1">{detailUser.full_name}</p></div>
-                <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Nhóm quyền</label><p className="text-sm font-bold text-slate-800 mt-1 uppercase">{detailUser.role}</p></div>
-              </div>
-              <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Mô tả chi tiết phân hệ vận hành</label><p className="text-xs font-semibold text-slate-500 leading-relaxed mt-1.5">{detailUser.address || "Hệ thống phân phối nông sản Demi Mart."}</p></div>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="text-sm font-extrabold text-slate-800 mb-4">Ma trận Phân quyền Mặc định</h3>
-              <div className="border border-gray-50 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      <th className="py-3 px-4">Chức năng Mô-đun</th><th className="py-3 px-2 text-center">Xem</th><th className="py-3 px-2 text-center">Thêm</th><th className="py-3 px-2 text-center">Sửa</th><th className="py-3 px-2 text-center">Xóa</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 font-bold text-slate-700">
-                    {rolePermissions.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                        <td className="py-3.5 px-4 flex items-center gap-3.5 text-slate-800 font-semibold">{renderModuleIcon(item.type)} {item.name}</td>
-                        {["view", "add", "edit", "delete"].map((field) => (
-                          <td key={field} className="py-3 px-2 text-center">
-                            <input type="checkbox" checked={item[field]} disabled={!isEditingRole} className="w-4 h-4 accent-[#006c49]" />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (loading) return <div className="p-8 text-center text-sm text-[#006c49] font-bold animate-pulse">🔌 Đang kết nối ma trận CSDL...</div>;
 
@@ -368,8 +280,6 @@ export default function Danhsachnoibo() {
                   <tr key={user.user_id || idx} className="hover:bg-gray-50/50 transition-colors">
                     <td className="py-4 px-6 whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        
-                        {/* 📌 VỊ TRÍ 2: FIX HIỂN THỊ AVATAR TRONG BẢNG DANH SÁCH CHÍNH */}
                         {user.avatar_url ? (
                           <img src={user.avatar_url} alt="Avatar" className="w-9 h-9 rounded-full object-cover border border-emerald-100 shadow-sm" />
                         ) : (
@@ -377,7 +287,6 @@ export default function Danhsachnoibo() {
                             {(user.full_name || "NV").split(" ").pop().substring(0,2).toUpperCase()}
                           </div>
                         )}
-
                         <div className="flex flex-col">
                           <span className="font-bold text-slate-800">{user.full_name || "Chưa cập nhật"}</span>
                           <span className="text-[11px] text-gray-400 font-medium mt-0.5">{user.email}</span>
@@ -414,8 +323,10 @@ export default function Danhsachnoibo() {
                         >
                           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
                         </button>
+                        
+                        {/* 🎯 Giao diện dẫn trực tiếp sang trang chi tiết chuẩn mã số */}
                         <button 
-                          onClick={() => navigate(`/admin/settings/quanlynoibo/danhsachnoibo/${user.email}`)}
+                          onClick={() => navigate(`/admin/settings/quanlynoibo/chitietnoibo/${user.user_id}`)}
                           className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition"
                           title="Xem trang chi tiết"
                         >
@@ -536,7 +447,6 @@ export default function Danhsachnoibo() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     
-                    {/* 📌 VỊ TRÍ 3: FIX HIỂN THỊ AVATAR TRONG MODAL PHÂN QUYỀN CHI TIẾT */}
                     {selectedUser.avatar_url ? (
                       <img src={selectedUser.avatar_url} alt="Avatar" className="w-11 h-11 rounded-full object-cover border border-emerald-100 shadow-sm" />
                     ) : (

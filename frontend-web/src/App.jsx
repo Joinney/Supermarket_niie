@@ -260,7 +260,7 @@ const AppRoutes = () => (
         </Route>
       </Route>
     </Route>
-
+    <Route path="/admin/settings/quanlynoibo/chitietnoibo/:id" element={<Chitietnoibo />} />
     {/* Điều hướng dự phòng */}
     <Route path="/admin/*" element={<Navigate to="/admin/login" replace />} />
     <Route path="*" element={<Navigate to="/" replace />} />
