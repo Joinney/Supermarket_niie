@@ -4,7 +4,8 @@ import { Plus } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
 
-const ProductCard = ({ p }) => {
+// 🟢 1. Bổ sung nhận props categoryName và categorySlug
+const ProductCard = ({ p, categoryName, categorySlug }) => {
   // 1. GỌI CONTEXT STORE ĐỂ LẤY QUỐC GIA VÀ HÀM ĐỔI TIỀN TỰ ĐỘNG
   const { currentStore, formatPrice } = useStore();
 
@@ -19,7 +20,9 @@ const ProductCard = ({ p }) => {
   // 2. Ưu tiên đường dẫn link chạy theo store người dùng đang chọn
   const rawCountryCode = currentStore?.code || p.country_code || "vn";
   const country = String(rawCountryCode).toLowerCase();
-  const category = p.slug_danh_muc || "san-pham";
+
+  // 🟢 2. Cập nhật ưu tiên lấy categorySlug từ props
+  const category = categorySlug || p.slug_danh_muc || "san-pham";
   const stockCount = p.tong_ton_kho || 0;
 
   // 3. Hàm xử lý thêm nhanh vào giỏ hàng và tạo hiệu ứng Animation
@@ -95,6 +98,11 @@ const ProductCard = ({ p }) => {
   return (
     <Link
       to={`/${country}/product/${category}/${p.ma_san_pham}`}
+      // 🟢 3. Thêm state vào Link để truyền dữ liệu đi 🟢
+      state={{
+        categoryName: categoryName,
+        categorySlug: categorySlug,
+      }}
       className="flex-shrink-0"
     >
       <div className="w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] hover:shadow-2xl hover:shadow-slate-100 transition-all duration-500 border border-transparent hover:border-slate-50">
@@ -129,7 +137,11 @@ const ProductCard = ({ p }) => {
           </p>
           <div className="flex gap-1 items-center pt-0.5">
             <span className="bg-[#e6f0ed] text-[#006c49] text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
-              {p.ten_danh_muc_con || p.ten_danh_muc || "Siêu thị"}
+              {/* 🟢 4. Cập nhật nhãn để hiện đúng tên danh mục 🟢 */}
+              {categoryName ||
+                p.ten_danh_muc_con ||
+                p.ten_danh_muc ||
+                "Siêu thị"}
             </span>
           </div>
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">

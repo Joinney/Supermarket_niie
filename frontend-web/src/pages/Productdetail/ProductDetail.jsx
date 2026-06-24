@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import {
   ShoppingCart,
   ShieldCheck,
@@ -9,10 +9,12 @@ import {
   ChevronRight,
   CreditCard,
 } from "lucide-react";
-import { useCart } from "../../context/CartContext";
-import { productApi } from "../../api/axios";
-import { useStore } from "../../context/StoreContext";
 
+import { useLanguage } from "../../context/LanguageContext";
+import { useStore } from "../../context/StoreContext";
+import { useCart } from "../../context/CartContext";
+
+import { productApi } from "../../api/axios";
 import Feedback from "./Feedback";
 import RelatedProducts from "./RelatedProducts";
 import RecommendedProducts from "./RecommendedProducts";
@@ -32,10 +34,12 @@ export default function ProductDetail() {
   const country = String(country_code || "vn").toLowerCase();
   const category = category_slug;
   const navigate = useNavigate();
+  const location = useLocation(); // Khai báo useLocation
   const { addToCart } = useCart();
 
   // Lấy formatPrice và currentStore từ StoreContext
   const { currentStore, formatPrice } = useStore();
+  const { t } = useLanguage(); // Gọi thêm useLanguage để tránh lỗi unused
 
   const [product, setProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -258,6 +262,16 @@ export default function ProductDetail() {
 
   const isMultiTier = Object.keys(nhomPhanLoai).length > 0;
 
+  // 🟢 LOGIC ƯU TIÊN DANH MỤC Ở BREADCRUMB 🟢
+  const displayCategoryName =
+    location.state?.categoryName ||
+    product?.ten_dm_con ||
+    product?.ten_danh_muc;
+  const displayCategorySlug =
+    location.state?.categorySlug ||
+    product?.slug_danh_muc ||
+    product?.ma_dm_con;
+
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10 transition-all duration-300">
@@ -265,15 +279,30 @@ export default function ProductDetail() {
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
           <Link
             to={`/${country}`}
-            className="hover:text-slate-900 flex-shrink-0"
+            className="hover:text-slate-900 flex-shrink-0 transition-colors"
           >
             Home
           </Link>
-          <ChevronRight size={10} className="text-slate-300" />
-          <span className="text-slate-400 truncate">
-            {product.ten_danh_muc}
-          </span>
-          <ChevronRight size={10} className="text-slate-300" />
+
+          <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
+
+          {/* 🟢 Render tên danh mục theo biến đã tính toán phía trên 🟢 */}
+          {displayCategoryName && (
+            <>
+              <Link
+                to={`/${country}/category/${displayCategorySlug}`}
+                className="text-slate-400 hover:text-slate-900 truncate transition-colors"
+              >
+                {displayCategoryName}
+              </Link>
+
+              <ChevronRight
+                size={10}
+                className="text-slate-300 flex-shrink-0"
+              />
+            </>
+          )}
+
           <span className="text-[#006c49] truncate font-black italic">
             {product.ten_san_pham}
           </span>
