@@ -40,6 +40,7 @@ import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang";
 import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
 import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
+import AdminProductDetail from "./admindb/pages/Products/ProductDetail";
 
 // Nhóm quản lý nội bộ (Import thật các components phân hệ cấu hình hệ thống)
 import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo"; 
@@ -213,6 +214,7 @@ const AppRoutes = () => (
       <Route path="products">
         <Route index element={<Navigate to="Danhsachsanpham" replace />} />
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
+        <Route path="detail/:id" element={<AdminProductDetail />} />
       </Route>
 
       {/* Nhóm: Donhang */}
