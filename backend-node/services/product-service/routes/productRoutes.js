@@ -11,6 +11,8 @@ import {
     getProductsWithoutDescriptions,
     refreshEmptyDescriptions,
     createProduct,
+    getReviewsByProduct,
+    getRelatedProducts,
     getAllCountries
 } from '../controllers/productController.js';
 
@@ -285,6 +287,54 @@ router.get('/', getAllProducts);
  *         description: Tạo sản phẩm thành công
  */
 router.post('/', createProduct);
+
+/**
+ * @swagger
+ * /api/products/{id}/reviews:
+ *   get:
+ *     summary: Lấy danh sách đánh giá của sản phẩm (bao gồm User Info từ Microservice)
+ *     tags:
+ *       - Products
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Trả về summary và danh sách đánh giá
+ */
+router.get('/:id/reviews', getReviewsByProduct);
+
+/**
+ * @swagger
+ * /api/products/{id}/related:
+ *   get:
+ *     summary: Lấy danh sách sản phẩm liên quan cùng danh mục
+ *     tags:
+ *       - Products
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: category
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 5
+ *     responses:
+ *       200:
+ *         description: Trả về danh sách sản phẩm liên quan
+ */
+router.get('/:id/related', getRelatedProducts);
 
 /**
  * @swagger

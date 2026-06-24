@@ -1,169 +1,208 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { productApi } from "../../api/axios";
+import { useStore } from "../../context/StoreContext";
+import { useCart } from "../../context/CartContext";
 
-// 🛠️ MOCK DATA: Dữ liệu giả lập chuẩn giao diện theo ảnh mẫu của bạn
-const MOCK_RECOMMENDED_PRODUCTS = [
-  {
-    id: "prod-001",
-    ten_san_pham: "Rau Răm 1 bó",
-    gia_ban: 15000,
-    don_vi_tinh: "bó",
-    hinh_anh: "https://images.unsplash.com/photo-1621460245598-a32057d394b9?auto=format&fit=crop&w=400&q=80", // Rau răm giả lập
-    ton_kho: 44,
-    da_ban: "1K+"
-  },
-  {
-    id: "prod-002",
-    ten_san_pham: "Khổ Qua 1-1.3 lb",
-    gia_ban: 35000,
-    don_vi_tinh: "lb",
-    hinh_anh: "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=400&q=80", // Khổ qua giả lập
-    ton_kho: 12,
-    da_ban: "1K+"
-  },
-  {
-    id: "prod-003",
-    ten_san_pham: "Giá 12 oz",
-    gia_ban: 12000,
-    don_vi_tinh: "oz",
-    hinh_anh: "https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?auto=format&fit=crop&w=400&q=80", // Giá đỗ giả lập
-    ton_kho: 85,
-    da_ban: "1K+"
-  },
-  {
-    id: "prod-004",
-    ten_san_pham: "Khoai Lang Nhật, Củ Nhỏ 3 lb",
-    gia_ban: 79000,
-    don_vi_tinh: "lb",
-    hinh_anh: "https://images.unsplash.com/photo-1596003906949-67221c37965c?auto=format&fit=crop&w=400&q=80", // Khoai lang giả lập
-    ton_kho: 5,
-    da_ban: "1K+"
-  },
-  {
-    id: "prod-005",
-    ten_san_pham: "Bắp Sú 1 cái",
-    gia_ban: 25000,
-    don_vi_tinh: "cái",
-    hinh_anh: "https://images.unsplash.com/photo-1581074817932-8429dd8b8e8f?auto=format&fit=crop&w=400&q=80", // Bắp cải giả lập
-    ton_kho: 0,
-    da_ban: "1K+"
-  }
-];
+// Component khung mờ chờ tải dữ liệu (Skeleton)
+const SkeletonCard = () => (
+  <div className="flex-shrink-0 w-[45vw] sm:w-[30vw] lg:w-[calc(20%-13px)] bg-white rounded-3xl p-3 border border-slate-100 shadow-sm animate-pulse">
+    <div className="aspect-square w-full bg-slate-200 rounded-2xl mb-3"></div>
+    <div className="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+    <div className="h-4 bg-slate-200 rounded w-1/2"></div>
+  </div>
+);
 
 export default function RecommendedProducts({ currentProduct }) {
   const { country } = useParams();
-  const [apiProducts, setApiProducts] = useState([]);
+  const { formatPrice } = useStore();
+  const { addToCart } = useCart();
+
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const scrollRef = useRef(null);
 
+  // Gọi API lấy dữ liệu sản phẩm cùng danh mục
   useEffect(() => {
-    // Giả lập độ trễ mạng nhẹ (500ms) để test hiệu ứng skeleton/loading nếu cần
-    const timer = setTimeout(() => {
-      // Lọc bỏ chính sản phẩm hiện tại đang xem ra khỏi danh sách dữ liệu giả
-      const currentId = currentProduct?.ma_san_pham || currentProduct?.id || currentProduct?._id;
-      const filtered = MOCK_RECOMMENDED_PRODUCTS.filter(p => p.id !== currentId);
-      
-      setApiProducts(filtered);
-      setLoading(false);
-    }, 400);
+    if (currentProduct?.ma_dm_con) {
+      setLoading(true);
+      productApi
+        .get(
+          `/products/${currentProduct.ma_san_pham}/related?category=${currentProduct.ma_dm_con}&limit=15`,
+        )
+        .then((res) => {
+          setProducts(res.data);
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Lỗi tải đề xuất:", err);
+          setLoading(false);
+        });
+    }
+  }, [currentProduct?.ma_san_pham]);
 
-    return () => clearTimeout(timer);
-  }, [currentProduct]);
+  // Xử lý Thêm vào giỏ hàng + Hiệu ứng hạt bay + Bảng thông báo (Toast)
+  const handleAddToCart = (e, prod) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12 text-slate-400 gap-2 text-sm w-full">
-        <div className="w-5 h-5 border-2 border-[#006c49] border-t-transparent rounded-full animate-spin"></div>
-        <span>Đang tải đề xuất cho bạn...</span>
+    // 1. Lưu vào Context Giỏ Hàng
+    addToCart({
+      variantId: prod.ma_bien_the || "default",
+      name: prod.ten_san_pham,
+      price: prod.gia_ban_thap_nhat,
+      quantity: 1,
+      image: prod.hinh_anh_chinh,
+      id: prod.ma_san_pham,
+      categorySlug: prod.slug_danh_muc,
+      countryCode: country,
+    });
+
+    // 2. Hiệu ứng hạt bay (Flying Dot)
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const cartIcon = document.getElementById("cart-icon");
+    let endX = window.innerWidth - 100;
+    let endY = 50;
+
+    if (cartIcon) {
+      const cartRect = cartIcon.getBoundingClientRect();
+      endX = cartRect.left + cartRect.width / 2;
+      endY = cartRect.top + cartRect.height / 2;
+    }
+
+    const dot = document.createElement("div");
+    dot.className = "flying-dot";
+    dot.style.left = `${startX}px`;
+    dot.style.top = `${startY}px`;
+    document.body.appendChild(dot);
+
+    setTimeout(() => {
+      dot.style.left = `${endX}px`;
+      dot.style.top = `${endY}px`;
+      dot.style.transform = "scale(0.2)";
+    }, 10);
+
+    setTimeout(() => {
+      dot.remove();
+    }, 800);
+
+    // 3. Hiện bảng thông báo (Toast) góc trên bên phải
+    const toast = document.createElement("div");
+    toast.className = "custom-toast";
+    toast.innerHTML = `
+      <img src="${prod.hinh_anh_chinh || "https://placehold.co/300x300?text=Demi"}" style="width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;">
+      <div>
+        <h4 style="margin: 0; color: #006c49; font-size: 15px; font-weight: 900; letter-spacing: -0.5px;">Thêm thành công!</h4>
+        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">Cảm ơn khách hàng đã mua <b style="color: #334155;">${prod.ten_san_pham}</b></p>
       </div>
-    );
-  }
+    `;
+    document.body.appendChild(toast);
 
-  if (apiProducts.length === 0) return null;
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
+  };
 
-  const currentCountry = country || 'vn';
+  // Hàm trượt ngang khi bấm nút mũi tên
+  const slide = (direction) => {
+    if (scrollRef.current) {
+      const scrollAmount = direction === "left" ? -400 : 400;
+      scrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
 
   return (
-    <section className="text-left mt-12 pt-8 border-t border-slate-100 w-full">
-      {/* TIÊU ĐỀ KHỐI ĐỀ XUẤT */}
+    <section className="mt-12 pt-8 border-t border-slate-100 w-full">
       <h2 className="text-2xl font-semibold text-slate-800 mb-6">
         Đề xuất cho bạn
       </h2>
 
-      {/* LƯỚI GRID Ô VUÔNG LỚN TRẢI NGANG DƯỚI TRANG */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-        {apiProducts.map((prod) => {
-          const price = prod.gia_ban || 0;
-          const thumbMedia = prod.hinh_anh;
-          const productId = prod.id;
-          const productName = prod.ten_san_pham;
-          const cSlug = "product-recommend"; // Slug mặc định cho sản phẩm giả lập
-          const unit = prod.don_vi_tinh;
+      <div className="relative group">
+        {/* Nút mũi tên trái */}
+        {!loading && products.length > 5 && (
+          <button
+            onClick={() => slide("left")}
+            className="absolute -left-4 top-[40%] -translate-y-1/2 z-10 w-10 h-10 bg-white border border-slate-200 rounded-full shadow-lg flex items-center justify-center text-slate-600 hover:text-[#006c49] hover:border-[#006c49] transition-all opacity-0 group-hover:opacity-100 hidden md:flex"
+          >
+            <ChevronLeft size={24} />
+          </button>
+        )}
 
-          return (
-            <div key={productId} className="flex flex-col bg-white rounded-3xl p-3 border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative group">
-              
-              {/* Box chứa ảnh vuông lớn */}
-              <Link 
-                to={`/${currentCountry}/product/${cSlug}/${productId}`}
-                className="aspect-square w-full bg-slate-50 rounded-2xl overflow-hidden flex items-center justify-center relative mb-3"
+        {/* Container cuộn ngang với CSS Scroll Snap */}
+        <div
+          ref={scrollRef}
+          className="flex gap-4 overflow-x-auto pb-4 -mb-4 scroll-smooth hide-scrollbar"
+          style={{
+            scrollSnapType: "x mandatory",
+            msOverflowStyle: "none",
+            scrollbarWidth: "none",
+          }}
+        >
+          {/* CSS nội tuyến để giấu thanh cuộn trên các trình duyệt Webkit (Chrome/Safari) */}
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar { display: none; }
+          `}</style>
+
+          {loading ? (
+            [...Array(5)].map((_, i) => <SkeletonCard key={i} />)
+          ) : products.length > 0 ? (
+            products.map((prod) => (
+              <div
+                key={prod.ma_san_pham}
+                className="flex-shrink-0 w-[45vw] sm:w-[30vw] lg:w-[calc(20%-13px)] flex flex-col bg-white rounded-3xl p-3 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 relative group/card"
+                style={{ scrollSnapAlign: "start" }}
               >
-                <img 
-                  src={thumbMedia} 
-                  alt={productName} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/300x300?text=Demi'; }}
-                />
-                
-                {/* Nút cộng tròn thêm nhanh neo ở góc dưới bên phải ảnh */}
                 <Link
-                  to={`/${currentCountry}/product/${cSlug}/${productId}`}
-                  className="absolute bottom-2 right-2 w-9 h-9 rounded-full border border-blue-100 flex items-center justify-center text-blue-600 bg-white hover:bg-blue-50 transition-all shadow-md z-10"
+                  to={`/${country}/product/${prod.slug_danh_muc || "product"}/${prod.ma_san_pham}`}
+                  className="aspect-square w-full bg-slate-50 rounded-2xl overflow-hidden relative mb-3 block"
                 >
-                  <Plus size={18} strokeWidth={2.5} />
-                </Link>
-              </Link>
-
-              {/* Phần text thông tin ở dưới ảnh */}
-              <div className="flex-1 flex flex-col justify-between space-y-1 px-1">
-                <div>
-                  {/* Hiển thị giá tiền Việt chuẩn lấy từ Mock Data */}
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xl font-bold text-red-600">
-                      {price > 0 ? `${price.toLocaleString('vi-VN')}đ` : 'Liên hệ'}
-                    </span>
-                  </div>
-                  
-                  {/* Đơn vị tính kèm giá tương đương */}
-                  {unit && price > 0 && (
-                    <div className="text-xs text-slate-400 font-medium">
-                      {price.toLocaleString('vi-VN')}đ/{unit}
-                    </div>
-                  )}
-
-                  {/* Tên hàng hóa */}
-                  <Link 
-                    to={`/${currentCountry}/product/${cSlug}/${productId}`}
-                    className="block text-sm font-medium text-slate-800 hover:text-[#006c49] line-clamp-2 mt-1 leading-snug min-h-[40px]"
+                  <img
+                    src={
+                      prod.hinh_anh_chinh ||
+                      "https://placehold.co/300x300?text=Demi"
+                    }
+                    className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                    alt={prod.ten_san_pham}
+                  />
+                  <button
+                    onClick={(e) => handleAddToCart(e, prod)}
+                    className="absolute bottom-2 right-2 w-9 h-9 rounded-full bg-white border border-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-50 transition-all shadow-md z-10"
                   >
-                    {productName}
+                    <Plus size={18} strokeWidth={2.5} />
+                  </button>
+                </Link>
+
+                <div className="px-1 flex flex-col flex-1">
+                  <span className="text-xl font-bold text-red-600">
+                    {formatPrice(prod.gia_ban_thap_nhat)}
+                  </span>
+                  <Link
+                    to={`/${country}/product/${prod.slug_danh_muc || "product"}/${prod.ma_san_pham}`}
+                    className="text-sm font-medium text-slate-800 hover:text-[#006c49] line-clamp-2 mt-1 leading-snug min-h-[40px]"
+                  >
+                    {prod.ten_san_pham}
                   </Link>
                 </div>
-
-                {/* Dòng thông tin phụ: Đã bán / Còn lại */}
-                <div className="text-[11px] text-slate-400 pt-1 flex flex-wrap gap-x-2 border-t border-slate-50 mt-1 justify-between">
-                  <span>Đã bán {prod.da_ban}</span>
-                  {prod.ton_kho > 0 ? (
-                    <span className="text-slate-400">Còn lại {prod.ton_kho}</span>
-                  ) : (
-                    <span className="text-red-500 font-medium">Hết hàng</span>
-                  )}
-                </div>
               </div>
-
+            ))
+          ) : (
+            <div className="text-slate-400 py-10 italic w-full text-center">
+              Hiện chưa có sản phẩm đề xuất khác trong danh mục này.
             </div>
-          );
-        })}
+          )}
+        </div>
+
+        {/* Nút mũi tên phải */}
+        {!loading && products.length > 5 && (
+          <button
+            onClick={() => slide("right")}
+            className="absolute -right-4 top-[40%] -translate-y-1/2 z-10 w-10 h-10 bg-white border border-slate-200 rounded-full shadow-lg flex items-center justify-center text-slate-600 hover:text-[#006c49] hover:border-[#006c49] transition-all opacity-0 group-hover:opacity-100 hidden md:flex"
+          >
+            <ChevronRight size={24} />
+          </button>
+        )}
       </div>
     </section>
   );
