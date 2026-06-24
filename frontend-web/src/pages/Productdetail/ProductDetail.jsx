@@ -357,6 +357,13 @@ export default function ProductDetail() {
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>
+
+              {/* 🟢 HIỂN THỊ TÊN BIẾN THỂ TỰ ĐỘNG CẬP NHẬT 🟢 */}
+              {selectedVariant && selectedVariant.ten_bien_the && (
+                <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
+                  Phân loại: {selectedVariant.ten_bien_the}
+                </h2>
+              )}
             </div>
 
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
