@@ -153,3 +153,35 @@ export const logout = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+
+// 1. API: Lấy toàn bộ danh sách users sắp xếp tăng dần
+export const getAllInternalUsers = async (req, res) => {
+    try {
+        // CẬP NHẬT: Thêm điều kiện WHERE để lọc sạch role Buyer ra khỏi danh sách nội bộ
+        const query = `
+            SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url 
+            FROM public.users 
+            WHERE LOWER(role) <> 'buyer'
+            ORDER BY user_id ASC;
+        `;
+        const { rows } = await pool.query(query);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error("❌ Lỗi CSDL tại getAllInternalUsers:", error.message);
+        res.status(500).json({ success: false, error: "Lỗi kết nối CSDL khi lấy danh sách" });
+    }
+};
+
+// 2. API: Lấy chi tiết 1 user phục vụ trang Chi tiết
+export const getUserDetail = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = `SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url FROM public.users WHERE user_id = $1;`;
+        const { rows } = await pool.query(query, [id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy user" });
+        res.status(200).json(rows[0]);
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Lỗi lấy chi tiết nhân sự" });
+    }
+};

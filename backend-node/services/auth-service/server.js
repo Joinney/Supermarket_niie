@@ -24,6 +24,7 @@ import forgotRoutes from "./routes/ForgotRoutes.js";
 import googleRoutes from './routes/GoogleRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';  
+
 // Import trực tiếp các hàm proxy địa chính từ Controller để xử lý cưỡng chế tại tệp gốc
 import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
 
@@ -112,6 +113,7 @@ app.use('/api/auth/google', googleRoutes);
 
 console.log("Đang đăng ký profileRoutes...");
 app.use('/api/profile', profileRoutes);
+
 
 // 🎯 HÀM ĐỊA CHÍNH CÔNG KHAI TUYỆT ĐỐI - ĐÓN ĐẦU TRƯỚC TIỀN TỐ TRUNG GIAN
 app.get('/api/addresses/locations/provinces', getProvincesProxy);
