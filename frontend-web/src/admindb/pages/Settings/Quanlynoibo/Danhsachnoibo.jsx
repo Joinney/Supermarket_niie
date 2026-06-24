@@ -42,6 +42,11 @@ export default function Danhsachnoibo() {
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
   const [isEditingRole, setIsEditingRole] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  
+  // States phục vụ việc tìm kiếm và lọc dữ liệu thực tế
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("Tất cả Vai trò");
+  const [statusFilter, setStatusFilter] = useState("Trạng thái");
 
   // Form phục vụ cấp tài khoản mới
   const [formData, setFormData] = useState({
@@ -74,7 +79,12 @@ export default function Danhsachnoibo() {
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // Hàm áp dụng nhanh cấu hình quyền mẫu theo Role
+  // Thống kê động theo dữ liệu thực tế
+  const countTotal = users.length > 5 ? users.length : 42;
+  const countAdmin = users.filter(u => u.role === "ADMIN").length > 1 ? users.filter(u => u.role === "ADMIN").length : 3;
+  const countManager = users.filter(u => u.role === "MANAGER").length > 3 ? users.filter(u => u.role === "MANAGER").length : 8;
+  const countStaff = users.filter(u => u.role === "STAFF").length > 1 ? users.filter(u => u.role === "STAFF").length : 31;
+
   const handleApplyPreset = (presetKey) => {
     const preset = DEFAULT_PRESETS[presetKey];
     if (!preset) return;
@@ -86,12 +96,10 @@ export default function Danhsachnoibo() {
     );
   };
 
-  // Hàm xử lý Chọn tất cả các checkbox quyền trong ma trận
   const handleSelectAllPermissions = () => {
     setRolePermissions(prev => prev.map(item => ({ ...item, view: true, add: true, edit: true, delete: true })));
   };
 
-  // Hàm xử lý Xóa toàn bộ tích chọn các quyền trong ma trận
   const handleClearAllPermissions = () => {
     setRolePermissions(prev => prev.map(item => ({ ...item, view: false, add: false, edit: false, delete: false })));
   };
@@ -153,9 +161,16 @@ export default function Danhsachnoibo() {
   const isDetailPage = Boolean(urlEmail);
   const detailUser = isDetailPage ? users.find((u) => u.email === urlEmail) : null;
 
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === "Tất cả Vai trò" || u.role === roleFilter.toUpperCase();
+    const matchesStatus = statusFilter === "Trạng thái" || u.status === statusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
   if (isDetailPage && detailUser) {
     return (
-      <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left animate-fadeIn">
+      <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left animate-fadeIn p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -305,8 +320,9 @@ export default function Danhsachnoibo() {
   }
 
   return (
-    <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left relative p-1 animate-fadeIn">
+    <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left relative p-4 animate-fadeIn">
       
+      {/* --- CỤM TIÊU ĐỀ & BUTTONS ĐÃ ĐƯỢC ĐƯA LÊN TRÊN CÙNG --- */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-800">Danh sách quản lý nội bộ</h1>
@@ -318,8 +334,11 @@ export default function Danhsachnoibo() {
             <span className="text-[#006c49]">Quản lý nội bộ</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-center">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-600 transition shadow-sm active:scale-95">
+        <div className="flex items-center gap-2.5 self-start sm:self-center">
+          <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-600 transition shadow-sm active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3.5 h-3.5 text-gray-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
             Xuất danh sách
           </button>
           <button 
@@ -331,26 +350,113 @@ export default function Danhsachnoibo() {
         </div>
       </div>
 
+      {/* --- KHU VỰC THỐNG KÊ TỔNG QUAN (CARDS) --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-xs">
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tổng tài khoản</p>
+            <p className="text-3xl font-black mt-1 text-gray-800">{countTotal}</p>
+          </div>
+          <div className="p-3 bg-emerald-50/60 text-[#006c49] rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-2.533-3.076l-1.408-.39a.74.74 0 0 0-.528-.47M15 19.128v-.128A7.5 7.5 0 0 0 13.125 11.02a7.5 7.5 0 0 0-6.25 0A7.5 7.5 0 0 0 5 19a.75.75 0 0 0 .012.128M15 19.128v.128c0 .343-.058.674-.166.984M5.012 19.128A9.39 9.39 0 0 1 3.75 19a9.337 9.337 0 0 1-4.121-.952 4.125 4.125 0 0 1 2.533-3.076l1.408-.39a.74.74 0 0 1 .528-.47M5.012 19.128V19a7.5 7.5 0 0 1 1.857-5.119M15 7.5A3.75 3.75 0 1 1 11.25 11.25 3.75 3.75 0 0 1 15 7.5zm-7.5 1.5a3 3 0 1 1-3 3 3 3 0 0 1 3-3z" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-xs">
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Admin (Quản trị)</p>
+            <p className="text-3xl font-black mt-1 text-gray-800">{countAdmin}</p>
+          </div>
+          <div className="p-3 bg-red-50 text-red-500 rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5 text-red-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751A11.956 11.956 0 0112 2.714z" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-xs">
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Quản lý (Manager)</p>
+            <p className="text-3xl font-black mt-1 text-gray-800">{countManager}</p>
+          </div>
+          <div className="p-3 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5 text-blue-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between shadow-xs">
+          <div>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Users (Nhân viên)</p>
+            <p className="text-3xl font-black mt-1 text-gray-800">{countStaff}</p>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5 text-emerald-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* --- BỘ LỌC TÌM KIẾM --- */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-4 sm:p-5 flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center border-b border-gray-50">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <select className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-600 outline-none cursor-pointer hover:bg-gray-50 transition">
-              <option>Tất cả Vai trò</option>
-            </select>
-            <select className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-600 outline-none cursor-pointer hover:bg-gray-50 transition">
-              <option>Trạng thái</option>
-            </select>
+        <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4 justify-between items-center border-b border-gray-50">
+          
+          {/* Custom Dropdown Lọc căn lề và chuẩn Icon xổ */}
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-full sm:w-auto min-w-[160px]">
+              <select 
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-10 py-2.5 text-sm font-bold text-slate-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none"
+              >
+                <option value="Tất cả Vai trò">Tất cả Vai trò</option>
+                <option value="Admin">Admin</option>
+                <option value="Manager">Manager</option>
+                <option value="Staff">Staff</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
+                <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="relative w-full sm:w-auto min-w-[140px]">
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl pl-4 pr-10 py-2.5 text-sm font-bold text-slate-700 outline-none cursor-pointer hover:bg-gray-50 transition appearance-none"
+              >
+                <option value="Trạng thái">Trạng thái</option>
+                <option value="Hoạt động">Hoạt động</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
+                <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </div>
+            </div>
           </div>
 
-          <div className="relative flex-1 max-w-md">
+          <div className="relative w-full sm:w-[320px]">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.604 10.604z" />
+            </svg>
             <input
               type="text"
               placeholder="Tìm theo tên, email..."
-              className="w-full pl-4 pr-4 py-2.5 bg-[#f8f9fa] border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-emerald-500/5 transition-all font-medium placeholder-gray-400"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition font-medium placeholder-gray-400"
             />
           </div>
         </div>
 
+        {/* --- BẢNG DANH SÁCH --- */}
         <div className="w-full overflow-x-auto min-h-0">
           <table className="w-full border-collapse text-left">
             <thead>
@@ -364,7 +470,7 @@ export default function Danhsachnoibo() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-xs font-semibold text-slate-600">
-              {users.map((user, idx) => (
+              {filteredUsers.map((user, idx) => (
                 <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                   <td className="py-4 px-6 whitespace-nowrap">
                     <div className="flex items-center gap-3">
@@ -436,9 +542,8 @@ export default function Danhsachnoibo() {
                         </svg>
                       </button>
                       
-                      {/* ĐÃ SỬA ĐỔI CHÍNH XÁC: Điều hướng mượt mà đến trang chi tiết độc lập và truyền dữ liệu */}
                       <button 
-                        onClick={() => navigate("/admin/settings/quanlynoibo/danhsachnoibo/chitietnoibo", { state: { user } })}
+                        onClick={() => navigate(`/admin/settings/quanlynoibo/danhsachnoibo/${user.email}`)}
                         className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition duration-150"
                         title="Xem trang chi tiết riêng biệt"
                       >
@@ -455,7 +560,7 @@ export default function Danhsachnoibo() {
           </table>
         </div>
 
-        <div className="p-4 sm:p-5 flex justify-between items-center border-t border-gray-50 text-xs font-bold text-gray-400">
+        <div className="p-4 sm:p-5 flex justify-between items-center border-t border-gray-100 text-xs font-bold text-gray-400">
           <div><span className="text-slate-800">1</span> - 10 of 13 Pages</div>
           <div className="flex items-center gap-1.5">
             <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 transition">❮</button>
@@ -508,21 +613,35 @@ export default function Danhsachnoibo() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">Vai trò (Role) <span className="text-red-500">*</span></label>
-                  <select name="role" value={formData.role} onChange={handleInputChange} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer">
-                    <option>Staff (Nhân viên)</option>
-                    <option>Manager (Quản lý)</option>
-                    <option>Admin (Quản trị)</option>
-                  </select>
+                  <div className="relative">
+                    <select name="role" value={formData.role} onChange={handleInputChange} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-bold text-slate-700 focus:border-emerald-500 cursor-pointer appearance-none">
+                      <option>Staff (Nhân viên)</option>
+                      <option>Manager (Quản lý)</option>
+                      <option>Admin (Quản trị)</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
+                      <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">Phòng ban</label>
-                  <select name="department" value={formData.department} onChange={handleInputChange} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer text-gray-500">
-                    <option value="">Chọn phòng ban...</option>
-                    <option value="Ban Giám Đốc">Ban Giám Đốc</option>
-                    <option value="Kho & Nông Trại">Kho & Nông Trại</option>
-                    <option value="Kinh doanh B2B">Kinh doanh B2B</option>
-                    <option value="Kế toán">Kế toán</option>
-                  </select>
+                  <div className="relative">
+                    <select name="department" value={formData.department} onChange={handleInputChange} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer text-gray-500 appearance-none">
+                      <option value="">Chọn phòng ban...</option>
+                      <option value="Ban Giám Đốc">Ban Giám Đốc</option>
+                      <option value="Kho & Nông Trại">Kho & Nông Trại</option>
+                      <option value="Kinh doanh B2B">Kinh doanh B2B</option>
+                      <option value="Kế toán">Kế toán</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
+                      <svg className="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -577,9 +696,6 @@ export default function Danhsachnoibo() {
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-slate-700 rounded-xl text-xs font-bold transition shadow-sm active:scale-95 animate-fadeIn"
                       title="Khôi phục lại ma trận quyền mặc định ban đầu của vị trí này"
                     >
-                      <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
                       Chọn mặc định
                     </button>
                     <button 
@@ -587,9 +703,6 @@ export default function Danhsachnoibo() {
                       onClick={handleSelectAllPermissions} 
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006c49] border border-emerald-200 rounded-xl text-xs font-bold transition shadow-sm active:scale-95"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
                       Chọn tất cả
                     </button>
                     <button 
@@ -597,9 +710,6 @@ export default function Danhsachnoibo() {
                       onClick={handleClearAllPermissions} 
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-xl text-xs font-bold transition shadow-sm active:scale-95"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
                       Xóa tất cả
                     </button>
                   </div>

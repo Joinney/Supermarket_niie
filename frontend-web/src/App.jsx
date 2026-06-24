@@ -41,16 +41,12 @@ import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
 import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
 
-// Nhóm quản lý nội bộ (Danh sách & Chi tiết biệt lập)
+// Nhóm quản lý nội bộ (Import thật các components phân hệ cấu hình hệ thống)
 import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo"; 
 import Chitietnoibo from "./admindb/pages/Settings/Quanlynoibo/Chitietnoibo";
+import Danhsachvaitro from "./admindb/pages/Settings/Quanlyvaitro/Danhsachvaitro"; 
 
-// Các component phục vụ giao diện tĩnh cho mục Settings
-const Danhsachvaitro = () => (
-  <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
-    Trang Giao Diện: Danh sách vai trò
-  </div>
-);
+// Các component phục vụ giao diện tĩnh cho mục Settings còn lại
 const SettingsGeneral = () => (
   <div className="p-6 bg-white rounded-xl shadow-sm text-gray-700 font-bold">
     Trang Giao Diện: Cấu hình chung (General Settings)
@@ -247,10 +243,12 @@ const AppRoutes = () => (
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<SettingsGeneral />} />
         
-        {/* Cấu trúc định tuyến lồng nhau quản lý danh sách & chi tiết nội bộ biệt lập */}
+        {/* Cấu trúc định tuyến lồng nhau đồng bộ dữ liệu chuẩn xác */}
         <Route path="quanlynoibo">
           <Route index element={<Navigate to="danhsachnoibo" replace />} />
           <Route path="danhsachnoibo" element={<Danhsachnoibo />} />
+          {/* Nhận tham số email động hoặc đường dẫn chi tiết độc lập đồng bộ hệ thống */}
+          <Route path="danhsachnoibo/:email" element={<Chitietnoibo />} />
           <Route path="danhsachnoibo/chitietnoibo" element={<Chitietnoibo />} />
         </Route>
 
