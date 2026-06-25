@@ -13,21 +13,27 @@ export default function AdminLogin() {
     setError('');
 
     try {
+      // 🎯 ĐỌC TRỰC TIẾP TỪ HOSTNAME: Không gọi API ngoài, không lo lỗi kết nối hay CORS
+      let browserIp = window.location.hostname;
+      
+      // Chuẩn hóa nếu chạy localhost
+      if (browserIp === 'localhost' || browserIp === '127.0.0.1') {
+        browserIp = '127.0.0.1';
+      }
+
       const response = await axios.post('http://localhost:5001/api/auth/signin', { 
         username: email, 
-        password: password 
+        password: password,
+        browser_ip: browserIp 
       }, { withCredentials: true });
 
       const { token, refreshToken, user } = response.data;
       const adminRoles = ['Admin', 'Manager', 'Staff'];
 
       if (adminRoles.includes(user.role)) {
-        
-        // BƯỚC QUAN TRỌNG: Xóa sạch tàn dư của tài khoản Khách hàng trước đó
         localStorage.removeItem('user'); 
-        localStorage.removeItem('token'); // Nếu sau này bên Khách hàng có lưu token riêng
+        localStorage.removeItem('token'); 
 
-        // Sau đó mới lưu bộ key của Admin
         localStorage.setItem('adminToken', token);
         localStorage.setItem('adminRefreshToken', refreshToken);
         localStorage.setItem('adminRole', user.role); 

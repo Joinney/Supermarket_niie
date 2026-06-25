@@ -17,7 +17,8 @@ dotenv.config({ path: envPath });
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 }
-
+const app = express();
+app.set('trust proxy', true);
 import './configs/Auth/passport.js'; 
 import authRoutes from "./routes/authRoutes.js"; 
 import forgotRoutes from "./routes/ForgotRoutes.js";
@@ -29,8 +30,7 @@ import addressRoutes from './routes/addressRoutes.js';
 import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
 
 // Initialize app and port
-const app = express();
-app.set('trust proxy', true);
+
 const PORT = process.env.PORT_AUTH || 5001; 
 
 // 2. Cấu hình CORS - Chấp nhận cả 5173 và 5174 để không bao giờ bị chặn nữa
