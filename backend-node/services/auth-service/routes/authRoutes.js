@@ -1,6 +1,6 @@
 import express from 'express';
 import { signup, signin, logout, refreshToken, getAllInternalUsers, getUserDetail, getUserRoleGroup, updateUserDetail } from '../controllers/authController.js';
-
+import upload from '../configs/cloudinary/cloudinary.js';
 const router = express.Router();
 
 /**
@@ -56,7 +56,7 @@ router.get('/', (req, res) => {
  *         description: Đăng ký thành công
  */
 // CHỈ ĐỂ '/signup' vì tiền tố /api/auth đã khai báo ở server.js
-router.post('/signup', signup);
+router.post('/signup', upload.single('avatar'), signup);
 
 /**
  * @swagger
@@ -112,5 +112,5 @@ router.post('/refresh-token', refreshToken);
 router.get('/internal/users', getAllInternalUsers);
 router.get('/internal/users/role-group/:id', getUserRoleGroup);
 router.get('/internal/users/:id', getUserDetail);
-router.put('/internal/users/:id', updateUserDetail);
+router.put('/internal/users/:id', upload.single('avatar'), updateUserDetail);
 export default router;

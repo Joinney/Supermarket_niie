@@ -52,6 +52,10 @@ export default function Danhsachnoibo() {
   const [roleFilter, setRoleFilter] = useState("Tất cả Vai trò");
   const [statusFilter, setStatusFilter] = useState("Trạng thái");
 
+  // 🎯 STATES PHỤC VỤ UPLOAD ẢNH CHUẨN CLOUDINARY
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarFile, setAvatarFile] = useState(null);
+
   // Form phục vụ cấp tài khoản mới
   const [formData, setFormData] = useState({
     fullName: "",
@@ -62,6 +66,7 @@ export default function Danhsachnoibo() {
     sendEmailNotification: true,
   });
 
+  // Khởi tạo mảng quyền cấu trúc nền
   const [rolePermissions, setRolePermissions] = useState([
     { id: "dashboard", name: "Bảng điều khiển (Dashboard)", type: "dashboard", view: true, add: false, edit: false, delete: false },
     { id: "products", name: "Quản lý Sản phẩm & SKU", type: "products", view: true, add: true, edit: true, delete: true },
@@ -146,49 +151,61 @@ export default function Danhsachnoibo() {
     setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  // 🎯 FIX PHÂN QUYỀN GẮN CHẶT CHỈ SỐ: Đảo trạng thái toggle boolean sạch sẽ
   const handlePermissionChange = (moduleId, field) => {
-    setRolePermissions(prev => prev.map(item => (item.id === moduleId ? { ...item, [field]: !item[field] } : item)));
+    setRolePermissions(prev => 
+      prev.map(item => (item.id === moduleId ? { ...item, [field]: !item[field] } : item))
+    );
   };
 
   const handleSavePermissions = async () => {
-  try {
-    const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-    const targetId = selectedUser?.user_id || selectedUser?.id;
+    try {
+      const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
+      const targetId = selectedUser?.user_id || selectedUser?.id;
 
-    if (!targetId) {
-      alert("Lỗi: Không tìm thấy ID nhân sự để thực hiện lưu phân quyền.");
-      return;
-    }
+      if (!targetId) {
+        alert("Lỗi: Không tìm thấy ID nhân sự để thực hiện lưu phân quyền.");
+        return;
+      }
 
-    const payload = {
-      role: selectedUser.role,
-      fullName: selectedUser.name,
-      avatarUrl: selectedUser.avatar_url,
-      custom_permissions: rolePermissions // Mảng quyền mới bạn vừa chỉnh sửa trên giao diện
-    };
+      // Ép kiểu boolean chuẩn xác để PostgreSQL nhận diện chính xác giá trị true/false thật
+      const cleanPermissions = rolePermissions.map(item => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        view: item.view === true || item.view === "true",
+        add: item.add === true || item.add === "true",
+        edit: item.edit === true || item.edit === "true",
+        delete: item.delete === true || item.delete === "true"
+      }));
 
-    const response = await axios.put(`${apiUrl}/api/auth/internal/users/${targetId}`, payload);
-    
-    if (response.status === 200 || response.data.success) {
-      alert(`Hệ thống Demi Mart: Đã đồng bộ lưu ma trận phân quyền mới cho ${selectedUser.name} thành công!`);
+      const payload = {
+        role: selectedUser.role,
+        fullName: selectedUser.name,
+        avatarUrl: selectedUser.avatar_url,
+        custom_permissions: cleanPermissions 
+      };
+
+      const response = await axios.put(`${apiUrl}/api/auth/internal/users/${targetId}`, payload);
       
-      // 🎯 LIVE ĐỒNG BỘ: Cập nhật trực tiếp ma trận quyền vừa lưu vào mảng State users hiện tại
-      // Điều này ép React Re-render và lưu giữ trạng thái mới ngay lập tức mà không cần nạp lại từ đầu
-      setUsers(prevUsers => 
-        prevUsers.map(u => 
-          u.user_id === targetId 
-            ? { ...u, custom_permissions: response.data.data.custom_permissions } 
-            : u
-        )
-      );
+      if (response.status === 200 || response.data.success) {
+        alert(`Hệ thống Demi Mart: Đã đồng bộ lưu ma trận phân quyền mới cho ${selectedUser.name} thành công!`);
+        
+        setUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.user_id === targetId 
+              ? { ...u, custom_permissions: cleanPermissions } 
+              : u
+          )
+        );
 
-      setIsPermissionModalOpen(false); // Đóng modal an toàn
+        setIsPermissionModalOpen(false);
+      }
+    } catch (err) {
+      console.error("❌ Lỗi kích hoạt gửi ma trận quyền:", err);
+      alert("Không thể truyền gói tin lưu phân quyền xuống Database.");
     }
-  } catch (err) {
-    console.error("❌ Lỗi kích hoạt gửi ma trận quyền:", err);
-    alert("Không thể truyền gói tin lưu phân quyền xuống Database. Vui lòng kiểm tra lại CORS.");
-  }
-};
+  };
 
   const handleCreateAccount = async (e) => {
     e.preventDefault();
@@ -198,23 +215,31 @@ export default function Danhsachnoibo() {
       const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
       const rawRole = formData.role.split(" ")[0].toUpperCase();
 
-      const payload = {
-        email: formData.email,
-        password: formData.password,
-        ho_ten: formData.fullName,
-        username: formData.email.split("@")[0],
-        role: rawRole, 
-        address: formData.department || "Hệ thống Demi Mart",
-        status: "active"
-      };
+      // 🎯 SỬ DỤNG FORMDATA ĐỂ TRUYỀN FILE CHUẨN MULTIPART LÊN CLOUDINARY
+      const dataToSend = new FormData();
+      dataToSend.append("email", formData.email);
+      dataToSend.append("password", formData.password);
+      dataToSend.append("fullName", formData.fullName);
+      dataToSend.append("role", rawRole);
+      dataToSend.append("department", formData.department || "Hệ thống Demi Mart");
+      
+      // Nếu nhân viên có chọn file ảnh đại diện mới thì đính kèm vào key 'avatar' dạng file nhị phân gốc
+      if (avatarFile) {
+        dataToSend.append("avatar", avatarFile);
+      }
 
-      await axios.post(`${apiUrl}/api/auth/signup`, payload);
+      await axios.post(`${apiUrl}/api/auth/signup`, dataToSend, {
+        headers: { "Content-Type": "multipart/form-data" } // Khởi động header multipart chuẩn file
+      });
+      
       setIsCollapsedModal(false);
+      setAvatarPreview("");
+      setAvatarFile(null); // Clear file sau submit
       setFormData({ fullName: "", email: "", password: "1234567890", role: "Staff (Nhân viên)", department: "", sendEmailNotification: true });
       fetchAllUsers(); 
     } catch (err) {
       console.error("Lỗi cấp tài khoản:", err);
-      alert("Đăng ký nhân sự thất bại! Vui lòng kiểm tra lại định dạng hoặc email đã tồn tại.");
+      alert("Đăng ký nhân sự thất bại! Vui lòng kiểm tra lại cấu hình file.");
     }
   };
 
@@ -357,13 +382,17 @@ export default function Danhsachnoibo() {
                             }); 
                             setIsPermissionModalOpen(true); 
                             
-                            // 🎯 LIVE ĐỒNG BỘ: Đọc dữ liệu custom_permissions thực tế bốc từ Postgres
+                            // 🎯 ĐỒNG BỘ: Đọc dữ liệu JSON live từ CSDL trước, bọc lỗi chuỗi text nếu có
                             if (user.custom_permissions) {
-                              setRolePermissions(
-                                typeof user.custom_permissions === "string" 
+                              try {
+                                const parsed = typeof user.custom_permissions === "string" 
                                   ? JSON.parse(user.custom_permissions) 
-                                  : user.custom_permissions
-                              );
+                                  : user.custom_permissions;
+                                setRolePermissions(parsed || []);
+                              } catch(e) {
+                                console.error("Lỗi parse JSON quyền:", e);
+                                handleApplyPreset(user.role);
+                              }
                             } else {
                               handleApplyPreset(user.role);
                             }
@@ -400,16 +429,51 @@ export default function Danhsachnoibo() {
                 <h3 className="text-xl font-bold text-slate-800">Thêm nhân sự mới</h3>
                 <p className="text-xs text-gray-400 font-medium mt-1">Cấp tài khoản hệ thống và thiết lập phòng ban cho nhân sự mới.</p>
               </div>
-              <button onClick={() => setIsCollapsedModal(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">✕</button>
+              <button onClick={() => { setIsCollapsedModal(false); setAvatarPreview(""); setAvatarFile(null); }} className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition">✕</button>
             </div>
 
             <form onSubmit={handleCreateAccount} className="p-6 space-y-4 text-sm font-semibold text-slate-700">
               <div className="flex items-center gap-4 bg-[#fafafa]/50 p-3 rounded-2xl border border-dashed border-gray-200">
-                <div className="w-14 h-14 rounded-full border border-dashed border-gray-300 bg-white flex items-center justify-center text-gray-400 font-light text-xl cursor-pointer hover:bg-gray-50">+</div>
+                {/* 🎯 SỬ DỤNG INPUT FILE ĐỂ BẮT FILE NHỊ PHÂN GỐC */}
+                <input
+                  type="file"
+                  id="modalAvatarInput"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      if (file.size > 2 * 1024 * 1024) {
+                        alert("Kích thước ảnh không được vượt quá 2MB!");
+                        return;
+                      }
+                      setAvatarFile(file); // Lưu đối tượng file gốc gửi lên server
+                      setAvatarPreview(URL.createObjectURL(file)); // Tạo ObjectURL hiển thị preview cực mượt
+                    }
+                  }}
+                />
+
+                <div 
+                  onClick={() => document.getElementById("modalAvatarInput").click()}
+                  className="w-14 h-14 rounded-full border border-dashed border-gray-300 bg-white flex items-center justify-center text-gray-400 font-light text-xl cursor-pointer hover:bg-gray-50 overflow-hidden shrink-0 shadow-sm transition-all"
+                >
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    "+"
+                  )}
+                </div>
+
                 <div className="flex flex-col text-left">
                   <span className="font-bold text-slate-800">Ảnh đại diện (Avatar)</span>
                   <span className="text-[10px] text-gray-400 font-medium mt-0.5">Định dạng JPG, PNG. Tối đa 2MB.</span>
-                  <button type="button" className="text-xs text-emerald-600 font-bold mt-1 text-left w-max hover:underline">Tải ảnh lên</button>
+                  <button 
+                    type="button" 
+                    onClick={() => document.getElementById("modalAvatarInput").click()}
+                    className="text-xs text-emerald-600 font-bold mt-1 text-left w-max hover:underline"
+                  >
+                    Tải ảnh lên
+                  </button>
                 </div>
               </div>
 
@@ -469,7 +533,7 @@ export default function Danhsachnoibo() {
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-gray-50">
-                <button type="button" onClick={() => setIsCollapsedModal(false)} className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-500 transition">Hủy bỏ</button>
+                <button type="button" onClick={() => { setIsCollapsedModal(false); setAvatarPreview(""); setAvatarFile(null); }} className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-500 transition">Hủy bỏ</button>
                 <button type="submit" className="px-5 py-2.5 bg-[#006c49] text-white rounded-xl text-xs font-bold shadow-sm hover:bg-[#00563a] transition flex items-center gap-1.5"><span>+</span> Cấp tài khoản</button>
               </div>
             </form>
@@ -557,9 +621,10 @@ export default function Danhsachnoibo() {
                         </td>
                         {["view", "add", "edit", "delete"].map((field) => (
                           <td key={field} className="py-3.5 px-3 text-center">
+                            {/* 🎯 SỬ DỤNG TOGGLE LOGIC KHÔNG THAM SỐ THỪA CHỐNG RESET QUYỀN */}
                             <input 
                               type="checkbox" 
-                              checked={item[field]} 
+                              checked={item[field] === true || item[field] === "true"} 
                               disabled={item.id === "dashboard" && field !== "view"} 
                               onChange={() => handlePermissionChange(item.id, field)} 
                               className="w-4 h-4 rounded text-[#006c49] bg-white border-gray-300 focus:ring-emerald-500 accent-[#006c49] cursor-pointer" 

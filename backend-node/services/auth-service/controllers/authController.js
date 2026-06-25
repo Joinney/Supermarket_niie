@@ -27,23 +27,25 @@ export const signup = async (req, res) => {
     const username = req.body.username || email.split("@")[0];
     const address = req.body.address || req.body.department || "Hệ thống Demi Mart";
 
-    // 🎯 FIX LỖI ENUM "" TRỐNG: Kiểm tra và bọc lót chuỗi nghiêm ngặt
+    // 🎯 ĐỌC URL ẢNH TỪ CLOUDINARY: Nếu có upload file thì lấy URL Cloudinary, nếu không thì lấy avatarUrl text (nếu có)
+    const avatar_url = req.file ? req.file.path : (req.body.avatarUrl || "");
+
     let rawRole = req.body.role ? String(req.body.role).trim().toUpperCase() : "STAFF";
-    if (rawRole.includes("STAFF") || rawRole.includes("NHÂN VIÊN")) rawRole = "STAFF";
-    if (rawRole.includes("MANAGER") || rawRole.includes("QUẢN LÝ")) rawRole = "MANAGER";
-    if (rawRole.includes("ADMIN")) rawRole = "ADMIN";
+    if (rawRole.includes("STAFF") || rawRole.includes("NHÂN VIÊN")) rawRole = "Staff";
+    if (rawRole.includes("MANAGER") || rawRole.includes("QUẢN LÝ")) rawRole = "Manager";
+    if (rawRole.includes("ADMIN")) rawRole = "Admin";
 
     try {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const query = `
-            INSERT INTO public.users (username, email, password_hash, full_name, role, address, status)
-            VALUES ($1, $2, $3, $4, $5, $6, 'active')
-            RETURNING user_id, username, email, role;
+            INSERT INTO public.users (username, password_hash, email, full_name, role, address, status, avatar_url, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
+            RETURNING user_id, username, email, role, avatar_url;
         `;
         
-        const result = await pool.query(query, [username, email, hashedPassword, ho_ten, rawRole, address]);
+        const result = await pool.query(query, [username, hashedPassword, email, ho_ten, rawRole, address, avatar_url]);
         res.status(201).json({ success: true, message: "Cấp tài khoản nhân sự mới thành công!", data: result.rows[0] });
     } catch (error) {
         console.error("❌ Lỗi khi thêm nhân sự:", error.message);
@@ -150,11 +152,23 @@ export const logout = async (req, res) => {
     }
 };
 
-// --- 5. LẤY TOÀN BỘ DANH SÁCH NHÂN SỰ NỘI BỘ ---
+// --- 5. LẤY TOÀN BỘ DANH SÁCH NHÂN SỰ NỘI BỘ (BẢN FIX LỖI F5 BỊ RESET) ---
 export const getAllInternalUsers = async (req, res) => {
     try {
         const query = `
-            SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url 
+            SELECT 
+                user_id, 
+                username, 
+                email, 
+                full_name, 
+                phone_number, 
+                address, 
+                gender, 
+                birthday, 
+                role, 
+                status, 
+                avatar_url,
+                custom_permissions -- 🎯 QUAN TRỌNG: Thêm cột này vào đây để khi F5 trang danh sách bốc được dữ liệu live!
             FROM public.users 
             WHERE LOWER(role) <> 'buyer'
             ORDER BY user_id ASC;
@@ -198,7 +212,7 @@ export const getUserRoleGroup = async (req, res) => {
     }
 };
 
-// --- 8. CẬP NHẬT THÔNG TIN VÀ MA TRẬN PHÂN QUYỀN ---
+// --- 8. CẬP NHẬT THÔNG TIN VÀ MA TRẬN PHÂN QUYỀN  ---
 export const updateUserDetail = async (req, res) => {
     const { id } = req.params;
     
@@ -212,9 +226,10 @@ export const updateUserDetail = async (req, res) => {
     const gender = req.body.gender;
     const birthday = req.body.birthday;
     const status = req.body.status || 'active';
-    const avatarUrl = req.body.avatar_url !== undefined ? req.body.avatar_url : req.body.avatarUrl;
     
-    // 🎯 ĐỌC DỮ LIỆU JSON QUYỀN GỬI TỪ FRONTEND
+    // 🎯 ĐỌC URL ẢNH TỪ CLOUDINARY KHI UPDATE: Ưu tiên file mới tải lên
+    const avatarUrl = req.file ? req.file.path : (req.body.avatar_url || req.body.avatarUrl);
+    
     const customPermissions = req.body.custom_permissions !== undefined ? req.body.custom_permissions : req.body.customPermissions;
 
     let rawRole = req.body.role ? String(req.body.role).trim().toUpperCase() : "STAFF";
@@ -223,7 +238,6 @@ export const updateUserDetail = async (req, res) => {
     if (rawRole.includes("ADMIN")) rawRole = "Admin";
 
     try {
-        // 🎯 KÍCH HOẠT LẠI CỘT custom_permissions TRONG SQL
         const query = `
             UPDATE public.users
             SET 
@@ -235,21 +249,22 @@ export const updateUserDetail = async (req, res) => {
                 role = $6,
                 status = $7,
                 avatar_url = $8,
-                custom_permissions = $9 -- Lưu mảng JSON vào cột JSONB thật
+                custom_permissions = $9,
+                updated_at = NOW()
             WHERE user_id = $10
-            RETURNING user_id, username, email, full_name, role, status, custom_permissions;
+            RETURNING user_id, username, email, full_name, role, status, avatar_url, custom_permissions;
         `;
         
         const { rows } = await pool.query(query, [
-            fullName,
-            phoneNumber,
-            address,
-            gender,
+            fullName || null,
+            phoneNumber || null,
+            address || null,
+            gender || null,
             birthday && birthday !== "" ? birthday : null,
             rawRole,
             status,
-            avatarUrl,
-            customPermissions ? JSON.stringify(customPermissions) : null, // Ép chuỗi JSON hợp lệ gửi xuống Postgres
+            avatarUrl || null,
+            customPermissions ? (typeof customPermissions === "string" ? customPermissions : JSON.stringify(customPermissions)) : null,
             id
         ]);
 
