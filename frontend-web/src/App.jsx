@@ -484,12 +484,12 @@ const AppRoutes = () => (
         </Route>
       </Route>
     </Route>
-<<<<<<< HEAD
 
-=======
+
+
     <Route path="/admin/settings/quanlynoibo/chitietnoibo/:id" element={<Chitietnoibo />} />
     {/* Điều hướng dự phòng */}
->>>>>>> 0c6d90261571ae894e49d951533a2dffd683a084
+
     <Route path="/admin/*" element={<Navigate to="/admin/login" replace />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
