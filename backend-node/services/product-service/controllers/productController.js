@@ -26,10 +26,26 @@ export const getInternalVariants = async (req, res) => {
         }
 
         const query = `
-            SELECT ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, gia_khuyen_mai, ton_kho, trang_thai
-            FROM public.bien_the_san_pham
-            WHERE ma_bien_the = ANY($1::text[]) 
-              AND trang_thai = true;
+            SELECT 
+                bt.ma_bien_the, 
+                bt.ma_san_pham, 
+                bt.ten_bien_the, 
+                bt.sku, 
+                bt.gia_ban_le, 
+                bt.gia_khuyen_mai, 
+                bt.trang_thai,
+                COALESCE(
+                    (
+                        SELECT jsonb_object_agg(dmtt.ten_thuoc_tinh, gttt.gia_tri)
+                        FROM public.chi_tiet_bien_the_thuoc_tinh cbtt
+                        JOIN public.gia_tri_thuoc_tinh gttt ON cbtt.ma_gia_tri = gttt.ma_gia_tri
+                        JOIN public.danh_muc_thuoc_tinh dmtt ON gttt.ma_thuoc_tinh = dmtt.ma_thuoc_tinh
+                        WHERE cbtt.ma_bien_the = bt.ma_bien_the
+                    ), '{}'::jsonb
+                ) AS tuy_chon
+            FROM public.bien_the_san_pham bt
+            WHERE bt.ma_bien_the = ANY($1::text[]) 
+              AND bt.trang_thai = true;
         `;
 
         const { rows: variants } = await pool.query(query, [variantIds]);
@@ -62,7 +78,7 @@ export const getAllProducts = async (req, res) => {
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
             WHERE sp.trang_thai = true 
               AND dmc.trang_thai = true
-              AND sp.ma_quoc_gia = $1
+              AND UPPER(sp.ma_quoc_gia) = $1
             ORDER BY sp.ngay_tao DESC
             LIMIT $2 OFFSET $3;
         `;
@@ -76,7 +92,7 @@ export const getAllProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 1.5 LẤY TẤT CẢ DANH MỤC (SIDEBAR) - Tối ưu hóa xử lý Fallback vùng miền rỗng
+// 1.5 LẤY TẤT CẢ DANH MỤC (SIDEBAR) - Tối ưu hóa xử lý Connection chạy tuần tự
 // =========================================================================
 export const getAllCategories = async (req, res) => {
     try {
@@ -85,21 +101,19 @@ export const getAllCategories = async (req, res) => {
         const queryCha = `
             SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, bieu_tuong, hinh_anh 
             FROM public.danh_muc_cha 
-            WHERE trang_thai = true AND ma_quoc_gia = $1
+            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $1
             ORDER BY ma_dm_cha ASC;
         `;
         
         const queryCon = `
             SELECT dmc.ma_dm_con, dmc.ma_dm_cha, dmc.ten_danh_muc_con, dmc.duong_dan_seo, dmc.la_danh_muc_hot, dmc.hinh_anh 
             FROM public.danh_muc_con dmc
-            WHERE dmc.trang_thai = true AND dmc.ma_quoc_gia = $1
+            WHERE dmc.trang_thai = true AND UPPER(dmc.ma_quoc_gia) = $1
             ORDER BY dmc.ma_dm_con ASC;
         `;
 
-        const [resCha, resCon] = await Promise.all([
-            pool.query(queryCha, [countryCode]),
-            pool.query(queryCon, [countryCode])
-        ]);
+        const resCha = await pool.query(queryCha, [countryCode]);
+        const resCon = await pool.query(queryCon, [countryCode]);
 
         const tree = [];
         const categoryMap = {};
@@ -140,56 +154,96 @@ export const getAllCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT)
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ ĐỒNG BỘ ĐƠN VỊ SẢN PHẨM
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
     const countryCode = (req.query.country || 'VN').toUpperCase();
 
     try {
-        const query = `
+        // QUERY 1: Lấy thông tin gốc của sản phẩm
+        const productQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                COALESCE(
-                    (SELECT json_agg(
-                        json_build_object(
-                            'ma_bien_the', bt.ma_bien_the, 'ten_bien_the', bt.ten_bien_the, 'sku', bt.sku,
-                            'gia_ban_le', bt.gia_ban_le, 'thuoc_tinh', bt.thuoc_tinh, 'ten_don_vi', dv.ten_don_vi
-                        )
-                    ) FROM public.bien_the_san_pham bt 
-                      LEFT JOIN public.don_vi_san_pham dv ON bt.don_vi_id = dv.id
-                      WHERE bt.ma_san_pham = sp.ma_san_pham AND bt.trang_thai = true
-                    ), '[]'
-                ) as bien_the,
-                COALESCE(
-                    (SELECT json_agg(
-                        json_build_object(
-                            'ma_media', m.ma_media, 
-                            'ma_bien_the', m.ma_bien_the,
-                            'duong_dan_url', m.duong_dan_url, 
-                            'la_anh_chinh', m.la_anh_chinh,
-                            'loai_media', m.loai_media, 
-                            'thoi_luong_video', m.thoi_luong_video
-                        )
-                    ) FROM public.media_san_pham m WHERE m.ma_san_pham = sp.ma_san_pham AND m.trang_thai = true), '[]'
-                ) as media
+                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            WHERE sp.ma_san_pham = $1
-              AND sp.ma_quoc_gia = $2;
+            WHERE sp.ma_san_pham = $1 AND UPPER(sp.ma_quoc_gia) = $2;
         `;
-        
-        const result = await pool.query(query, [id, countryCode]);
+        const productResult = await pool.query(productQuery, [id, countryCode]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: "Sản phẩm không hỗ trợ tại vùng quốc gia này!" });
+        if (productResult.rows.length === 0) {
+            return res.status(404).json({ message: "Sản phẩm không hỗ trợ tại vùng quốc gia này hoặc không tồn tại!" });
         }
 
-        res.status(200).json(result.rows[0]); 
+        const product = productResult.rows[0];
+
+        // QUERY 2: Lấy danh sách biến thể kèm thuộc tính phẳng & tên đơn vị chuẩn từ don_vi_san_pham
+        const variantsQuery = `
+            SELECT 
+                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le,
+                dm.ten_thuoc_tinh, gt.gia_tri,
+                dv.ten_don_vi AS ten_don_vi
+            FROM public.bien_the_san_pham bt
+            LEFT JOIN public.chi_tiet_bien_the_thuoc_tinh ct ON bt.ma_bien_the = ct.ma_bien_the
+            LEFT JOIN public.gia_tri_thuoc_tinh gt ON ct.ma_gia_tri = gt.ma_gia_tri
+            LEFT JOIN public.danh_muc_thuoc_tinh dm ON gt.ma_thuoc_tinh = dm.ma_thuoc_tinh
+            LEFT JOIN public.don_vi_san_pham dv ON bt.don_vi_id = dv.id
+            WHERE bt.ma_san_pham = $1 AND bt.trang_thai = true;
+        `;
+        const variantsResult = await pool.query(variantsQuery, [id]);
+
+        // Xử lý gom nhóm dữ liệu bằng JS
+        const variantsMap = {};
+        const attributesRaw = {};
+
+        variantsResult.rows.forEach(row => {
+            if (!variantsMap[row.ma_bien_the]) {
+                variantsMap[row.ma_bien_the] = {
+                    ma_bien_the: row.ma_bien_the,
+                    ten_bien_the: row.ten_bien_the,
+                    sku: row.sku,
+                    gia_ban_le: Number(row.gia_ban_le),
+                    thuoc_tinh: {},
+                    ten_don_vi: row.ten_don_vi || "Gói"
+                };
+            }
+            if (row.ten_thuoc_tinh && row.gia_tri) {
+                variantsMap[row.ma_bien_the].thuoc_tinh[row.ten_thuoc_tinh] = row.gia_tri;
+                
+                if (!attributesRaw[row.ten_thuoc_tinh]) {
+                    attributesRaw[row.ten_thuoc_tinh] = new Set();
+                }
+                attributesRaw[row.ten_thuoc_tinh].add(row.gia_tri);
+            }
+        });
+
+        const bien_the = Object.values(variantsMap);
+
+        const attributes = Object.keys(attributesRaw).map((ten, index) => ({
+            id_nhom: index + 1,
+            ten_thuoc_tinh: ten,
+            gia_tri_khadung: Array.from(attributesRaw[ten])
+        }));
+
+        // QUERY 3: Lấy danh sách media của sản phẩm
+        const mediaQuery = `
+            SELECT ma_media, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, thoi_luong_video
+            FROM public.media_san_pham
+            WHERE ma_san_pham = $1 AND trang_thai = true;
+        `;
+        const mediaResult = await pool.query(mediaQuery, [id]);
+
+        res.status(200).json({
+            ...product,
+            attributes,
+            bien_the,
+            media: mediaResult.rows
+        });
+
     } catch (error) {
         console.error("❌ Lỗi API getProductById:", error.message);
-        res.status(500).json({ error: "Lỗi hệ thống khi tìm chi tiết sản phẩm." });
+        res.status(500).json({ error: "Lỗi hệ thống khi tìm chi tiết sản phẩm.", detail: error.message });
     }
 };
 
@@ -216,23 +270,23 @@ export const getProductsByCategorySlug = async (req, res) => {
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            WHERE sp.trang_thai = true
+            WHERE sp.trang_thai = true 
               AND dmc.trang_thai = true
-              AND sp.ma_quoc_gia = $1
+              AND UPPER(sp.ma_quoc_gia) = $1
         `;
         
-        const params = [countryCode];
+        const countParams = [countryCode];
         let paramIndex = 2; 
 
         if (slug !== 'tat-ca') {
             baseQuery += ` AND (dmc.duong_dan_seo = $${paramIndex} OR dmc.ma_dm_cha = (SELECT ma_dm_cha FROM public.danh_muc_cha WHERE duong_dan_seo = $${paramIndex} AND trang_thai = true LIMIT 1))`;
-            params.push(slug);
+            countParams.push(slug);
             paramIndex++;
         }
 
         if (origin !== 'tat-ca') {
             baseQuery += ` AND sp.xuat_xu = $${paramIndex}`;
-            params.push(origin); 
+            countParams.push(origin); 
             paramIndex++;
         }
 
@@ -249,7 +303,7 @@ export const getProductsByCategorySlug = async (req, res) => {
         }
 
         const countQuery = `SELECT COUNT(*) as total FROM (${finalQuery}) as count_table`;
-        const { rows: countResult } = await pool.query(countQuery, params);
+        const { rows: countResult } = await pool.query(countQuery, countParams);
         const totalItems = parseInt(countResult[0].total);
         const totalPages = Math.ceil(totalItems / limit);
 
@@ -258,9 +312,9 @@ export const getProductsByCategorySlug = async (req, res) => {
         else finalQuery += ` ORDER BY ngay_tao DESC`;
 
         finalQuery += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1};`;
-        params.push(limit, offset);
-
-        const { rows: products } = await pool.query(finalQuery, params);
+        
+        const finalParams = [...countParams, limit, offset];
+        const { rows: products } = await pool.query(finalQuery, finalParams);
         
         res.status(200).json({ products, totalPages, currentPage: page, totalItems });
     } catch (error) {
@@ -287,7 +341,7 @@ export const searchProducts = async (req, res) => {
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
             WHERE sp.trang_thai = true 
               AND dmc.trang_thai = true
-              AND sp.ma_quoc_gia = $2
+              AND UPPER(sp.ma_quoc_gia) = $2
               AND (unaccent(sp.ten_san_pham) ILIKE unaccent($1) OR unaccent(sp.mo_ta) ILIKE unaccent($1))
             ORDER BY sp.ngay_tao DESC;
         `;
@@ -481,7 +535,7 @@ export const createProduct = async (req, res) => {
 export const schedulePeriodicDescriptionGeneration = () => {
     const checkInterval = 6 * 60 * 60 * 1000;
 
-    setInterval(async () => {
+    const runScheduler = async () => {
         try {
             const query = `
                 SELECT sp.ma_san_pham, sp.ten_san_pham, dmc.ten_danh_muc_con AS ten_danh_muc
@@ -503,8 +557,12 @@ export const schedulePeriodicDescriptionGeneration = () => {
             }
         } catch (error) {
             console.error('❌ Lỗi tiến trình quét định kỳ Scheduler:', error.message);
+        } finally {
+            setTimeout(runScheduler, checkInterval);
         }
-    }, checkInterval);
+    };
+
+    setTimeout(runScheduler, checkInterval);
 };
 
 // =========================================================================
@@ -545,14 +603,14 @@ export const searchCategories = async (req, res) => {
         const query = `
             SELECT ma_dm_cha AS ma_danh_muc, ten_danh_muc_cha AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'cha' AS loai_danh_muc
             FROM public.danh_muc_cha
-            WHERE trang_thai = true AND ma_quoc_gia = $2 
+            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $2 
               AND unaccent(ten_danh_muc_cha) ILIKE unaccent($1)
             
             UNION ALL
             
             SELECT ma_dm_con AS ma_danh_muc, ten_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
             FROM public.danh_muc_con
-            WHERE trang_thai = true AND ma_quoc_gia = $2 
+            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $2 
               AND unaccent(ten_danh_muc_con) ILIKE unaccent($1)
             
             LIMIT 12;
@@ -566,3 +624,92 @@ export const searchCategories = async (req, res) => {
     }
 };
 
+// =========================================================================
+// 12. LẤY ĐÁNH GIÁ SẢN PHẨM (XỬ LÝ ĐỒNG BỘ MICROSERVICES GỌI SANG AUTH)
+// =========================================================================
+export const getReviewsByProduct = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const query = `
+            SELECT 
+                dg.ma_danh_gia, dg.user_id, dg.so_sao, dg.noi_dung, dg.ngay_tao,
+                dg.phan_hoi_nguoi_ban, dg.ngay_phan_hoi, dg.luot_huu_ich,
+                bt.ten_bien_the,
+                COALESCE(
+                    (SELECT json_agg(json_build_object('url', md.duong_dan_url, 'type', md.loai_media, 'duration', md.thoi_luong_video))
+                     FROM public.media_danh_gia md WHERE md.ma_danh_gia = dg.ma_danh_gia),
+                    '[]'
+                ) as media
+            FROM public.danh_gia_san_pham dg
+            LEFT JOIN public.bien_the_san_pham bt ON dg.ma_bien_the = bt.ma_bien_the
+            WHERE dg.ma_san_pham = $1 AND dg.trang_thai = true
+            ORDER BY dg.ngay_tao DESC;
+        `;
+        const { rows: reviews } = await pool.query(query, [id]);
+
+        if (reviews.length === 0) {
+            return res.status(200).json({ summary: { avgRating: 0, total: 0 }, reviews: [] });
+        }
+
+        const totalReviews = reviews.length;
+        const avgRating = (reviews.reduce((sum, r) => sum + r.so_sao, 0) / totalReviews).toFixed(1);
+        const starCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0, hasMedia: 0, hasComment: 0 };
+        
+        reviews.forEach(r => {
+            if (starCounts[r.so_sao] !== undefined) starCounts[r.so_sao]++;
+            if (r.media.length > 0) starCounts.hasMedia++;
+            if (r.noi_dung && r.noi_dung.trim() !== '') starCounts.hasComment++;
+        });
+
+        const userIds = [...new Set(reviews.map(r => r.user_id))];
+        const userInfoMap = {};
+        userIds.forEach(uid => {
+            userInfoMap[uid] = {
+                username: uid === 1 ? 'tukhanjluu' : `khachhang_${uid}`,
+                avatar_url: `https://ui-avatars.com/api/?name=User${uid}&background=f1f5f9&color=94a3b8`
+            };
+        });
+
+        const finalReviews = reviews.map(r => ({
+            ...r,
+            user: userInfoMap[r.user_id] || { username: 'Người dùng ẩn danh', avatar_url: null }
+        }));
+
+        res.status(200).json({
+            summary: { avgRating, total: totalReviews, ...starCounts },
+            reviews: finalReviews
+        });
+    } catch (error) {
+        console.error("❌ Lỗi API getReviewsByProduct:", error.message);
+        res.status(500).json({ error: "Lỗi lấy dữ liệu đánh giá." });
+    }
+};
+
+// =========================================================================
+// 13. LẤY SẢN PHẨM LIÊN QUAN (CÙNG DANH MỤC CON)
+// =========================================================================
+export const getRelatedProducts = async (req, res) => {
+    const { id } = req.params;
+    const { category, limit = 5 } = req.query;
+
+    if (!category) return res.status(400).json({ error: "Thiếu thông tin danh mục con." });
+
+    try {
+        const query = `
+            SELECT 
+                sp.ma_san_pham, sp.ten_san_pham,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
+            FROM public.san_pham sp
+            WHERE sp.ma_dm_con = $1 AND sp.ma_san_pham != $2 AND sp.trang_thai = true
+            ORDER BY RANDOM()
+            LIMIT $3;
+        `;
+        const { rows: products } = await pool.query(query, [category, id, limit]);
+        res.status(200).json(products);
+    } catch (error) {
+        console.error("❌ Lỗi API getRelatedProducts:", error.message);
+        res.status(500).json({ error: "Lỗi lấy sản phẩm liên quan." });
+    }
+};
