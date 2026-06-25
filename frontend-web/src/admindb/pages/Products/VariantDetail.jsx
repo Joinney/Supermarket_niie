@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -14,6 +14,9 @@ import {
   FileText,
   ShieldAlert,
   Archive,
+  Image as ImageIcon, // Thêm Icon Image
+  Edit3, // Thêm Icon Edit3
+  Plus, // Thêm Icon Plus
 } from "lucide-react";
 import axios from "axios";
 
@@ -32,12 +35,15 @@ export default function AdminVariantDetail() {
   const [editStock, setEditStock] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // 🟢 State & Ref phục vụ Upload ảnh
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef(null);
+
   useEffect(() => {
     const fetchVariantDetail = async () => {
       try {
         const apiUrl =
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        // Gọi API bốc chi tiết 1 biến thể cụ thể từ Node.js Backend
         const response = await axios.get(
           `${apiUrl}/api/products/variants/${variantId}`,
         );
@@ -84,6 +90,54 @@ export default function AdminVariantDetail() {
       alert("Gặp sự cố khi đồng bộ dữ liệu biến thể xuống DB!");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 🟢 Hàm xử lý Upload ảnh (Khai báo đúng 1 lần duy nhất)
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Kích thước ảnh quá lớn. Vui lòng chọn ảnh dưới 5MB.");
+      return;
+    }
+
+    setUploadingImage(true);
+
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("ma_san_pham", variant.ma_san_pham);
+    formData.append("ma_bien_the", variant.ma_bien_the);
+    formData.append("loai_media", "image");
+
+    try {
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+
+      const response = await axios.post(
+        `${apiUrl}/api/products/variants/${variantId}/upload-image`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
+      );
+
+      if (response.data && response.data.duong_dan_url) {
+        setVariant((prev) => ({
+          ...prev,
+          duong_dan_url: response.data.duong_dan_url,
+        }));
+        alert("Đã cập nhật ảnh đại diện biến thể thành công!");
+      }
+    } catch (err) {
+      console.error("Lỗi Upload ảnh:", err);
+      alert("Đã xảy ra sự cố khi tải ảnh lên máy chủ.");
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -148,8 +202,7 @@ export default function AdminVariantDetail() {
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        {/* Nút bật/tắt chế độ chỉnh sửa (Giữ nguyên) */}
+      <div className="flex items-center gap-2 mb-6">
         <button
           onClick={() => {
             if (isEditing) handleSaveVariant();
@@ -170,7 +223,6 @@ export default function AdminVariantDetail() {
             : "Chỉnh sửa nhanh"}
         </button>
 
-        {/* NÚT MỚI DẪN SANG TRANG CROSS-CHECK */}
         {!isEditing && (
           <button
             onClick={() =>
@@ -187,25 +239,63 @@ export default function AdminVariantDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-7xl">
         {/* ==================== CỘT TRÁI: THƯ VIỆN ẢNH ĐẠI DIỆN RIÊNG ==================== */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white rounded-3xl border border-gray-200/80 p-3 shadow-sm aspect-square flex items-center justify-center overflow-hidden bg-slate-50 relative">
-            {variant.duong_dan_url ? (
-              <img
-                src={variant.duong_dan_url}
-                alt="variant-thumb"
-                className="w-full h-full object-cover rounded-2xl"
-              />
+          <div className="bg-white rounded-3xl border border-gray-200/80 p-3 shadow-sm aspect-square flex items-center justify-center overflow-hidden bg-slate-50 relative group">
+            {/* Input File Ẩn */}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+            />
+
+            {uploadingImage ? (
+              <div className="flex flex-col items-center justify-center text-[#006c49] w-full h-full">
+                <span className="w-8 h-8 rounded-full border-4 border-[#006c49]/30 border-t-[#006c49] animate-spin mb-3"></span>
+                <span className="text-xs font-bold animate-pulse">
+                  Đang tải ảnh lên...
+                </span>
+              </div>
+            ) : variant.duong_dan_url ? (
+              <>
+                <img
+                  src={variant.duong_dan_url}
+                  alt="variant-thumb"
+                  className="w-full h-full object-cover rounded-2xl transition-transform group-hover:scale-105 duration-500"
+                />
+
+                {/* Lớp phủ mờ (Overlay) khi Hover để hiện nút Thay Đổi Ảnh */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl backdrop-blur-[2px]">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-white text-slate-800 hover:bg-[#006c49] hover:text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg transition-colors transform translate-y-4 group-hover:translate-y-0 duration-300"
+                  >
+                    <Edit3 size={14} /> Thay đổi ảnh
+                  </button>
+                </div>
+              </>
             ) : (
-              <div className="flex flex-col items-center text-gray-300">
-                <ImageIcon size={48} />
-                <span className="text-xs font-bold mt-1">
+              <div className="flex flex-col items-center justify-center text-gray-400 w-full h-full">
+                <ImageIcon size={48} className="mb-3 opacity-50" />
+                <span className="text-xs font-bold mb-4">
                   Chưa gán ảnh chính
                 </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-[#006c49] hover:bg-[#005137] text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-sm transition active:scale-95"
+                >
+                  <Plus size={14} /> Tải ảnh lên
+                </button>
               </div>
             )}
           </div>
+
           <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 text-[11px] font-bold text-emerald-800 leading-relaxed">
             💡 <em>Mẹo Admin:</em> Ảnh hiển thị được lấy độc lập từ bảng dữ liệu
-            liên kết media dựa trên mã định danh biến thể chi tiết này.
+            liên kết <code>media_san_pham</code> dựa trên mã định danh{" "}
+            <code>ma_bien_the</code>.
           </div>
         </div>
 
@@ -269,7 +359,7 @@ export default function AdminVariantDetail() {
                 <input
                   type="text"
                   disabled={true}
-                  value={variant.ten_don_vi || "Chai"}
+                  value={variant?.ten_don_vi || "Chai"}
                   className="w-full bg-slate-100 border border-gray-200 opacity-65 font-bold text-gray-500 p-3 rounded-xl text-xs outline-none"
                 />
               </div>
@@ -283,7 +373,7 @@ export default function AdminVariantDetail() {
               tính liên kết (Database EAV Mapping)
             </h3>
 
-            {variant.thuoc_tinh_hop_nhat &&
+            {variant?.thuoc_tinh_hop_nhat &&
             variant.thuoc_tinh_hop_nhat.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {variant.thuoc_tinh_hop_nhat.map((attr, index) => (
@@ -317,7 +407,7 @@ export default function AdminVariantDetail() {
                   Ngày ghi nhận hệ thống:
                 </span>
                 <span className="text-slate-800 font-black mt-0.5 block">
-                  {new Date(variant.ngay_tao || Date.now()).toLocaleDateString(
+                  {new Date(variant?.ngay_tao || Date.now()).toLocaleDateString(
                     "vi-VN",
                   )}
                 </span>
@@ -330,7 +420,7 @@ export default function AdminVariantDetail() {
                   Cập nhật log cuối:
                 </span>
                 <span className="text-slate-800 font-black mt-0.5 block">
-                  {variant.ngay_cap_nhat
+                  {variant?.ngay_cap_nhat
                     ? new Date(variant.ngay_cap_nhat).toLocaleDateString(
                         "vi-VN",
                       )
