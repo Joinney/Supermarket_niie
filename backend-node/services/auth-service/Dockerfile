@@ -8,7 +8,8 @@ WORKDIR /app
 # Chỉ copy package.json để install trước
 COPY package*.json ./
 
-# Ép install và build lại ngay trong môi trường Linux của Docker
+# 🎯 SỬA CHỖ NÀY: Ép Docker luôn luôn cài đặt socket.io trực tiếp trong môi trường build
+RUN npm install socket.io --save
 RUN npm install
 
 COPY . .

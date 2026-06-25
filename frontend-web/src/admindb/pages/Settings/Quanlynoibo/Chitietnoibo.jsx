@@ -31,15 +31,71 @@ export default function Chitietnoibo() {
     avatarUrl: ""
   });
 
-  // Ma trận phân quyền hệ thống (Giữ nguyên nghiệp vụ Enterprise)
+// Ma trận phân quyền hệ thống (Đã đồng bộ hóa 100% dữ liệu live với Sidebar DemiMart)
   const [matrixPermissions, setMatrixPermissions] = useState([
-    { id: "dashboard", name: "Bảng điều khiển (Dashboard)", type: "dashboard", view: true, add: false, edit: false, delete: false, approve: false },
-    { id: "products", name: "Quản lý Sản phẩm & SKU", type: "products", view: false, add: false, edit: false, delete: false, approve: false },
-    { id: "farm", name: "Quản lý Nông trại & Mùa vụ", type: "farm", view: false, add: false, edit: false, delete: false, approve: false },
-    { id: "orders", name: "Quản lý Đơn hàng", type: "orders", view: false, add: false, edit: false, delete: false, approve: false },
-    { id: "inventory", name: "Quản lý Tồn kho", type: "inventory", view: false, add: false, edit: false, delete: false, approve: false },
-    { id: "customers", name: "Quản lý Khách hàng", type: "customers", view: false, add: false, edit: false, delete: false, approve: false },
-    { id: "settings", name: "Cấu hình Hệ thống", type: "settings", view: false, add: false, edit: false, delete: false, approve: false },
+    { 
+      id: "dashboard", 
+      name: "Dashboard", 
+      type: "dashboard", 
+      read: true,    // Truy cập (Xem)
+      create: false,  // Vô hiệu hóa hoặc ẩn trên UI nếu không dùng
+      update: false, 
+      delete: false 
+    },
+    { 
+      id: "products", 
+      name: "Danh sách sản phẩm", 
+      type: "products", 
+      read: false, 
+      create: false, 
+      update: false, 
+      delete: false 
+    },
+    { 
+      id: "orders", 
+      name: "Đơn Hàng", 
+      type: "orders", 
+      read: false, 
+      create: false, 
+      update: false, 
+      delete: false 
+    },
+    { 
+      id: "inventory", 
+      name: "Kho Hàng", 
+      type: "inventory", 
+      read: false, 
+      create: false, 
+      update: false, 
+      delete: false 
+    },
+    { 
+      id: "customers", 
+      name: "Khách Hàng", 
+      type: "customers", 
+      read: false, 
+      create: false, 
+      update: false, 
+      delete: false 
+    },
+    { 
+      id: "settings", 
+      name: "Tài khoản & Phân quyền", 
+      type: "settings", 
+      read: false, 
+      create: false, 
+      update: false, 
+      delete: false 
+    },
+    { 
+      id: "general_settings", 
+      name: "Cấu hình hệ thống", 
+      type: "general_settings", 
+      read: false, 
+      create: false, 
+      update: false, 
+      delete: false 
+    }
   ]);
 
   // Danh sách đồng nghiệp cùng nhóm quyền tải động từ DB

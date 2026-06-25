@@ -138,10 +138,31 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 8. Khởi chạy và Graceful Shutdown
-const server = app.listen(PORT, '0.0.0.0', () => {
+// --- 8 KHỞI CHẠY VÀ CONFIG REALTIME CHUẨN SOCKET.IO ---
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: allowedOrigins,
+        credentials: true
+    }
+});
+
+// Lưu biến toàn cục để Controller ở file khác có thể gọi bắn tín hiệu
+global._io = io;
+
+io.on('connection', (socket) => {
+    // Cho phép client join vào phòng riêng biệt theo ID của user_id
+    socket.on('join_user_room', (userId) => {
+        socket.join(`user_room_${userId}`);
+    });
+});
+
+const server = httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`\n=========================================`);
-    console.log(`✅ Auth Service Live: http://localhost:${PORT}`);
+    console.log(`✅ Auth & Realtime Service Live: http://localhost:${PORT}`);
     console.log(`📝 Swagger Docs:  http://localhost:${PORT}/api-docs`);
     console.log(`=========================================\n`);
 });

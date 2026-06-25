@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-// Ma trận cấu hình quyền mẫu chuẩn cho từng vị trí nghiệp vụ của ETECHS
+// Ma trận cấu hình quyền mẫu chuẩn cho từng vị trí nghiệp vụ của Demi Mart
 const DEFAULT_PRESETS = {
   ADMIN: [
     { id: "dashboard", view: true, add: true, edit: true, delete: true },
     { id: "products", view: true, add: true, edit: true, delete: true },
-    { id: "farm", view: true, add: true, edit: true, delete: true },
     { id: "orders", view: true, add: true, edit: true, delete: true },
     { id: "inventory", view: true, add: true, edit: true, delete: true },
     { id: "customers", view: true, add: true, edit: true, delete: true },
@@ -17,16 +16,14 @@ const DEFAULT_PRESETS = {
   MANAGER: [
     { id: "dashboard", view: true, add: false, edit: false, delete: false },
     { id: "products", view: true, add: true, edit: true, delete: false },
-    { id: "farm", view: true, add: true, edit: true, delete: false },
     { id: "orders", view: true, add: true, edit: true, delete: false },
     { id: "inventory", view: true, add: true, edit: true, delete: false },
     { id: "customers", view: true, add: true, edit: true, delete: false },
-    { id: "settings", view: true, add: false, edit: false, delete: false },
+    { id: "settings", view: true, add: false, edit: true, delete: false },
   ],
   STAFF: [
     { id: "dashboard", view: true, add: false, edit: false, delete: false },
     { id: "products", view: true, add: false, edit: false, delete: false },
-    { id: "farm", view: true, add: false, edit: false, delete: false },
     { id: "orders", view: true, add: true, edit: true, delete: false },     
     { id: "inventory", view: true, add: true, edit: true, delete: false },  
     { id: "customers", view: true, add: true, edit: false, delete: false },
@@ -52,11 +49,11 @@ export default function Danhsachnoibo() {
   const [roleFilter, setRoleFilter] = useState("Tất cả Vai trò");
   const [statusFilter, setStatusFilter] = useState("Trạng thái");
 
-  // 🎯 STATES PHỤC VỤ UPLOAD ẢNH CHUẨN CLOUDINARY
+  // STATES UPLOAD ẢNH CLOUDINARY
   const [avatarPreview, setAvatarPreview] = useState("");
   const [avatarFile, setAvatarFile] = useState(null);
 
-  // Form phục vụ cấp tài khoản mới
+  // Form cấp tài khoản mới
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -66,15 +63,14 @@ export default function Danhsachnoibo() {
     sendEmailNotification: true,
   });
 
-  // Khởi tạo mảng quyền cấu trúc nền
+  // Khởi tạo mảng quyền cấu trúc nền chuẩn hệ thống Demi Mart
   const [rolePermissions, setRolePermissions] = useState([
     { id: "dashboard", name: "Bảng điều khiển (Dashboard)", type: "dashboard", view: true, add: false, edit: false, delete: false },
-    { id: "products", name: "Quản lý Sản phẩm & SKU", type: "products", view: true, add: true, edit: true, delete: true },
-    { id: "farm", name: "Quản lý Nông trại & Mùa vụ", type: "farm", view: true, add: true, edit: true, delete: true },
-    { id: "orders", name: "Quản lý Đơn hàng", type: "orders", view: true, add: true, edit: true, delete: true },
-    { id: "inventory", name: "Quản lý Tồn kho", type: "inventory", view: true, add: true, edit: true, delete: true },
-    { id: "customers", name: "Quản lý Khách hàng", type: "customers", view: true, add: true, edit: true, delete: true },
-    { id: "settings", name: "Quản lý Phân quyền & Cài đặt", type: "settings", view: true, add: true, edit: true, delete: true },
+    { id: "products", name: "Danh sách sản phẩm", type: "products", view: true, add: true, edit: true, delete: true },
+    { id: "orders", name: "Đơn Hàng", type: "orders", view: true, add: true, edit: true, delete: true },
+    { id: "inventory", name: "Kho Hàng", type: "inventory", view: true, add: true, edit: true, delete: true },
+    { id: "customers", name: "Khách Hàng", type: "customers", view: true, add: true, edit: true, delete: true },
+    { id: "settings", name: "Tài khoản & Phân quyền", type: "settings", view: true, add: true, edit: true, delete: true },
   ]);
 
   const [showPassword, setShowPassword] = useState(false);
@@ -137,7 +133,6 @@ export default function Danhsachnoibo() {
     switch (type) {
       case "dashboard": return <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>;
       case "products": return <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>;
-      case "farm": return <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707m12.728 12.728A9 9 0 1111.55 3.05a.5.5 0 00.5.5v2.32a6 6 0 106.12 6.12h2.32a.5.5 0 00.5-.5a9 9 0 00-3.05-6.47z" /></svg>;
       case "orders": return <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>;
       case "inventory": return <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>;
       case "customers": return <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
@@ -151,7 +146,6 @@ export default function Danhsachnoibo() {
     setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
-  // 🎯 FIX PHÂN QUYỀN GẮN CHẶT CHỈ SỐ: Đảo trạng thái toggle boolean sạch sẽ
   const handlePermissionChange = (moduleId, field) => {
     setRolePermissions(prev => 
       prev.map(item => (item.id === moduleId ? { ...item, [field]: !item[field] } : item))
@@ -168,10 +162,9 @@ export default function Danhsachnoibo() {
         return;
       }
 
-      // Ép kiểu boolean chuẩn xác để PostgreSQL nhận diện chính xác giá trị true/false thật
       const cleanPermissions = rolePermissions.map(item => ({
+        module: item.name, // 🎯 Chuyển thành cấu trúc field key 'module' khớp hoàn hảo với Sidebar
         id: item.id,
-        name: item.name,
         type: item.type,
         view: item.view === true || item.view === "true",
         add: item.add === true || item.add === "true",
@@ -191,6 +184,14 @@ export default function Danhsachnoibo() {
       if (response.status === 200 || response.data.success) {
         alert(`Hệ thống Demi Mart: Đã đồng bộ lưu ma trận phân quyền mới cho ${selectedUser.name} thành công!`);
         
+        
+        const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+        if (adminInfo.id === targetId || adminInfo.user_id === targetId) {
+            // Cập nhật nóng quyền mới vào localStorage để Sidebar ăn ngay lập tức
+            adminInfo.custom_permissions = cleanPermissions;
+            localStorage.setItem('adminInfo', JSON.stringify(adminInfo));
+        }
+
         setUsers(prevUsers => 
           prevUsers.map(u => 
             u.user_id === targetId 
@@ -215,7 +216,6 @@ export default function Danhsachnoibo() {
       const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
       const rawRole = formData.role.split(" ")[0].toUpperCase();
 
-      // 🎯 SỬ DỤNG FORMDATA ĐỂ TRUYỀN FILE CHUẨN MULTIPART LÊN CLOUDINARY
       const dataToSend = new FormData();
       dataToSend.append("email", formData.email);
       dataToSend.append("password", formData.password);
@@ -223,18 +223,17 @@ export default function Danhsachnoibo() {
       dataToSend.append("role", rawRole);
       dataToSend.append("department", formData.department || "Hệ thống Demi Mart");
       
-      // Nếu nhân viên có chọn file ảnh đại diện mới thì đính kèm vào key 'avatar' dạng file nhị phân gốc
       if (avatarFile) {
         dataToSend.append("avatar", avatarFile);
       }
 
       await axios.post(`${apiUrl}/api/auth/signup`, dataToSend, {
-        headers: { "Content-Type": "multipart/form-data" } // Khởi động header multipart chuẩn file
+        headers: { "Content-Type": "multipart/form-data" }
       });
       
       setIsCollapsedModal(false);
       setAvatarPreview("");
-      setAvatarFile(null); // Clear file sau submit
+      setAvatarFile(null);
       setFormData({ fullName: "", email: "", password: "1234567890", role: "Staff (Nhân viên)", department: "", sendEmailNotification: true });
       fetchAllUsers(); 
     } catch (err) {
@@ -265,7 +264,7 @@ export default function Danhsachnoibo() {
   return (
     <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left relative p-4 animate-fadeIn">
       
-      {/* --- TIÊU ĐỀ & BUTTONS NGOÀI --- */}
+      {/* --- TIÊU ĐỀ & BUTTONS --- */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-800">Danh sách quản lý nội bộ</h1>
@@ -284,7 +283,7 @@ export default function Danhsachnoibo() {
         </div>
       </div>
 
-      {/* --- THỐNG KÊ ĐẾM NGOÀI ĐỒNG BỘ THẬT --- */}
+      {/* --- THỐNG KÊ --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
           <div><p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tổng tài khoản</p><p className="text-3xl font-black mt-1 text-gray-800">{stats.total}</p></div>
@@ -304,7 +303,7 @@ export default function Danhsachnoibo() {
         </div>
       </div>
 
-      {/* --- BỘ LỌC TÌM KIẾM NGOÀI --- */}
+      {/* --- BỘ LỌC TÌM KIẾM --- */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4 justify-between items-center border-b border-gray-50">
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
@@ -320,7 +319,7 @@ export default function Danhsachnoibo() {
           <input type="text" placeholder="Tìm theo tên, email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full sm:w-[320px] px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none" />
         </div>
 
-        {/* --- BẢNG LIÊN KẾT ĐỒNG BỘ NGOÀI --- */}
+        {/* --- BẢNG ĐỒNG BỘ --- */}
         <div className="w-full overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>
@@ -365,31 +364,27 @@ export default function Danhsachnoibo() {
                       </span>
                     </td>
                     <td className="py-4 px-4">
-  <div className="flex flex-col text-left">
-    {/* 1. Hiển thị thời gian login thực tế bốc từ CSDL Postgres */}
-    <span className="text-slate-700 font-bold">
-      {user.last_login ? (
-        (() => {
-          const d = new Date(user.last_login);
-          // Định dạng ngày giờ chuẩn Việt Nam dễ nhìn: Giờ:Phút Ngày/Tháng
-          return d.toLocaleString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit",
-            day: "2-digit",
-            month: "2-digit"
-          });
-        })()
-      ) : (
-        <span className="text-gray-400 font-normal italic">Chưa đăng nhập</span>
-      )}
-    </span>
-    
-    {/* 2. Hiển thị thông tin Trình duyệt & IP động được lưu từ Backend */}
-    <span className="text-[10px] text-gray-400 font-medium mt-0.5">
-      {user.last_login_device ? user.last_login_device : "Hệ thống Demi Mart"}
-    </span>
-  </div>
-</td>
+                      <div className="flex flex-col text-left">
+                        <span className="text-slate-700 font-bold">
+                          {user.last_login ? (
+                            (() => {
+                              const d = new Date(user.last_login);
+                              return d.toLocaleString("vi-VN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                day: "2-digit",
+                                month: "2-digit"
+                              });
+                            })()
+                          ) : (
+                            <span className="text-gray-400 font-normal italic">Chưa đăng nhập</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-medium mt-0.5">
+                          {user.last_login_device ? user.last_login_device : "Hệ thống Demi Mart"}
+                        </span>
+                      </div>
+                    </td>
                     <td className="py-4 px-6 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">
                         <button 
@@ -402,20 +397,33 @@ export default function Danhsachnoibo() {
                             }); 
                             setIsPermissionModalOpen(true); 
                             
-                            // 🎯 ĐỒNG BỘ: Đọc dữ liệu JSON live từ CSDL trước, bọc lỗi chuỗi text nếu có
                             if (user.custom_permissions) {
-                              try {
-                                const parsed = typeof user.custom_permissions === "string" 
-                                  ? JSON.parse(user.custom_permissions) 
-                                  : user.custom_permissions;
-                                setRolePermissions(parsed || []);
-                              } catch(e) {
-                                console.error("Lỗi parse JSON quyền:", e);
-                                handleApplyPreset(user.role);
-                              }
-                            } else {
-                              handleApplyPreset(user.role);
-                            }
+  try {
+    const parsed = typeof user.custom_permissions === "string" 
+      ? JSON.parse(user.custom_permissions) 
+      : user.custom_permissions;
+    
+    
+    const filteredAndMapped = parsed
+      .filter(p => p.id !== "farm") 
+      .map(p => {
+        let finalName = p.name || p.module;
+        if (p.id === "products") finalName = "Danh sách sản phẩm";
+        if (p.id === "orders") finalName = "Đơn Hàng";
+        if (p.id === "inventory") finalName = "Kho Hàng";
+        if (p.id === "customers") finalName = "Khách Hàng";
+        if (p.id === "settings") finalName = "Tài khoản & Phân quyền";
+        return { ...p, name: finalName };
+      });
+
+    setRolePermissions(filteredAndMapped);
+  } catch(e) {
+    console.error("Lỗi parse JSON quyền:", e);
+    handleApplyPreset(user.role);
+  }
+} else {
+  handleApplyPreset(user.role);
+}
                           }} 
                           className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition"
                           title="Phân quyền chi tiết"
@@ -454,7 +462,6 @@ export default function Danhsachnoibo() {
 
             <form onSubmit={handleCreateAccount} className="p-6 space-y-4 text-sm font-semibold text-slate-700">
               <div className="flex items-center gap-4 bg-[#fafafa]/50 p-3 rounded-2xl border border-dashed border-gray-200">
-                {/* 🎯 SỬ DỤNG INPUT FILE ĐỂ BẮT FILE NHỊ PHÂN GỐC */}
                 <input
                   type="file"
                   id="modalAvatarInput"
@@ -467,8 +474,8 @@ export default function Danhsachnoibo() {
                         alert("Kích thước ảnh không được vượt quá 2MB!");
                         return;
                       }
-                      setAvatarFile(file); // Lưu đối tượng file gốc gửi lên server
-                      setAvatarPreview(URL.createObjectURL(file)); // Tạo ObjectURL hiển thị preview cực mượt
+                      setAvatarFile(file);
+                      setAvatarPreview(URL.createObjectURL(file));
                     }
                   }}
                 />
@@ -505,7 +512,7 @@ export default function Danhsachnoibo() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">Địa chỉ Email <span className="text-red-500">*</span></label>
-                  <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="VD: email@etechs.vn" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition" />
+                  <input type="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="VD: email@demimart.vn" required className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition" />
                 </div>
                 <div className="flex flex-col gap-1.5 relative">
                   <label className="text-xs font-bold text-slate-700">Mật khẩu mặc định <span className="text-red-500">*</span></label>
@@ -536,8 +543,8 @@ export default function Danhsachnoibo() {
                     <select name="department" value={formData.department} onChange={handleInputChange} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer text-gray-500 appearance-none">
                       <option value="">Chọn phòng ban...</option>
                       <option value="Ban Giám Đốc">Ban Giám Đốc</option>
-                      <option value="Kho & Nông Trại">Kho & Nông Trại</option>
-                      <option value="Kinh doanh B2B">Kinh doanh B2B</option>
+                      <option value="Hệ Thống Bán Lẻ">Hệ Thống Bán Lẻ</option>
+                      <option value="Kho & Tồn Kho">Kho & Tồn Kho</option>
                       <option value="Kế toán">Kế toán</option>
                     </select>
                     <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none">
@@ -562,7 +569,7 @@ export default function Danhsachnoibo() {
         document.body
       )}
 
-      {/* ================= MODAL 2: PHÂN QUYỀN CHI TIẾT ================= */}
+      {/* ================= MODAL 2: PHÂN QUYỀN CHI TIẾT (ĐÃ VIỆT HÓA SIDEBAR) ================= */}
       {isPermissionModalOpen && selectedUser && createPortal(
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all max-h-[92vh] flex flex-col">
@@ -641,7 +648,6 @@ export default function Danhsachnoibo() {
                         </td>
                         {["view", "add", "edit", "delete"].map((field) => (
                           <td key={field} className="py-3.5 px-3 text-center">
-                            {/* 🎯 SỬ DỤNG TOGGLE LOGIC KHÔNG THAM SỐ THỪA CHỐNG RESET QUYỀN */}
                             <input 
                               type="checkbox" 
                               checked={item[field] === true || item[field] === "true"} 

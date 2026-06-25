@@ -372,7 +372,28 @@ const Dieuchuyenkho = () => {
     </div>
   );
 };
+// 🎯 THÊM ĐOẠN NÀY ĐỂ ĐỌC QUYỀN VÀ KHÓA CHẶT ROUTE GỐC
+const AdminModuleGuard = ({ moduleName, children }) => {
+  const userRole = localStorage.getItem('adminRole') || '';
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
 
+  if (userRole === 'Admin') return children;
+
+  let permissions = [];
+  try {
+    let rawPerms = adminInfo.custom_permissions;
+    if (typeof rawPerms === 'string') rawPerms = JSON.parse(rawPerms);
+    permissions = Array.isArray(rawPerms) ? rawPerms : [];
+  } catch (e) {
+    console.error("Lỗi xác thực Guard:", e);
+  }
+
+  const hasAccess = permissions.some(
+    p => (p.module === moduleName || p.name === moduleName) && (p.view === true || p.view === "true")
+  );
+
+  return hasAccess ? children : <Navigate to="/admin/dashboard/thongkesanpham" replace />;
+};
 /**
  * 1. LAYOUTS (KHÁCH HÀNG & ADMIN)
  */
@@ -439,14 +460,16 @@ const AppRoutes = () => (
       <Route path="profile" element={<AdminProfile />} />
       <Route index element={<Navigate to="dashboard/thongkesanpham" replace />} />
       
-      <Route path="dashboard">
+      {/* 🏠 Bọc Bảng điều khiển */}
+      <Route path="dashboard" element={<AdminModuleGuard moduleName="Bảng điều khiển (Dashboard)"><Outlet /></AdminModuleGuard>}>
         <Route index element={<Navigate to="thongkesanpham" replace />} />
         <Route path="thongkesanpham" element={<Dashboard />} />
         <Route path="thongkedonhang" element={<ThongKeDonHang />} />
         <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
       </Route>
 
-      <Route path="products">
+      {/* 🛒 Bọc Danh sách sản phẩm */}
+      <Route path="products" element={<AdminModuleGuard moduleName="Danh sách sản phẩm"><Outlet /></AdminModuleGuard>}>
         <Route index element={<Navigate to="Danhsachsanpham" replace />} />
         {/* Route tạo sản phẩm mới bắt buộc phải khớp với mã navigate */}
         <Route path="/admin/products/create" element={<ProductCreate />} />
@@ -458,12 +481,14 @@ const AppRoutes = () => (
 
       </Route>
 
-      <Route path="Donhang">
+      {/* 📄 Bọc Đơn Hàng */}
+      <Route path="Donhang" element={<AdminModuleGuard moduleName="Đơn Hàng"><Outlet /></AdminModuleGuard>}>
         <Route index element={<Navigate to="Danhsachdonhang" replace />} />
         <Route path="Danhsachdonhang" element={<Danhsachdonhang />} />
       </Route>
 
-      <Route path="inventory">
+      {/* 📦 Bọc Kho Hàng */}
+      <Route path="inventory" element={<AdminModuleGuard moduleName="Kho Hàng"><Outlet /></AdminModuleGuard>}>
         <Route index element={<Navigate to="import-list" replace />} />
         <Route path="import-list" element={<Danhsachnhapkho />} />
         <Route path="batches" element={<Quanlylohang />} />
@@ -471,14 +496,16 @@ const AppRoutes = () => (
         <Route path="transfer" element={<Dieuchuyenkho />} />
       </Route>
 
-      <Route path="customers">
+      {/* 👥 Bọc Khách Hàng */}
+      <Route path="customers" element={<AdminModuleGuard moduleName="Khách Hàng"><Outlet /></AdminModuleGuard>}>
         <Route index element={<Navigate to="list" replace />} />
         <Route path="list" element={<Danhsachkhachhang />} />
         <Route path="groups" element={<Nhomkhachhang />} />
         <Route path="types" element={<Loaikhachhang />} />
       </Route>
 
-      <Route path="settings">
+      {/* 🛡️ Bọc Tài khoản & Phân quyền */}
+      <Route path="settings" element={<AdminModuleGuard moduleName="Tài khoản & Phân quyền"><Outlet /></AdminModuleGuard>}>
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<SettingsGeneral />} />
         <Route path="quanlynoibo">

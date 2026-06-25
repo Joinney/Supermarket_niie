@@ -59,7 +59,7 @@ export const signin = async (req, res) => {
     const { username, password } = req.body;
     try {
         const userResult = await pool.query(
-            'SELECT user_id, username, password_hash, email, role, full_name, avatar_url FROM users WHERE username = $1 OR email = $1', 
+            'SELECT user_id, username, password_hash, email, role, full_name, avatar_url, custom_permissions FROM users WHERE username = $1 OR email = $1', 
             [username]
         );
         
@@ -133,7 +133,8 @@ export const signin = async (req, res) => {
                 email: user.email,
                 role: user.role,
                 full_name: user.full_name,
-                avatar_url: user.avatar_url 
+                avatar_url: user.avatar_url,
+                custom_permissions: user.custom_permissions
             }
         });
     } catch (error) {
@@ -310,6 +311,10 @@ export const updateUserDetail = async (req, res) => {
 
         if (rows.length === 0) {
             return res.status(404).json({ success: false, message: "Không tìm thấy nhân sự để cập nhật!" });
+        }
+        
+        if (global._io) {
+            global._io.to(`user_room_${id}`).emit('permission_matrix_changed', rows[0].custom_permissions);
         }
 
         res.status(200).json({ success: true, message: "Cập nhật PostgreSQL thành công!", data: rows[0] });
