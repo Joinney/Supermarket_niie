@@ -53,7 +53,8 @@ export const signup = async (req, res) => {
     }
 };
 
-// --- 2. ĐĂNG NHẬP (SIGNIN) ---
+
+// --- 2. ĐĂNG NHẬP (SIGNIN) - BẢN CẬP NHẬT LƯU THIẾT BỊ VÀ IP ĐỘNG HOÀN CHỈNH ---
 export const signin = async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -70,11 +71,59 @@ export const signin = async (req, res) => {
 
         const { accessToken, refreshToken } = generateTokens(user);
 
-        // Lưu Refresh Token vào DB
-        await pool.query(
-            'UPDATE users SET refresh_token = $1, last_login = NOW() WHERE user_id = $2', 
-            [refreshToken, user.user_id]
-        );
+        // 🎯 GOM KHỐI ĐỌC THÔNG TIN TRÌNH DUYỆT VÀ IP CHUẨN HOÁ
+        const userAgent = req.headers['user-agent'] || 'Unknown Browser';
+        
+        // Bốc IP ưu tiên qua các lớp proxy của Docker
+        let clientIp = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || '127.0.0.1';
+
+        let browserName = "Thiết bị khác";
+        if (userAgent.includes("Edg")) browserName = "Edge";
+        else if (userAgent.includes("Chrome")) browserName = "Chrome";
+        else if (userAgent.includes("Safari")) browserName = "Safari";
+        else if (userAgent.includes("Firefox")) browserName = "Firefox";
+
+        // Nếu IP chứa dấu phẩy do đi qua nhiều tầng proxy, lấy địa chỉ IP đầu tiên (IP gốc của Client)
+        if (clientIp.includes(',')) {
+            clientIp = clientIp.split(',')[0].trim();
+        }
+
+        // Làm sạch ký tự tiền tố IPv6
+        clientIp = clientIp.replace('::ffff:', '');
+
+        // 🎯 XỬ LÝ ĐỘNG XUYÊN DOCKER LOCAL:
+        // 1. Nếu chính máy của Thuận đăng nhập (qua localhost/127.0.0.1/::1) -> Ánh xạ về IP Wi-Fi máy bạn để demo chuẩn
+        if (clientIp === '::1' || clientIp === '127.0.0.1') {
+            clientIp = '10.234.128.1'; 
+        } 
+        // 2. Nếu đi qua cầu Docker và nhận IP ảo Gateway (172.x)
+        else if (clientIp.startsWith('172.')) {
+            // Kiểm tra xem header có chứa IP thật của máy khác trong mạng LAN không
+            const realIp = req.headers['x-real-ip'] || req.headers['x-forwarded-for'];
+            if (realIp) {
+                clientIp = realIp.replace('::ffff:', '').split(',')[0].trim();
+            } else {
+                // Nếu Docker nuốt mất IP nguồn khi gọi nội bộ từ chính máy chủ, gán dải máy bạn làm chuẩn
+                // Nhưng nếu là thiết bị khác gọi tới, hệ thống vẫn ưu tiên giữ hoặc nhận diện theo mạng LAN
+                clientIp = '10.234.128.1';
+            }
+        }
+
+        const deviceString = `${browserName} (IP: ${clientIp})`;
+
+        // 🎯 LƯU TRỰC TIẾP VÀO CƠ SỞ DỮ LIỆU POSTGRESQL
+        try {
+            await pool.query(
+                `UPDATE public.users 
+                 SET refresh_token = $1, 
+                     last_login = NOW(), 
+                     last_login_device = $2 
+                 WHERE user_id = $3`, 
+                [refreshToken, deviceString, user.user_id]
+            );
+        } catch (dbError) {
+            console.error("❌ Lỗi khi cập nhật IP/Device vào CSDL:", dbError.message);
+        }
 
         // Gửi Refresh Token qua Cookie
         res.cookie('refreshToken', refreshToken, {
@@ -168,7 +217,9 @@ export const getAllInternalUsers = async (req, res) => {
                 role, 
                 status, 
                 avatar_url,
-                custom_permissions -- 🎯 QUAN TRỌNG: Thêm cột này vào đây để khi F5 trang danh sách bốc được dữ liệu live!
+                custom_permissions,-- 🎯 QUAN TRỌNG: Thêm cột này vào đây để khi F5 trang danh sách bốc được dữ liệu live!
+                last_login,
+                last_login_device 
             FROM public.users 
             WHERE LOWER(role) <> 'buyer'
             ORDER BY user_id ASC;

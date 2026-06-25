@@ -30,6 +30,7 @@ import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controlle
 
 // Initialize app and port
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT_AUTH || 5001; 
 
 // 2. Cấu hình CORS - Chấp nhận cả 5173 và 5174 để không bao giờ bị chặn nữa

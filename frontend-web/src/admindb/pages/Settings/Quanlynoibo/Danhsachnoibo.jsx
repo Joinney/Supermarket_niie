@@ -365,11 +365,31 @@ export default function Danhsachnoibo() {
                       </span>
                     </td>
                     <td className="py-4 px-4">
-                      <div className="flex flex-col">
-                        <span className="text-slate-700 font-bold">Vừa xong</span>
-                        <span className="text-[10px] text-gray-400 font-medium mt-0.5">Chrome (IP: 192.168.1)</span>
-                      </div>
-                    </td>
+  <div className="flex flex-col text-left">
+    {/* 1. Hiển thị thời gian login thực tế bốc từ CSDL Postgres */}
+    <span className="text-slate-700 font-bold">
+      {user.last_login ? (
+        (() => {
+          const d = new Date(user.last_login);
+          // Định dạng ngày giờ chuẩn Việt Nam dễ nhìn: Giờ:Phút Ngày/Tháng
+          return d.toLocaleString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            day: "2-digit",
+            month: "2-digit"
+          });
+        })()
+      ) : (
+        <span className="text-gray-400 font-normal italic">Chưa đăng nhập</span>
+      )}
+    </span>
+    
+    {/* 2. Hiển thị thông tin Trình duyệt & IP động được lưu từ Backend */}
+    <span className="text-[10px] text-gray-400 font-medium mt-0.5">
+      {user.last_login_device ? user.last_login_device : "Hệ thống Demi Mart"}
+    </span>
+  </div>
+</td>
                     <td className="py-4 px-6 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">
                         <button 
