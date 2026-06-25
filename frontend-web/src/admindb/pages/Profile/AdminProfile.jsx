@@ -7,6 +7,7 @@ export default function AdminProfile() {
     username: "",
     full_name: "",
     email: "",
+    avatar_url: null, // 🎯 THÊM: Quản lý biến đường dẫn ảnh đại diện
     role: "Staff",
     status: "Đang hoạt động"
   });
@@ -14,7 +15,7 @@ export default function AdminProfile() {
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
 
-useEffect(() => {
+  useEffect(() => {
     const raw = localStorage.getItem("adminInfo");
     if (raw) {
       try {
@@ -24,11 +25,12 @@ useEffect(() => {
           username: data.username || "",
           full_name: data.full_name || data.username || "",
           email: data.email || "",
+          avatar_url: data.avatar_url || null, // 🎯 THÊM: Đọc live trường ảnh từ LocalStorage
           role: data.role || "Staff",
           status: data.status === "inactive" ? "Tạm ngưng" : "Đang hoạt động"
         });
       } catch (e) {
-        console.error(e);
+        console.error("Lỗi parse cấu trúc dữ liệu Profile:", e);
       }
     }
   }, []);
@@ -38,7 +40,12 @@ useEffect(() => {
     setSaving(true);
     setTimeout(() => {
       // Lưu tạm đè vào LocalStorage để Header tự cập nhật theo
-      const updated = { ...JSON.parse(localStorage.getItem("adminInfo")), full_name: profile.full_name, email: profile.email };
+      const currentInfo = JSON.parse(localStorage.getItem("adminInfo") || '{}');
+      const updated = { 
+        ...currentInfo, 
+        full_name: profile.full_name, 
+        email: profile.email 
+      };
       localStorage.setItem("adminInfo", JSON.stringify(updated));
       setSaving(false);
       setSuccessMsg(true);
@@ -66,9 +73,20 @@ useEffect(() => {
         {/* Cột trái: Card Avatar */}
         <div className="md:col-span-1 flex flex-col items-center p-6 bg-white rounded-3xl border border-slate-100 shadow-sm text-center h-fit">
           <div className="relative group cursor-pointer mb-4">
-            <div className="w-28 h-28 rounded-full bg-[#006c49] text-white font-black flex items-center justify-center text-4xl shadow-lg ring-4 ring-emerald-50">
-              {profile.full_name.charAt(0).toUpperCase() || "A"}
-            </div>
+            
+            {/* 🎯 SỬA CHỖ NÀY: KIỂM TRA ĐIỀU KIỆN ẨN CHỮ CÁI, HIỆN ẢNH ĐẠI DIỆN LIVE */}
+            {profile.avatar_url ? (
+              <img 
+                src={profile.avatar_url} 
+                alt="Profile Avatar" 
+                className="w-28 h-28 rounded-full object-cover shadow-lg ring-4 ring-emerald-50"
+              />
+            ) : (
+              <div className="w-28 h-28 rounded-full bg-[#006c49] text-white font-black flex items-center justify-center text-4xl shadow-lg ring-4 ring-emerald-50">
+                {(profile.full_name || "A").charAt(0).toUpperCase()}
+              </div>
+            )}
+
             <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
               <Camera size={24} />
             </div>

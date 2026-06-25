@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client"; // 🎯 TÍNH HỢP KHÁCH HÀNG SOCKET ĐỂ LIVE AVATAR
 
 export default function Header() {
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   
-  // Đã khôi phục lại thuộc tính 'role' vào State
+  // Trạng thái lưu trữ dữ liệu Live của tài khoản
   const [adminData, setAdminData] = useState({
     full_name: "Quản trị viên",
     username: "admin",
@@ -15,6 +16,7 @@ export default function Header() {
     role: "Admin" 
   });
 
+  // 🎯 1. NẠP DỮ LIỆU BAN ĐẦU TỪ LOCALSTORAGE
   useEffect(() => {
     const info = localStorage.getItem("adminInfo");
     if (info) {
@@ -27,8 +29,51 @@ export default function Header() {
           role: parsed.role || "Admin"
         });
       } catch (e) {
-        console.error("Lỗi đọc thông tin Admin:", e);
+        console.error("Lỗi đọc thông tin Admin trên Header:", e);
       }
+    }
+  }, []);
+
+  // 🎯 2. REAL-TIME LISTENERS: CẬP NHẬT ẢNH VÀ THÔNG TIN LIVE KHI ADMIN SỬA TRÊN HỆ THỐNG
+  useEffect(() => {
+    const info = localStorage.getItem("adminInfo");
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!info && !storedUser) return;
+
+    try {
+      const parsedInfo = info ? JSON.parse(info) : {};
+      const currentUserId = parsedInfo.id || parsedInfo.user_id || storedUser.id || storedUser.user_id;
+      
+      if (!currentUserId) return;
+
+      const socketUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
+      const socket = io(socketUrl, { 
+        withCredentials: true,
+        transports: ['websocket', 'polling']
+      });
+
+      // Tham gia vào phòng real-time của chính mình
+      socket.emit('join_user_room', currentUserId);
+
+      // Lắng nghe tín hiệu ma trận hoặc hồ sơ cá nhân thay đổi live
+      socket.on('permission_matrix_changed', (newCustomPermissions) => {
+        // Đồng bộ lại UI bằng cách bốc lại dữ liệu LocalStorage mới vừa được Sidebar cập nhật nóng
+        const updatedInfo = localStorage.getItem("adminInfo");
+        if (updatedInfo) {
+          const parsed = JSON.parse(updatedInfo);
+          setAdminData(prev => ({
+            ...prev,
+            ...parsed,
+            status: parsed.status === "inactive" ? "Tạm ngưng" : "Đang hoạt động"
+          }));
+        }
+      });
+
+      return () => {
+        socket.disconnect();
+      };
+    } catch (err) {
+      console.error("Lỗi đồng bộ socket trên Header:", err);
     }
   }, []);
 
@@ -79,11 +124,12 @@ export default function Header() {
             onClick={() => setShowDropdown(!showDropdown)}
             className="flex items-center gap-2.5 cursor-pointer py-1 px-2 rounded-xl hover:bg-gray-50 transition-all duration-150 border border-transparent hover:border-gray-100"
           >
+            {/* ĐỒNG BỘ ẢNH ĐẠI DIỆN LIVE TỪ CLOUDINARY HOẶC TRẢ VỀ CHỮ CÁI NẾU NULL */}
             {adminData.avatar_url ? (
               <img 
                 src={adminData.avatar_url} 
                 alt="avatar" 
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-[#006c49]/20"
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-[#006c49]/20 shadow-sm"
               />
             ) : (
               <div className="w-8 h-8 rounded-full bg-[#006c49] text-white font-black flex items-center justify-center text-xs shadow-inner shrink-0">
@@ -117,7 +163,7 @@ export default function Header() {
             <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)}></div>
           )}
 
-          {/* BẢNG MENU w-48 */}
+          {/* BẢNG MENU DROPDOWN */}
           {showDropdown && (
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2.5 px-2 z-50 animate-fadeIn">
               
@@ -125,7 +171,6 @@ export default function Header() {
                 <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Signed in as</p>
                 <p className="text-xs font-black text-gray-900 truncate mt-0.5">{adminData.email || `${adminData.username}@demimart.com`}</p>
                 
-                {/* ĐÃ ĐỔI THÀNH ROLE VỚI TÔNG MÀU XANH DƯƠNG (SKY) TÁCH BIỆT VỚI MÀU STATUS */}
                 <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-100 max-w-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0"></span>
                   <span className="truncate">Role: {adminData.role}</span>
@@ -135,7 +180,7 @@ export default function Header() {
               {/* Nhóm chức năng */}
               <div className="space-y-0.5 pt-1 text-left">
                 
-                {/* 1. NÚT HỒ SƠ CÁ NHÂN (Ai đăng nhập vào cũng được xem) */}
+                {/* 1. NÚT HỒ SƠ CÁ NHÂN */}
                 <button 
                   onClick={() => { setShowDropdown(false); navigate('/admin/profile'); }} 
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition-colors text-left"
@@ -146,7 +191,7 @@ export default function Header() {
                   <span className="truncate">Hồ sơ cá nhân</span>
                 </button>
 
-                {/* 2. NÚT CÀI ĐẶT QUẢN TRỊ -> CHỈ DUY NHẤT 'Admin' MỚI ĐƯỢC RENDER */}
+                {/* 2. NÚT CÀI ĐẶT QUẢN TRỊ */}
                 {adminData.role === "Admin" && (
                   <button 
                     onClick={() => { setShowDropdown(false); navigate('/admin/authz/danhsachvaitro'); }} 
@@ -164,6 +209,7 @@ export default function Header() {
 
               <div className="h-[1px] bg-gray-100 my-1 mx-1"></div>
 
+              {/* ĐĂNG XUẤT */}
               <button 
                 onClick={handleLogout} 
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-black text-red-600 hover:bg-red-50 rounded-xl transition-all text-left"

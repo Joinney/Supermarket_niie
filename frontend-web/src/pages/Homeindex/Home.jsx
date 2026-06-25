@@ -114,6 +114,17 @@ export default function Home() {
     };
   }, [apiProducts, loading, error]);
 
+  // 🎯 HÀM TRUNG GIAN CHUẨN HOÁ BIẾN ĐỐI TƯỢNG HOẶC MẢNG AN TOÀN TRƯỚC KHI SLICE
+  const getCleanProductList = () => {
+    if (!apiProducts) return [];
+    if (Array.isArray(apiProducts)) return apiProducts;
+    if (apiProducts.data && Array.isArray(apiProducts.data)) return apiProducts.data;
+    if (apiProducts.products && Array.isArray(apiProducts.products)) return apiProducts.products;
+    return [];
+  };
+
+  const cleanProducts = getCleanProductList();
+
   return (
     <div className="space-y-12 pb-20 bg-[#fafbfc] font-sans pt-[10px] selection:bg-[#006c49] selection:text-white">
       
@@ -172,8 +183,8 @@ export default function Home() {
               </div>
             ))
           ) : (
-            apiProducts.slice(0, 6).map((p, idx) => (
-              <div key={p.ma_san_pham} className="min-w-[180px] md:min-w-[220px] bg-white border border-slate-100 rounded-[28px] p-3 hover:shadow-xl hover:border-slate-200/60 transition-all duration-300 relative group text-left flex flex-col justify-between">
+            cleanProducts.slice(0, 6).map((p, idx) => (
+              <div key={p.ma_san_pham || idx} className="min-w-[180px] md:min-w-[220px] bg-white border border-slate-100 rounded-[28px] p-3 hover:shadow-xl hover:border-slate-200/60 transition-all duration-300 relative group text-left flex flex-col justify-between">
                 <div className="absolute top-4 left-4 z-10 bg-red-500 text-white font-black text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wide shadow-sm">
                   -{20 + (idx * 5)}%
                 </div>
@@ -201,7 +212,7 @@ export default function Home() {
       {/* 3. SẢN PHẨM THỊNH HÀNH (SÁT SCREEN) */}
       <section className="px-6 md:px-10">
         <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <div className="w-1.5 h-6 bg-[#006c49] rounded-full"></div>
             <h2 className="text-2xl font-black text-[#161b22] tracking-tight uppercase">{t('favorites_title')}</h2>
           </div>
@@ -226,8 +237,8 @@ export default function Home() {
                 <button onClick={() => window.location.reload()} className="text-[#006c49] underline text-sm">Thử lại</button>
             </div>
           ) : (
-            apiProducts.map(p => (
-              <div key={p.ma_san_pham} className="min-w-[170px] md:min-w-[210px] transition-all duration-300 hover:-translate-y-1">
+            cleanProducts.map((p, idx) => (
+              <div key={p.ma_san_pham || idx} className="min-w-[170px] md:min-w-[210px] transition-all duration-300 hover:-translate-y-1">
                 <ProductCard p={p} />
               </div>
             ))
@@ -284,8 +295,8 @@ export default function Home() {
               <div key={i} className="aspect-[3/4] bg-slate-50 border border-slate-100 rounded-3xl animate-pulse"></div>
             ))
           ) : (
-            apiProducts.slice(0, 12).map(p => (
-              <div key={p.ma_san_pham} className="w-full bg-white rounded-[28px] border border-slate-100/80 p-1 hover:shadow-xl hover:border-slate-200/50 transition-all duration-300 hover:-translate-y-1">
+            cleanProducts.slice(0, 12).map((p, idx) => (
+              <div key={p.ma_san_pham || idx} className="w-full bg-white rounded-[28px] border border-slate-100/80 p-1 hover:shadow-xl hover:border-slate-200/50 transition-all duration-300 hover:-translate-y-1">
                 <ProductCard p={p} />
               </div>
             ))
@@ -356,7 +367,7 @@ export default function Home() {
               <div key={i} className="aspect-[3/4] bg-slate-50 border border-slate-100 rounded-[32px] animate-pulse"></div>
             ))
           ) : (
-            apiProducts.slice(0, 3).map((p, index) => {
+            cleanProducts.slice(0, 3).map((p, index) => {
               const medalColors = index === 0 
                 ? 'from-yellow-50/60 to-amber-100/30 border-yellow-200/70 shadow-yellow-100/40 shadow-xl' 
                 : index === 1 
@@ -365,7 +376,8 @@ export default function Home() {
 
               return (
                 <div 
-                  key={p.ma_san_pham} 
+                  network_id={p.ma_san_pham || index}
+                  key={p.ma_san_pham || index} 
                   className={`bg-gradient-to-b ${medalColors} border rounded-[36px] p-4 relative transition-all duration-300 hover:shadow-2xl hover:-translate-y-1.5 group text-left`}
                 >
                   {/* Huy hiệu xếp hạng tinh xảo */}

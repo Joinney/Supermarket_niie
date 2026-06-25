@@ -4,13 +4,16 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# 🎯 ÉP BUỘC DOCKER CÀI ĐẶT THƯ VIỆN CLIENT TRONG MÔI TRƯỜNG DOCKER
-RUN npm install socket.io-client --save
+# Cài đặt toàn bộ thư viện nền tảng trong container
 RUN npm install
+
+# Ép buộc cài đặt socket.io-client trực tiếp vào môi trường container
+RUN npm install socket.io-client --save
 
 COPY . .
 
 EXPOSE 5173
 
-# Chạy thẳng dev server của Vite
-CMD ["npm", "run", "dev"]
+# 🌟 GIẢI PHÁP TỰ ĐỘNG HÓA HOÀN TOÀN:
+
+CMD ["sh", "-c", "npm install && npm run dev"]
