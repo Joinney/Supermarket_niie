@@ -150,10 +150,45 @@ export default function Danhsachnoibo() {
     setRolePermissions(prev => prev.map(item => (item.id === moduleId ? { ...item, [field]: !item[field] } : item)));
   };
 
-  const handleSavePermissions = () => {
-    alert(`Đã lưu thiết lập phân quyền chi tiết cho nhân sự: ${selectedUser?.name}`);
-    setIsPermissionModalOpen(false);
-  };
+  const handleSavePermissions = async () => {
+  try {
+    const apiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
+    const targetId = selectedUser?.user_id || selectedUser?.id;
+
+    if (!targetId) {
+      alert("Lỗi: Không tìm thấy ID nhân sự để thực hiện lưu phân quyền.");
+      return;
+    }
+
+    const payload = {
+      role: selectedUser.role,
+      fullName: selectedUser.name,
+      avatarUrl: selectedUser.avatar_url,
+      custom_permissions: rolePermissions // Mảng quyền mới bạn vừa chỉnh sửa trên giao diện
+    };
+
+    const response = await axios.put(`${apiUrl}/api/auth/internal/users/${targetId}`, payload);
+    
+    if (response.status === 200 || response.data.success) {
+      alert(`Hệ thống Demi Mart: Đã đồng bộ lưu ma trận phân quyền mới cho ${selectedUser.name} thành công!`);
+      
+      // 🎯 LIVE ĐỒNG BỘ: Cập nhật trực tiếp ma trận quyền vừa lưu vào mảng State users hiện tại
+      // Điều này ép React Re-render và lưu giữ trạng thái mới ngay lập tức mà không cần nạp lại từ đầu
+      setUsers(prevUsers => 
+        prevUsers.map(u => 
+          u.user_id === targetId 
+            ? { ...u, custom_permissions: response.data.data.custom_permissions } 
+            : u
+        )
+      );
+
+      setIsPermissionModalOpen(false); // Đóng modal an toàn
+    }
+  } catch (err) {
+    console.error("❌ Lỗi kích hoạt gửi ma trận quyền:", err);
+    alert("Không thể truyền gói tin lưu phân quyền xuống Database. Vui lòng kiểm tra lại CORS.");
+  }
+};
 
   const handleCreateAccount = async (e) => {
     e.preventDefault();
@@ -168,7 +203,7 @@ export default function Danhsachnoibo() {
         password: formData.password,
         ho_ten: formData.fullName,
         username: formData.email.split("@")[0],
-        role: rawRole === "STAFF" ? "Staff" : rawRole === "MANAGER" ? "Manager" : "Admin",
+        role: rawRole, 
         address: formData.department || "Hệ thống Demi Mart",
         status: "active"
       };
@@ -314,9 +349,24 @@ export default function Danhsachnoibo() {
                       <div className="flex items-center justify-center gap-2">
                         <button 
                           onClick={() => { 
-                            setSelectedUser({ name: user.full_name, role: roleMeta.label, avatar_url: user.avatar_url }); 
+                            setSelectedUser({ 
+                              user_id: user.user_id, 
+                              name: user.full_name, 
+                              role: roleMeta.label, 
+                              avatar_url: user.avatar_url 
+                            }); 
                             setIsPermissionModalOpen(true); 
-                            handleApplyPreset(user.role);
+                            
+                            // 🎯 LIVE ĐỒNG BỘ: Đọc dữ liệu custom_permissions thực tế bốc từ Postgres
+                            if (user.custom_permissions) {
+                              setRolePermissions(
+                                typeof user.custom_permissions === "string" 
+                                  ? JSON.parse(user.custom_permissions) 
+                                  : user.custom_permissions
+                              );
+                            } else {
+                              handleApplyPreset(user.role);
+                            }
                           }} 
                           className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition"
                           title="Phân quyền chi tiết"
@@ -324,7 +374,6 @@ export default function Danhsachnoibo() {
                           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
                         </button>
                         
-                        {/* 🎯 Giao diện dẫn trực tiếp sang trang chi tiết chuẩn mã số */}
                         <button 
                           onClick={() => navigate(`/admin/settings/quanlynoibo/chitietnoibo/${user.user_id}`)}
                           className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition"
