@@ -153,3 +153,100 @@ export const logout = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+
+// 1. API: Lấy toàn bộ danh sách users sắp xếp tăng dần
+export const getAllInternalUsers = async (req, res) => {
+    try {
+        // CẬP NHẬT: Thêm điều kiện WHERE để lọc sạch role Buyer ra khỏi danh sách nội bộ
+        const query = `
+            SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url 
+            FROM public.users 
+            WHERE LOWER(role) <> 'buyer'
+            ORDER BY user_id ASC;
+        `;
+        const { rows } = await pool.query(query);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error("❌ Lỗi CSDL tại getAllInternalUsers:", error.message);
+        res.status(500).json({ success: false, error: "Lỗi kết nối CSDL khi lấy danh sách" });
+    }
+};
+
+// 2. API: Lấy chi tiết 1 user phục vụ trang Chi tiết
+export const getUserDetail = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = `SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url FROM public.users WHERE user_id = $1;`;
+        const { rows } = await pool.query(query, [id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy user" });
+        res.status(200).json(rows[0]);
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Lỗi lấy chi tiết nhân sự" });
+    }
+};
+
+// API: Lấy danh sách những nhân sự có cùng vai trò (Role)
+export const getUserRoleGroup = async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Tìm những user có cùng role với user hiện tại (và loại trừ chính user hiện tại ra)
+        const query = `
+            SELECT user_id, username, email, full_name, address, role, avatar_url 
+            FROM public.users 
+            WHERE role = (SELECT role FROM public.users WHERE user_id = $1)
+              AND user_id <> $1;
+        `;
+        const { rows } = await pool.query(query, [id]);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error("❌ Lỗi tại getUserRoleGroup:", error.message);
+        res.status(500).json({ success: false, error: "Lỗi lấy danh sách nhóm quyền" });
+    }
+};
+
+// API: Cập nhật thông tin nhân sự và ma trận quyền chi tiết xuống PostgreSQL
+export const updateUserDetail = async (req, res) => {
+    const { id } = req.params;
+    const { full_name, phone_number, address, gender, birthday, role, status, avatar_url, custom_permissions } = req.body;
+
+    try {
+        const query = `
+            UPDATE public.users
+            SET 
+                full_name = $1,
+                phone_number = $2,
+                address = $3,
+                gender = $4,
+                birthday = $5,
+                role = $6,
+                status = $7,
+                avatar_url = $8,
+                custom_permissions = $9 -- Lưu mảng quyền trực tiếp dưới dạng JSONB nếu cột CSDL có hỗ trợ
+            WHERE user_id = $10
+            RETURNING user_id, username, email, full_name, role, status;
+        `;
+        
+        const { rows } = await pool.query(query, [
+            full_name,
+            phone_number,
+            address,
+            gender,
+            birthday || null,
+            role,
+            status,
+            avatar_url,
+            JSON.stringify(custom_permissions),
+            id
+        ]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy user_id tương ứng để cập nhật!" });
+        }
+
+        res.status(200).json({ success: true, message: "Cập nhật PostgreSQL thành công!", data: rows[0] });
+    } catch (error) {
+        console.error("❌ Lỗi tại updateUserDetail:", error.message);
+        res.status(500).json({ success: false, error: "Lỗi hệ thống khi ghi đè dữ liệu xuống Postgres." });
+    }
+};

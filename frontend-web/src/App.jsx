@@ -40,6 +40,7 @@ import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang";
 import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
 import Danhsachsanpham from "./admindb/pages/Products/Danhsachsanpham";
 import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
+import AdminProductDetail from "./admindb/pages/Products/ProductDetail";
 
 // --- IMPORTS KHÁCH HÀNG - NHÓM KHÁCH HÀNG - LOẠI KHÁCH HÀNG (ĐÃ SỬA CHÍNH TẢ) ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
@@ -445,6 +446,7 @@ const AppRoutes = () => (
       <Route path="products">
         <Route index element={<Navigate to="Danhsachsanpham" replace />} />
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
+        <Route path="detail/:id" element={<AdminProductDetail />} />
       </Route>
 
       <Route path="Donhang">
@@ -482,7 +484,12 @@ const AppRoutes = () => (
         </Route>
       </Route>
     </Route>
+<<<<<<< HEAD
 
+=======
+    <Route path="/admin/settings/quanlynoibo/chitietnoibo/:id" element={<Chitietnoibo />} />
+    {/* Điều hướng dự phòng */}
+>>>>>>> 0c6d90261571ae894e49d951533a2dffd683a084
     <Route path="/admin/*" element={<Navigate to="/admin/login" replace />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

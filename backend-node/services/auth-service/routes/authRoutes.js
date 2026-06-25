@@ -1,5 +1,5 @@
 import express from 'express';
-import { signup, signin, logout, refreshToken } from '../controllers/authController.js';
+import { signup, signin, logout, refreshToken, getAllInternalUsers, getUserDetail, getUserRoleGroup, updateUserDetail } from '../controllers/authController.js';
 
 const router = express.Router();
 
@@ -109,5 +109,8 @@ router.post('/logout', logout);
  *         description: Cấp Access Token mới thành công
  */
 router.post('/refresh-token', refreshToken);
-
+router.get('/internal/users', getAllInternalUsers);
+router.get('/internal/users/role-group/:id', getUserRoleGroup);
+router.get('/internal/users/:id', getUserDetail);
+router.put('/internal/users/:id', updateUserDetail);
 export default router;

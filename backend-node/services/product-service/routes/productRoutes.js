@@ -11,9 +11,8 @@ import {
     getProductsWithoutDescriptions,
     refreshEmptyDescriptions,
     createProduct,
-    getReviewsByProduct,
-    getRelatedProducts,
-    getAllCountries
+    getAllCountries,
+
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -305,7 +304,7 @@ router.post('/', createProduct);
  *       200:
  *         description: Trả về summary và danh sách đánh giá
  */
-router.get('/:id/reviews', getReviewsByProduct);
+//router.get('/:id/reviews', getReviewsByProduct);
 
 /**
  * @swagger
@@ -334,7 +333,7 @@ router.get('/:id/reviews', getReviewsByProduct);
  *       200:
  *         description: Trả về danh sách sản phẩm liên quan
  */
-router.get('/:id/related', getRelatedProducts);
+//router.get('/:id/related', getRelatedProducts);
 
 /**
  * @swagger

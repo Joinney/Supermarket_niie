@@ -13,7 +13,17 @@ const createInstance = (baseURL) => {
             token = token.replace(/^"|"$/g, '');
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // 🚀 KHẮC PHỤC LỖI "typer.test is not a function" TẠI ĐÂY:
+        // Đảm bảo Content-Type luôn là chuỗi nguyên bản (string), tránh bị ghi đè thành Object 
+        // hoặc bị biến dạng khi kết hợp với một số thư viện hook hoặc multipart form khác.
+        if (config.data && !(config.data instanceof FormData)) {
+            config.headers['Content-Type'] = 'application/json';
+        }
+
         return config;
+    }, (error) => {
+        return Promise.reject(error);
     });
 
     // --- INTERCEPTOR RESPONSE: Xử lý kết quả và chặn đứng lỗi đá văng ---
@@ -95,7 +105,7 @@ export const orderApi = createInstance(
     isLocal ? 'http://localhost:5005/api' : 'https://orderservice-url.onrender.com/api'
 );
 
-// ✨ BỔ SUNG: Khởi tạo paymentApi kết nối đến cổng 5004 của Ruby service mới tách
+// ✨ BỔ SUNG: Cổng kết nối đến cổng 5004 của Ruby service
 export const paymentApi = createInstance(
     isLocal ? 'http://localhost:5004/api' : 'https://paymentservice-url.onrender.com/api'
 );

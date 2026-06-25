@@ -218,4 +218,81 @@ const updateInternalOrderStatus = async (req, res) => {
   }
 };
 
-export { getShippingFee, placeOrder, updateInternalOrderStatus };
+// ========================================================
+// 📊 CONTROLLER 4: THỐNG KÊ ĐƠN HÀNG CHO ADMIN DASHBOARD
+// ========================================================
+const getOrderStatistics = async (req, res) => {
+  try {
+    // 1. Kiểm tra an ninh: Chỉ Admin, Manager, Staff mới được xem
+    if (!req.user || !['Admin', 'Manager', 'Staff'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập dữ liệu thống kê!" });
+    }
+
+    // 2. Chạy song song 4 câu truy vấn SQL để tối ưu tốc độ phản hồi (Non-blocking)
+    const queryTotal = `SELECT COUNT(*) as total FROM public.orders`;
+    const queryDelivered = `SELECT COUNT(*) as delivered FROM public.orders WHERE status = 'Đã giao' OR trang_thai_thanh_toan = 'COMPLETED'`;
+    const queryPending = `SELECT COUNT(*) as pending FROM public.orders WHERE status = 'Chờ xử lý' OR status IS NULL`;
+    const queryToday = `SELECT COUNT(*) as today FROM public.orders WHERE created_at >= CURRENT_DATE`;
+    const queryRevenue = `SELECT SUM(tong_thanh_toan) as revenue FROM public.orders WHERE trang_thai_thanh_toan = 'COMPLETED' OR status = 'Đã giao'`;
+    const queryAvg = `SELECT AVG(tong_thanh_toan) as avg_val FROM public.orders WHERE tong_thanh_toan > 0`;
+    
+    // Lấy 10 đơn hàng mới nhất
+    const queryRecent = `
+      SELECT ma_don_hang, tong_thanh_toan, COALESCE(status, 'Chờ xử lý') as status, TO_CHAR(created_at, 'DD/MM/YYYY') as date
+      FROM public.orders 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+
+    // Thực thi query thông qua helper db hiện có của bạn
+    const executeSql = async (sql) => {
+      const res = db.query ? await db.query(sql) : await db.execute(sql);
+      return res.rows ? res.rows : res;
+    };
+
+    const [totRes, delRes, penRes, todRes, revRes, avgRes, recRes] = await Promise.all([
+      executeSql(queryTotal),
+      executeSql(queryDelivered),
+      executeSql(queryPending),
+      executeSql(queryToday),
+      executeSql(queryRevenue),
+      executeSql(queryAvg),
+      executeSql(queryRecent)
+    ]);
+
+    // Format an toàn các con số trả về Frontend
+    const totalOrders = Number(totRes[0]?.total || 0);
+    const deliveredOrders = Number(delRes[0]?.delivered || 0);
+    const pendingOrders = Number(penRes[0]?.pending || 0);
+    const todayOrders = Number(todRes[0]?.today || 0);
+    const totalRevenue = Number(revRes[0]?.revenue || 0);
+    const avgOrderValue = Number(avgRes[0]?.avg_val || 0);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        overview: {
+          total_orders: totalOrders,
+          delivered_orders: deliveredOrders,
+          pending_orders: pendingOrders,
+          today_orders: todayOrders,
+          total_revenue: totalRevenue,
+          avg_order_value: avgOrderValue
+        },
+        recent_orders: recRes.map(item => ({
+          id: item.ma_don_hang || "DH-N/A",
+          customer: "Khách hàng Demi", // Giấu hoặc join bảng users nếu cần
+          date: item.date,
+          total: Number(item.tong_thanh_toan).toLocaleString('vi-VN') + ' đ',
+          status: item.status
+        }))
+      }
+    });
+
+  } catch (err) {
+    console.error("🔥 [LỖI TRÍCH XUẤT THỐNG KÊ]:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi trích xuất số liệu thống kê!" });
+  }
+};
+
+export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics };
