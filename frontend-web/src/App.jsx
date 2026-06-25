@@ -43,6 +43,7 @@ import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
 import AdminProductDetail from "./admindb/pages/Products/ProductDetail";
 import AdminVariantDetail from "./admindb/pages/products/VariantDetail";
 import AdminCreateVariant from "./admindb/pages/Products/CreateVariant";
+import ProductCreate from "./admindb/pages/Products/ProductCreate";
 
 // --- IMPORTS KHÁCH HÀNG - NHÓM KHÁCH HÀNG - LOẠI KHÁCH HÀNG (ĐÃ SỬA CHÍNH TẢ) ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
@@ -447,10 +448,14 @@ const AppRoutes = () => (
 
       <Route path="products">
         <Route index element={<Navigate to="Danhsachsanpham" replace />} />
+        {/* Route tạo sản phẩm mới bắt buộc phải khớp với mã navigate */}
+        <Route path="/admin/products/create" element={<ProductCreate />} />
+        
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
         <Route path="detail/:id" element={<AdminProductDetail />} />
         <Route path="variant-detail/:variantId" element={<AdminVariantDetail />} />
         <Route path="create-variant/:id" element={<AdminCreateVariant />} />
+
       </Route>
 
       <Route path="Donhang">

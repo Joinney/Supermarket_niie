@@ -61,12 +61,25 @@ export const getInternalVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME) - Lọc chuẩn theo quốc gia trực tiếp
+// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Phân trang chuẩn hóa
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         const countryCode = (req.query.country || 'VN').toUpperCase(); 
+
+        const countQuery = `
+            SELECT COUNT(*) as total 
+            FROM public.san_pham sp
+            INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+            WHERE sp.trang_thai = true 
+              AND dmc.trang_thai = true
+              AND UPPER(sp.ma_quoc_gia) = $1;
+        `;
+        const { rows: countResult } = await pool.query(countQuery, [countryCode]);
+        const totalItems = parseInt(countResult[0]?.total || 0);
+        const totalPages = Math.ceil(totalItems / limit);
 
         const query = `
             SELECT 
@@ -84,7 +97,13 @@ export const getAllProducts = async (req, res) => {
         `;
 
         const { rows: products } = await pool.query(query, [countryCode, limit, offset]);
-        res.status(200).json(products);
+
+        res.status(200).json({
+            products,
+            totalPages,
+            currentPage: page,
+            totalItems
+        });
     } catch (error) {
         console.error("❌ Lỗi API getAllProducts:", error.message);
         res.status(500).json({ error: "Không thể lấy danh sách sản phẩm trang chủ." });
@@ -161,7 +180,6 @@ export const getProductById = async (req, res) => {
     const countryCode = (req.query.country || 'VN').toUpperCase();
 
     try {
-        // QUERY 1: Lấy thông tin gốc của sản phẩm
         const productQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
@@ -178,7 +196,6 @@ export const getProductById = async (req, res) => {
 
         const product = productResult.rows[0];
 
-        // QUERY 2: Lấy danh sách biến thể kèm thuộc tính phẳng & tên đơn vị chuẩn từ don_vi_san_pham
         const variantsQuery = `
             SELECT 
                 bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le,
@@ -193,7 +210,6 @@ export const getProductById = async (req, res) => {
         `;
         const variantsResult = await pool.query(variantsQuery, [id]);
 
-        // Xử lý gom nhóm dữ liệu bằng JS
         const variantsMap = {};
         const attributesRaw = {};
 
@@ -226,7 +242,6 @@ export const getProductById = async (req, res) => {
             gia_tri_khadung: Array.from(attributesRaw[ten])
         }));
 
-        // QUERY 3: Lấy danh sách media của sản phẩm
         const mediaQuery = `
             SELECT ma_media, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, thoi_luong_video
             FROM public.media_san_pham
@@ -728,7 +743,6 @@ export const getVariantById = async (req, res) => {
             });
         }
 
-        // 🌟 ĐÃ LƯỢC BỎ HẾT CÁC CỘT GÂY XUNG ĐỘT (gia_khuyen_mai, so_luong_ton)
         const query = `
             SELECT 
                 bt.ma_bien_the, 
@@ -745,7 +759,6 @@ export const getVariantById = async (req, res) => {
 
         const { rows } = await pool.query(query, [variantId]);
 
-        // Nếu mã BT001 không tồn tại trong bảng (do dữ liệu trống)
         if (rows.length === 0) {
             return res.status(200).json({
                 ma_bien_the: variantId,
@@ -767,15 +780,13 @@ export const getVariantById = async (req, res) => {
 
         const variantData = rows[0];
 
-        // 🌟 Định nghĩa các trường giả lập mượt mà ở tầng JS để khớp 100% với giao diện Admin chi tiết
         variantData.gia_khuyen_mai = 0; 
-        variantData.so_luong_ton = 150; // Trả về số lượng tồn cố định tránh lỗi sập DB
+        variantData.so_luong_ton = 150; 
         variantData.ten_don_vi = "Chai";
         variantData.ten_san_pham = "Trà Đông Trai Cozy";
         variantData.duong_dan_url = "https://placehold.co/400x400?text=Demi+Mart";
         variantData.thuoc_tinh_hop_nhat = [];
 
-        // TRUY VẤN PHỤ LẤY MA TRẬN THUỘC TÍNH (EAV MATRIX)
         try {
             const attrQuery = `
                 SELECT dmtt.ten_thuoc_tinh, gttt.gia_tri
@@ -801,42 +812,52 @@ export const getVariantById = async (req, res) => {
         });
     }
 };
+
 // =========================================================================
-// 15. TẠO BIẾN THỂ MỚI VÀ ĐẤU NỐI MA TRẬN THUỘC TÍNH (EAV MAPPING)
+// 15. TẠO BIẾN THỂ MỚI VÀ ĐẤU NỐI MA TRẬN THUỘC TÍNH (EAV MAPPING) - HOÀN CHỈNH
 // =========================================================================
 export const createVariant = async (req, res) => {
-    const client = await pool.connect(); // Sử dụng client riêng để chạy Transaction
+    const client = await pool.connect(); 
     try {
-        const { id } = req.params; // ma_san_pham từ URL
-        const { ten_bien_the, sku, gia_ban_le, so_luong_ton, ten_don_vi, thuoc_tinh } = req.body;
+        const { id } = req.params; 
+        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url } = req.body;
 
         if (!sku || !gia_ban_le) {
             return res.status(400).json({ success: false, message: "Mã SKU và Giá bán lẻ không được để trống." });
         }
 
-        // BẮT ĐẦU TRANSACTION
         await client.query('BEGIN');
 
-        // Bước 1: Khởi tạo mã biến thể mới tự động (Sinh mã dạng BT000...)
         const countRes = await client.query('SELECT COUNT(*) FROM public.bien_the_san_pham');
         const nextIdNum = parseInt(countRes.rows[0].count) + 1;
         const ma_bien_the_moi = `BT${String(nextIdNum).padStart(3, '0')}`;
 
-        // Bước 2: Chèn thông tin biến thể vào bảng chính
         const insertVariantQuery = `
-            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, trang_thai)
-            VALUES ($1, $2, $3, $4, $5, 'active')
+            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
             RETURNING *;
         `;
         const variantResult = await client.query(insertVariantQuery, [
-            ma_bien_the_moi, id, ten_bien_the, sku, gia_ban_le
+            ma_bien_the_moi, id, ten_bien_the || `Phiên bản mới ${sku}`, sku, gia_ban_le
         ]);
 
-        // Bước 3: Đấu nối Ma trận EAV (thuoc_tinh gửi lên dạng: {"Vị": "Ô long xoài", "Dung tích": "450ml"})
+        // LƯU ẢNH MINH HỌA RIÊNG CỦA BIẾN THỂ VÀO BẢNG public.media_san_pham
+        if (hinh_anh_url && hinh_anh_url.trim() !== '') {
+            const mediaCountRes = await client.query('SELECT COUNT(*) FROM public.media_san_pham');
+            const nextMediaNum = parseInt(mediaCountRes.rows[0].count) + 1;
+            const ma_media_moi = `MED${String(nextMediaNum).padStart(3, '0')}`;
+
+            const insertMediaQuery = `
+                INSERT INTO public.media_san_pham (ma_media, ma_san_pham, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, trang_thai, ngay_tao)
+                VALUES ($1, $2, $3, $4, false, 'image', true, NOW());
+            `;
+            await client.query(insertMediaQuery, [ma_media_moi, id, ma_bien_the_moi, hinh_anh_url]);
+        }
+
         if (thuoc_tinh && typeof thuoc_tinh === 'object') {
             for (const [ten_thuoc_tinh, gia_tri] of Object.entries(thuoc_tinh)) {
-                
-                // 3.1 Lấy ma_thuoc_tinh từ danh mục có sẵn (Ví dụ: "Vị" -> ATT001)
+                if (!gia_tri) continue;
+
                 const attrRes = await client.query(
                     `SELECT ma_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE ten_thuoc_tinh = $1`,
                     [ten_thuoc_tinh]
@@ -845,7 +866,6 @@ export const createVariant = async (req, res) => {
                 if (attrRes.rows.length > 0) {
                     const ma_thuoc_tinh = attrRes.rows[0].ma_thuoc_tinh;
 
-                    // 3.2 Tìm xem giá trị này đã tồn tại chưa, nếu chưa thì INSERT mới vào bảng gia_tri_thuoc_tinh
                     let valueRes = await client.query(
                         `SELECT ma_gia_tri FROM public.gia_tri_thuoc_tinh WHERE ma_thuoc_tinh = $1 AND gia_tri = $2`,
                         [ma_thuoc_tinh, gia_tri]
@@ -853,7 +873,6 @@ export const createVariant = async (req, res) => {
 
                     let ma_gia_tri;
                     if (valueRes.rows.length === 0) {
-                        // Sinh mã giá trị mới (Ví dụ: VAL001...)
                         const valCount = await client.query('SELECT COUNT(*) FROM public.gia_tri_thuoc_tinh');
                         const nextValNum = parseInt(valCount.rows[0].count) + 1;
                         ma_gia_tri = `VAL${String(nextValNum).padStart(3, '0')}`;
@@ -866,17 +885,15 @@ export const createVariant = async (req, res) => {
                         ma_gia_tri = valueRes.rows[0].ma_gia_tri;
                     }
 
-                    // 3.3 Đấu nối bản ghi liên kết vào bảng chi_tiet_bien_the_thuoc_tinh
                     await client.query(
                         `INSERT INTO public.chi_tiet_bien_the_thuoc_tinh (ma_bien_the, ma_gia_tri) VALUES ($1, $2)
-                         ON CONFLICT DO NOTHING`, // Tránh lỗi nếu bấm gửi trùng lặp
+                         ON CONFLICT DO NOTHING`,
                         [ma_bien_the_moi, ma_gia_tri]
                     );
                 }
             }
         }
 
-        // HOÀN THÀNH TOÀN BỘ CÁC BƯỚC AN TOÀN
         await client.query('COMMIT');
 
         return res.status(201).json({
@@ -886,20 +903,185 @@ export const createVariant = async (req, res) => {
         });
 
     } catch (error) {
-        // NẾU CÓ BẤT KỲ LỖI GÌ -> ROLLBACK LẠI TOÀN BỘ DB VỀ TRẠNG THÁI CŨ
         await client.query('ROLLBACK');
         console.error('❌ Lỗi hệ thống trong quá trình map EAV:', error.message);
         return res.status(500).json({
             success: false,
-            message: "Không thể lưu biến thể do lỗi cấu trúc hoặc trùng lạp SKU.",
+            message: "Không thể lưu biến thể do lỗi cấu trúc hoặc trùng lặp mã SKU.",
             error_detail: error.message
         });
     } finally {
-        client.release(); // Giải phóng connection trả lại cho pool
+        client.release(); 
     }
 };
+
 // =========================================================================
-// 16. LẤY TOÀN BỘ DANH MỤC THUỘC TÍNH VÀ GIÁ TRỊ KHẢ DỤNG (CHO FORM MA TRẬN TẠO BIẾN THỂ)
+// 15.2 CẬP NHẬT BIẾN THỂ VÀ MA TRẬN THUỘC TÍNH (EAV UPDATE MAPPING) - HOÀN CHỈNH
+// =========================================================================
+export const updateVariant = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { variantId } = req.params;
+        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url } = req.body;
+
+        if (!sku || !gia_ban_le) {
+            return res.status(400).json({ success: false, message: "Mã SKU và Giá bán lẻ không được để trống." });
+        }
+
+        await client.query('BEGIN');
+
+        // 1. Cập nhật bảng chính public.bien_the_san_pham
+        const updateVariantQuery = `
+            UPDATE public.bien_the_san_pham 
+            SET ten_bien_the = $1, sku = $2, gia_ban_le = $3, ngay_cap_nhat = NOW()
+            WHERE ma_bien_the = $4
+            RETURNING *;
+        `;
+        const variantResult = await client.query(updateVariantQuery, [
+            ten_bien_the, sku, gia_ban_le, variantId
+        ]);
+
+        if (variantResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: 'Không tìm thấy biến thể để cập nhật.' });
+        }
+
+        const ma_san_pham = variantResult.rows[0].ma_san_pham;
+
+        // 2. Cập nhật hoặc lưu mới ảnh minh họa riêng của biến thể vào bảng public.media_san_pham
+        if (hinh_anh_url && hinh_anh_url.trim() !== '') {
+            const mediaCheck = await client.query(
+                `SELECT ma_media FROM public.media_san_pham WHERE ma_bien_the = $1 AND trang_thai = true LIMIT 1`,
+                [variantId]
+            );
+
+            if (mediaCheck.rows.length > 0) {
+                await client.query(
+                    `UPDATE public.media_san_pham SET duong_dan_url = $1, ngay_cap_nhat = NOW() WHERE ma_media = $2`,
+                    [hinh_anh_url, mediaCheck.rows[0].ma_media]
+                );
+            } else {
+                const mediaCountRes = await client.query('SELECT COUNT(*) FROM public.media_san_pham');
+                const nextMediaNum = parseInt(mediaCountRes.rows[0].count) + 1;
+                const ma_media_moi = `MED${String(nextMediaNum).padStart(3, '0')}`;
+
+                const insertMediaQuery = `
+                    INSERT INTO public.media_san_pham (ma_media, ma_san_pham, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, trang_thai, ngay_tao)
+                    VALUES ($1, $2, $3, $4, false, 'image', true, NOW());
+                `;
+                await client.query(insertMediaQuery, [ma_media_moi, ma_san_pham, variantId, hinh_anh_url]);
+            }
+        }
+
+        // 3. Đấu nối lại Ma trận EAV (Xóa liên kết thuộc tính cũ của biến thể và ghi nhận cái mới)
+        if (thuoc_tinh && typeof thuoc_tinh === 'object') {
+            await client.query(
+                `DELETE FROM public.chi_tiet_bien_the_thuoc_tinh WHERE ma_bien_the = $1`,
+                [variantId]
+            );
+
+            for (const [ten_thuoc_tinh, gia_tri] of Object.entries(thuoc_tinh)) {
+                if (!gia_tri) continue;
+
+                const attrRes = await client.query(
+                    `SELECT ma_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE ten_thuoc_tinh = $1`,
+                    [ten_thuoc_tinh]
+                );
+
+                if (attrRes.rows.length > 0) {
+                    const ma_thuoc_tinh = attrRes.rows[0].ma_thuoc_tinh;
+
+                    let valueRes = await client.query(
+                        `SELECT ma_gia_tri FROM public.gia_tri_thuoc_tinh WHERE ma_thuoc_tinh = $1 AND gia_tri = $2`,
+                        [ma_thuoc_tinh, gia_tri]
+                    );
+
+                    let ma_gia_tri;
+                    if (valueRes.rows.length === 0) {
+                        const valCount = await client.query('SELECT COUNT(*) FROM public.gia_tri_thuoc_tinh');
+                        const nextValNum = parseInt(valCount.rows[0].count) + 1;
+                        ma_gia_tri = `VAL${String(nextValNum).padStart(3, '0')}`;
+
+                        await client.query(
+                            `INSERT INTO public.gia_tri_thuoc_tinh (ma_gia_tri, ma_thuoc_tinh, gia_tri) VALUES ($1, $2, $3)`,
+                            [ma_gia_tri, ma_thuoc_tinh, gia_tri]
+                        );
+                    } else {
+                        ma_gia_tri = valueRes.rows[0].ma_gia_tri;
+                    }
+
+                    await client.query(
+                        `INSERT INTO public.chi_tiet_bien_the_thuoc_tinh (ma_bien_the, ma_gia_tri) VALUES ($1, $2)
+                         ON CONFLICT DO NOTHING`,
+                        [variantId, ma_gia_tri]
+                    );
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+            success: true,
+            message: "Cập nhật biến thể và map ma trận EAV thành công!",
+            data: variantResult.rows[0]
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi hệ thống trong quá trình cập nhật EAV:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Không thể cập nhật biến thể do lỗi cấu trúc hoặc trùng lặp mã SKU.",
+            error_detail: error.message
+        });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================================
+// 15.5 XÓA BIẾN THỂ (SOFT DELETE ĐỂ BẢO TOÀN LỊCH SỬ ĐƠN HÀNG)
+// =========================================================================
+export const deleteVariant = async (req, res) => {
+    try {
+        const { variantId } = req.params; 
+
+        if (!variantId) {
+            return res.status(400).json({ success: false, message: 'Mã ID biến thể không được trống.' });
+        }
+
+        const query = `
+            UPDATE public.bien_the_san_pham 
+            SET trang_thai = false, ngay_cap_nhat = NOW() 
+            WHERE ma_bien_the = $1 
+            RETURNING *;
+        `;
+
+        const { rows } = await pool.query(query, [variantId]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy biến thể sản phẩm yêu cầu.' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Xóa biến thể ${variantId} thành công (Đã chuyển trạng thái lưu trữ).`,
+            data: rows[0]
+        });
+
+    } catch (error) {
+        console.error('❌ Lỗi API deleteVariant:', error.message);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Sự cố máy chủ khi thực thi xóa biến thể sản phẩm.',
+            error_detail: error.message 
+        });
+    }
+};
+
+// =========================================================================
+// 16. LẤY TOÀN BỘ DANH MỤC THUỘC TÍNH VÀ GIÁ TRỊ KHẢ DỤNG (CHO FORM MA TRẬN)
 // =========================================================================
 export const getAllAvailableAttributes = async (req, res) => {
     try {
@@ -916,12 +1098,11 @@ export const getAllAvailableAttributes = async (req, res) => {
         
         const { rows } = await pool.query(query);
         
-        // Chuẩn hóa cấu trúc để khớp với State có sẵn ở Frontend của Demi
         const formattedAttributes = rows.map(row => ({
             id: row.id,
             name: row.name,
-            values: [...new Set(row.values)], // Loại bỏ các giá trị trùng lặp nếu có trong DB
-            selected: row.values[0] || "" // Tự động chọn giá trị đầu tiên làm mặc định
+            values: [...new Set(row.values)], 
+            selected: row.values[0] || "" 
         }));
 
         res.status(200).json(formattedAttributes);
@@ -932,69 +1113,53 @@ export const getAllAvailableAttributes = async (req, res) => {
 };
 
 // =========================================================================
-// 17. XỬ LÝ UPLOAD ẢNH BIẾN THỂ LÊN CLOUDINARY & ĐẤU NỐI DATABASE
+// 17. TẠO THUỘC TÍNH MỚI (LƯU TÊN NHÓM THUỘC TÍNH MỚI KHI CLICK TẠO TRỰC TIẾP)
 // =========================================================================
-export const uploadVariantImage = async (req, res) => {
+export const createAttribute = async (req, res) => {
     try {
-        const { variantId } = req.params; // Lấy ma_bien_the từ URL
-        const { ma_san_pham } = req.body; // Lấy ma_san_pham gửi kèm từ FormData
-
-        // Nếu phễu Multer-Cloudinary không bắt được file ảnh nào
-        if (!req.file) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Không nhận được dữ liệu file ảnh tải lên." 
-            });
+        const { ten_thuoc_tinh } = req.body;
+        if (!ten_thuoc_tinh || ten_thuoc_tinh.trim() === '') {
+            return res.status(400).json({ success: false, message: 'Tên thuộc tính không được trống.' });
         }
 
-        // Đường dẫn URL mạng do Cloudinary tự động sinh ra sau khi upload thành công
-        const imageUrl = req.file.path; 
+        const name = ten_thuoc_tinh.trim();
 
-        // Kiểm tra xem biến thể này đã có bản ghi ảnh nào trong bảng media_san_pham chưa
-        const checkMediaQuery = `
-            SELECT ma_media FROM public.media_san_pham 
-            WHERE ma_bien_the = $1 AND loai_media = 'image' LIMIT 1;
+        const checkQuery = `SELECT ma_thuoc_tinh, ten_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE LOWER(ten_thuoc_tinh) = LOWER($1);`;
+        const checkRes = await pool.query(checkQuery, [name]);
+
+        if (checkRes.rows.length > 0) {
+            return res.status(200).json(checkRes.rows[0]);
+        }
+
+        const countRes = await pool.query('SELECT COUNT(*) FROM public.danh_muc_thuoc_tinh');
+        const nextIdNum = parseInt(countRes.rows[0].count) + 1;
+        const ma_thuoc_tinh_moi = `ATT${String(nextIdNum).padStart(3, '0')}`;
+
+        const insertQuery = `
+            INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh)
+            VALUES ($1, $2)
+            RETURNING ma_thuoc_tinh, ten_thuoc_tinh;
         `;
-        const checkResult = await pool.query(checkMediaQuery, [variantId]);
+        const result = await pool.query(insertQuery, [ma_thuoc_tinh_moi, name]);
 
-        if (checkResult.rows.length > 0) {
-            // Trường hợp 1: ĐÃ CÓ ảnh -> Chạy lệnh UPDATE đường dẫn ảnh mới đè lên ảnh cũ
-            const updateMediaQuery = `
-                UPDATE public.media_san_pham 
-                SET duong_dan_url = $1, trang_thai = true 
-                WHERE ma_bien_the = $2 AND loai_media = 'image';
-            `;
-            await pool.query(updateMediaQuery, [imageUrl, variantId]);
-        } else {
-            // Trường hợp 2: CHƯA CÓ ảnh -> Chạy lệnh INSERT tạo bản ghi media mới hoàn toàn
-            // Tạo ma_media ngẫu nhiên theo cấu trúc chuẩn của hệ thống (Ví dụ: MED_1718632910)
-            const newMediaId = `MED_${Date.now().toString().slice(-10)}`; 
-            
-            const insertMediaQuery = `
-                INSERT INTO public.media_san_pham (ma_media, ma_san_pham, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, trang_thai)
-                VALUES ($1, $2, $3, $4, true, 'image', true);
-            `;
-            await pool.query(insertMediaQuery, [
-                newMediaId, 
-                ma_san_pham || null, 
-                variantId, 
-                imageUrl
-            ]);
-        }
-
-        // Trả kết quả thành công kèm URL mạng về để Frontend React cập nhật lại UI ngay lập tức
-        return res.status(200).json({
-            success: true,
-            message: "Đã đồng bộ và cập nhật ảnh đại diện biến thể thành công!",
-            duong_dan_url: imageUrl
-        });
-
+        res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error("❌ Lỗi nghiêm trọng tại API uploadVariantImage:", error.message);
-        return res.status(500).json({ 
-            success: false, 
-            message: "Sự cố máy chủ khi xử lý đồng bộ hình ảnh biến thể.",
-            error_detail: error.message 
-        });
+        console.error('❌ Lỗi API createAttribute:', error.message);
+        res.status(500).json({ success: false, message: 'Sự cố máy chủ khi tạo nhóm thuộc tính mới.' });
+    }
+};
+
+// =========================================================================
+// 18. TẢI FILE MINH HỌA LÊN CLOUDINARY (TRẢ VỀ SECURE URL CHO MÁY KHÁCH)
+// =========================================================================
+export const uploadImage = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Chưa chọn file hoặc tải tệp tin thất bại!' });
+        }
+        return res.status(200).json({ success: true, url: req.file.path });
+    } catch (error) {
+        console.error('❌ Lỗi tiến trình tải file lên máy chủ Cloudinary:', error.message);
+        return res.status(500).json({ success: false, message: 'Gặp sự cố hệ thống khi tải ảnh.' });
     }
 };

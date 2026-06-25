@@ -25,5 +25,5 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage: storage });
 
-// Sử dụng export default để khớp với cú pháp import trong profileRoutes.js
+// Sử dụng export default để khớp với cú pháp import trong router
 export default upload;
