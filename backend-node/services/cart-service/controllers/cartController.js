@@ -144,3 +144,47 @@ export const removeSelectedFromCart = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// =========================================================================
+// 6. 🚀 UPLOAD ẢNH MINH CHỨNG THANH TOÁN LÊN CLOUDINARY VÀ LƯU VÀO ĐƠN HÀNG
+// =========================================================================
+export const uploadPaymentProof = async (req, res) => {
+  try {
+    const { orderId } = req.params; // Lấy mã đơn hàng từ đường dẫn API
+
+    // Kiểm tra xem phễu Multer đã bắt được file ảnh chưa
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Vui lòng chọn hình ảnh minh chứng giao dịch." 
+      });
+    }
+
+    // Lấy URL mạng do Cloudinary tự sinh ra
+    const proofUrl = req.file.path;
+
+    // Giả định bạn có model Order để quản lý đơn hàng
+    // (Nếu nhóm bạn dùng Model khác như Bill/Invoice thì thay đổi cho phù hợp nhé)
+    // const order = await Order.findById(orderId);
+    // if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
+
+    // order.paymentProofUrl = proofUrl;
+    // order.paymentStatus = 'pending_verification'; // Chuyển trạng thái sang "Chờ duyệt"
+    // await order.save();
+
+    // Tạm thời trả về URL để Frontend có thể hiển thị ảnh ngay lập tức
+    // (Bỏ comment phần cập nhật Order khi bạn đã có Model Order nhé)
+    res.status(200).json({ 
+      success: true, 
+      message: "Tải lên ảnh minh chứng thành công! Đang chờ Admin xác nhận.", 
+      paymentProofUrl: proofUrl 
+    });
+
+  } catch (error) {
+    console.error("🔥 Lỗi tại uploadPaymentProof:", error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Lỗi hệ thống khi tải ảnh lên máy chủ Cloudinary." 
+    });
+  }
+};

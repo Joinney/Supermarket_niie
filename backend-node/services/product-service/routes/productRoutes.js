@@ -13,10 +13,11 @@ import {
     createProduct,
     getAllCountries,
     getVariantById,
-    getAllAvailableAttributes, // 🌟 Đã thêm hàm import bốc ma trận EAV từ Controller
-    createVariant             // 🌟 Đã thêm hàm import xử lý lưu Transaction EAV
+    getAllAvailableAttributes,
+    createVariant,           
+    uploadVariantImage
 } from '../controllers/productController.js';
-
+import { uploadProductImage } from '../configs/cloudinary.js';
 const router = express.Router();
 
 // =========================================================================
@@ -43,6 +44,7 @@ router.get('/attributes/matrix', getAllAvailableAttributes);
 // 🔄 2. NHÓM ROUTE ĐỘNG (DYNAMIC ROUTES)
 // =========================================================================
 router.get('/variants/:variantId', getVariantById); 
+router.post('/variants/:variantId/upload-image', uploadProductImage.single('image'), uploadVariantImage);
 router.get('/category/:slug', getProductsByCategorySlug);
 router.get('/', getAllProducts);
 router.post('/', createProduct);

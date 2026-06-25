@@ -4,7 +4,8 @@ import {
     addToCart, 
     removeFromCart, 
     mergeCart, 
-    removeSelectedFromCart 
+    removeSelectedFromCart,
+    uploadPaymentProof 
 } from '../controllers/cartController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
@@ -188,5 +189,36 @@ router.post('/merge', protect, mergeCart);
  * description: Xóa các món đã chọn thành công
  */
 router.post('/remove-selected', protect, removeSelectedFromCart);
+
+/**
+ * @swagger
+ * /api/cart/orders/{orderId}/payment-proof:
+ * post:
+ * summary: Upload ảnh minh chứng giao dịch / hóa đơn
+ * tags: [Cart]
+ * security:
+ * - bearerAuth: []
+ * parameters:
+ * - in: path
+ * name: orderId
+ * required: true
+ * schema:
+ * type: string
+ * description: Mã đơn hàng cần đính kèm hóa đơn
+ * requestBody:
+ * required: true
+ * content:
+ * multipart/form-data:
+ * schema:
+ * type: object
+ * properties:
+ * receiptFile:
+ * type: string
+ * format: binary
+ * responses:
+ * 200:
+ * description: Upload thành công
+ */
+router.post('/orders/:orderId/payment-proof', protect, uploadReceipt.single('receiptFile'), uploadPaymentProof);
 
 export default router;

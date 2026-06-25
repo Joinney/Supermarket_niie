@@ -17,7 +17,7 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'demi-mart',
+    folder: 'demi-mart/avatars',
     format: async (req, file) => 'png',
     public_id: (req, file) => `${Date.now()}`,
   },

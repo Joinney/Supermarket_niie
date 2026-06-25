@@ -930,3 +930,71 @@ export const getAllAvailableAttributes = async (req, res) => {
         res.status(500).json({ success: false, message: "Không thể tải ma trận thuộc tính." });
     }
 };
+
+// =========================================================================
+// 17. XỬ LÝ UPLOAD ẢNH BIẾN THỂ LÊN CLOUDINARY & ĐẤU NỐI DATABASE
+// =========================================================================
+export const uploadVariantImage = async (req, res) => {
+    try {
+        const { variantId } = req.params; // Lấy ma_bien_the từ URL
+        const { ma_san_pham } = req.body; // Lấy ma_san_pham gửi kèm từ FormData
+
+        // Nếu phễu Multer-Cloudinary không bắt được file ảnh nào
+        if (!req.file) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Không nhận được dữ liệu file ảnh tải lên." 
+            });
+        }
+
+        // Đường dẫn URL mạng do Cloudinary tự động sinh ra sau khi upload thành công
+        const imageUrl = req.file.path; 
+
+        // Kiểm tra xem biến thể này đã có bản ghi ảnh nào trong bảng media_san_pham chưa
+        const checkMediaQuery = `
+            SELECT ma_media FROM public.media_san_pham 
+            WHERE ma_bien_the = $1 AND loai_media = 'image' LIMIT 1;
+        `;
+        const checkResult = await pool.query(checkMediaQuery, [variantId]);
+
+        if (checkResult.rows.length > 0) {
+            // Trường hợp 1: ĐÃ CÓ ảnh -> Chạy lệnh UPDATE đường dẫn ảnh mới đè lên ảnh cũ
+            const updateMediaQuery = `
+                UPDATE public.media_san_pham 
+                SET duong_dan_url = $1, trang_thai = true 
+                WHERE ma_bien_the = $2 AND loai_media = 'image';
+            `;
+            await pool.query(updateMediaQuery, [imageUrl, variantId]);
+        } else {
+            // Trường hợp 2: CHƯA CÓ ảnh -> Chạy lệnh INSERT tạo bản ghi media mới hoàn toàn
+            // Tạo ma_media ngẫu nhiên theo cấu trúc chuẩn của hệ thống (Ví dụ: MED_1718632910)
+            const newMediaId = `MED_${Date.now().toString().slice(-10)}`; 
+            
+            const insertMediaQuery = `
+                INSERT INTO public.media_san_pham (ma_media, ma_san_pham, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, trang_thai)
+                VALUES ($1, $2, $3, $4, true, 'image', true);
+            `;
+            await pool.query(insertMediaQuery, [
+                newMediaId, 
+                ma_san_pham || null, 
+                variantId, 
+                imageUrl
+            ]);
+        }
+
+        // Trả kết quả thành công kèm URL mạng về để Frontend React cập nhật lại UI ngay lập tức
+        return res.status(200).json({
+            success: true,
+            message: "Đã đồng bộ và cập nhật ảnh đại diện biến thể thành công!",
+            duong_dan_url: imageUrl
+        });
+
+    } catch (error) {
+        console.error("❌ Lỗi nghiêm trọng tại API uploadVariantImage:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            message: "Sự cố máy chủ khi xử lý đồng bộ hình ảnh biến thể.",
+            error_detail: error.message 
+        });
+    }
+};
