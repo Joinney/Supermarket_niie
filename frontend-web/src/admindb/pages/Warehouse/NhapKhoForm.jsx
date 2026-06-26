@@ -12,7 +12,7 @@ const MOCK_IMPORT_DATA = [
   { id: "PN2401-01", warehouse: "Kho Nông Sản Cầu Đất", status: "completed", date: "22/01/2024 08:30", creator: "nv_kho_02", total: 12800000, debt: 0 },
 ];
 
-const Danhsachnhapkho = () => {
+const NhapKhoForm = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
@@ -171,4 +171,4 @@ const Danhsachnhapkho = () => {
   );
 };
 
-export default Danhsachnhapkho;
+export default NhapKhoForm;
