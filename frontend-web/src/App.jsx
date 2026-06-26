@@ -47,6 +47,11 @@ import ProductCreate from "./admindb/pages/Products/ProductCreate";
 import ParentCategories from "./admindb/pages/Products/ParentCategories";
 import ChildCategories from "./admindb/pages/Products/ChildCategories";
 import Units from "./admindb/pages/Products/Units";
+import DanhSachPhieuNhap from "./admindb/pages/Warehouse/DanhSachPhieuNhap.jsx";
+import NhapKhoForm from "./admindb/pages/Warehouse/NhapKhoForm.jsx";
+import LoHang from "./admindb/pages/Warehouse/LoHang.jsx";
+import TonKho from "./admindb/pages/Warehouse/TonKho.jsx";
+import ChuyenKho from "./admindb/pages/Warehouse/ChuyenKho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG - NHÓM KHÁCH HÀNG - LOẠI KHÁCH HÀNG (ĐÃ SỬA CHÍNH TẢ) ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
@@ -918,21 +923,19 @@ const AppRoutes = () => (
         <Route path="Danhsachdonhang" element={<Danhsachdonhang />} />
       </Route>
 
-      {/* 📦 Bọc Kho Hàng */}
-      <Route
-        path="inventory"
-        element={
-          <AdminModuleGuard moduleName="Kho Hàng">
-            <Outlet />
-          </AdminModuleGuard>
-        }
-      >
-        <Route index element={<Navigate to="import-list" replace />} />
-        <Route path="import-list" element={<Danhsachnhapkho />} />
-        <Route path="batches" element={<Quanlylohang />} />
-        <Route path="stock" element={<Quanlytonkho />} />
-        <Route path="transfer" element={<Dieuchuyenkho />} />
-      </Route>
+            {/* 📦 Bọc Kho Hàng */}
+<Route path="inventory" element={<AdminModuleGuard moduleName="Kho Hàng"><Outlet /></AdminModuleGuard>}>
+  {/* Vào /admin/inventory tự động nhảy sang trang danh sách */}
+  <Route index element={<Navigate to="create-import" replace />} />
+  
+  {/* Khớp chuẩn chỉnh 100% theo URL gọi từ Sidebar */}
+  <Route path="create-import" element={<NhapKhoForm />} />
+  <Route path="import-list" element={<DanhSachPhieuNhap />} />
+  
+  <Route path="batches" element={<LoHang />} />
+  <Route path="stock" element={<TonKho />} />
+  <Route path="transfer" element={<ChuyenKho />} />
+</Route>
 
       {/* 👥 Bọc Khách Hàng */}
       <Route

@@ -137,7 +137,7 @@ export default function Sidebar() {
       setActiveItem("/admin/Donhang/Danhsachdonhang");
       navigate("/admin/Donhang/Danhsachdonhang");
     } else if (menuKey === "khoHang" && hasAccess("inventory")) {
-      setActiveItem("/admin/inventory/import-list");
+      setActiveItem("/admin/inventory/create-import");
       navigate("/admin/inventory/import-list");
     } else if (menuKey === "khachHang" && hasAccess("customers")) {
       setActiveItem("/admin/customers/list");
@@ -556,10 +556,17 @@ export default function Sidebar() {
 
                 {openDropdowns.khoHang && !isCollapsed && (
                   <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-                    <button onClick={() => handleSubMenuClick("/admin/inventory/import-list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/import-list")}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/import-list" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
-                      <span>Nhập kho</span>
-                    </button>
+
+                    <button onClick={() => handleSubMenuClick("/admin/inventory/create-import")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/create-import")}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/create-import" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+      <span>Nhập kho </span> {/* 🎯 Đổi nhãn này để nhân viên kho biết đây là nơi thêm mới hàng hóa */}
+    </button>
+
+    <button onClick={() => handleSubMenuClick("/admin/inventory/import-list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/import-list")}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/import-list" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+      <span>Danh sách phiếu nhập</span> {/* 🎯 Đổi nhãn này lên đây để khớp với dữ liệu bảng */}
+    </button>
+                    
 
                     <button
                       onClick={() =>
