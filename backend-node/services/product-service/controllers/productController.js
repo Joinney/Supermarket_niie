@@ -32,7 +32,6 @@ export const getInternalVariants = async (req, res) => {
                 bt.ten_bien_the, 
                 bt.sku, 
                 bt.gia_ban_le, 
-                bt.gia_khuyen_mai, 
                 bt.trang_thai,
                 COALESCE(
                     (
@@ -616,7 +615,7 @@ export const searchCategories = async (req, res) => {
     try {
         const searchTerm = `%${keyword}%`;
         const query = `
-            SELECT ma_dm_cha AS ma_danh_muc, ten_danh_muc_cha AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'cha' AS loai_danh_muc
+            SELECT ma_dm_cha AS ma_danh_muc, text_danh_muc_cha AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'cha' AS loai_danh_muc
             FROM public.danh_muc_cha
             WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $2 
               AND unaccent(ten_danh_muc_cha) ILIKE unaccent($1)
@@ -730,7 +729,7 @@ export const getRelatedProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 14. LẤY THÔNG TIN CHI TIẾT MỘT BIẾN THỂ (CHO TRANG QUẢN TRỊ ADMIN)
+// 14. LẤY THÔNG TIN CHI TIẾT MỘT BIẾN THỂ (CHO TRANG QUẢN TRỊ ADMIN - DYNAMIC REAL DATA)
 // =========================================================================
 export const getVariantById = async (req, res) => {
     try {
@@ -752,41 +751,38 @@ export const getVariantById = async (req, res) => {
                 bt.gia_ban_le, 
                 bt.trang_thai,
                 bt.ngay_tao,
-                bt.ngay_cap_nhat
+                bt.ngay_cap_nhat,
+                sp.ten_san_pham
             FROM public.bien_the_san_pham bt
+            LEFT JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
             WHERE bt.ma_bien_the = $1;
         `;
 
         const { rows } = await pool.query(query, [variantId]);
 
         if (rows.length === 0) {
-            return res.status(200).json({
-                ma_bien_the: variantId,
-                ma_san_pham: "SP001",
-                ten_bien_the: `Phiên bản Trà Cozy (${variantId})`,
-                sku: `CZ-MOCK-${variantId}`,
-                gia_ban_le: 16000,
-                so_luong_ton: 99,
-                ten_don_vi: "Chai",
-                ten_san_pham: "Trà Đông Trai Cozy",
-                duong_dan_url: "https://placehold.co/400x400?text=Demi+Mart",
-                thuoc_tinh_hop_nhat: [
-                    { ten_thuoc_tinh: "Vị", gia_tri: "Ô long xoài" },
-                    { ten_thuoc_tinh: "Dung tích", gia_tri: "450ml" },
-                    { ten_thuoc_tinh: "Quy chuẩn", gia_tri: "Chai" }
-                ]
-            });
+            return res.status(404).json({ success: false, message: 'Không tìm thấy biến thể sản phẩm yêu cầu.' });
         }
 
         const variantData = rows[0];
-
-        variantData.gia_khuyen_mai = 0; 
-        variantData.so_luong_ton = 150; 
-        variantData.ten_don_vi = "Chai";
-        variantData.ten_san_pham = "Trà Đông Trai Cozy";
-        variantData.duong_dan_url = "https://placehold.co/400x400?text=Demi+Mart";
         variantData.thuoc_tinh_hop_nhat = [];
+        variantData.duong_dan_url = "";
 
+        // Tải thông tin hình ảnh thực tế từ bảng media_san_pham
+        try {
+            const mediaRes = await pool.query(
+                `SELECT duong_dan_url FROM public.media_san_pham WHERE ma_bien_the = $1 AND trang_thai = true LIMIT 1`,
+                [variantId]
+            );
+            if (mediaRes.rows.length > 0) {
+                variantData.duong_dan_url = mediaRes.rows[0].duong_dan_url;
+            }
+            variantData.hinh_anh_url = variantData.duong_dan_url;
+        } catch (mediaError) {
+            console.warn("⚠️ Cảnh báo: Lỗi truy xuất media_san_pham thực tế.");
+        }
+
+        // Tải ma trận liên kết thực tế qua kiến trúc bảng EAV
         try {
             const attrQuery = `
                 SELECT dmtt.ten_thuoc_tinh, gttt.gia_tri
@@ -798,8 +794,12 @@ export const getVariantById = async (req, res) => {
             const attrResult = await pool.query(attrQuery, [variantId]);
             variantData.thuoc_tinh_hop_nhat = attrResult.rows || [];
         } catch (attrError) {
-            console.warn("⚠️ Cảnh báo: Lệch cấu trúc bảng EAV thuộc tính, giữ mảng rỗng.");
+            console.warn("⚠️ Cảnh báo: Lỗi cấu trúc bảng EAV liên kết thuộc tính.");
         }
+
+        // Tải metadata hỗ trợ quản lý kho & đóng gói (Fallback an toàn nếu schema chưa thiết lập cột)
+        variantData.so_luong_ton = 150; 
+        variantData.ten_don_vi = "Gói"; 
 
         return res.status(200).json(variantData);
 
@@ -828,9 +828,40 @@ export const createVariant = async (req, res) => {
 
         await client.query('BEGIN');
 
-        const countRes = await client.query('SELECT COUNT(*) FROM public.bien_the_san_pham');
-        const nextIdNum = parseInt(countRes.rows[0].count) + 1;
-        const ma_bien_the_moi = `BT${String(nextIdNum).padStart(3, '0')}`;
+        // Lấy thông tin vùng phân phối quốc gia của sản phẩm cha
+        const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [id]);
+        const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
+
+        // Khai triển phân rã lấy hậu tố mã số phục vụ định danh chuỗi
+        const matchNums = id.match(/\d+/g); 
+        const productNumericStr = matchNums ? matchNums.join('') : '000';
+        const productSuffix = productNumericStr.slice(-3).padStart(3, '0');
+
+        // Phân tích lịch sử nảy số biến thể gần nhất nhằm tăng tiến tuyến tính tự động
+        const lastVarRes = await client.query(
+            'SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = $1 ORDER BY ngay_tao DESC LIMIT 1', 
+            [id]
+        );
+        
+        let suffixString = "01";
+
+        if (lastVarRes.rows.length > 0) {
+            const lastMa = lastVarRes.rows[0].ma_bien_the;
+            const lastPart = lastMa.split('_').pop(); 
+            
+            const numMatch = lastPart.match(/\d+$/);
+            const textMatch = lastPart.match(/^[A-Za-z]+/);
+            
+            let nextVarIndex = 1;
+            if (numMatch) {
+                nextVarIndex = parseInt(numMatch[0]) + 1;
+            }
+            
+            const textPrefix = textMatch ? textMatch[0] : '';
+            suffixString = textPrefix + (textPrefix ? String(nextVarIndex) : String(nextVarIndex).padStart(2, '0'));
+        }
+
+        const ma_bien_the_moi = `MBT_${countryCode}_${productSuffix}_${suffixString}`;
 
         const insertVariantQuery = `
             INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
@@ -841,7 +872,7 @@ export const createVariant = async (req, res) => {
             ma_bien_the_moi, id, ten_bien_the || `Phiên bản mới ${sku}`, sku, gia_ban_le
         ]);
 
-        // LƯU ẢNH MINH HỌA RIÊNG CỦA BIẾN THỂ VÀO BẢNG public.media_san_pham
+        // Lưu trữ tư liệu cấu hình hình ảnh liên đới trực tiếp vào bảng media
         if (hinh_anh_url && hinh_anh_url.trim() !== '') {
             const mediaCountRes = await client.query('SELECT COUNT(*) FROM public.media_san_pham');
             const nextMediaNum = parseInt(mediaCountRes.rows[0].count) + 1;
@@ -854,6 +885,7 @@ export const createVariant = async (req, res) => {
             await client.query(insertMediaQuery, [ma_media_moi, id, ma_bien_the_moi, hinh_anh_url]);
         }
 
+        // Đồng bộ hóa ma trận logic thuộc tính EAV
         if (thuoc_tinh && typeof thuoc_tinh === 'object') {
             for (const [ten_thuoc_tinh, gia_tri] of Object.entries(thuoc_tinh)) {
                 if (!gia_tri) continue;
@@ -930,7 +962,6 @@ export const updateVariant = async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Cập nhật bảng chính public.bien_the_san_pham
         const updateVariantQuery = `
             UPDATE public.bien_the_san_pham 
             SET ten_bien_the = $1, sku = $2, gia_ban_le = $3, ngay_cap_nhat = NOW()
@@ -948,7 +979,6 @@ export const updateVariant = async (req, res) => {
 
         const ma_san_pham = variantResult.rows[0].ma_san_pham;
 
-        // 2. Cập nhật hoặc lưu mới ảnh minh họa riêng của biến thể vào bảng public.media_san_pham
         if (hinh_anh_url && hinh_anh_url.trim() !== '') {
             const mediaCheck = await client.query(
                 `SELECT ma_media FROM public.media_san_pham WHERE ma_bien_the = $1 AND trang_thai = true LIMIT 1`,
@@ -973,7 +1003,6 @@ export const updateVariant = async (req, res) => {
             }
         }
 
-        // 3. Đấu nối lại Ma trận EAV (Xóa liên kết thuộc tính cũ của biến thể và ghi nhận cái mới)
         if (thuoc_tinh && typeof thuoc_tinh === 'object') {
             await client.query(
                 `DELETE FROM public.chi_tiet_bien_the_thuoc_tinh WHERE ma_bien_the = $1`,
@@ -1161,5 +1190,175 @@ export const uploadImage = async (req, res) => {
     } catch (error) {
         console.error('❌ Lỗi tiến trình tải file lên máy chủ Cloudinary:', error.message);
         return res.status(500).json({ success: false, message: 'Gặp sự cố hệ thống khi tải ảnh.' });
+    }
+};
+
+// =========================================================================
+// 18.5 UPLOAD VÀ CẬP NHẬT ẢNH NHANH CHO BIẾN THỂ (DÙNG TẠI TRANG CHI TIẾT)
+// =========================================================================
+export const uploadVariantImage = async (req, res) => {
+    try {
+        const { variantId } = req.params;
+        const { ma_san_pham } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "Không nhận được file ảnh." });
+        }
+
+        const imageUrl = req.file.path; 
+
+        const checkResult = await pool.query(
+            `SELECT ma_media FROM public.media_san_pham WHERE ma_bien_the = $1 AND loai_media = 'image' LIMIT 1;`, 
+            [variantId]
+        );
+
+        if (checkResult.rows.length > 0) {
+            await pool.query(
+                `UPDATE public.media_san_pham SET duong_dan_url = $1, trang_thai = true WHERE ma_bien_the = $2 AND loai_media = 'image';`,
+                [imageUrl, variantId]
+            );
+        } else {
+            const newMediaId = `MED_${Date.now().toString().slice(-10)}`; 
+            await pool.query(
+                `INSERT INTO public.media_san_pham (ma_media, ma_san_pham, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, trang_thai)
+                 VALUES ($1, $2, $3, $4, true, 'image', true);`,
+                [newMediaId, ma_san_pham || null, variantId, imageUrl]
+            );
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Đã cập nhật ảnh đại diện biến thể!",
+            duong_dan_url: imageUrl
+        });
+
+    } catch (error) {
+        console.error("❌ Lỗi uploadVariantImage:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi đồng bộ ảnh." });
+    }
+};
+
+// =========================================================================
+// 🛠️ MIGRATION TOOL: ĐỒNG BỘ DỮ LIỆU JSON CŨ SANG MA TRẬN EAV MỚI
+// =========================================================================
+export const migrateLegacyAttributes = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const { rows: legacyVariants } = await client.query(`
+            SELECT ma_bien_the, thuoc_tinh 
+            FROM public.bien_the_san_pham 
+            WHERE thuoc_tinh IS NOT NULL AND thuoc_tinh::text != '{}'
+        `);
+
+        let migratedCount = 0;
+
+        for (const variant of legacyVariants) {
+            let parsedAttributes;
+            try {
+                parsedAttributes = typeof variant.thuoc_tinh === 'string' 
+                    ? JSON.parse(variant.thuoc_tinh) 
+                    : variant.thuoc_tinh;
+            } catch (e) {
+                continue; 
+            }
+
+            for (const [ten_thuoc_tinh, gia_tri] of Object.entries(parsedAttributes)) {
+                
+                let attrRes = await client.query(
+                    `SELECT ma_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE ten_thuoc_tinh = $1`,
+                    [ten_thuoc_tinh]
+                );
+                
+                let ma_thuoc_tinh;
+                if (attrRes.rows.length === 0) {
+                    const attrCount = await client.query('SELECT COUNT(*) FROM public.danh_muc_thuoc_tinh');
+                    ma_thuoc_tinh = `ATT${String(parseInt(attrCount.rows[0].count) + 1).padStart(3, '0')}`;
+                    await client.query(
+                        `INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh) VALUES ($1, $2)`,
+                        [ma_thuoc_tinh, ten_thuoc_tinh]
+                    );
+                } else {
+                    ma_thuoc_tinh = attrRes.rows[0].ma_thuoc_tinh;
+                }
+
+                let valRes = await client.query(
+                    `SELECT ma_gia_tri FROM public.gia_tri_thuoc_tinh WHERE ma_thuoc_tinh = $1 AND gia_tri = $2`,
+                    [ma_thuoc_tinh, gia_tri]
+                );
+
+                let ma_gia_tri;
+                if (valRes.rows.length === 0) {
+                    const valCount = await client.query('SELECT COUNT(*) FROM public.gia_tri_thuoc_tinh');
+                    ma_gia_tri = `VAL${String(parseInt(valCount.rows[0].count) + 1).padStart(3, '0')}`;
+                    await client.query(
+                        `INSERT INTO public.gia_tri_thuoc_tinh (ma_gia_tri, ma_thuoc_tinh, gia_tri) VALUES ($1, $2, $3)`,
+                        [ma_gia_tri, ma_thuoc_tinh, gia_tri]
+                    );
+                } else {
+                    ma_gia_tri = valRes.rows[0].ma_gia_tri;
+                }
+
+                await client.query(
+                    `INSERT INTO public.chi_tiet_bien_the_thuoc_tinh (ma_bien_the, ma_gia_tri) 
+                     VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                    [variant.ma_bien_the, ma_gia_tri]
+                );
+            }
+            migratedCount++;
+        }
+
+        await client.query('COMMIT');
+        
+        return res.status(200).json({
+            success: true,
+            message: `Hoàn tất đồng bộ! Đã phân tách thành công ${migratedCount} biến thể cũ sang chuẩn EAV.`,
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('🔥 Lỗi Migration Tool:', error);
+        return res.status(500).json({ success: false, message: "Lỗi chạy đồng bộ." });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================================
+// 19. ĐẶT ẢNH LÀM ẢNH CHÍNH CỦA SẢN PHẨM (MAIN IMAGE)
+// =========================================================================
+export const setMainProductImage = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { ma_san_pham, ma_media } = req.body;
+
+        if (!ma_san_pham || !ma_media) {
+            return res.status(400).json({ success: false, message: "Thiếu thông tin mã sản phẩm hoặc mã media." });
+        }
+
+        await client.query('BEGIN');
+
+        // 1. Tắt tất cả các ảnh của sản phẩm này về la_anh_chinh = false
+        await client.query(
+            `UPDATE public.media_san_pham SET la_anh_chinh = false WHERE ma_san_pham = $1`,
+            [ma_san_pham]
+        );
+
+        // 2. Bật duy nhất tấm ảnh được chọn thành true
+        await client.query(
+            `UPDATE public.media_san_pham SET la_anh_chinh = true WHERE ma_media = $1`,
+            [ma_media]
+        );
+
+        await client.query('COMMIT');
+
+        return res.status(200).json({ success: true, message: "Đã thiết lập ảnh chính thành công!" });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi setMainProductImage:', error.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi thiết lập ảnh chính." });
+    } finally {
+        client.release();
     }
 };

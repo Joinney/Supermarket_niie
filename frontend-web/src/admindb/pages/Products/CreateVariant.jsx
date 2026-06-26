@@ -53,17 +53,45 @@ export default function AdminCreateVariant() {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        
+        const apiUrl =
+          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+
         // Gọi song song API sản phẩm và API danh mục thuộc tính tổng thể hệ thống
         const [productResponse, globalAttrResponse] = await Promise.all([
           axios.get(`${apiUrl}/api/products/${id}`),
-          axios.get(`${apiUrl}/api/products/attributes/matrix`).catch(() => ({ data: [] })),
+          axios
+            .get(`${apiUrl}/api/products/attributes/matrix`)
+            .catch(() => ({ data: [] })),
         ]);
+        useEffect(() => {
+          // Chỉ tự động sinh SKU nếu đây là form tạo mới (không phải đang update biến thể cũ)
+          if (!matchedVariant && availableAttributes.length > 0) {
+            // 1. Lấy 3-4 số cuối của mã sản phẩm cha
+            const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+
+            // 2. Lấy 3 chữ cái đầu tiên của mỗi giá trị thuộc tính đã chọn (Loại bỏ dấu tiếng Việt)
+            const attrParts = availableAttributes
+              .map((a) => {
+                if (!a.selected) return "";
+                return a.selected
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/\s+/g, "")
+                  .substring(0, 3)
+                  .toUpperCase();
+              })
+              .filter(Boolean)
+              .join("-");
+
+            setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
+          }
+        }, [availableAttributes, matchedVariant, id]);
 
         // 1. XỬ LÝ DỮ LIỆU SẢN PHẨM & TRÍCH XUẤT MA TRẬN RIÊNG TỪ CÁC BIẾN THỂ ĐÃ CÓ TRONG DB
         if (productResponse.data) {
-          const data = Array.isArray(productResponse.data) ? productResponse.data[0] : productResponse.data;
+          const data = Array.isArray(productResponse.data)
+            ? productResponse.data[0]
+            : productResponse.data;
           const currentProductTitle = data.ten_san_pham || "Sản phẩm gốc";
           setProductName(currentProductTitle);
 
@@ -87,15 +115,17 @@ export default function AdminCreateVariant() {
             }
           });
 
-          const dynamicMatrix = Object.entries(matrixMap).map(([attrName, valuesSet], index) => {
-            const valuesArray = Array.from(valuesSet);
-            return {
-              id: `attr_${index}_${Date.now()}`,
-              name: attrName,
-              values: valuesArray,
-              selected: valuesArray[0] || "",
-            };
-          });
+          const dynamicMatrix = Object.entries(matrixMap).map(
+            ([attrName, valuesSet], index) => {
+              const valuesArray = Array.from(valuesSet);
+              return {
+                id: `attr_${index}_${Date.now()}`,
+                name: attrName,
+                values: valuesArray,
+                selected: valuesArray[0] || "",
+              };
+            },
+          );
 
           setAvailableAttributes(dynamicMatrix);
 
@@ -103,7 +133,9 @@ export default function AdminCreateVariant() {
             .map((attr) => attr.selected)
             .filter(Boolean)
             .join(" - ");
-          setEditVariantName(`${currentProductTitle} ${comboText ? `- ${comboText}` : ""}`);
+          setEditVariantName(
+            `${currentProductTitle} ${comboText ? `- ${comboText}` : ""}`,
+          );
         }
 
         // 2. XỬ LÝ THUỘC TÍNH TỔNG QUÁT HỆ THỐNG ĐỂ ĐƯA VÀO DROPDOWN CHỌN NHANH
@@ -167,12 +199,18 @@ export default function AdminCreateVariant() {
     const finalName = (targetName || newAttrName).trim();
     if (!finalName) return;
 
-    if (availableAttributes.some((a) => a.name.toLowerCase() === finalName.toLowerCase())) {
-      return alert("Nhóm thuộc tính này đã tồn tại trên ma trận liên kết của sản phẩm!");
+    if (
+      availableAttributes.some(
+        (a) => a.name.toLowerCase() === finalName.toLowerCase(),
+      )
+    ) {
+      return alert(
+        "Nhóm thuộc tính này đã tồn tại trên ma trận liên kết của sản phẩm!",
+      );
     }
 
     const isExistingGlobal = globalAttributes.some(
-      (name) => name.toLowerCase() === finalName.toLowerCase()
+      (name) => name.toLowerCase() === finalName.toLowerCase(),
     );
 
     if (isExistingGlobal) {
@@ -187,7 +225,8 @@ export default function AdminCreateVariant() {
       setShowDropdown(false);
     } else {
       try {
-        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+        const apiUrl =
+          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
         const response = await axios.post(`${apiUrl}/api/products/attributes`, {
           ten_thuoc_tinh: finalName,
         });
@@ -205,11 +244,15 @@ export default function AdminCreateVariant() {
           setGlobalAttributes((prev) => [...prev, newGroup.name]);
           setNewAttrName("");
           setShowDropdown(false);
-          alert(`🎉 Đã khởi tạo và lưu nhóm thuộc tính [${finalName}] thành công vào Database!`);
+          alert(
+            `🎉 Đã khởi tạo và lưu nhóm thuộc tính [${finalName}] thành công vào Database!`,
+          );
         }
       } catch (err) {
         console.error("Lỗi khi thêm mới nhóm thuộc tính xuống database:", err);
-        alert("Gặp sự cố khi lưu nhóm thuộc tính mới xuống DB. Vui lòng thử lại!");
+        alert(
+          "Gặp sự cố khi lưu nhóm thuộc tính mới xuống DB. Vui lòng thử lại!",
+        );
       }
     }
   };
@@ -223,15 +266,21 @@ export default function AdminCreateVariant() {
   const filteredGlobalAttributes = useMemo(() => {
     const query = newAttrName.trim().toLowerCase();
     if (!query) return globalAttributes;
-    return globalAttributes.filter((name) => name.toLowerCase().includes(query));
+    return globalAttributes.filter((name) =>
+      name.toLowerCase().includes(query),
+    );
   }, [newAttrName, globalAttributes]);
 
   const isAlreadyInProductMatrix = useMemo(() => {
-    return availableAttributes.some((a) => a.name.toLowerCase() === newAttrName.trim().toLowerCase());
+    return availableAttributes.some(
+      (a) => a.name.toLowerCase() === newAttrName.trim().toLowerCase(),
+    );
   }, [newAttrName, availableAttributes]);
 
   const isExistingInGlobal = useMemo(() => {
-    return globalAttributes.some((name) => name.toLowerCase() === newAttrName.trim().toLowerCase());
+    return globalAttributes.some(
+      (name) => name.toLowerCase() === newAttrName.trim().toLowerCase(),
+    );
   }, [newAttrName, globalAttributes]);
 
   const usedAttributesMap = useMemo(() => {
@@ -259,8 +308,11 @@ export default function AdminCreateVariant() {
 
     return existingVariants.some((variant) => {
       if (!variant.thuoc_tinh) return false;
-      if (Object.keys(variant.thuoc_tinh).length !== availableAttributes.length) return false;
-      return Object.entries(hypotheticalSelection).every(([k, v]) => variant.thuoc_tinh[k] === v);
+      if (Object.keys(variant.thuoc_tinh).length !== availableAttributes.length)
+        return false;
+      return Object.entries(hypotheticalSelection).every(
+        ([k, v]) => variant.thuoc_tinh[k] === v,
+      );
     });
   };
 
@@ -274,8 +326,12 @@ export default function AdminCreateVariant() {
 
     return existingVariants.find((variant) => {
       if (!variant.thuoc_tinh) return false;
-      const isMatch = Object.keys(currentSelection).every((key) => variant.thuoc_tinh[key] === currentSelection[key]);
-      const isExactLength = Object.keys(currentSelection).length === Object.keys(variant.thuoc_tinh).length;
+      const isMatch = Object.keys(currentSelection).every(
+        (key) => variant.thuoc_tinh[key] === currentSelection[key],
+      );
+      const isExactLength =
+        Object.keys(currentSelection).length ===
+        Object.keys(variant.thuoc_tinh).length;
       return isMatch && isExactLength;
     });
   }, [availableAttributes, existingVariants]);
@@ -286,7 +342,9 @@ export default function AdminCreateVariant() {
       setEditPrice(matchedVariant.gia_ban_le || 0);
       setEditStock(matchedVariant.ton_kho || matchedVariant.so_luong_ton || 0);
       setEditUnit(matchedVariant.ten_don_vi || "Chai");
-      setVariantImageUrl(matchedVariant.hinh_anh_url || matchedVariant.duong_dan_url || ""); // Đồng bộ ảnh cũ của biến thể
+      setVariantImageUrl(
+        matchedVariant.hinh_anh_url || matchedVariant.duong_dan_url || "",
+      ); // Đồng bộ ảnh cũ của biến thể
     } else {
       setEditSku("");
       setEditPrice(0);
@@ -311,12 +369,17 @@ export default function AdminCreateVariant() {
     formData.append("image", file);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const response = await axios.post(`${apiUrl}/api/products/upload`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+      const response = await axios.post(
+        `${apiUrl}/api/products/upload`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         },
-      });
+      );
 
       if (response.data && response.data.url) {
         setVariantImageUrl(response.data.url); // Lưu liên kết ảnh trả về từ Cloudinary
@@ -332,8 +395,13 @@ export default function AdminCreateVariant() {
   };
 
   const handleSuggestMissingCombination = () => {
-    if (availableAttributes.length === 0 || availableAttributes.some(a => a.values.length === 0)) {
-      return alert("Vui lòng khởi tạo nhóm thuộc tính và giá trị trước khi tìm tổ hợp thiếu!");
+    if (
+      availableAttributes.length === 0 ||
+      availableAttributes.some((a) => a.values.length === 0)
+    ) {
+      return alert(
+        "Vui lòng khởi tạo nhóm thuộc tính và giá trị trước khi tìm tổ hợp thiếu!",
+      );
     }
 
     const keys = availableAttributes.map((a) => a.name);
@@ -356,7 +424,9 @@ export default function AdminCreateVariant() {
 
     for (let combo of allPossibleCombos) {
       const comboObj = {};
-      keys.forEach((k, idx) => { comboObj[k] = combo[idx]; });
+      keys.forEach((k, idx) => {
+        comboObj[k] = combo[idx];
+      });
 
       const existsInDB = existingVariants.some((variant) => {
         if (!variant.thuoc_tinh) return false;
@@ -377,7 +447,9 @@ export default function AdminCreateVariant() {
       setAvailableAttributes(updated);
       updateVariantNameSuggestion(productName, updated);
     } else {
-      alert("✨ Tuyệt vời! Bạn đã bao phủ ĐẦY ĐỦ tất cả các tổ hợp biến thể của sản phẩm này.");
+      alert(
+        "✨ Tuyệt vời! Bạn đã bao phủ ĐẦY ĐỦ tất cả các tổ hợp biến thể của sản phẩm này.",
+      );
     }
   };
 
@@ -388,14 +460,18 @@ export default function AdminCreateVariant() {
 
     setSaving(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-      const filterAttributesPayload = availableAttributes.reduce((acc, attr) => {
-        if (attr.selected && attr.selected.trim() !== "") {
-          acc[attr.name] = attr.selected;
-        }
-        return acc;
-      }, {});
+      const filterAttributesPayload = availableAttributes.reduce(
+        (acc, attr) => {
+          if (attr.selected && attr.selected.trim() !== "") {
+            acc[attr.name] = attr.selected;
+          }
+          return acc;
+        },
+        {},
+      );
 
       const payload = {
         ma_san_pham: id,
@@ -409,7 +485,10 @@ export default function AdminCreateVariant() {
       };
 
       if (matchedVariant) {
-        await axios.put(`${apiUrl}/api/variants/${matchedVariant.ma_bien_the}`, payload);
+        await axios.put(
+          `${apiUrl}/api/products/variants/${matchedVariant.ma_bien_the}`,
+          payload,
+        );
         alert(`💾 Đã cập nhật thành công biến thể [${matchedVariant.sku}]`);
       } else {
         await axios.post(`${apiUrl}/api/products/${id}/variants`, payload);
@@ -418,7 +497,9 @@ export default function AdminCreateVariant() {
       navigate(-1);
     } catch (err) {
       console.error("Lỗi xử lý lưu dữ liệu biến thể:", err);
-      alert("Gặp sự cố khi lưu biến thể xuống DB. Vui lòng kiểm tra lại log hệ thống!");
+      alert(
+        "Gặp sự cố khi lưu biến thể xuống DB. Vui lòng kiểm tra lại log hệ thống!",
+      );
     } finally {
       setSaving(false);
     }
@@ -428,7 +509,8 @@ export default function AdminCreateVariant() {
     return (
       <div className="flex-1 bg-[#f8f9fa] min-h-screen flex items-center justify-center font-sans">
         <div className="flex items-center gap-2 text-[#006c49] font-bold text-sm animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang tải ma trận thuộc tính riêng sản phẩm...
+          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang
+          tải ma trận thuộc tính riêng sản phẩm...
         </div>
       </div>
     );
@@ -456,23 +538,31 @@ export default function AdminCreateVariant() {
               {matchedVariant ? "Cập nhật biến thể" : "Thêm biến thể mới"}
             </h1>
             <p className="text-xs font-bold text-gray-400 mt-0.5">
-              Sản phẩm cha: <span className="text-[#006c49]">{productName}</span>
+              Sản phẩm cha:{" "}
+              <span className="text-[#006c49]">{productName}</span>
             </p>
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSaveVariant} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-6xl">
+      <form
+        onSubmit={handleSaveVariant}
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-6xl"
+      >
         {/* CỘT TRÁI: QUẢN LÝ MA TRẬN RIÊNG & ĐIỀU KHIỂN CHỌN/TẠO THUỘC TÍNH */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-5">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <Tag size={16} className="text-amber-500" /> Bước 1: Ma trận EAV riêng biệt sản phẩm
+              <Tag size={16} className="text-amber-500" /> Bước 1: Ma trận EAV
+              riêng biệt sản phẩm
             </h3>
 
             <div className="space-y-5">
               {availableAttributes.map((attr) => (
-                <div key={attr.id} className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3 relative group/box">
+                <div
+                  key={attr.id}
+                  className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3 relative group/box"
+                >
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-black text-slate-900 uppercase tracking-wide">
                       👑 Nhóm: {attr.name}
@@ -488,41 +578,44 @@ export default function AdminCreateVariant() {
 
                   {/* DANH SÁCH GIÁ TRỊ THUỘC TÍNH ĐANG ACTIVE */}
                   <div className="flex flex-wrap gap-1.5">
-                    {attr.values && attr.values.map((val) => {
-                      const isSelected = attr.selected === val;
-                      const isGloballyUsed = usedAttributesMap[attr.name]?.has(val);
-                      const isComboValid = checkComboExists(attr.name, val);
+                    {attr.values &&
+                      attr.values.map((val) => {
+                        const isSelected = attr.selected === val;
+                        const isGloballyUsed =
+                          usedAttributesMap[attr.name]?.has(val);
+                        const isComboValid = checkComboExists(attr.name, val);
 
-                      return (
-                        <button
-                          type="button"
-                          key={val}
-                          onClick={() => handleSelectAttribute(attr.id, val)}
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${
-                            isSelected
-                              ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
-                              : isComboValid
-                                ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm"
-                                : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"
-                          }`}
-                        >
-                          {val}
+                        return (
+                          <button
+                            type="button"
+                            key={val}
+                            onClick={() => handleSelectAttribute(attr.id, val)}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${
+                              isSelected
+                                ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
+                                : isComboValid
+                                  ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm"
+                                  : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"
+                            }`}
+                          >
+                            {val}
 
-                          {!isGloballyUsed && !isSelected && (
-                            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 border border-white"></span>
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                            {!isGloballyUsed && !isSelected && (
+                              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 border border-white"></span>
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                   </div>
 
                   {/* UX WARNING: Hiển thị dòng nhắc nhở màu cam thông minh khi nhóm mới chưa có giá trị */}
                   {(!attr.values || attr.values.length === 0) && (
                     <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-700 font-bold leading-normal">
-                      ⚠️ Nhóm rỗng! Hãy thêm nhanh ít nhất 1 giá trị ở dưới (vd: Cay, Đào) để có thể đấu nối thuộc tính này vào biến thể.
+                      ⚠️ Nhóm rỗng! Hãy thêm nhanh ít nhất 1 giá trị ở dưới (vd:
+                      Cay, Đào) để có thể đấu nối thuộc tính này vào biến thể.
                     </div>
                   )}
 
@@ -531,7 +624,12 @@ export default function AdminCreateVariant() {
                       type="text"
                       placeholder={`Thêm nhanh giá trị ${attr.name}...`}
                       value={newValInputs[attr.id] || ""}
-                      onChange={(e) => setNewValInputs({ ...newValInputs, [attr.id]: e.target.value })}
+                      onChange={(e) =>
+                        setNewValInputs({
+                          ...newValInputs,
+                          [attr.id]: e.target.value,
+                        })
+                      }
                       className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] px-2.5 py-1 rounded-lg text-[11px] font-medium outline-none"
                     />
                     <button
@@ -547,7 +645,8 @@ export default function AdminCreateVariant() {
 
               {availableAttributes.length === 0 && (
                 <div className="text-center text-gray-400 italic text-[11px] py-6 bg-slate-50 rounded-2xl border border-dashed border-gray-200">
-                  Sản phẩm này hiện tại không chia theo nhóm ma trận.<br />
+                  Sản phẩm này hiện tại không chia theo nhóm ma trận.
+                  <br />
                   Bạn có thể tạo trực tiếp biến thể đơn lẻ.
                 </div>
               )}
@@ -571,7 +670,7 @@ export default function AdminCreateVariant() {
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
                 ✨ Thêm hoặc Khởi tạo thuộc tính mới
               </label>
-              
+
               <div className="flex gap-2 relative">
                 <div className="flex-1 relative">
                   <input
@@ -591,16 +690,21 @@ export default function AdminCreateVariant() {
                           <button
                             key={idx}
                             type="button"
-                            onMouseDown={() => handleAddOrCreateAttributeGroup(name)}
+                            onMouseDown={() =>
+                              handleAddOrCreateAttributeGroup(name)
+                            }
                             className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[#006c49]/10 hover:text-[#006c49] transition text-left flex items-center justify-between"
                           >
                             <span>📦 {name}</span>
-                            <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded">Có sẵn</span>
+                            <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded">
+                              Có sẵn
+                            </span>
                           </button>
                         ))
                       ) : (
                         <div className="p-3 text-[11px] text-gray-400 italic">
-                          Không tìm thấy thuộc tính khớp. Bạn có thể tự gõ để tạo mới hoàn toàn!
+                          Không tìm thấy thuộc tính khớp. Bạn có thể tự gõ để
+                          tạo mới hoàn toàn!
                         </div>
                       )}
                     </div>
@@ -619,12 +723,11 @@ export default function AdminCreateVariant() {
                         : "bg-[#006c49] hover:bg-[#005137]"
                   }`}
                 >
-                  <Plus size={14} /> 
+                  <Plus size={14} />
                   {isExistingInGlobal ? "Chọn nhóm" : "Tạo mới"}
                 </button>
               </div>
             </div>
-
           </div>
         </div>
 
@@ -638,24 +741,35 @@ export default function AdminCreateVariant() {
             >
               <Edit3 size={20} className="text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-sm font-black text-blue-900">Phiên bản này đã tồn tại trong hệ thống!</h4>
+                <h4 className="text-sm font-black text-blue-900">
+                  Phiên bản này đã tồn tại trong hệ thống!
+                </h4>
                 <p className="text-xs font-medium text-blue-700 mt-1">
-                  Hệ thống tự động chuyển sang chế độ <b className="font-black">Cập nhật (Update)</b>. Bạn có thể thay đổi trực tiếp thông số hiện hành của SKU này.
+                  Hệ thống tự động chuyển sang chế độ{" "}
+                  <b className="font-black">Cập nhật (Update)</b>. Bạn có thể
+                  thay đổi trực tiếp thông số hiện hành của SKU này.
                 </p>
               </div>
             </motion.div>
           )}
 
           {/* BLOCK THÔNG TIN THƯƠNG MẠI */}
-          <div className={`bg-white rounded-3xl border p-6 shadow-sm space-y-5 transition-colors ${matchedVariant ? "border-blue-200" : "border-gray-200/80"}`}>
+          <div
+            className={`bg-white rounded-3xl border p-6 shadow-sm space-y-5 transition-colors ${matchedVariant ? "border-blue-200" : "border-gray-200/80"}`}
+          >
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <Layers size={16} className={matchedVariant ? "text-blue-600" : "text-[#006c49]"} />
+              <Layers
+                size={16}
+                className={matchedVariant ? "text-blue-600" : "text-[#006c49]"}
+              />
               Bước 2: Thông số thương mại của phiên bản
             </h3>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-gray-400 uppercase">Tên hiển thị phiên bản</label>
+                <label className="text-[11px] font-black text-gray-400 uppercase">
+                  Tên hiển thị phiên bản
+                </label>
                 <input
                   type="text"
                   required
@@ -706,7 +820,9 @@ export default function AdminCreateVariant() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-400 uppercase">Quy chuẩn đóng gói</label>
+                  <label className="text-[11px] font-black text-gray-400 uppercase">
+                    Quy chuẩn đóng gói
+                  </label>
                   <select
                     value={unit}
                     onChange={(e) => setEditUnit(e.target.value)}
@@ -735,13 +851,14 @@ export default function AdminCreateVariant() {
                 <div className="w-32 h-32 rounded-2xl border border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center overflow-hidden relative group/img shadow-inner">
                   {variantImageUrl ? (
                     <>
-                      <img 
-                        src={variantImageUrl} 
-                        alt="Preview biến thể" 
+                      <img
+                        src={variantImageUrl}
+                        alt="Preview biến thể"
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.target.onerror = null; 
-                          e.target.src = "https://placehold.co/400x400?text=Lỗi+đường+dẫn";
+                          e.target.onerror = null;
+                          e.target.src =
+                            "https://placehold.co/400x400?text=Lỗi+đường+dẫn";
                         }}
                       />
                       <button
@@ -790,23 +907,32 @@ export default function AdminCreateVariant() {
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-slate-100 hover:bg-slate-200 border border-gray-200 text-slate-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition disabled:opacity-50"
                   >
-                    <Upload size={13} /> {uploadingImage ? "Đang tải ảnh..." : "Tải ảnh từ máy"}
+                    <Upload size={13} />{" "}
+                    {uploadingImage ? "Đang tải ảnh..." : "Tải ảnh từ máy"}
                   </button>
-                  <span className="text-[10px] text-gray-400 font-medium">Khuyên dùng tỷ lệ vuông 1:1</span>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    Khuyên dùng tỷ lệ vuông 1:1
+                  </span>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex justify-end pt-2 border-t border-gray-100">
               <button
                 type="submit"
                 disabled={saving}
                 className={`font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md transition active:scale-95 disabled:opacity-50 text-white ${
-                  matchedVariant ? "bg-blue-600 hover:bg-blue-800" : "bg-[#006c49] hover:bg-[#004f36]"
+                  matchedVariant
+                    ? "bg-blue-600 hover:bg-blue-800"
+                    : "bg-[#006c49] hover:bg-[#004f36]"
                 }`}
               >
                 <Save size={15} />
-                {saving ? "Đang lưu..." : matchedVariant ? "Cập nhật phiên bản" : "Kích hoạt tạo biến thể"}
+                {saving
+                  ? "Đang lưu..."
+                  : matchedVariant
+                    ? "Cập nhật phiên bản"
+                    : "Kích hoạt tạo biến thể"}
               </button>
             </div>
           </div>
@@ -814,7 +940,8 @@ export default function AdminCreateVariant() {
           {/* BẢNG MA TRẬN ĐỐI CHIẾU GIÁ THỰC TẾ HÀNH CHÍNH */}
           <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-black text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
-              📊 Bảng đối chiếu ma trận định giá hiện hành (Existing Pricing Matrix)
+              📊 Bảng đối chiếu ma trận định giá hiện hành (Existing Pricing
+              Matrix)
             </h3>
 
             <div className="overflow-x-auto">
@@ -823,28 +950,48 @@ export default function AdminCreateVariant() {
                   <tr className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
                     <th className="py-2.5 px-2">Mã SKU</th>
                     <th className="py-2.5 px-2">Tên phiên bản hiện tại</th>
-                    <th className="py-2.5 px-2 font-mono text-right">Giá niêm yết</th>
+                    <th className="py-2.5 px-2 font-mono text-right">
+                      Giá niêm yết
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 text-xs font-bold text-slate-700">
                   {existingVariants.length > 0 ? (
                     existingVariants.map((v, index) => {
-                      const isHighlighted = matchedVariant?.ma_bien_the === v.ma_bien_the;
+                      const isHighlighted =
+                        matchedVariant?.ma_bien_the === v.ma_bien_the;
                       return (
-                        <tr key={index} className={`transition ${isHighlighted ? "bg-blue-50/70" : "hover:bg-slate-50/80"}`}>
-                          <td className={`py-3 px-2 font-mono ${isHighlighted ? "text-blue-700" : "text-amber-700"}`}>
+                        <tr
+                          key={index}
+                          className={`transition ${isHighlighted ? "bg-blue-50/70" : "hover:bg-slate-50/80"}`}
+                        >
+                          <td
+                            className={`py-3 px-2 font-mono ${isHighlighted ? "text-blue-700" : "text-amber-700"}`}
+                          >
                             {v.sku} {isHighlighted && "📍"}
                           </td>
-                          <td className={`py-3 px-2 ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}>{v.ten_bien_the}</td>
-                          <td className={`py-3 px-2 font-mono text-right ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}>
-                            {v.gia_ban_le ? Number(v.gia_ban_le).toLocaleString("vi-VN") : 0} đ
+                          <td
+                            className={`py-3 px-2 ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}
+                          >
+                            {v.ten_bien_the}
+                          </td>
+                          <td
+                            className={`py-3 px-2 font-mono text-right ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}
+                          >
+                            {v.gia_ban_le
+                              ? Number(v.gia_ban_le).toLocaleString("vi-VN")
+                              : 0}{" "}
+                            đ
                           </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan="3" className="py-4 text-center text-gray-400 italic text-[11px]">
+                      <td
+                        colSpan="3"
+                        className="py-4 text-center text-gray-400 italic text-[11px]"
+                      >
                         Sản phẩm này chưa gán cấu hình biến thể nào trước đây.
                       </td>
                     </tr>

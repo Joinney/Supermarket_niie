@@ -200,7 +200,37 @@ export default function AdminProductDetail() {
               </div>
             )}
           </div>
-
+          {/* 🌟 NÚT ĐẶT LÀM ẢNH CHÍNH */}
+          {activeMediaObj && (
+            <div className="absolute top-4 left-4">
+              {activeMediaObj.la_anh_chinh ? (
+                <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-md flex items-center gap-1.5">
+                  <Check size={14} /> ẢNH CHÍNH
+                </span>
+              ) : (
+                <button
+                  onClick={async () => {
+                    try {
+                      const apiUrl =
+                        import.meta.env.VITE_API_PRODUCT_URL ||
+                        "http://localhost:5002";
+                      await axios.put(`${apiUrl}/api/products/media/set-main`, {
+                        ma_san_pham: product.ma_san_pham,
+                        ma_media: activeMediaObj.ma_media,
+                      });
+                      alert("Đã đặt làm ảnh chính thành công!");
+                      window.location.reload(); // Tải lại trang để cập nhật UI
+                    } catch (err) {
+                      alert("Lỗi khi thiết lập ảnh chính.");
+                    }
+                  }}
+                  className="bg-white/90 backdrop-blur text-slate-700 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm transition-colors flex items-center gap-1.5 border border-slate-200"
+                >
+                  <ImageIcon size={14} /> ĐẶT LÀM ẢNH CHÍNH
+                </button>
+              )}
+            </div>
+          )}
           {product.media && product.media.length > 0 && (
             <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar">
               {product.media.map((imgObj) => (

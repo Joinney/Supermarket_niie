@@ -12,17 +12,21 @@ import {
     refreshEmptyDescriptions,
     createProduct,
     getAllCountries,
-    getReviewsByProduct,        // 🌟 Bổ sung: Lấy đánh giá sản phẩm
-    getRelatedProducts,        // 🌟 Bổ sung: Lấy sản phẩm liên quan
+    getReviewsByProduct,        
+    getRelatedProducts,       
     getVariantById,
-    getAllAvailableAttributes,  // Lấy ma trận thuộc tính khả dụng
+    getAllAvailableAttributes,  
     createVariant,
-    updateVariant,              // 🌟 ĐỒNG BỘ: Đã import hàm cập nhật biến thể EAV
-    deleteVariant,             // 🌟 Bổ sung: Xóa mềm biến thể EAV
-    createAttribute,            // 🌟 Bổ sung: Tạo nhóm thuộc tính mới trực tiếp
-    uploadImage                 // 🌟 Bổ sung: Upload ảnh Cloudinary
+    updateVariant,              
+    deleteVariant,             
+    createAttribute,           
+    uploadImage,
+    uploadVariantImage     
+
 } from '../controllers/productController.js';
-import upload from '../configs/cloudinary/cloudinary.js'; // 🌟 Import Multer Storage mà Demi vừa cung cấp
+import upload from '../configs/cloudinary/cloudinary.js'; 
+import { migrateLegacyAttributes } from '../controllers/productController.js';
+import { setMainProductImage } from '../controllers/productController.js';
 
 const router = express.Router();
 
@@ -34,6 +38,7 @@ router.post('/internal/variants', getInternalVariants);
 // =========================================================================
 // 🏢 1. NHÓM ROUTE TĨNH (STATIC ROUTES) - Đặt lên hàng đầu tránh xung đột params
 // =========================================================================
+//router.get('/internal/migrate-eav', migrateLegacyAttributes);
 router.get('/countries', getAllCountries);
 router.get('/search', searchProducts);
 router.get('/categories', getAllCategories);
@@ -41,7 +46,7 @@ router.get('/categories/search', searchCategories);
 router.get('/without-descriptions', getProductsWithoutDescriptions);
 router.post('/batch-generate-descriptions', batchGenerateDescriptionsController);
 router.post('/refresh-empty-descriptions', refreshEmptyDescriptions);
-
+router.put('/media/set-main', setMainProductImage);
 // Giao thức EAV: Lấy danh mục thuộc tính tổng thể hệ thống cho Form ma trận
 router.get('/attributes/matrix', getAllAvailableAttributes);
 
@@ -57,6 +62,7 @@ router.post('/upload', upload.single('image'), uploadImage);
 router.get('/variants/:variantId', getVariantById); 
 router.put('/variants/:variantId', updateVariant);    // 🌟 ĐỒNG BỘ: Route PUT cập nhật thông tin và ma trận EAV của biến thể
 router.delete('/variants/:variantId', deleteVariant); // Route xử lý Xóa mềm
+router.post('/variants/:variantId/upload-image', upload.single('image'), uploadVariantImage);
 
 // =========================================================================
 // 🔄 3. NHÓM ROUTE ĐỘNG SẢN PHẨM & DANH MỤC (DYNAMIC ROUTES)

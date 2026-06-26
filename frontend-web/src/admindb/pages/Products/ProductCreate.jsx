@@ -21,17 +21,22 @@ export default function ProductCreate() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+  const apiUrl =
+    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
   // 3. Gọi API lấy cây danh mục để hiển thị danh mục con
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await axios.get(`${apiUrl}/api/products/categories?country=${formData.ma_quoc_gia}`);
-        
+        const response = await axios.get(
+          `${apiUrl}/api/products/categories?country=${formData.ma_quoc_gia}`,
+        );
+
         // Làm phẳng cấu trúc cây danh mục hoặc trích xuất danh mục con (children)
         if (Array.isArray(response.data)) {
-          const allSubCategories = response.data.flatMap(parent => parent.children || []);
+          const allSubCategories = response.data.flatMap(
+            (parent) => parent.children || [],
+          );
           setCategories(allSubCategories);
         }
       } catch (err) {
@@ -55,19 +60,23 @@ export default function ProductCreate() {
       const response = await axios.post(`${apiUrl}/api/products`, formData);
 
       if (response.data?.success) {
-        alert("🎉 Sản phẩm đã được tạo lập thành công! Hệ thống AI đang sinh mô tả tự động.");
+        alert(
+          "🎉 Sản phẩm đã được tạo lập thành công! Hệ thống AI đang sinh mô tả tự động.",
+        );
         navigate("/admin/products"); // Quay về trang danh sách sản phẩm
       }
     } catch (err) {
       console.error("Lỗi tạo sản phẩm:", err);
-      setError(err.response?.data?.message || "Gặp sự cố khi thêm mới sản phẩm.");
+      setError(
+        err.response?.data?.message || "Gặp sự cố khi thêm mới sản phẩm.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
@@ -76,19 +85,26 @@ export default function ProductCreate() {
       {/* TIÊU ĐỀ & BREADCRUMB */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Thêm sản phẩm mới</h1>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+            Thêm sản phẩm mới
+          </h1>
           <div className="flex items-center gap-2 text-sm text-gray-400 mt-1 font-medium">
             <span>Dashboard</span>
             <span>❯</span>
-            <span className="cursor-pointer hover:text-[#006c49]" onClick={() => navigate('/admin/products')}>Danh sách sản phẩm</span>
+            <span
+              className="cursor-pointer hover:text-[#006c49]"
+              onClick={() => navigate("/admin/products")}
+            >
+              Danh sách sản phẩm
+            </span>
             <span>❯</span>
             <span className="text-[#006c49] font-semibold">Tạo mới</span>
           </div>
         </div>
 
-        <button 
+        <button
           type="button"
-          onClick={() => navigate('/admin/products')}
+          onClick={() => navigate("/admin/products")}
           className="flex items-center justify-center gap-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm transition active:scale-95 shrink-0"
         >
           ❮ Quay lại
@@ -97,7 +113,6 @@ export default function ProductCreate() {
 
       {/* KHỐI FORM CONTAINER CHÍNH */}
       <div className="max-w-3xl bg-white rounded-2xl border border-gray-100 shadow-sm p-6 relative">
-        
         {error && (
           <div className="mb-6 p-3 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold text-center">
             ⚠️ {error}
@@ -105,7 +120,6 @@ export default function ProductCreate() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          
           {/* HÀNG 1: TÊN SẢN PHẨM */}
           <div>
             <label className="block text-[11px] font-extrabold text-gray-400 uppercase tracking-wider mb-2">
@@ -116,14 +130,15 @@ export default function ProductCreate() {
               required
               placeholder="Nhập tên sản phẩm (Ví dụ: Trà Đông Trai Cozy)"
               value={formData.ten_san_pham}
-              onChange={(e) => setFormData({ ...formData, ten_san_pham: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, ten_san_pham: e.target.value })
+              }
               className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 outline-none focus:bg-white focus:border-[#006c49] transition"
             />
           </div>
 
           {/* HÀNG 2: DANH MỤC CON & XUẤT XỨ */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
             {/* Ô CHỌN DANH MỤC */}
             <div>
               <label className="block text-[11px] font-extrabold text-gray-400 uppercase tracking-wider mb-2">
@@ -132,10 +147,18 @@ export default function ProductCreate() {
               <select
                 required
                 value={formData.ma_dm_con}
-                onChange={(e) => setFormData({ ...formData, ma_dm_con: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, ma_dm_con: e.target.value })
+                }
                 className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer"
               >
-                <option value="">-- {loadingCategories ? "Đang tải danh mục..." : "Chọn danh mục con"} --</option>
+                <option value="">
+                  --{" "}
+                  {loadingCategories
+                    ? "Đang tải danh mục..."
+                    : "Chọn danh mục con"}{" "}
+                  --
+                </option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
@@ -153,11 +176,12 @@ export default function ProductCreate() {
                 type="text"
                 placeholder="Ví dụ: Việt Nam, Nhật Bản, Thái Lan..."
                 value={formData.xuat_xu}
-                onChange={(e) => setFormData({ ...formData, xuat_xu: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, xuat_xu: e.target.value })
+                }
                 className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 outline-none focus:bg-white focus:border-[#006c49] transition"
               />
             </div>
-
           </div>
 
           {/* HÀNG 3: MÃ QUỐC GIA (THỊ TRƯỜNG PHÂN PHỐI) */}
@@ -166,17 +190,27 @@ export default function ProductCreate() {
               Thị trường quốc gia
             </label>
             <div className="flex items-center gap-4">
-              {["VN", "TH", "KR"].map((country) => (
-                <label key={country} className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700">
+              {/* Đã sửa mảng thành VN, US, CN cho khớp đúng 100% với Database của Demi Mart */}
+              {["VN", "US", "CN"].map((country) => (
+                <label
+                  key={country}
+                  className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700"
+                >
                   <input
                     type="radio"
                     name="ma_quoc_gia"
                     value={country}
                     checked={formData.ma_quoc_gia === country}
-                    onChange={(e) => setFormData({ ...formData, ma_quoc_gia: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, ma_quoc_gia: e.target.value })
+                    }
                     className="w-4 h-4 text-[#006c49] focus:ring-[#006c49] border-gray-300"
                   />
-                  {country === "VN" ? "🇻🇳 Việt Nam (VN)" : country === "TH" ? "🇹🇭 Thái Lan (TH)" : "🇰🇷 Hàn Quốc (KR)"}
+                  {country === "VN"
+                    ? "🇻🇳 Việt Nam (VN)"
+                    : country === "US"
+                      ? "🇺🇸 Mỹ (US)"
+                      : "🇨🇳 Trung Quốc (CN)"}
                 </label>
               ))}
             </div>
@@ -196,7 +230,9 @@ export default function ProductCreate() {
               rows="5"
               placeholder="Nhập mô tả sản phẩm chủ động hoặc bỏ trống để hệ thống AI tự phân tích và sinh văn bản tự động..."
               value={formData.mo_ta}
-              onChange={(e) => setFormData({ ...formData, mo_ta: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, mo_ta: e.target.value })
+              }
               className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 outline-none focus:bg-white focus:border-[#006c49] transition resize-none font-sans leading-relaxed"
             />
           </div>
@@ -205,7 +241,7 @@ export default function ProductCreate() {
           <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={() => navigate('/admin/products')}
+              onClick={() => navigate("/admin/products")}
               className="px-5 py-2.5 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition"
             >
               Hủy bỏ
@@ -225,7 +261,6 @@ export default function ProductCreate() {
               )}
             </button>
           </div>
-
         </form>
       </div>
     </motion.div>
