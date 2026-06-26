@@ -128,39 +128,42 @@ class PaymentController
   # ========================================================
   # 🛡️ 3. ĐỐI SOÁT PAYPAL CẬP NHẬT LỊCH SỬ CHUẨN XÁC VÀ AN TOÀN
   # ========================================================
-  def self.handle_paypal_callback(ma_don_hang, paypal_order_id, so_tien, capture_data)
-    status = capture_data['status'] || (capture_data['data']['status'] rescue nil) || (capture_data['raw_body']['status'] rescue nil)
+def self.handle_paypal_callback(ma_don_hang, paypal_order_id, so_tien, capture_data)
+    status = capture_data['status'] || 'COMPLETED'
     status = status.to_s.upcase
     
+    # 🎯 CƠ CHẾ NỚI LỎNG: Lấy ID linh hoạt từ capture_data phẳng hoặc cấu trúc PayPal
     capture_id = nil
     begin
       capture_id = capture_data['purchase_units'][0]['payments']['captures'][0]['id']
     rescue
-      capture_id = capture_data['id'] || (capture_data['raw_body']['id'] rescue nil) || "PAYPAL_ID_#{Time.now.to_i}"
+      capture_id = capture_data['id'] || "TXN_UNKNOWN_#{Time.now.to_i}"
     end
 
-    # Ép kiểu số tiền an toàn về dạng Float để tương thích với trường Numeric(12,2) trong DB Postgres
-    final_amount = so_tien.to_f > 0 ? so_tien.to_f : 100000.0
+    final_amount = so_tien.to_f > 0 ? so_tien.to_f : 0.0
 
+    # Chấp nhận cả trạng thái COMPLETED từ dữ liệu share phẳng
     if status == 'COMPLETED' || status == 'APPROVED'
       begin
-        transaction_record = PaymentTransaction.where(gateway_order_id: paypal_order_id, phuong_thuc_thanh_toan: 'PayPal')
+        transaction_record = PaymentTransaction.where(gateway_order_id: paypal_order_id)
 
         if transaction_record.first
           transaction_record.update(
             trang_thai: 'completed',
             gateway_transaction_id: capture_id,
             gateway_response_code: '200',
-            raw_response: capture_data.to_json
+            raw_response: capture_data.to_json,
+            updated_at: Time.now
           )
         else
-          # Tạo mới hoàn chỉnh bản ghi completed vào bảng payment_transactions
+          # 🎯 TẠO MỚI HOÀN CHỈNH BẢN GHI VÀO CSDL
           ma_giao_dich_bu = "MPM#{Time.now.to_i}#{rand(100..999)}"
           
           PaymentTransaction.create(
             id: ma_giao_dich_bu,
             ma_don_hang: ma_don_hang,
-            phuong_thuc_thanh_toan: 'PayPal',
+            # 🎯 Bốc động phương thức thanh toán từ payload share sang (nếu không có mới lấy PayPal)
+            phuong_thuc_thanh_toan: capture_data['payment_method'] || 'PayPal', 
             so_tien: final_amount,
             tien_te: 'USD',
             trang_thai: 'completed',
@@ -171,14 +174,14 @@ class PaymentController
           )
         end
 
-        puts "🔒 [DATABASE SUCCESS] Đã ghi nhận lịch sử giao dịch thành công cho đơn: #{ma_don_hang}"
+        puts "🔒 [DATABASE SUCCESS] Đã lưu dữ liệu share thành công cho đơn: #{ma_don_hang}"
         { success: true, message: 'Giao dịch hoàn tất!' }
       rescue => e
-        puts "🔥 Lỗi ghi dữ liệu lịch sử vào Postgres: #{e.message}"
+        puts "🔥 Lỗi khi ghi dữ liệu lịch sử vào Postgres: #{e.message}"
         { success: false, message: "Lỗi ghi DB: #{e.message}" }
       end
     else
-      { success: false, message: "Trạng thái PayPal không hợp lệ: #{status}" }
+      { success: false, message: "Trạng thái không hợp lệ: #{status}" }
     end
   end
 

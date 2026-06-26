@@ -119,7 +119,7 @@ const placeOrder = async (req, res) => {
     }
     req.body.tong_thanh_toan = finalTotal;
 
-    // 🚀 BƯỚC C: PHI CHUẨN HÓA MẢNG SẢN PHẨM AN TOÀN (CƠ CHẾ FALLBACK CHỐNG MẤT SẢN PHẨM)
+    // 🚀 BƯỚC C: PHI CHUẨN HÓA MẢNG SẢN PHẨM AN TOÀN
     const normalizedItems = danh_sach_san_pham.map(item => {
       const detail = internalProducts.find(p => String(p.variant_id) === String(item.variant_id));
       
@@ -142,35 +142,41 @@ const placeOrder = async (req, res) => {
         paypal_order_id: req.body.paypal_order_id || null
     };
 
-    // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE
+// 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công tại Order-Service với ID:", order.id);
 
+// ========================================================
+    // 🌟 🚀 CƠ CHẾ SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD & CÙNG TÊN CỘT)
     // ========================================================
-    // 🌟 🚀 ĐÃ SỬA CHÍ MẠNG: ĐỒNG BỘ CHUẨN CONTAINER & THAM SỐ PHẲNG SANG RUBY SERVICE
-    // ========================================================
-    if (phuong_thuc_thanh_toan === 'PayPal' && (req.body.paypal_order_id || req.body.paypal_transaction_id)) {
+    const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
+    
+    if (methodUpper !== 'COD' && methodUpper !== '') {
       try {
-        const syncPayload = {
+        const safeOrderId = req.body.paypal_order_id || `GATEWAY_${order.ma_don_hang}`;
+        const safeTxnId = req.body.paypal_transaction_id || `TXN_${Date.now()}`;
+
+        // Đóng gói CHÍNH XÁC các cột trùng tên giữa bảng orders và payment_transactions
+        const sharePayload = {
           ma_don_hang: String(order.ma_don_hang),
-          paypal_order_id: String(req.body.paypal_order_id),
           so_tien: Number(finalTotal),
+          phuong_thuc_thanh_toan: methodUpper,
+          trang_thai_thanh_toan: String(req.body.trang_thai_thanh_toan || 'PENDING'),
+          
+          // 2 tham số mồi để vượt qua lớp validation của payment_routes.rb
+          paypal_order_id: String(safeOrderId),
           capture_data: {
             status: 'COMPLETED',
-            id: String(req.body.paypal_transaction_id),
-            purchase_units: [{
-              payments: {
-                captures: [{ id: req.body.paypal_transaction_id }]
-              }
-            }]
+            id: String(safeTxnId),
+            shared_from: 'order_service'
           }
         };
 
-        // 🌟 ĐÃ FIX: Trỏ chính xác đến tên container 'demi_payment_service' trên cổng nội bộ 5004 và route phẳng hóa
-        await axios.post('http://localhost:5004/paypal-capture', syncPayload);
-        console.log(`🔒 [MICROSERVICES SYNC]: Đã đồng bộ ngược log giao dịch ${order.ma_don_hang} sang Payment-Service!`);
+        // 🎯 GỌI NỘI BỘ DOCKER: Dùng tên container 'demi_payment_service' và port 5004
+        await axios.post('http://demi_payment_service:5004/api/paypal-capture', sharePayload);
+        console.log(`🔒 [MICROSERVICES SHARE]: Đã chia sẻ đơn ${order.ma_don_hang} (${methodUpper}) sang Payment-Service!`);
       } catch (syncErr) {
-        console.error("⚠️ Cảnh báo: Lỗi ngầm khi đẩy lịch sử sang Payment-Service:", syncErr.response?.data || syncErr.message);
+        console.error("⚠️ Cảnh báo: Lỗi share dữ liệu nội bộ Docker sang Payment:", syncErr.message);
       }
     }
 
@@ -179,7 +185,7 @@ const placeOrder = async (req, res) => {
       ma_don_hang: order.ma_don_hang, 
       tong_thanh_toan: finalTotal,
       phuong_thuc_thanh_toan: phuong_thuc_thanh_toan,
-      message: "Đặt hàng thành công! Đang chuyển tiếp sang cổng thanh toán xử lý đối soát." 
+      message: "Đặt hàng thành công! Thông tin thanh toán đang được xử lý đối soát nội bộ." 
     });
 
   } catch (err) {

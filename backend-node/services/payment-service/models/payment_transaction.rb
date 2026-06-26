@@ -4,4 +4,5 @@ require 'sequel'
 # Sử dụng plugin `timestamps` để tự động quản lý created_at và updated_at
 class PaymentTransaction < Sequel::Model(Sequel.qualify(:public, :payment_transactions))
   plugin :timestamps, update_on_create: true
+  unrestrict_primary_key
 end
