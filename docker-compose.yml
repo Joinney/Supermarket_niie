@@ -100,7 +100,7 @@ services:
       - auth-service
       - product-service
       - cart-service
-      - inventory-service # Thêm dependency để frontend đợi cả dịch vụ kho
+      - inventory-service
     networks:
       - demi_network
     restart: always
@@ -154,6 +154,32 @@ services:
       - "8000:8000"
     env_file:
       - ./ai-service/.env
+    networks:
+      - demi_network
+    restart: on-failure
+
+  # 12. RABBITMQ (Message Broker) 🐰
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - demi_network
+    restart: always
+
+  # 13. NOTIFICATION SERVICE (Cổng 8085 - Viết bằng Java Spring Boot) ✉️
+  notification-service:
+    build: ./backend-node/services/notification-service
+    container_name: demi_notification_service
+    ports:
+      - "8085:8085"
+    # Bạn có thể bổ sung file .env nếu cấu hình tài khoản mail hoặc pass riêng biệt
+    # env_file:
+    #   - ./backend-node/services/notification-service/.env
+    depends_on:
+      - rabbitmq
     networks:
       - demi_network
     restart: on-failure
