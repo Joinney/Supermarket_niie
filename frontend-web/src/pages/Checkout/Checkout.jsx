@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { MapPin, Truck, Tag, CreditCard, Loader2 } from 'lucide-react';
@@ -43,6 +43,24 @@ export default function Checkout() {
     }
     return cleanUrl;
   };
+
+  // 🚀 ĐỒNG BỘ MA TRẬN CHÉO: Gom nhóm sản phẩm giống hệt trang Giỏ hàng
+  const groupedCheckoutCart = useMemo(() => {
+    const groups = {};
+    checkoutCart.forEach(item => {
+      const pId = item.productId || item.id || "unknown";
+      if (!groups[pId]) {
+        groups[pId] = {
+          productId: pId,
+          name: item.name,
+          image: item.image,
+          subVariants: []
+        };
+      }
+      groups[pId].subVariants.push(item);
+    });
+    return Object.values(groups);
+  }, [checkoutCart]);
 
   const [address, setAddress] = useState(null);
   const [addresses, setAddresses] = useState([]);
@@ -139,9 +157,6 @@ export default function Checkout() {
     localStorage.removeItem('checkoutItems');
   };
 
-  // ========================================================
-  // 🎯 LUỒNG XỬ LÝ LƯU ĐƠN CHUNG (MICROSERVICES ĐỒNG BỘ)
-  // ========================================================
   const executePlaceOrder = async (extraPaymentInfo = {}) => {
     if (!address) return alert("Vui lòng chọn địa chỉ giao hàng hợp lệ!");
 
@@ -225,7 +240,6 @@ export default function Checkout() {
     setIsPlacing(false);
   };
 
-  // Luồng xử lý bất đồng bộ sau khi SDK PayPal phản hồi Captures thành công ở Frontend
   const handlePayPalSuccess = async (details) => {
     try {
       setIsPlacing(true);
@@ -233,7 +247,6 @@ export default function Checkout() {
 
       console.log("🚀 PayPal capture thành công ở Client, tiến hành lưu hóa đơn hệ thống...");
 
-      // 1. Lưu thông tin hóa đơn chính thức lên order-service
       const maDonHangText = await executePlaceOrder({
         trang_thai_thanh_toan: "completed",
         paypal_transaction_id: String(transactionId),
@@ -244,7 +257,6 @@ export default function Checkout() {
         try {
           console.log("💥 Bắn gói tin đối soát phẳng hóa cấu trúc sang payment-service...");
           
-          // 2. Nạp đầy đủ 4 tham số định danh phẳng sang đúng endpoint của payment-service (Ruby)
           await paymentApi.post('/payments/paypal-capture', {
             ma_don_hang: String(maDonHangText),
             paypal_order_id: String(details.id),
@@ -260,7 +272,6 @@ export default function Checkout() {
           console.warn("⚠️ Ghi nhận lịch sử payment_transactions chạy ngầm gặp độ trễ:", syncErr.response?.data || syncErr.message);
         }
 
-        // Đơn hàng phía orders đã chốt hoàn tất an toàn, chuyển hướng người dùng
         alert(`🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart của bạn là: ${maDonHangText}`);
         await finalizeOrderCleanup();
         navigate('/profile/orders');
@@ -276,14 +287,14 @@ export default function Checkout() {
   const isGlobalLoading = orderContextLoading || isPlacing;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 pt-10">
-      <div className="max-w-[1200px] mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <div className="min-h-screen bg-slate-50 pb-20 pt-10 text-left selection:bg-[#006c49] selection:text-white">
+      <div className="max-w-[1250px] mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* CỘT TRÁI: THÔNG TIN CHI TIẾT ĐƠN HÀNG */}
-        <div className="lg:col-span-8 space-y-6 text-left">
+        <div className="lg:col-span-8 space-y-4">
           
           {/* 1. ĐỊA CHỈ */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-l-[#006c49]">
+          <section className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-l-[#006c49]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider"><MapPin size={18} /> Địa chỉ nhận hàng</h2>
               <button onClick={() => setIsModalOpen(true)} className="text-[#006c49] font-black text-xs uppercase hover:underline">Thay đổi</button>
@@ -307,29 +318,111 @@ export default function Checkout() {
             )}
           </section>
 
-          {/* 2. SẢN PHẨM */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm">
-            <div className="grid grid-cols-12 text-gray-400 text-xs font-black uppercase tracking-wider border-b pb-3 mb-4">
-              <div className="col-span-6">Kiện hàng sản phẩm ({checkoutCart.length})</div>
-              <div className="col-span-2 text-center">Đơn giá</div>
-              <div className="col-span-2 text-center">Số lượng</div>
-              <div className="col-span-2 text-right">Thành tiền</div>
+          {/* 2. SẢN PHẨM PHẲNG HÓA VÀ GOM BIẾN THỂ HOÀN HẢO */}
+          <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
+            <h2 className="text-gray-700 font-black text-xs lg:text-sm uppercase tracking-wide border-b border-slate-100 pb-3 mb-2">
+              Kiện hàng sản phẩm ({checkoutCart.length} loại phân loại)
+            </h2>
+
+            <div className="space-y-4">
+              {groupedCheckoutCart.map((group) => {
+                const hasMultipleVariants = group.subVariants.length > 1;
+
+                // ─── TRƯỜNG HỢP 1: SẢN PHẨM ĐƠN LẺ ───
+                if (!hasMultipleVariants) {
+                  const item = group.subVariants[0];
+                  return (
+                    <div key={item.variantId || item.variant_id} className="flex items-center gap-4 bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
+                      <div className="w-16 h-16 bg-slate-50 border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
+                        <img src={getCleanImage(item.image)} className="w-full h-full object-contain" alt={item.name} />
+                      </div>
+
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                        <div className="min-w-0 flex-1 text-left">
+                          <span className="font-black text-slate-800 text-sm lg:text-base uppercase truncate italic block">{item.name}</span>
+                          {item.thuoc_tinh_hop_nhat && item.thuoc_tinh_hop_nhat.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                              {item.thuoc_tinh_hop_nhat.map((attr, idx) => (
+                                <span key={idx} className="inline-flex items-center text-[10px] font-bold tracking-wide text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-100/60 shadow-sm">
+                                  {attr.ten_thuoc_tinh}: <b className="text-slate-700 ml-1 font-black">{attr.gia_tri}</b>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            item.variantName && (
+                              <span className="inline-block mt-1.5 text-[10px] font-bold tracking-wide text-slate-400 bg-slate-50 px-2.5 py-0.5 rounded border border-slate-100">
+                                Phân loại: {item.variantName}
+                              </span>
+                            )
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-6 flex-shrink-0 w-full sm:w-auto justify-between sm:justify-end">
+                          <div className="text-center"><span className="text-xs text-gray-400 font-bold block">Đơn giá</span><span className="font-semibold text-slate-600 text-sm">{(item.price || 0).toLocaleString()}đ</span></div>
+                          <div className="text-center"><span className="text-xs text-gray-400 font-bold block">Số lượng</span><span className="font-bold text-slate-800 text-sm">x{item.quantity}</span></div>
+                          <div className="text-right min-w-[80px]"><span className="text-xs text-gray-400 font-bold block">Thành tiền</span><span className="font-black text-[#006c49] text-sm">{(item.price * item.quantity).toLocaleString()}đ</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ─── TRƯỜNG HỢP 2: SẢN PHẨM NHIỀU PHÂN LOẠI (GOM LẠI VÀ BUNG SẴN SỔ XỊN SÒ) ───
+                return (
+                  <div key={group.productId} className="bg-white border rounded-2xl shadow-sm overflow-hidden border-slate-100">
+                    {/* HÀNG TỔNG KHÔNG CÓ CHECKBOX VÀ KHÔNG CÓ NÚT THU GỌN */}
+                    <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 via-slate-50/30 to-white border-b border-slate-100">
+                      <div className="w-16 h-16 bg-white border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
+                        <img src={group.image} alt={group.name} className="w-full h-full object-contain" />
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <span className="font-black text-slate-800 text-sm lg:text-base uppercase truncate italic block">{group.name}</span>
+                        <p className="text-[11px] text-gray-400 mt-1 font-bold">
+                          Kiện hàng gom: <span className="text-[#006c49] font-black bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 shadow-inner">{group.subVariants.length} loại phân loại</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* MẶC ĐỊNH BUNG SẴN TOÀN BỘ DANH SÁCH CON SẠCH SẼ */}
+                    <div className="divide-y divide-slate-100 bg-white">
+                      {group.subVariants.map((subItem) => (
+                        <div key={subItem.variantId} className="flex items-center gap-4 p-4 pl-6 transition-all duration-200">
+                          <div className="w-12 h-14 bg-slate-50 border border-slate-100 rounded-lg overflow-hidden p-1 flex-shrink-0 flex items-center justify-center shadow-sm">
+                            <img src={getCleanImage(subItem.image)} alt={subItem.variantName} className="w-full h-full object-contain" />
+                          </div>
+
+                          <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                            <div className="min-w-0 flex-1 text-left">
+                              {subItem.thuoc_tinh_hop_nhat && subItem.thuoc_tinh_hop_nhat.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {subItem.thuoc_tinh_hop_nhat.map((attr, idx) => (
+                                    <span key={idx} className="inline-flex items-center text-[9px] font-black tracking-wide text-emerald-800 bg-emerald-50/80 px-2 py-0.5 rounded border border-emerald-100/40 shadow-inner">
+                                      {attr.ten_thuoc_tinh}: <span className="text-slate-600 ml-1 font-bold">{attr.gia_tri}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs font-bold text-slate-500">{subItem.variantName}</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-6 flex-shrink-0 w-full sm:w-auto justify-between sm:justify-end">
+                              <div className="text-center"><span className="text-xs text-gray-400 font-bold block">Đơn giá</span><span className="font-semibold text-slate-600 text-xs">{subItem.price.toLocaleString()}đ</span></div>
+                              <div className="text-center"><span className="text-xs text-gray-400 font-bold block">Số lượng</span><span className="font-bold text-slate-800 text-xs">x{subItem.quantity}</span></div>
+                              <div className="text-right min-w-[80px]"><span className="text-xs text-gray-400 font-bold block">Thành tiền</span><span className="font-black text-[#006c49] text-xs">{(subItem.price * subItem.quantity).toLocaleString()}đ</span></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {checkoutCart.map(item => (
-              <div key={item.variantId || item.variant_id} className="grid grid-cols-12 items-center py-4 border-b border-gray-100 last:border-b-0">
-                <div className="col-span-6 flex items-center gap-3 font-bold text-slate-800 text-sm">
-                  <img src={getCleanImage(item.image)} className="w-12 h-12 rounded-xl object-cover border" alt={item.name} />
-                  <span className="truncate pr-4">{item.name}</span>
-                </div>
-                <div className="col-span-2 text-center font-semibold text-slate-600 text-sm">{item.price.toLocaleString()}đ</div>
-                <div className="col-span-2 text-center font-bold text-slate-800 text-sm">{item.quantity}</div>
-                <div className="col-span-2 text-right font-black text-[#006c49] text-sm">{(item.price * item.quantity).toLocaleString()}đ</div>
-              </div>
-            ))}
           </section>
 
           {/* 3. ĐƠN VỊ VẬN CHUYỂN */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+          <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center font-black text-sm uppercase text-[#006c49] border-b pb-3">
               <div className="flex gap-2"><Truck size={18} /> Gói cước vận chuyển</div>
               <button disabled={isLoadingShipping || !address} onClick={() => setIsShippingModalOpen(true)} className="text-xs hover:underline disabled:opacity-30 disabled:no-underline">Thay đổi</button>
@@ -363,7 +456,7 @@ export default function Checkout() {
           </section>
 
           {/* 4. PHƯƠNG THỨC THANH TOÁN */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
+          <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider"><CreditCard size={18} /> Phương thức thanh toán</h2>
               <button onClick={() => setIsEditingPayment(!isEditingPayment)} className="text-[#006c49] font-black text-xs uppercase hover:underline">{isEditingPayment ? 'Xong' : 'Thay đổi'}</button>
@@ -398,7 +491,6 @@ export default function Checkout() {
             </div>
             <p className="text-[10px] text-gray-400 text-center leading-relaxed">Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân thủ theo các chính sách bảo mật và Điều khoản mua sắm của Demi Mart.</p>
             
-            {/* KHỐI HIỂN THỊ NÚT THANH TOÁN ĐỘNG */}
             {selectedPayment === 'PayPal' ? (
               <div className="w-full pt-2">
                 <PayPalButton 

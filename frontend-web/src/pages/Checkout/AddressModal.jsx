@@ -371,7 +371,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                /* 🎯 SEARCHABLE DROPDOWN 2: QUẬN / HUYỆN */
+                {/* 🎯 SEARCHABLE DROPDOWN 2: QUẬN / HUYỆN */}
                 <div className="relative" ref={districtRef}>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Quận / Huyện</label>
                   <div 
@@ -420,7 +420,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                   )}
                 </div>
 
-                /* 🎯 SEARCHABLE DROPDOWN 3: PHƯỜNG / XÃ */
+                {/* 🎯 SEARCHABLE DROPDOWN 3: PHƯỜNG / XÃ */}
                 <div className="relative" ref={wardRef}>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Phường / Xã</label>
                   <div 
