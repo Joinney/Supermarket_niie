@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer'; 
 import { 
     getCart, 
     addToCart, 
@@ -8,6 +9,9 @@ import {
     uploadPaymentProof 
 } from '../controllers/cartController.js';
 import { protect } from '../middlewares/authMiddleware.js';
+
+const storage = multer.diskStorage({});
+const uploadReceipt = multer({ storage }); 
 
 const router = express.Router();
 

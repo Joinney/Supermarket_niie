@@ -8,7 +8,6 @@ export default function Cart() {
   const navigate = useNavigate();
   const [selectedItems, setSelectedItems] = useState([]);
 
-  // Đồng bộ danh sách các item được chọn mặc định khi giỏ hàng thay đổi
   useEffect(() => {
     if (cart && cart.length > 0) {
       setSelectedItems(cart.map(item => item.variantId));
@@ -29,7 +28,6 @@ export default function Cart() {
 
   const handleUpdateQuantity = (item, type) => {
     if (type === 'minus' && (item.quantity || 1) <= 1) return;
-    // Cập nhật số lượng chênh lệch (+1 hoặc -1) thông qua hàm context
     addToCart({ ...item, quantity: type === 'plus' ? 1 : -1 });
   };
 
@@ -41,7 +39,6 @@ export default function Cart() {
       alert("Vui lòng chọn ít nhất một sản phẩm để tiến hành thanh toán!");
       return;
     }
-    // Lưu các sản phẩm được chọn mua vào bộ nhớ tạm trước khi chuyển hướng checkout
     localStorage.setItem('checkoutItems', JSON.stringify(selectedCartItems));
     navigate('/checkout');
   };
@@ -69,7 +66,7 @@ export default function Cart() {
           <p className="text-slate-400 mt-2 font-medium text-sm leading-relaxed">
             Không gian giỏ hàng của bạn đang trống. Hãy quay lại trang chủ và chọn những sản phẩm ưng ý nhất nhé!
           </p>
-          <Link to="/" className="mt-8 inline-block w-full bg-[#006c49] text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#005a3d] transition-all shadow-lg shadow-emerald-700/10 active:scale-[0.98]">
+          <Link to="/" className="mt-8 inline-block w-full bg-[#006c49] text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#005a3d] transition-all shadow-lg active:scale-[0.98]">
             Quay lại mua sắm
           </Link>
         </div>
@@ -81,7 +78,6 @@ export default function Cart() {
     <div className="min-h-screen bg-slate-50/40 pb-24 text-left">
       <div className="w-full max-w-[1250px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-12">
         
-        {/* Nút quay lại và Tiêu đề */}
         <div className="flex items-center gap-4 mb-8">
           <button onClick={() => navigate(-1)} className="p-3 bg-white border border-slate-100 hover:bg-slate-50 rounded-2xl transition-all shadow-sm active:scale-95">
             <ArrowLeft size={18} className="text-slate-700" />
@@ -97,9 +93,7 @@ export default function Cart() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* CỘT DANH SÁCH SẢN PHẨM */}
           <div className="lg:col-span-8 space-y-4">
-            {/* Thanh chọn tất cả */}
             <div className="flex items-center justify-between bg-white border border-slate-100 px-5 py-4 rounded-2xl shadow-sm">
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <input 
@@ -119,16 +113,13 @@ export default function Cart() {
               )}
             </div>
 
-            {/* Loop danh sách giỏ hàng */}
             <div className="space-y-4">
               {cart.map((item) => {
                 const isSelected = selectedItems.includes(item.variantId);
-                
-                // Chuẩn hóa cấu trúc Route quốc tế: /:countryCode/product/:categorySlug/:productId
                 const country = item.countryCode || 'vn';
                 const category = item.categorySlug || 'san-pham';
                 const pId = item.productId || item.id; 
-                const productDetailUrl = pId ? `/${country.toLowerCase()}/product/${category}/${pId}` : '#';
+                const productDetailUrl = pId ? `/${country.toLowerCase()}/product/${category}/${pId}/${item.variantId}` : '#';
                 
                 return (
                   <div 
@@ -151,11 +142,9 @@ export default function Cart() {
                     <div className="flex-1 min-w-0 py-1 text-left">
                       <div className="flex justify-between items-start gap-4">
                         <div className="min-w-0 flex-1">
-                          {/* Tên sản phẩm gốc */}
                           <Link to={productDetailUrl} className="font-black text-slate-800 text-sm lg:text-base uppercase truncate italic hover:text-[#006c49] transition-colors block">
                             {item.name || "Sản phẩm"}
                           </Link>
-                          {/* Hiển thị chi tiết nhãn biến thể (Vị, kích thước, quy chuẩn...) */}
                           {item.variantName && (
                             <span className="inline-block mt-1 text-[11px] font-bold tracking-wide text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
                               Phân loại: {item.variantName}
@@ -181,7 +170,7 @@ export default function Cart() {
                           <button 
                             onClick={() => handleUpdateQuantity(item, 'minus')} 
                             disabled={(item.quantity || 1) <= 1}
-                            className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white rounded-lg transition-all disabled:opacity-30"
                           >
                             <Minus size={12} strokeWidth={2.5} />
                           </button>
@@ -201,11 +190,8 @@ export default function Cart() {
             </div>
           </div>
 
-          {/* CỘT TÓM TẮT HÓA ĐƠN */}
           <div className="lg:col-span-4 lg:sticky lg:top-24">
-            <div className="bg-white border border-slate-100 rounded-[32px] p-6 lg:p-8 shadow-xl shadow-slate-200/20 space-y-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/40 rounded-full blur-2xl -z-10"></div>
-              
+            <div className="bg-white border border-slate-100 rounded-[32px] p-6 lg:p-8 shadow-xl space-y-6 relative overflow-hidden">
               <h2 className="text-sm font-black text-slate-800 uppercase italic tracking-wider border-b border-slate-100 pb-4 flex items-center gap-2">
                 <CreditCard size={16} className="text-[#006c49]" /> Tóm tắt hóa đơn
               </h2>
@@ -227,7 +213,7 @@ export default function Cart() {
               <button 
                 onClick={handleCheckout}
                 disabled={selectedItems.length === 0}
-                className="w-full bg-[#ffb800] text-slate-900 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#e6a600] transition-all shadow-lg shadow-amber-500/5 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#ffb800]"
+                className="w-full bg-[#ffb800] text-slate-900 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#e6a600] transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Thanh toán ngay ({selectedItems.length})
               </button>
