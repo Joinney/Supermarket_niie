@@ -63,29 +63,6 @@ export default function AdminCreateVariant() {
             .get(`${apiUrl}/api/products/attributes/matrix`)
             .catch(() => ({ data: [] })),
         ]);
-        useEffect(() => {
-          // Chỉ tự động sinh SKU nếu đây là form tạo mới (không phải đang update biến thể cũ)
-          if (!matchedVariant && availableAttributes.length > 0) {
-            // 1. Lấy 3-4 số cuối của mã sản phẩm cha
-            const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
-
-            // 2. Lấy 3 chữ cái đầu tiên của mỗi giá trị thuộc tính đã chọn (Loại bỏ dấu tiếng Việt)
-            const attrParts = availableAttributes
-              .map((a) => {
-                if (!a.selected) return "";
-                return a.selected
-                  .normalize("NFD")
-                  .replace(/[\u0300-\u036f]/g, "")
-                  .replace(/\s+/g, "")
-                  .substring(0, 3)
-                  .toUpperCase();
-              })
-              .filter(Boolean)
-              .join("-");
-
-            setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
-          }
-        }, [availableAttributes, matchedVariant, id]);
 
         // 1. XỬ LÝ DỮ LIỆU SẢN PHẨM & TRÍCH XUẤT MA TRẬN RIÊNG TỪ CÁC BIẾN THỂ ĐÃ CÓ TRONG DB
         if (productResponse.data) {
