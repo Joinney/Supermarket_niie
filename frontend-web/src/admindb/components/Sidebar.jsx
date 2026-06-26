@@ -138,7 +138,7 @@ export default function Sidebar() {
       navigate("/admin/Donhang/Danhsachdonhang");
     } else if (menuKey === "khoHang" && hasAccess("inventory")) {
       setActiveItem("/admin/inventory/create-import");
-      navigate("/admin/inventory/import-list");
+      navigate("/admin/inventory/create-import");
     } else if (menuKey === "khachHang" && hasAccess("customers")) {
       setActiveItem("/admin/customers/list");
       navigate("/admin/customers/list");
