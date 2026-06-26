@@ -2,218 +2,229 @@ import Cart from '../models/Cart.js';
 import axios from 'axios';
 
 // =========================================================================
-// 1. LẤY CHI TIẾT GIỎ HÀNG KÈM THUỘC TÍNH ĐỘNG TỪ POSTGRESQL (EAV MERGE)
+// 1. LẤY CHI TIẾT GIỎ HÀNG KÈM THEO DANH SÁCH MẢNG THUỘC TÍNH EAV CHUẨN
 // =========================================================================
 export const getCart = async (req, res) => {
-    try {
-        const cart = await Cart.findOne({ userId: req.user.id });
-        
-        if (!cart || !cart.items || cart.items.length === 0) {
-            return res.status(200).json({ userId: req.user.id, items: [] });
-        }
-
-        // 1. Thu thập danh sách variantId duy nhất có trong giỏ hàng NoSQL
-        const variantIds = cart.items.map(item => item.variantId);
-
-        // 2. Gọi liên dịch vụ (Inter-service) sang Product Service lấy ma trận EAV
-        let internalVariants = [];
-        try {
-            // Gọi endpoint nội bộ của Product Service (Cổng 5002)
-            const response = await axios.post('http://localhost:5002/api/products/internal/variants', { variantIds });
-            internalVariants = response.data || [];
-        } catch (apiError) {
-            console.warn("⚠️ [Product Service Connection Refused]: Không thể lấy ma trận thuộc tính động.", apiError.message);
-        }
-
-        // 3. Tiến hành gộp (Merge) dữ liệu map object "tuy_chon" vào sub-document
-        const mergedItems = cart.items.map(item => {
-            const itemObj = item.toObject();
-            // Tìm bản ghi tương ứng từ PostgreSQL
-            const matchedDbVariant = internalVariants.find(v => v.ma_bien_the === item.variantId);
-            
-            return {
-                ...itemObj,
-                // Nạp object thuộc tính lồng (Ví dụ: {"Màu sắc": "Đỏ", "Size": "M"}) vào document trả về
-                tuy_chon: matchedDbVariant ? matchedDbVariant.tuy_chon : {}
-            };
-        });
-
-        res.status(200).json({ 
-            userId: cart.userId, 
-            items: mergedItems 
-        });
-    } catch (error) {
-        console.error("🔥 Lỗi tại getCart Backend:", error.message);
-        res.status(500).json({ message: error.message });
+  try {
+    const cart = await Cart.findOne({ userId: req.user.id });
+    
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return res.status(200).json({ userId: req.user.id, items: [] });
     }
+
+    // Đóng gói mảng xử lý bất đồng bộ, ưu tiên data gộp trực tiếp từ Mongo, fallback sang Product Service nếu thiếu
+    const detailedItemsPromises = cart.items.map(async (item) => {
+      const itemObj = item.toObject();
+      
+      // Nếu dữ liệu đã có sẵn mảng thuộc tính lưu trực tiếp trong MongoDB, trả về luôn không cần gọi API chéo
+      if (itemObj.thuoc_tinh_hop_nhat && itemObj.thuoc_tinh_hop_nhat.length > 0) {
+        return itemObj;
+      }
+
+      try {
+        // Fallback: Gọi liên dịch vụ sang Product Service (Cổng 5002) nếu là bản ghi cũ chưa có mảng EAV
+        const response = await axios.get(`http://localhost:5002/api/products/variants/${item.variantId}`);
+        
+        if (response.data) {
+          const vData = response.data;
+          
+          return {
+            ...itemObj,
+            productId: itemObj.productId || vData.ma_san_pham || "",
+            variantName: vData.ten_bien_the || itemObj.variantName || "",
+            image: vData.hinh_anh_url || vData.duong_dan_url || itemObj.image || "",
+            price: Number(vData.gia_ban_le) || itemObj.price || 0, 
+            thuoc_tinh_hop_nhat: vData.thuoc_tinh_hop_nhat || [],
+            ten_don_vi: vData.ten_don_vi || "Gói"
+          };
+        }
+      } catch (apiError) {
+        console.warn(`⚠️ [Inter-Service Connection Refused] Mã biến thể: ${item.variantId}. Message: ${apiError.message}`);
+      }
+      
+      return { ...itemObj, thuoc_tinh_hop_nhat: itemObj.thuoc_tinh_hop_nhat || [], ten_don_vi: itemObj.ten_don_vi || "Gói" };
+    });
+
+    const finalItems = await Promise.all(detailedItemsPromises);
+
+    res.status(200).json({
+      userId: cart.userId,
+      items: finalItems
+    });
+
+  } catch (error) {
+    console.error("🔥 Lỗi tại getCart Backend:", error.message);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // =========================================================================
-// 2. THÊM SẢN PHẨM VÀO GIỎ HÀNG (Hỗ trợ lưu động Route quốc tế từ PostgreSQL)
+// 2. THÊM SẢN PHẨM VÀO GIỎ HÀNG (LƯU TRỰC TIẾP EAV VÀO MONGO)
 // =========================================================================
 export const addToCart = async (req, res) => {
-    const { 
+  const { 
+    variantId, 
+    name, 
+    variantName, 
+    price, 
+    quantity, 
+    image, 
+    productId, 
+    countryCode, 
+    categorySlug,
+    ten_don_vi,          
+    thuoc_tinh_hop_nhat  
+  } = req.body;
+
+  try {
+    let cart = await Cart.findOne({ userId: req.user.id });
+    if (!cart) cart = new Cart({ userId: req.user.id, items: [] });
+    
+    const idx = cart.items.findIndex(i => i.variantId === variantId);
+    if (idx > -1) {
+      cart.items[idx].quantity += Number(quantity);
+      if (price) cart.items[idx].price = price;
+      if (image) cart.items[idx].image = image;
+      if (variantName) cart.items[idx].variantName = variantName;
+      if (ten_don_vi) cart.items[idx].ten_don_vi = ten_don_vi;
+      if (thuoc_tinh_hop_nhat) cart.items[idx].thuoc_tinh_hop_nhat = thuoc_tinh_hop_nhat;
+    } else {
+      cart.items.push({ 
         variantId, 
         name, 
+        variantName: variantName || '', 
         price, 
         quantity, 
         image, 
         productId, 
         countryCode, 
-        categorySlug 
-    } = req.body;
-
-    try {
-        let cart = await Cart.findOne({ userId: req.user.id });
-        if (!cart) cart = new Cart({ userId: req.user.id, items: [] });
-        
-        const idx = cart.items.findIndex(i => i.variantId === variantId);
-        if (idx > -1) {
-            // Nếu đã tồn tại biến thể, cộng dồn số lượng chênh lệch từ Frontend (+1 hoặc -1)
-            cart.items[idx].quantity += Number(quantity);
-            
-            // Cập nhật lại thông tin mới nhất nếu có thay đổi từ DB
-            if (price) cart.items[idx].price = price;
-            if (image) cart.items[idx].image = image;
-        } else {
-            // Thêm mới item kèm theo các metadata route của sản phẩm
-            cart.items.push({ 
-                variantId, 
-                name, 
-                price, 
-                quantity, 
-                image, 
-                productId, 
-                countryCode, 
-                categorySlug 
-            });
-        }
-        
-        await cart.save();
-        res.status(200).json(cart);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+        categorySlug,
+        ten_don_vi: ten_don_vi || 'Gói',               
+        thuoc_tinh_hop_nhat: thuoc_tinh_hop_nhat || [] 
+      });
     }
+    
+    await cart.save();
+    res.status(200).json(cart);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // =========================================================================
-// 3. XÓA MỘT BIẾN THỂ KHỎI GIỎ HÀNG (Qua Params)
-// =========================================================================
-export const removeFromCart = async (req, res) => {
-    try {
-        const { productId } = req.params; // Ở đây productId đóng vai trò là variantId cần xóa
-        let cart = await Cart.findOne({ userId: req.user.id });
-        if (!cart) return res.status(404).json({ message: 'Cart not found' });
-        
-        cart.items = cart.items.filter(item => item.variantId !== productId);
-        await cart.save();
-        
-        res.status(200).json(cart);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// =========================================================================
-// 4. ĐỒNG BỘ/MERGE GIỎ HÀNG TỪ LOCALSTORAGE LÊN DATABASE KHI LOGIN
+// 3. ĐỒNG BỘ/MERGE GIỎ HÀNG TỪ LOCALSTORAGE VÀO DATABASE
 // =========================================================================
 export const mergeCart = async (req, res) => {
-    try {
-        const { items } = req.body;
-        let cart = await Cart.findOne({ userId: req.user.id });
-        if (!cart) cart = new Cart({ userId: req.user.id, items: [] });
+  try {
+    const { items } = req.body;
+    let cart = await Cart.findOne({ userId: req.user.id });
+    if (!cart) cart = new Cart({ userId: req.user.id, items: [] });
 
-        items.forEach(newItem => {
-            const existing = cart.items.find(i => i.variantId === newItem.variantId);
-            if (existing) {
-                existing.quantity = Number(existing.quantity) + Number(newItem.quantity);
-            } else {
-                cart.items.push(newItem);
-            }
+    items.forEach(newItem => {
+      const existing = cart.items.find(i => i.variantId === newItem.variantId);
+      if (existing) {
+        existing.quantity = Number(existing.quantity) + Number(newItem.quantity);
+        if (newItem.variantName) existing.variantName = newItem.variantName;
+        if (newItem.ten_don_vi) existing.ten_don_vi = newItem.ten_don_vi;
+        if (newItem.thuoc_tinh_hop_nhat) existing.thuoc_tinh_hop_nhat = newItem.thuoc_tinh_hop_nhat;
+      } else {
+        cart.items.push({
+          variantId: newItem.variantId,
+          productId: newItem.productId || '',
+          name: newItem.name,
+          variantName: newItem.variantName || '', 
+          image: newItem.image || '',
+          price: newItem.price,
+          quantity: newItem.quantity,
+          categorySlug: newItem.categorySlug || 'san-pham',
+          countryCode: newItem.countryCode || 'vn',
+          ten_don_vi: newItem.ten_don_vi || 'Gói',                
+          thuoc_tinh_hop_nhat: newItem.thuoc_tinh_hop_nhat || []  
         });
-        
-        await cart.save();
-        res.status(200).json(cart);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+      }
+    });
+    
+    await cart.save();
+    res.status(200).json(cart);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // =========================================================================
-// 5. 🚀 XÓA CHỌN LỌC CÁC BIẾN THỂ ĐÃ THANH TOÁN THÀNH CÔNG KHỎI MONGODB
+// 4. XÓA MỘT BIẾN THỂ KHỎI GIỎ HÀNG
+// =========================================================================
+export const removeFromCart = async (req, res) => {
+  try {
+    const { productId } = req.params; 
+    let cart = await Cart.findOne({ userId: req.user.id });
+    if (!cart) return res.status(404).json({ message: 'Cart not found' });
+    
+    cart.items = cart.items.filter(item => item.variantId !== productId);
+    await cart.save();
+    
+    res.status(200).json(cart);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// =========================================================================
+// 5. XÓA CHỌN LỌC CÁC BIẾN THỂ ĐÃ THANH TOÁN
 // =========================================================================
 export const removeSelectedFromCart = async (req, res) => {
-    try {
-        const { variant_ids } = req.body;
+  try {
+    const { variant_ids } = req.body;
 
-        if (!variant_ids || !Array.isArray(variant_ids) || variant_ids.length === 0) {
-            return res.status(400).json({ success: false, message: "Mảng variant_ids trống hoặc không hợp lệ!" });
-        }
-
-        // Dùng $pull kết hợp $or để quét triệt để cả camelCase và snake_case trong Sub-document của MongoDB
-        const cart = await Cart.findOneAndUpdate(
-            { userId: req.user.id },
-            { 
-                $pull: { 
-                    items: { 
-                        $or: [
-                            { variantId: { $in: variant_ids } },
-                            { variant_id: { $in: variant_ids } }
-                        ]
-                    } 
-                } 
-            },
-            { new: true }
-        );
-
-        if (!cart) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy giỏ hàng của người dùng!" });
-        }
-
-        res.status(200).json({ 
-            success: true, 
-            message: "Đã dọn dẹp các sản phẩm đã thanh toán khỏi Database MongoDB thành công!",
-            cart 
-        });
-    } catch (error) {
-        console.error("🔥 Lỗi tại removeSelectedFromCart Backend:", error.message);
-        res.status(500).json({ success: false, message: error.message });
+    if (!variant_ids || !Array.isArray(variant_ids) || variant_ids.length === 0) {
+      return res.status(400).json({ success: false, message: "Mảng variant_ids trống hoặc không hợp lệ!" });
     }
+
+    const cart = await Cart.findOneAndUpdate(
+      { userId: req.user.id },
+      { 
+        $pull: { 
+          items: { 
+            $or: [
+              { variantId: { $in: variant_ids } },
+              { variant_id: { $in: variant_ids } }
+            ]
+          } 
+        } 
+      },
+      { new: true }
+    );
+
+    if (!cart) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy giỏ hàng của người dùng!" });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Đã dọn dẹp các sản phẩm đã thanh toán thành công!",
+      cart 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // =========================================================================
-// 6. 🚀 UPLOAD ẢNH MINH CHỨNG THANH TOÁN LÊN CLOUDINARY VÀ LƯU VÀO ĐƠN HÀNG
+// 6. UPLOAD ẢNH MINH CHỨNG THANH TOÁN
 // =========================================================================
 export const uploadPaymentProof = async (req, res) => {
-    try {
-        const { orderId } = req.params;
-
-        if (!req.file) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Vui lòng chọn hình ảnh minh chứng giao dịch." 
-            });
-        }
-
-        const proofUrl = req.file.path;
-
-        // Tạm thời trả về URL, mở comment khối này ra khi bạn đã import model Order/Bill thành công
-        // const order = await Order.findById(orderId);
-        // if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
-        // order.paymentProofUrl = proofUrl;
-        // order.paymentStatus = 'pending_verification';
-        // await order.save();
-
-        res.status(200).json({ 
-            success: true, 
-            message: "Tải lên ảnh minh chứng thành công! Đang chờ Admin xác nhận.", 
-            paymentProofUrl: proofUrl 
-        });
-    } catch (error) {
-        console.error("🔥 Lỗi tại uploadPaymentProof:", error.message);
-        res.status(500).json({ 
-            success: false, 
-            message: "Lỗi hệ thống khi tải ảnh lên máy chủ Cloudinary." 
-        });
+  try {
+    const { orderId } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Vui lòng chọn hình ảnh minh chứng giao dịch." });
     }
+    const proofUrl = req.file.path;
+    res.status(200).json({ 
+      success: true, 
+      message: "Tải lên ảnh minh chứng thành công! Đang chờ Admin xác nhận.", 
+      paymentProofUrl: proofUrl 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải ảnh." });
+  }
 };

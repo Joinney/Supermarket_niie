@@ -31,6 +31,7 @@ const getYouTubeEmbedUrl = (url) => {
 export default function ProductDetail() {
   const { country_code, category_slug, id, variantId } = useParams();
   const country = String(country_code || "vn").toLowerCase();
+  const category = category_slug;
   const navigate = useNavigate();
   const location = useLocation();
   const { addToCart } = useCart();
@@ -74,16 +75,28 @@ export default function ProductDetail() {
 
         if (productData && productData.ma_san_pham) {
           const bienTheList = productData.bien_the || productData.variants || [];
-          productData.bien_the = bienTheList;
+          
+          // Phẳng hóa mảng EAV từ Postgres sang object phẳng ngay khi vừa nạp về phục vụ render highlight bộ nút bấm
+          productData.bien_the = bienTheList.map(bt => {
+            if (Array.isArray(bt.thuoc_tinh_hop_nhat) && (!bt.thuoc_tinh || Object.keys(bt.thuoc_tinh).length === 0)) {
+              const flatAttrs = {};
+              bt.thuoc_tinh_hop_nhat.forEach(a => {
+                flatAttrs[a.ten_thuoc_tinh] = a.gia_tri;
+              });
+              bt.thuoc_tinh = flatAttrs;
+            }
+            return bt;
+          });
+
           setProduct(productData);
 
           let targetVariant = null;
           if (variantId) {
-            targetVariant = bienTheList.find((v) => v.ma_bien_the === variantId);
+            targetVariant = productData.bien_the.find((v) => v.ma_bien_the === variantId);
           }
 
           if (!targetVariant) {
-            targetVariant = bienTheList.find((v) => v.la_ban_chay) || bienTheList[0];
+            targetVariant = productData.bien_the.find((v) => v.la_ban_chay) || productData.bien_the[0];
           }
 
           if (targetVariant) {
@@ -140,8 +153,8 @@ export default function ProductDetail() {
     return product.bien_the.some((bt) => {
       if (!bt.thuoc_tinh) return false;
       const targetVal = bt.thuoc_tinh[key];
-      const cleanTargetVal = typeof targetVal === "string" ? targetVal.trim() : targetVal;
-      return cleanTargetVal === cleanValue;
+      if (!targetVal) return false;
+      return String(targetVal).trim().toLowerCase() === String(cleanValue).toLowerCase();
     });
   };
 
@@ -156,9 +169,8 @@ export default function ProductDetail() {
       return Object.keys(nhomPhanLoai).every((k) => {
         const val1 = bt.thuoc_tinh[k];
         const val2 = nextAttributes[k];
-        const cVal1 = typeof val1 === "string" ? val1.trim() : val1;
-        const cVal2 = typeof val2 === "string" ? val2.trim() : val2;
-        return cVal1 === cVal2;
+        if (!val1 || !val2) return false;
+        return String(val1).trim().toLowerCase() === String(val2).trim().toLowerCase();
       });
     });
 
@@ -185,19 +197,41 @@ export default function ProductDetail() {
     });
   };
 
+  // ✅ ĐÃ SỬA ĐỔI HOÀN CHỈNH: Trích xuất sâu mảng dữ liệu phân loại chéo EAV sạch để đưa vào Database MongoDB
   const handleAddToCart = (e) => {
     if (!product || !selectedVariant) return;
+    
+    // Ép cứng cấu trúc mảng EAV dynamic sang mảng JSON thuần túy để Axios không làm rỗng mảng
+    let cleanEAVArray = [];
+    if (Array.isArray(selectedVariant.thuoc_tinh_hop_nhat) && selectedVariant.thuoc_tinh_hop_nhat.length > 0) {
+      cleanEAVArray = selectedVariant.thuoc_tinh_hop_nhat.map(attr => ({
+        ten_thuoc_tinh: String(attr.ten_thuoc_tinh || "").trim(),
+        gia_tri: String(attr.gia_tri || "").trim()
+      }));
+    } else if (selectedVariant.thuoc_tinh && Object.keys(selectedVariant.thuoc_tinh).length > 0) {
+      cleanEAVArray = Object.entries(selectedVariant.thuoc_tinh).map(([key, val]) => ({
+        ten_thuoc_tinh: String(key).trim(),
+        gia_tri: String(val).trim()
+      }));
+    }
+
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
       name: product.ten_san_pham,
       price: currentPrice,
       quantity: quantity,
-      image: mainMedia?.duong_dan_url,
-      productId: product.ma_san_pham, // ✅ ĐỒNG BỘ CHUẨN: Dùng productId
-      categorySlug: product.slug_danh_muc,
-      countryCode: product.country_code,
-      variantName: selectedVariant.ten_bien_the,
+      image: selectedVariant.hinh_anh_url || selectedVariant.duong_dan_url || mainMedia?.duong_dan_url || "",
+      productId: product.ma_san_pham, 
+      categorySlug: product.slug_danh_muc || category_slug,
+      countryCode: product.country_code || country,
+      variantName: selectedVariant.ten_bien_the || product.ten_san_pham,
+
+      // 🚀 ĐỒNG BỘ TUYỆT ĐỐI PAYLOAD: Bắn chính xác bộ dữ liệu động sang CartContext
+      ten_don_vi: selectedVariant.ten_don_vi || product.ten_don_vi || "Gói",
+      thuoc_tinh_hop_nhat: cleanEAVArray
     };
+
+    console.log("📦 Payload bóc tách chuẩn bị gửi MongoDB:", itemToCart);
     addToCart(itemToCart);
 
     const startX = e.clientX;
@@ -229,7 +263,7 @@ export default function ProductDetail() {
     const toast = document.createElement("div");
     toast.className = "custom-toast";
     toast.innerHTML = `
-      <img src="${mainMedia?.duong_dan_url || "https://placehold.co/300x300?text=Demi+Mart"}" style="width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;">
+      <img src="${selectedVariant.hinh_anh_url || selectedVariant.duong_dan_url || mainMedia?.duong_dan_url || "https://placehold.co/300x300?text=Demi+Mart"}" style="width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;">
       <div>
         <h4 style="margin: 0; color: #006c49; font-size: 15px; font-weight: 900; letter-spacing: -0.5px;">Thêm thành công!</h4>
         <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">Cảm ơn khách hàng đã mua <b style="color: #334155;">${product.ten_san_pham}</b></p>
@@ -265,7 +299,6 @@ export default function ProductDetail() {
     <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16 text-left">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10">
         
-        {/* BREADCRUMB */}
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
           <Link to={`/${country}`} className="hover:text-slate-900 flex-shrink-0 transition-colors">Home</Link>
           <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
@@ -280,7 +313,6 @@ export default function ProductDetail() {
           <span className="text-[#006c49] truncate font-black italic">{product.ten_san_pham}</span>
         </nav>
 
-        {/* DETAILS CONTAINER */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
           <div className="lg:col-span-6 xl:col-span-7 flex flex-col-reverse sm:flex-row gap-2 lg:gap-4">
             <div className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto thumb-scrollbar py-1 sm:max-h-[280px] 2xl:max-h-[350px] pr-1">
@@ -309,12 +341,7 @@ export default function ProductDetail() {
                   <video src={mainMedia.duong_dan_url} controls className="w-full h-full object-contain p-4 bg-black rounded-[16px]" />
                 )
               ) : (
-                <img
-                  src={mainMedia?.duong_dan_url}
-                  className="w-full h-full object-contain p-4 transition-transform duration-500 hover:scale-105"
-                  alt={product.ten_san_pham}
-                  onError={(e) => { e.target.src = "https://placehold.co/600x600?text=Demi+Mart"; }}
-                />
+                <img src={mainMedia?.duong_dan_url} className="w-full h-full object-contain p-4 transition-transform duration-500 hover:scale-105" alt={product.ten_san_pham} onError={(e) => { e.target.src = "https://placehold.co/600x600?text=Demi+Mart"; }} />
               )}
             </div>
           </div>
@@ -359,7 +386,7 @@ export default function ProductDetail() {
                       <div className="flex flex-wrap gap-2">
                         {danhSachGiaTri.map((giaTri) => {
                           const isSelected = typeof selectedAttributes[tenThuocTinh] === "string" && typeof giaTri === "string"
-                            ? selectedAttributes[tenThuocTinh].trim() === giaTri.trim()
+                            ? selectedAttributes[tenThuocTinh].trim().toLowerCase() === giaTri.trim().toLowerCase()
                             : selectedAttributes[tenThuocTinh] === giaTri;
                           const isValid = isOptionValid(tenThuocTinh, giaTri);
 
@@ -406,7 +433,6 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            {/* BOX SỐ LƯỢNG & ĐẶT HÀNG */}
             <div className="bg-[#fcfcfc] p-4 lg:p-6 2xl:p-8 rounded-[20px] lg:rounded-[24px] border border-slate-100 shadow-xl space-y-4 lg:space-y-6 mt-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -450,7 +476,6 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* REVIEWS & FEEDBACK */}
         <div className="mt-12 lg:mt-16 pt-8 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
           <div className="lg:col-span-8"><Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} /></div>
           <div className="lg:col-span-4 lg:sticky lg:top-6"><RelatedProducts currentProduct={product} countryCode={country} /></div>
