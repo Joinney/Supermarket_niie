@@ -223,6 +223,69 @@ export const getAllInternalUsers = async (req, res) => {
     }
 };
 
+// --- 5b. LẤY TOÀN BỘ DANH SÁCH KHÁCH HÀNG BUYER THỰC TẾ ---
+export const getAllBuyers = async (req, res) => {
+    try {
+        const search = req.query.search || "";
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        let queryArgs = [];
+        let whereClauses = [`LOWER(role) = 'buyer'`]; // 🎯 ÉP CHẶT: Chỉ lấy tài khoản Buyer
+
+        // Xử lý bộ lọc tìm kiếm động (nếu có)
+        if (search.trim() !== "") {
+            queryArgs.push(`%${search.trim()}%`);
+            whereClauses.push(`(full_name ILIKE $${queryArgs.length} OR email ILIKE $${queryArgs.length} OR username ILIKE $${queryArgs.length})`);
+        }
+
+        const whereStatement = whereClauses.join(" AND ");
+
+        // 1. Lấy tổng số lượng để tính phân trang
+        const totalQuery = `SELECT COUNT(*) FROM public.users WHERE ${whereStatement};`;
+        const totalResult = await pool.query(totalQuery, queryArgs);
+        const totalItems = parseInt(totalResult.rows[0].count);
+        const totalPages = Math.ceil(totalItems / limit);
+
+        // 2. Lấy dữ liệu trang hiện tại
+        queryArgs.push(limit, offset);
+        const dataQuery = `
+            SELECT 
+                user_id, 
+                username, 
+                email, 
+                full_name, 
+                phone_number, 
+                address, 
+                gender, 
+                birthday, 
+                role, 
+                status, 
+                avatar_url,
+                last_login,
+                created_at
+            FROM public.users 
+            WHERE ${whereStatement}
+            ORDER BY user_id DESC
+            LIMIT $${queryArgs.length - 1} OFFSET $${queryArgs.length};
+        `;
+        
+        const { rows } = await pool.query(dataQuery, queryArgs);
+
+        // Trả về cấu trúc phân trang chuẩn để Frontend khớp dữ liệu
+        res.status(200).json({
+            users: rows,
+            totalPages,
+            totalItems,
+            currentPage: page
+        });
+    } catch (error) {
+        console.error("❌ Lỗi CSDL tại getAllBuyers:", error.message);
+        res.status(500).json({ success: false, error: "Lỗi kết nối CSDL khi lấy danh sách Buyer" });
+    }
+};
+
 // --- 6. LẤY CHI TIẾT 1 NHÂN SỰ ---
 export const getUserDetail = async (req, res) => {
     const { id } = req.params;
