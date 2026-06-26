@@ -228,7 +228,7 @@ export const getProductById = async (req, res) => {
 
         const variantsQuery = `
             SELECT 
-                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le,
+                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai, -- 🌟 1. BỔ SUNG TRẠNG THÁI VÀO CÂU SELECT
                 dm.ten_thuoc_tinh, gt.gia_tri,
                 dv.ten_don_vi AS ten_don_vi
             FROM public.bien_the_san_pham bt
@@ -251,6 +251,7 @@ export const getProductById = async (req, res) => {
                     ten_bien_the: row.ten_bien_the,
                     sku: row.sku,
                     gia_ban_le: Number(row.gia_ban_le),
+                    trang_thai: row.trang_thai, 
                     thuoc_tinh: {},
                     ten_don_vi: row.ten_don_vi || "Gói"
                 };
@@ -573,6 +574,88 @@ export const createProduct = async (req, res) => {
     } catch (error) {
         console.error('❌ Lỗi API createProduct:', error.message);
         res.status(500).json({ success: false, error: "Gặp sự cố khi thêm mới sản phẩm." });
+    }
+};
+
+// =========================================================================
+// 8.5 BẬT / TẮT TRẠNG THÁI SẢN PHẨM (TOGGLE STATUS)
+// =========================================================================
+export const toggleProductStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Cập nhật trạng thái lật ngược (true thành false, false thành true)
+        const result = await pool.query(`
+            UPDATE public.san_pham 
+            SET trang_thai = NOT trang_thai, ngay_cap_nhat = NOW() 
+            WHERE ma_san_pham = $1 
+            RETURNING ma_san_pham, trang_thai;
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm." });
+        }
+
+        // Tùy chọn: Đồng bộ tắt luôn các biến thể bên trong nếu sản phẩm cha bị tắt
+        const newStatus = result.rows[0].trang_thai;
+        await pool.query(`UPDATE public.bien_the_san_pham SET trang_thai = $1 WHERE ma_san_pham = $2`, [newStatus, id]);
+
+        res.status(200).json({ 
+            success: true, 
+            message: newStatus ? "Đã MỞ BÁN sản phẩm!" : "Đã TẠM NGƯNG sản phẩm!",
+            newStatus 
+        });
+    } catch (error) {
+        console.error('❌ Lỗi API toggleProductStatus:', error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi đổi trạng thái." });
+    }
+};
+
+// =========================================================================
+// 8.6 DELETE PRODUCT (HARD DELETE - CÓ BẢO VỆ SKU)
+// =========================================================================
+export const deleteProduct = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        await client.query('BEGIN');
+
+        // 🌟 1. LÁ CHẮN BẢO VỆ: KIỂM TRA SỐ LƯỢNG SKU (BIẾN THỂ)
+        const checkVariants = await client.query(
+            'SELECT COUNT(*) FROM public.bien_the_san_pham WHERE ma_san_pham = $1',
+            [id]
+        );
+        
+        const skuCount = parseInt(checkVariants.rows[0].count);
+
+        if (skuCount > 0) {
+            await client.query('ROLLBACK');
+            // Trả về lỗi 400 (Bad Request) kèm thông báo chi tiết
+            return res.status(400).json({ 
+                success: false, 
+                message: `Từ chối xóa! Sản phẩm này đang chứa ${skuCount} phiên bản (SKU). Vui lòng vào chi tiết sản phẩm, xóa hết các SKU trước khi xóa sản phẩm gốc.` 
+            });
+        }
+
+        // 2. Nếu đã sạch SKU, tiến hành dọn dẹp các dữ liệu rác còn lại (như hình ảnh media)
+        await client.query('DELETE FROM public.media_san_pham WHERE ma_san_pham = $1', [id]);
+
+        // 3. Xóa Sản phẩm gốc
+        const result = await client.query('DELETE FROM public.san_pham WHERE ma_san_pham = $1 RETURNING *', [id]);
+
+        if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm!" });
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ success: true, message: "Đã xóa vĩnh viễn sản phẩm khỏi hệ thống!" });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi API deleteProduct:', error.message);
+        res.status(500).json({ success: false, message: "Xóa thất bại! Sản phẩm này đang dính lịch sử đơn hàng." });
+    } finally {
+        client.release();
     }
 };
 
@@ -1103,7 +1186,7 @@ export const updateVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 15.5 XÓA BIẾN THỂ (SOFT DELETE ĐỂ BẢO TOÀN LỊCH SỬ ĐƠN HÀNG)
+// 15.5 XÓA TỪNG BIẾN THỂ (SOFT DELETE - TÔN TRỌNG LOGIC BẢO TOÀN ĐƠN HÀNG)
 // =========================================================================
 export const deleteVariant = async (req, res) => {
     try {
@@ -1139,6 +1222,67 @@ export const deleteVariant = async (req, res) => {
             message: 'Sự cố máy chủ khi thực thi xóa biến thể sản phẩm.',
             error_detail: error.message 
         });
+    }
+};
+
+// =========================================================================
+// 15.6 XÓA TẤT CẢ BIẾN THỂ (SOFT DELETE - ẨN HÀNG LOẠT BẢO TOÀN DỮ LIỆU)
+// =========================================================================
+export const deleteAllVariants = async (req, res) => {
+    try {
+        const { id } = req.params; // Lấy ID của Sản phẩm cha
+
+        // Chuyển toàn bộ biến thể của sản phẩm này sang trạng thái lưu trữ (false)
+        const query = `
+            UPDATE public.bien_the_san_pham 
+            SET trang_thai = false, ngay_cap_nhat = NOW() 
+            WHERE ma_san_pham = $1 
+            RETURNING ma_bien_the;
+        `;
+        
+        const { rows } = await pool.query(query, [id]);
+
+        return res.status(200).json({ 
+            success: true, 
+            message: `Đã xóa (lưu trữ) thành công ${rows.length} biến thể để bảo toàn lịch sử đơn hàng!` 
+        });
+    } catch (error) {
+        console.error('❌ Lỗi API deleteAllVariants:', error.message);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Lỗi dọn dẹp biến thể.',
+            error_detail: error.message
+        });
+    }
+};
+
+// =========================================================================
+// 15.7 KHÔI PHỤC BIẾN THỂ ĐÃ XÓA MỀM (RESTORE SKU)
+// =========================================================================
+export const restoreVariant = async (req, res) => {
+    try {
+        const { variantId } = req.params;
+
+        const query = `
+            UPDATE public.bien_the_san_pham 
+            SET trang_thai = true, ngay_cap_nhat = NOW() 
+            WHERE ma_bien_the = $1 
+            RETURNING *;
+        `;
+        
+        const { rows } = await pool.query(query, [variantId]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy biến thể để khôi phục.' });
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: 'Đã khôi phục phiên bản thành công, sẵn sàng mở bán lại!' 
+        });
+    } catch (error) {
+        console.error('❌ Lỗi API restoreVariant:', error.message);
+        return res.status(500).json({ success: false, message: 'Sự cố máy chủ khi khôi phục biến thể.' });
     }
 };
 
@@ -1448,37 +1592,3 @@ export const createUnit = async (req, res) => {
     }
 };
 
-// =========================================================================
-// API XÓA SẢN PHẨM (XÓA TOÀN BỘ SẢN PHẨM)
-// =========================================================================
-export const deleteProduct = async (req, res) => {
-    const client = await pool.connect();
-    try {
-        const { id } = req.params;
-        await client.query('BEGIN');
-
-        // 1. Xóa các dữ liệu liên quan trước (để tránh lỗi ràng buộc khóa ngoại)
-        // Xóa hình ảnh media
-        await client.query('DELETE FROM public.media_san_pham WHERE ma_san_pham = $1', [id]);
-        
-        // Xóa các biến thể
-        await client.query('DELETE FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
-
-        // 2. Xóa sản phẩm chính
-        const result = await client.query('DELETE FROM public.san_pham WHERE ma_san_pham = $1 RETURNING *', [id]);
-
-        if (result.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm để xóa." });
-        }
-
-        await client.query('COMMIT');
-        res.status(200).json({ success: true, message: "Đã xóa sản phẩm và dữ liệu liên quan thành công." });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('❌ Lỗi API deleteProduct:', error.message);
-        res.status(500).json({ success: false, message: "Lỗi hệ thống khi xóa sản phẩm." });
-    } finally {
-        client.release();
-    }
-};

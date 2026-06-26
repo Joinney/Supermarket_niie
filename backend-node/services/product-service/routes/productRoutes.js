@@ -13,6 +13,8 @@ import {
     getProductsWithoutDescriptions,
     refreshEmptyDescriptions,
     createProduct,
+    toggleProductStatus,
+    deleteProduct,
     getAllCountries,
     getReviewsByProduct,        
     getRelatedProducts,       
@@ -20,7 +22,9 @@ import {
     getAllAvailableAttributes,  
     createVariant,
     updateVariant,              
-    deleteVariant,             
+    deleteVariant,    
+    deleteAllVariants,  
+    restoreVariant,       
     createAttribute,           
     uploadImage,
     uploadVariantImage,
@@ -69,8 +73,9 @@ router.post('/upload', upload.single('image'), uploadImage);
 router.get('/variants/:variantId', getVariantById); 
 router.put('/variants/:variantId', updateVariant);    // ĐỒNG BỘ: Route PUT cập nhật thông tin và ma trận EAV của biến thể
 router.delete('/variants/:variantId', deleteVariant); // Route xử lý Xóa mềm
+router.delete('/:id/variants-all', deleteAllVariants); 
 router.post('/variants/:variantId/upload-image', upload.single('image'), uploadVariantImage);
-
+router.put('/variants/:variantId/restore', restoreVariant);
 
 // =========================================================================
 // 🔄 3. NHÓM ROUTE ĐỘNG SẢN PHẨM & DANH MỤC (DYNAMIC ROUTES CÓ CHỨA PARAM :id)
@@ -78,6 +83,8 @@ router.post('/variants/:variantId/upload-image', upload.single('image'), uploadV
 router.get('/category/:slug', getProductsByCategorySlug);
 router.get('/', getAllProducts);
 router.post('/', createProduct);
+router.put('/:id/toggle-status', toggleProductStatus);
+router.delete('/:id', deleteProduct);
 
 // Xử lý lưu Transaction khởi tạo biến thể mới đấu nối ma trận EAV
 router.post('/:id/variants', createVariant);

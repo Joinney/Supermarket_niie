@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -14,6 +14,8 @@ import {
   Eye,
   Plus,
   Edit,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import axios from "axios";
 
@@ -38,15 +40,16 @@ export default function AdminProductDetail() {
   const [currentPage, setCurrentPage] = useState(1);
   const variantsPerPage = 5;
 
-  useEffect(() => {
-    const fetchDetail = async () => {
+  // 🌟 Đã tách hàm fetchDetail ra ngoài để có thể tái sử dụng sau khi xóa SKU
+  const fetchDetail = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setLoading(true);
       try {
         const apiUrl =
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
         const response = await axios.get(`${apiUrl}/api/products/${id}`);
 
         if (response.data) {
-          // Khắc phục lỗi sập trắng màn hình bằng cách bóc tách mảng phẳng nếu có
           const data = Array.isArray(response.data)
             ? response.data[0]
             : response.data;
@@ -56,7 +59,7 @@ export default function AdminProductDetail() {
             data?.media?.find((m) => m.la_anh_chinh) ||
             data?.media?.[0] ||
             null;
-          setActiveMediaObj(mainMedia);
+          if (!activeMediaObj) setActiveMediaObj(mainMedia);
 
           const savedNote = localStorage.getItem(`demi_note_${id}`);
           if (savedNote) setNoteText(savedNote);
@@ -66,9 +69,13 @@ export default function AdminProductDetail() {
       } finally {
         setLoading(false);
       }
-    };
+    },
+    [id, activeMediaObj],
+  );
+
+  useEffect(() => {
     fetchDetail();
-  }, [id]);
+  }, [fetchDetail]);
 
   const handleSaveNote = () => {
     setSavingNote(true);
@@ -109,6 +116,70 @@ export default function AdminProductDetail() {
 
   const handlePrevPage = () => {
     if (currentPage > 1) setCurrentPage((prev) => prev - 1);
+  };
+
+  // HÀM XÓA 1 BIẾN THỂ
+  const handleDeleteVariant = async (variantId, variantName) => {
+    if (
+      window.confirm(
+        `⚠️ Bạn có chắc chắn muốn đưa SKU "${variantName}" vào lưu trữ?`,
+      )
+    ) {
+      try {
+        const apiUrl =
+          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+        await axios.delete(`${apiUrl}/api/products/variants/${variantId}`);
+        alert("✅ Đã lưu trữ biến thể thành công!");
+        fetchDetail(false); // Load lại dữ liệu ngầm không bị chớp màn hình
+      } catch (err) {
+        alert(
+          "❌ Xóa thất bại: " + (err.response?.data?.message || err.message),
+        );
+      }
+    }
+  };
+
+  // HÀM XÓA TẤT CẢ BIẾN THỂ
+  const handleDeleteAllVariants = async () => {
+    if (
+      window.confirm(`🧨 NGUY HIỂM: Lưu trữ TOÀN BỘ biến thể của sản phẩm này?`)
+    ) {
+      try {
+        const apiUrl =
+          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+        await axios.delete(
+          `${apiUrl}/api/products/${product.ma_san_pham}/variants-all`,
+        );
+        alert("✅ Đã lưu trữ toàn bộ biến thể thành công!");
+        fetchDetail(false);
+      } catch (err) {
+        alert(
+          "❌ Xóa thất bại: " + (err.response?.data?.message || err.message),
+        );
+      }
+    }
+  };
+
+  // HÀM KHÔI PHỤC BIẾN THỂ
+  const handleRestoreVariant = async (variantId, variantName) => {
+    if (
+      window.confirm(
+        `🔄 Bạn muốn khôi phục lại phiên bản "${variantName}" để tiếp tục kinh doanh?`,
+      )
+    ) {
+      try {
+        const apiUrl =
+          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+        await axios.put(`${apiUrl}/api/products/variants/${variantId}/restore`);
+        alert("✅ Đã khôi phục biến thể thành công!");
+        fetchDetail(false); // Load lại danh sách ngầm
+      } catch (err) {
+        alert(
+          "❌ Khôi phục thất bại: " +
+            (err.response?.data?.message || err.message),
+        );
+      }
+    }
   };
 
   if (loading) {
@@ -204,7 +275,7 @@ export default function AdminProductDetail() {
               </div>
             )}
           </div>
-          {/* 🌟 NÚT ĐẶT LÀM ẢNH CHÍNH */}
+          {/* NÚT ĐẶT LÀM ẢNH CHÍNH */}
           {activeMediaObj && (
             <div className="absolute top-4 left-4">
               {activeMediaObj.la_anh_chinh ? (
@@ -223,7 +294,7 @@ export default function AdminProductDetail() {
                         ma_media: activeMediaObj.ma_media,
                       });
                       alert("Đã đặt làm ảnh chính thành công!");
-                      window.location.reload(); // Tải lại trang để cập nhật UI
+                      window.location.reload();
                     } catch (err) {
                       alert("Lỗi khi thiết lập ảnh chính.");
                     }
@@ -325,29 +396,38 @@ export default function AdminProductDetail() {
               </motion.div>
             )}
 
-            {/* --- TAB 2: SKU & BIẾN THỂ (ĐÃ THÊM NÚT TẠO MỚI) --- */}
+            {/* --- TAB 2: SKU & BIẾN THỂ --- */}
             {activeTab === "variants" && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4"
               >
-                {/* 🛠️ SỬA HÀNG TIÊU ĐỀ: Đưa nút "Thêm biến thể" ra góc phải */}
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
                     <Layers size={16} className="text-[#006c49]" /> Danh sách
                     các phiên bản ({totalVariants})
                   </h3>
 
-                  {/* 🔗 NÚT BẤM KẾT NỐI SANG TRANG CREATE-VARIANT BIỆT LẬP */}
-                  <Link
-                    to={`/admin/products/create-variant/${product.ma_san_pham}`}
-                    // 🟢 TRUYỀN DANH SÁCH BIẾN THỂ HIỆN TẠI SANG TRANG CREATE ĐỂ KIỂM TRA CHÉO 🟢
-                    state={{ existingVariants: product.bien_the }}
-                    className="flex items-center gap-1 bg-[#006c49] hover:bg-[#004d34] text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm transition active:scale-95 uppercase tracking-wider"
-                  >
-                    <Plus size={14} /> Thêm biến thể
-                  </Link>
+                  {/* 🌟 NÚT XÓA TẤT CẢ VÀ THÊM MỚI */}
+                  <div className="flex items-center gap-2">
+                    {totalVariants > 0 && (
+                      <button
+                        onClick={handleDeleteAllVariants}
+                        className="flex items-center gap-1.5 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 border border-red-200 hover:border-red-500 px-3 py-1.5 rounded-xl text-xs font-black shadow-sm transition active:scale-95 uppercase tracking-wider"
+                      >
+                        <Trash2 size={14} /> Xóa tất cả
+                      </button>
+                    )}
+
+                    <Link
+                      to={`/admin/products/create-variant/${product.ma_san_pham}`}
+                      state={{ existingVariants: product.bien_the }}
+                      className="flex items-center gap-1 bg-[#006c49] hover:bg-[#004d34] text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm transition active:scale-95 uppercase tracking-wider"
+                    >
+                      <Plus size={14} /> Thêm biến thể
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -373,12 +453,58 @@ export default function AdminProductDetail() {
                           return (
                             <tr
                               key={bt.ma_bien_the || idx}
-                              className="group hover:bg-emerald-50/40 transition"
+                              className={`group transition ${bt.trang_thai === false ? "bg-slate-50" : "hover:bg-emerald-50/40"}`}
                             >
-                              {/* 🌟 CỘT HÀNH ĐỘNG NÂNG CẤP */}
                               <td className="py-3.5 px-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  {/* 1. Nút Xem chi tiết (Mắt) */}
+                                <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 mx-auto">
+                                  {varMediaObj?.duong_dan_url ? (
+                                    <img
+                                      src={varMediaObj.duong_dan_url}
+                                      alt="sku-img"
+                                      className={`w-full h-full object-cover ${bt.trang_thai === false ? "grayscale opacity-50" : ""}`}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                      <ImageIcon size={18} />
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="py-3.5 px-3">
+                                <div className="flex items-center gap-2">
+                                  <Link
+                                    to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
+                                    className={`font-extrabold hover:text-[#006c49] hover:underline transition-all ${bt.trang_thai === false ? "text-slate-400 line-through" : "text-slate-900"}`}
+                                  >
+                                    {bt.ten_bien_the || "Mặc định"}
+                                  </Link>
+                                  {/* 🌟 NHÃN "ĐÃ XÓA" */}
+                                  {bt.trang_thai === false && (
+                                    <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[9px] font-black uppercase whitespace-nowrap">
+                                      Đã xóa
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td
+                                className={`py-3.5 px-3 font-mono font-black ${bt.trang_thai === false ? "text-slate-400" : "text-amber-700"}`}
+                              >
+                                {bt.sku || "N/A"}
+                              </td>
+                              <td
+                                className={`py-3.5 px-3 font-black font-mono ${bt.trang_thai === false ? "text-slate-400" : "text-slate-900"}`}
+                              >
+                                {formatPrice(bt.gia_ban_le)}
+                              </td>
+                              <td className="py-3.5 px-3 text-gray-500 font-semibold">
+                                {bt.ten_don_vi || "Hộp"}
+                              </td>
+
+                              <td className="py-3.5 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* 1. Nút Xem chi tiết (Luôn hiện để Admin xem lại data cũ) */}
                                   <Link
                                     to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
                                     className="p-1.5 text-slate-400 hover:text-[#006c49] hover:bg-emerald-50 rounded-lg transition shadow-sm border border-transparent hover:border-emerald-200"
@@ -387,52 +513,58 @@ export default function AdminProductDetail() {
                                     <Eye size={16} />
                                   </Link>
 
-                                  {/* 2. Nút Sửa (Bút chì) - Nhảy sang form EAV */}
-                                  <button
-                                    onClick={() =>
-                                      navigate(
-                                        `/admin/products/create-variant/${product.ma_san_pham}/${bt.ma_bien_the}`,
-                                        {
-                                          state: {
-                                            existingVariants: product.bien_the,
-                                          },
-                                        },
-                                      )
-                                    }
-                                    className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition shadow-sm border border-transparent hover:border-sky-200"
-                                    title="Chỉnh sửa EAV & Giá"
-                                  >
-                                    <Edit size={16} />
-                                  </button>
+                                  {/* Logic hiển thị: Nếu ĐANG MỞ BÁN thì hiện Sửa/Xóa. Nếu ĐÃ XÓA thì hiện Khôi phục */}
+                                  {bt.trang_thai !== false ? (
+                                    <>
+                                      {/* Nút Sửa */}
+                                      <button
+                                        onClick={() =>
+                                          navigate(
+                                            `/admin/products/create-variant/${product.ma_san_pham}/${bt.ma_bien_the}`,
+                                            {
+                                              state: {
+                                                existingVariants:
+                                                  product.bien_the,
+                                              },
+                                            },
+                                          )
+                                        }
+                                        className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition shadow-sm border border-transparent hover:border-sky-200"
+                                        title="Chỉnh sửa EAV & Giá"
+                                      >
+                                        <Edit size={16} />
+                                      </button>
+
+                                      {/* Nút Xóa (Lưu trữ) */}
+                                      <button
+                                        onClick={() =>
+                                          handleDeleteVariant(
+                                            bt.ma_bien_the,
+                                            bt.ten_bien_the,
+                                          )
+                                        }
+                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shadow-sm border border-transparent hover:border-red-200"
+                                        title="Xóa biến thể (Lưu trữ)"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    /*  NÚT KHÔI PHỤC */
+                                    <button
+                                      onClick={() =>
+                                        handleRestoreVariant(
+                                          bt.ma_bien_the,
+                                          bt.ten_bien_the,
+                                        )
+                                      }
+                                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition shadow-sm border border-transparent hover:border-emerald-200"
+                                      title="Khôi phục biến thể này"
+                                    >
+                                      <RotateCcw size={16} />
+                                    </button>
+                                  )}
                                 </div>
-                              </td>
-
-                              <td className="py-3.5 px-3">
-                                <Link
-                                  to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
-                                  className="text-slate-900 font-extrabold hover:text-[#006c49] hover:underline transition-all"
-                                >
-                                  {bt.ten_bien_the || "Mặc định"}
-                                </Link>
-                              </td>
-
-                              <td className="py-3.5 px-3 font-mono font-black text-amber-700">
-                                {bt.sku || "N/A"}
-                              </td>
-                              <td className="py-3.5 px-3 text-slate-900 font-black font-mono">
-                                {formatPrice(bt.gia_ban_le)}
-                              </td>
-                              <td className="py-3.5 px-3 text-gray-500 font-semibold">
-                                {bt.ten_don_vi || "Hộp"}
-                              </td>
-
-                              <td className="py-3.5 px-3 text-center">
-                                <Link
-                                  to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-[#006c49] hover:text-white transition shadow-sm text-[11px] font-black uppercase"
-                                >
-                                  <Eye size={12} /> Chi tiết
-                                </Link>
                               </td>
                             </tr>
                           );

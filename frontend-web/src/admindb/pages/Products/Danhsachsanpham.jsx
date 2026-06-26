@@ -134,6 +134,24 @@ export default function ProductList() {
     }
   };
 
+  // HÀM BẬT / TẮT TRẠNG THÁI SẢN PHẨM
+  const handleToggleStatus = async (id, currentStatus) => {
+    try {
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+      await axios.put(`${apiUrl}/api/products/${id}/toggle-status`);
+
+      // Cập nhật lại UI ngay lập tức mà không cần F5
+      setProducts(
+        products.map((p) =>
+          p.ma_san_pham === id ? { ...p, trang_thai: !currentStatus } : p,
+        ),
+      );
+    } catch (error) {
+      alert("❌ Lỗi khi thay đổi trạng thái sản phẩm!");
+    }
+  };
+
   const formatPrice = (price) => {
     return Number(price || 0).toLocaleString("vi-VN") + " đ";
   };
@@ -369,18 +387,30 @@ export default function ProductList() {
                         alt={item.ten_san_pham}
                         className="w-12 h-12 rounded-xl object-cover border border-gray-100 shadow-sm shrink-0 bg-gray-50"
                       />
-                      <div className="truncate">
-                        <p
-                          className="text-xs font-black text-slate-900 truncate hover:text-[#006c49] cursor-pointer"
-                          onClick={() =>
-                            navigate(
-                              `/admin/products/detail/${item.ma_san_pham}`,
-                            )
-                          }
-                        >
-                          {item.ten_san_pham}
-                        </p>
-                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                      <div className="flex flex-col justify-center min-w-0">
+                        {/* Bọc tên sản phẩm và nhãn vào 1 dòng flex */}
+                        <div className="flex items-center gap-2">
+                          <p
+                            className="text-xs font-black text-slate-900 truncate hover:text-[#006c49] cursor-pointer"
+                            onClick={() =>
+                              navigate(
+                                `/admin/products/detail/${item.ma_san_pham}`,
+                              )
+                            }
+                            title={item.ten_san_pham}
+                          >
+                            {item.ten_san_pham}
+                          </p>
+
+                          {/*  ĐÂY LÀ NHÃN CẢNH BÁO "ĐÃ XÓA"  */}
+                          {item.trang_thai === false && (
+                            <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[9px] font-black uppercase whitespace-nowrap">
+                              Tạm khóa
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">
                           Mã: {item.ma_san_pham}
                         </p>
                       </div>
@@ -409,6 +439,31 @@ export default function ProductList() {
 
                   <td className="py-4 px-4 text-slate-900 font-black font-mono">
                     {formatPrice(item.gia_ban_thap_nhat)}
+                  </td>
+
+                  {/* CỘT CÔNG TẮC BẬT/TẮT TRẠNG THÁI SẢN PHẨM  */}
+                  <td className="py-4 px-4 text-center">
+                    <button
+                      onClick={() =>
+                        handleToggleStatus(item.ma_san_pham, item.trang_thai)
+                      }
+                      className={`w-10 h-5.5 rounded-full relative transition-colors duration-300 focus:outline-none shadow-inner ${
+                        item.trang_thai ? "bg-[#006c49]" : "bg-gray-300"
+                      }`}
+                      title={
+                        item.trang_thai
+                          ? "Đang mở bán (Click để tắt)"
+                          : "Đang tạm ẩn (Click để mở)"
+                      }
+                    >
+                      <span
+                        className={`absolute top-[2px] left-[2px] w-4.5 h-4.5 bg-white rounded-full shadow transition-transform duration-300 ${
+                          item.trang_thai
+                            ? "translate-x-[18px]"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </button>
                   </td>
 
                   <td className="py-4 px-4 text-right pr-6">
@@ -440,7 +495,7 @@ export default function ProductList() {
                           />
                         </svg>
                       </button>
-                      {/* NÚT BÚT CHÌ ĐÃ SỬA: Nhảy vào chi tiết và tự động mở Tab Biến thể */}
+                      {/* NÚT BÚT CHÌ: Nhảy vào chi tiết và tự động mở Tab Biến thể */}
                       <button
                         onClick={() =>
                           navigate(
@@ -471,7 +526,7 @@ export default function ProductList() {
                           handleDelete(item.ma_san_pham, item.ten_san_pham)
                         }
                         className="p-1.5 hover:text-red-600 hover:bg-red-50 rounded-lg shadow-sm transition"
-                        title="Xóa"
+                        title="Xóa vĩnh viễn"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
