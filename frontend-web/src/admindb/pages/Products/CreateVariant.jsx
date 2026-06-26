@@ -23,6 +23,8 @@ export default function AdminCreateVariant() {
   const location = useLocation();
   const fileInputRef = useRef(null);
   const [parentProductImage, setParentProductImage] = useState("");
+  const [productMedia, setProductMedia] = useState([]);
+  const [units, setUnits] = useState([]);
   const [productName, setProductName] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -56,13 +58,21 @@ export default function AdminCreateVariant() {
         const apiUrl =
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-        // Gọi song song API sản phẩm và API danh mục thuộc tính tổng thể hệ thống
-        const [productResponse, globalAttrResponse] = await Promise.all([
-          axios.get(`${apiUrl}/api/products/${id}`),
-          axios
-            .get(`${apiUrl}/api/products/attributes/matrix`)
-            .catch(() => ({ data: [] })),
-        ]);
+        // Gọi song song 3 API: Sản phẩm, Ma trận thuộc tính, và Đơn vị đóng gói
+        const [productResponse, globalAttrResponse, unitsResponse] =
+          await Promise.all([
+            axios.get(`${apiUrl}/api/products/${id}`),
+            axios
+              .get(`${apiUrl}/api/products/attributes/matrix`)
+              .catch(() => ({ data: [] })),
+            axios
+              .get(`${apiUrl}/api/products/units`)
+              .catch(() => ({ data: [] })),
+          ]);
+
+        if (unitsResponse.data) {
+          setUnits(unitsResponse.data);
+        }
 
         // 1. XỬ LÝ DỮ LIỆU SẢN PHẨM & TRÍCH XUẤT MA TRẬN RIÊNG TỪ CÁC BIẾN THỂ ĐÃ CÓ TRONG DB
         if (productResponse.data) {
@@ -78,6 +88,8 @@ export default function AdminCreateVariant() {
               ? data.media[0].duong_dan_url
               : "");
           setParentProductImage(mainImg);
+
+          setProductMedia(data.media || []);
 
           let variantsList = [];
           if (location.state?.existingVariants) {
@@ -148,7 +160,7 @@ export default function AdminCreateVariant() {
     };
 
     fetchAllData();
-  }, [id, location.state]);
+  }, [id]);
 
   const updateVariantNameSuggestion = (productTitle, updatedAttributes) => {
     const comboText = updatedAttributes
@@ -336,29 +348,46 @@ export default function AdminCreateVariant() {
       setEditSku(matchedVariant.sku || "");
       setEditPrice(matchedVariant.gia_ban_le || 0);
       setEditStock(matchedVariant.ton_kho || matchedVariant.so_luong_ton || 0);
-      setEditUnit(matchedVariant.ten_don_vi || "Chai");
-      setVariantImageUrl(
-        matchedVariant.hinh_anh_url ||
-          matchedVariant.duong_dan_url ||
-          parentProductImage ||
-          "",
+      setEditUnit(matchedVariant.ten_don_vi || units[0]?.ten_don_vi || "Chai");
+
+      const specificMedia = productMedia.find(
+        (m) => m.ma_bien_the === matchedVariant.ma_bien_the,
       );
+      const specificImgUrl = specificMedia
+        ? specificMedia.duong_dan_url
+        : matchedVariant.hinh_anh_url || matchedVariant.duong_dan_url;
+      setVariantImageUrl(specificImgUrl || parentProductImage || "");
 
       if (variantId !== matchedVariant.ma_bien_the) {
         navigate(
           `/admin/products/create-variant/${id}/${matchedVariant.ma_bien_the}`,
-          {
-            replace: true,
-            state: location.state,
-          },
+          { replace: true, state: location.state },
         );
       }
     } else {
-      setEditSku("");
       setEditPrice(0);
       setEditStock(0);
-      setEditUnit("Chai");
+      // KHÔNG reset setEditUnit ở đây để giữ lựa chọn đơn vị hiện tại của Admin khi đang bấm liên tục
       setVariantImageUrl(parentProductImage || "");
+
+      if (availableAttributes.length > 0) {
+        const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+        const attrParts = availableAttributes
+          .map((a) => {
+            if (!a.selected) return "";
+            return a.selected
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/\s+/g, "")
+              .substring(0, 3)
+              .toUpperCase();
+          })
+          .filter(Boolean)
+          .join("-");
+        setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
+      } else {
+        setEditSku("");
+      }
 
       if (variantId) {
         navigate(`/admin/products/create-variant/${id}`, {
@@ -370,10 +399,13 @@ export default function AdminCreateVariant() {
   }, [
     matchedVariant,
     parentProductImage,
+    productMedia,
     id,
     variantId,
     navigate,
     location.state,
+    availableAttributes,
+    units,
   ]);
 
   // 🌟 HÀM XỬ LÝ UPLOAD ẢNH TỪ MÁY LÊN CLOUDINARY
@@ -856,17 +888,55 @@ export default function AdminCreateVariant() {
 
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-gray-400 uppercase">
-                    Quy chuẩn đóng gói
+                    Quy chuẩn đóng gói / Đơn vị
                   </label>
                   <select
                     value={unit}
-                    onChange={(e) => setEditUnit(e.target.value)}
+                    onChange={async (e) => {
+                      if (e.target.value === "ADD_NEW_UNIT") {
+                        // 🌟 TÍNH NĂNG TẠO ĐƠN VỊ NHANH (PROMPT)
+                        const newUnit = window.prompt(
+                          "Nhập tên đơn vị/quy chuẩn mới (VD: Lốc, Khay, Thùng 24...):",
+                        );
+                        if (newUnit && newUnit.trim() !== "") {
+                          try {
+                            const apiUrl =
+                              import.meta.env.VITE_API_PRODUCT_URL ||
+                              "http://localhost:5002";
+                            const res = await axios.post(
+                              `${apiUrl}/api/products/units`,
+                              { ten_don_vi: newUnit.trim() },
+                            );
+                            if (res.data) {
+                              setUnits([...units, res.data]);
+                              setEditUnit(res.data.ten_don_vi);
+                            }
+                          } catch (err) {
+                            alert("Lỗi khi thêm đơn vị mới vào Database!");
+                          }
+                        }
+                      } else {
+                        setEditUnit(e.target.value);
+                      }
+                    }}
                     className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] font-bold text-slate-800 outline-none p-3 rounded-xl text-xs transition cursor-pointer"
                   >
-                    <option value="Chai">Chai lẻ</option>
-                    <option value="Thùng">Thùng đóng gói</option>
-                    <option value="Hộp">Hộp giấy</option>
-                    <option value="Gói">Gói lẻ</option>
+                    {units.length > 0 ? (
+                      units.map((u) => (
+                        <option key={u.id} value={u.ten_don_vi}>
+                          {u.ten_don_vi}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="Chai">Chai lẻ</option>
+                    )}
+                    {/* Nút mồi để kích hoạt popup thêm mới */}
+                    <option
+                      value="ADD_NEW_UNIT"
+                      className="font-black text-[#006c49] bg-emerald-50"
+                    >
+                      ➕ Bổ sung đơn vị mới...
+                    </option>
                   </select>
                 </div>
               </div>
@@ -979,13 +1049,14 @@ export default function AdminCreateVariant() {
               Matrix)
             </h3>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                    <th className="py-2.5 px-2">Mã SKU</th>
-                    <th className="py-2.5 px-2">Tên phiên bản hiện tại</th>
-                    <th className="py-2.5 px-2 font-mono text-right">
+            {/* 🌟 NÂNG CẤP: Giới hạn chiều cao và thêm thanh cuộn */}
+            <div className="overflow-x-auto rounded-xl border border-gray-100 max-h-[280px] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse relative">
+                <thead className="sticky top-0 bg-white z-10 shadow-sm">
+                  <tr className="border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider bg-slate-50/80">
+                    <th className="py-3 px-3">Mã SKU</th>
+                    <th className="py-3 px-3">Tên phiên bản hiện tại</th>
+                    <th className="py-3 px-3 font-mono text-right">
                       Giá niêm yết
                     </th>
                   </tr>
@@ -998,20 +1069,20 @@ export default function AdminCreateVariant() {
                       return (
                         <tr
                           key={index}
-                          className={`transition ${isHighlighted ? "bg-blue-50/70" : "hover:bg-slate-50/80"}`}
+                          className={`transition duration-150 ${isHighlighted ? "bg-blue-50/70" : "hover:bg-slate-50"}`}
                         >
                           <td
-                            className={`py-3 px-2 font-mono ${isHighlighted ? "text-blue-700" : "text-amber-700"}`}
+                            className={`py-3 px-3 font-mono ${isHighlighted ? "text-blue-700 font-black" : "text-amber-700"}`}
                           >
                             {v.sku} {isHighlighted && "📍"}
                           </td>
                           <td
-                            className={`py-3 px-2 ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}
+                            className={`py-3 px-3 ${isHighlighted ? "text-blue-900" : "text-slate-800"}`}
                           >
                             {v.ten_bien_the}
                           </td>
                           <td
-                            className={`py-3 px-2 font-mono text-right ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}
+                            className={`py-3 px-3 font-mono text-right ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}
                           >
                             {v.gia_ban_le
                               ? Number(v.gia_ban_le).toLocaleString("vi-VN")
@@ -1025,7 +1096,7 @@ export default function AdminCreateVariant() {
                     <tr>
                       <td
                         colSpan="3"
-                        className="py-4 text-center text-gray-400 italic text-[11px]"
+                        className="py-8 text-center text-gray-400 italic text-[11px]"
                       >
                         Sản phẩm này chưa gán cấu hình biến thể nào trước đây.
                       </td>

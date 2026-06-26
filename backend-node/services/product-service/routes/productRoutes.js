@@ -1,4 +1,6 @@
 import express from 'express';
+import upload from '../configs/cloudinary/cloudinary.js'; 
+
 import {
     getInternalVariants,
     getAllProducts,
@@ -21,12 +23,12 @@ import {
     deleteVariant,             
     createAttribute,           
     uploadImage,
-    uploadVariantImage     
-
+    uploadVariantImage,
+    migrateLegacyAttributes,
+    setMainProductImage,
+    getAllUnits,
+    createUnit
 } from '../controllers/productController.js';
-import upload from '../configs/cloudinary/cloudinary.js'; 
-import { migrateLegacyAttributes } from '../controllers/productController.js';
-import { setMainProductImage } from '../controllers/productController.js';
 
 const router = express.Router();
 
@@ -47,25 +49,31 @@ router.get('/without-descriptions', getProductsWithoutDescriptions);
 router.post('/batch-generate-descriptions', batchGenerateDescriptionsController);
 router.post('/refresh-empty-descriptions', refreshEmptyDescriptions);
 router.put('/media/set-main', setMainProductImage);
+
+// 🌟 Đã chuyển API quản lý đơn vị lên nhóm Tĩnh
+router.get('/units', getAllUnits);
+router.post('/units', createUnit);
+
 // Giao thức EAV: Lấy danh mục thuộc tính tổng thể hệ thống cho Form ma trận
 router.get('/attributes/matrix', getAllAvailableAttributes);
-
 // Giao thức EAV: Thêm mới nhóm thuộc tính trực tiếp khi nhấn tạo nhóm
 router.post('/attributes', createAttribute);
 
-// 🌟 ROUTE MỚI: Tiếp nhận file upload từ local máy tính và lưu trữ lên Cloudinary thông qua storage
+// Tiếp nhận file upload từ local máy tính và lưu trữ lên Cloudinary thông qua storage
 router.post('/upload', upload.single('image'), uploadImage);
+
 
 // =========================================================================
 // 🔄 2. NHÓM ROUTE BIẾN THỂ (VARIANTS) - Đặt trước /:id để tránh trùng khớp "id = variants"
 // =========================================================================
 router.get('/variants/:variantId', getVariantById); 
-router.put('/variants/:variantId', updateVariant);    // 🌟 ĐỒNG BỘ: Route PUT cập nhật thông tin và ma trận EAV của biến thể
+router.put('/variants/:variantId', updateVariant);    // ĐỒNG BỘ: Route PUT cập nhật thông tin và ma trận EAV của biến thể
 router.delete('/variants/:variantId', deleteVariant); // Route xử lý Xóa mềm
 router.post('/variants/:variantId/upload-image', upload.single('image'), uploadVariantImage);
 
+
 // =========================================================================
-// 🔄 3. NHÓM ROUTE ĐỘNG SẢN PHẨM & DANH MỤC (DYNAMIC ROUTES)
+// 🔄 3. NHÓM ROUTE ĐỘNG SẢN PHẨM & DANH MỤC (DYNAMIC ROUTES CÓ CHỨA PARAM :id)
 // =========================================================================
 router.get('/category/:slug', getProductsByCategorySlug);
 router.get('/', getAllProducts);
@@ -77,6 +85,8 @@ router.post('/:id/variants', createVariant);
 // Các thông tin liên quan cụ thể của một sản phẩm
 router.get('/:id/reviews', getReviewsByProduct);      // Route lấy đánh giá sản phẩm
 router.get('/:id/related', getRelatedProducts);      // Route lấy sản phẩm liên quan
+
+// ⚠️ CATCH-ALL: Lấy chi tiết sản phẩm (Luôn phải nằm dưới cùng của nhóm để không nuốt nhầm các route khác)
 router.get('/:id', getProductById);
 
 export default router;

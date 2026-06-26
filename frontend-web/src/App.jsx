@@ -44,6 +44,9 @@ import AdminProductDetail from "./admindb/pages/Products/ProductDetail";
 import AdminVariantDetail from "./admindb/pages/products/VariantDetail";
 import AdminCreateVariant from "./admindb/pages/Products/CreateVariant";
 import ProductCreate from "./admindb/pages/Products/ProductCreate";
+import ParentCategories from "./admindb/pages/Products/ParentCategories";
+import ChildCategories from "./admindb/pages/Products/ChildCategories";
+import Units from "./admindb/pages/Products/Units";
 
 // --- IMPORTS KHÁCH HÀNG - NHÓM KHÁCH HÀNG - LOẠI KHÁCH HÀNG (ĐÃ SỬA CHÍNH TẢ) ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
@@ -895,6 +898,11 @@ const AppRoutes = () => (
           path="/admin/products/create-variant/:id/:variantId?"
           element={<AdminCreateVariant />}
         />
+
+        {/* 🌟 3 ROUTE MỚI BỔ SUNG CHO MASTER DATA */}
+        <Route path="parent-categories" element={<ParentCategories />} />
+        <Route path="child-categories" element={<ChildCategories />} />
+        <Route path="units" element={<Units />} />
       </Route>
 
       {/* 📄 Bọc Đơn Hàng */}
