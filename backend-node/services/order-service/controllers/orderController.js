@@ -295,4 +295,60 @@ const getOrderStatistics = async (req, res) => {
   }
 };
 
-export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics };
+// ========================================================
+// 🎯 API MỚI: LẤY DANH SÁCH ĐƠN HÀNG PHÂN TRANG CHO ADMIN
+// ========================================================
+const getAllOrdersAdmin = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    let whereClause = `WHERE 1=1`;
+    const queryParams = [];
+    let pIdx = 1;
+
+    if (search.trim() !== '') {
+      whereClause += ` AND (ma_don_hang ILIKE $${pIdx} OR phuong_thuc_thanh_toan ILIKE $${pIdx})`;
+      queryParams.push(`%${search.trim()}%`);
+      pIdx++;
+    }
+
+    // 1. Đếm tổng số đơn hàng phục vụ phân trang
+    const countSql = `SELECT COUNT(*) as total FROM public.orders ${whereClause}`;
+    const countRes = db.query ? await db.query(countSql, queryParams) : await db.execute(countSql, queryParams);
+    const totalItems = parseInt((countRes.rows ? countRes.rows[0] : countRes[0])?.total || 0);
+    const totalPages = Math.ceil(totalItems / limit);
+
+    // 2. Lấy dữ liệu đơn hàng khớp chính xác 100% theo tên cột của Thuận
+    const dataSql = `
+      SELECT 
+        id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+        trang_thai_don_hang, tong_thanh_toan, ngay_tao
+      FROM public.orders
+      ${whereClause}
+      ORDER BY ngay_tao DESC
+      LIMIT $${pIdx} OFFSET $${pIdx + 1};
+    `;
+
+    const dataParams = [...queryParams, limit, offset];
+    const dataRes = db.query ? await db.query(dataSql, dataParams) : await db.execute(dataSql, dataParams);
+    const orders = dataRes.rows ? dataRes.rows : dataRes;
+
+    return res.status(200).json({
+      success: true,
+      orders,
+      totalPages,
+      currentPage: page,
+      totalItems
+    });
+
+  } catch (err) {
+    console.error("🔥 Lỗi API getAllOrdersAdmin:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi lấy danh sách đơn hàng." });
+  }
+};
+
+// Thuận nhớ thêm tên hàm mới vào lệnh export cuối file nhé!
+export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin };
