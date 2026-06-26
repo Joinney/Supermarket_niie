@@ -60,42 +60,71 @@ export const getInternalVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Phân trang chuẩn hóa
+// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Đã nâng cấp Lọc Động
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
-        const countryCode = (req.query.country || 'VN').toUpperCase(); 
+        
+        // 🌟 Lấy các tham số filter từ Frontend gửi lên
+        const { sort, market, origin } = req.query;
 
+        // 🌟 1. XÂY DỰNG CÂU LỆNH WHERE ĐỘNG
+        let whereClause = `WHERE 1=1`; // Móng nhà vững chắc (LUÔN ĐÚNG)
+        let values = [];
+        let valueIndex = 1;
+
+        // Lọc theo thị trường (Nếu có chọn)
+        if (market && market !== 'all') {
+            whereClause += ` AND UPPER(sp.ma_quoc_gia) = $${valueIndex}`;
+            values.push(market.toUpperCase());
+            valueIndex++;
+        }
+
+        // Lọc theo xuất xứ (Nếu có chọn)
+        if (origin && origin !== 'all') {
+            whereClause += ` AND sp.xuat_xu = $${valueIndex}`;
+            values.push(origin);
+            valueIndex++;
+        }
+
+        // 🌟 2. ĐẾM TỔNG SỐ LƯỢNG (Dùng LEFT JOIN để không sót sản phẩm chưa có danh mục)
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM public.san_pham sp
-            INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            WHERE sp.trang_thai = true 
-              AND dmc.trang_thai = true
-              AND UPPER(sp.ma_quoc_gia) = $1;
+            LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+            ${whereClause};
         `;
-        const { rows: countResult } = await pool.query(countQuery, [countryCode]);
+        const { rows: countResult } = await pool.query(countQuery, values);
         const totalItems = parseInt(countResult[0]?.total || 0);
         const totalPages = Math.ceil(totalItems / limit);
 
+        // 🌟 3. XỬ LÝ SẮP XẾP (SORT)
+        let orderByClause = `ORDER BY sp.ngay_tao DESC`; // Mặc định: Mới nhất
+        if (sort === 'oldest') orderByClause = `ORDER BY sp.ngay_tao ASC`;
+        if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
+        if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
+
+        // 🌟 4. CÂU LỆNH TRUY VẤN CHÍNH (Đã bỏ trang_thai = true để Admin thấy hết)
         const query = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
-                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
+                sp.ma_quoc_gia, sp.xuat_xu, -- ĐÃ BỔ SUNG LẤY DỮ LIỆU XUẤT XỨ
+                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS gia_ban_thap_nhat,
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
-            INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            WHERE sp.trang_thai = true 
-              AND dmc.trang_thai = true
-              AND UPPER(sp.ma_quoc_gia) = $1
-            ORDER BY sp.ngay_tao DESC
-            LIMIT $2 OFFSET $3;
+            LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+            ${whereClause}
+            ${orderByClause}
+            LIMIT $${valueIndex} OFFSET $${valueIndex + 1};
         `;
 
-        const { rows: products } = await pool.query(query, [countryCode, limit, offset]);
+        // Đưa limit và offset vào cuối mảng values
+        values.push(limit, offset);
+
+        const { rows: products } = await pool.query(query, values);
 
         res.status(200).json({
             products,
@@ -105,7 +134,7 @@ export const getAllProducts = async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Lỗi API getAllProducts:", error.message);
-        res.status(500).json({ error: "Không thể lấy danh sách sản phẩm trang chủ." });
+        res.status(500).json({ error: "Không thể lấy danh sách sản phẩm." });
     }
 };
 
@@ -172,11 +201,11 @@ export const getAllCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ ĐỒNG BỘ ĐƠN VỊ SẢN PHẨM
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ CẤP QUYỀN ADMIN TỐI ĐA
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
-    const countryCode = (req.query.country || 'VN').toUpperCase();
+    // Đã có ID đích danh thì không cần ép cứng CountryCode nữa
 
     try {
         const productQuery = `
@@ -184,13 +213,15 @@ export const getProductById = async (req, res) => {
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code
             FROM public.san_pham sp
-            INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            WHERE sp.ma_san_pham = $1 AND UPPER(sp.ma_quoc_gia) = $2;
+            -- 🌟 SỬA THÀNH LEFT JOIN: SP chưa có danh mục vẫn xem được bình thường
+            LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+            -- 🌟 XÓA BỎ CHẶN QUỐC GIA: Admin xem được mọi SP bất kể là VN, US hay CN
+            WHERE sp.ma_san_pham = $1;
         `;
-        const productResult = await pool.query(productQuery, [id, countryCode]);
+        const productResult = await pool.query(productQuery, [id]);
 
         if (productResult.rows.length === 0) {
-            return res.status(404).json({ message: "Sản phẩm không hỗ trợ tại vùng quốc gia này hoặc không tồn tại!" });
+            return res.status(404).json({ message: "Sản phẩm không tồn tại trong hệ thống!" });
         }
 
         const product = productResult.rows[0];
@@ -205,7 +236,8 @@ export const getProductById = async (req, res) => {
             LEFT JOIN public.gia_tri_thuoc_tinh gt ON ct.ma_gia_tri = gt.ma_gia_tri
             LEFT JOIN public.danh_muc_thuoc_tinh dm ON gt.ma_thuoc_tinh = dm.ma_thuoc_tinh
             LEFT JOIN public.don_vi_san_pham dv ON bt.don_vi_id = dv.id
-            WHERE bt.ma_san_pham = $1 AND bt.trang_thai = true;
+            -- 🌟 BỎ LỌC 'bt.trang_thai = true': Admin cần xem được cả các biến thể đang bị Tạm Khóa
+            WHERE bt.ma_san_pham = $1;
         `;
         const variantsResult = await pool.query(variantsQuery, [id]);
 
@@ -244,7 +276,8 @@ export const getProductById = async (req, res) => {
         const mediaQuery = `
             SELECT ma_media, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, thoi_luong_video
             FROM public.media_san_pham
-            WHERE ma_san_pham = $1 AND trang_thai = true;
+            -- 🌟 BỎ LỌC 'trang_thai = true': Admin xem được mọi hình ảnh
+            WHERE ma_san_pham = $1;
         `;
         const mediaResult = await pool.query(mediaQuery, [id]);
 
@@ -1412,5 +1445,40 @@ export const createUnit = async (req, res) => {
         res.status(201).json(rows[0]);
     } catch (error) {
         res.status(500).json({ error: "Lỗi thêm đơn vị mới." });
+    }
+};
+
+// =========================================================================
+// API XÓA SẢN PHẨM (XÓA TOÀN BỘ SẢN PHẨM)
+// =========================================================================
+export const deleteProduct = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        await client.query('BEGIN');
+
+        // 1. Xóa các dữ liệu liên quan trước (để tránh lỗi ràng buộc khóa ngoại)
+        // Xóa hình ảnh media
+        await client.query('DELETE FROM public.media_san_pham WHERE ma_san_pham = $1', [id]);
+        
+        // Xóa các biến thể
+        await client.query('DELETE FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
+
+        // 2. Xóa sản phẩm chính
+        const result = await client.query('DELETE FROM public.san_pham WHERE ma_san_pham = $1 RETURNING *', [id]);
+
+        if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm để xóa." });
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ success: true, message: "Đã xóa sản phẩm và dữ liệu liên quan thành công." });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi API deleteProduct:', error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi xóa sản phẩm." });
+    } finally {
+        client.release();
     }
 };

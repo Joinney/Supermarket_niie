@@ -891,8 +891,7 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="Danhsachsanpham" replace />} />
         {/* Route tạo sản phẩm mới bắt buộc phải khớp với mã navigate */}
-        <Route path="/admin/products/create" element={<ProductCreate />} />
-
+        <Route path="create" element={<ProductCreate />} />
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
         <Route path="detail/:id" element={<AdminProductDetail />} />
         <Route
@@ -900,7 +899,7 @@ const AppRoutes = () => (
           element={<AdminVariantDetail />}
         />
         <Route
-          path="/admin/products/create-variant/:id/:variantId?"
+          path="create-variant/:id/:variantId?"
           element={<AdminCreateVariant />}
         />
 
@@ -923,19 +922,26 @@ const AppRoutes = () => (
         <Route path="Danhsachdonhang" element={<Danhsachdonhang />} />
       </Route>
 
-            {/* 📦 Bọc Kho Hàng */}
-<Route path="inventory" element={<AdminModuleGuard moduleName="Kho Hàng"><Outlet /></AdminModuleGuard>}>
-  {/* Vào /admin/inventory tự động nhảy sang trang danh sách */}
-  <Route index element={<Navigate to="create-import" replace />} />
-  
-  {/* Khớp chuẩn chỉnh 100% theo URL gọi từ Sidebar */}
-  <Route path="create-import" element={<NhapKhoForm />} />
-  <Route path="import-list" element={<DanhSachPhieuNhap />} />
-  
-  <Route path="batches" element={<LoHang />} />
-  <Route path="stock" element={<TonKho />} />
-  <Route path="transfer" element={<ChuyenKho />} />
-</Route>
+      {/* 📦 Bọc Kho Hàng */}
+      <Route
+        path="inventory"
+        element={
+          <AdminModuleGuard moduleName="Kho Hàng">
+            <Outlet />
+          </AdminModuleGuard>
+        }
+      >
+        {/* Vào /admin/inventory tự động nhảy sang trang danh sách */}
+        <Route index element={<Navigate to="create-import" replace />} />
+
+        {/* Khớp chuẩn chỉnh 100% theo URL gọi từ Sidebar */}
+        <Route path="create-import" element={<NhapKhoForm />} />
+        <Route path="import-list" element={<DanhSachPhieuNhap />} />
+
+        <Route path="batches" element={<LoHang />} />
+        <Route path="stock" element={<TonKho />} />
+        <Route path="transfer" element={<ChuyenKho />} />
+      </Route>
 
       {/* 👥 Bọc Khách Hàng */}
       <Route

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom"; // 🛠️ Thêm Link để chuyển trang biệt lập
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  Plus, // 🛠️ Thêm icon Plus cho nút tạo mới
+  Plus,
+  Edit,
 } from "lucide-react";
 import axios from "axios";
 
@@ -24,7 +25,10 @@ export default function AdminProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [activeTab, setActiveTab] = useState("info");
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(
+    location.state?.targetTab || "info",
+  );
   const [activeMediaObj, setActiveMediaObj] = useState(null);
 
   const [noteText, setNoteText] = useState("");
@@ -371,22 +375,36 @@ export default function AdminProductDetail() {
                               key={bt.ma_bien_the || idx}
                               className="group hover:bg-emerald-50/40 transition"
                             >
-                              <td className="py-3.5 px-3 text-center">
-                                {varMediaObj?.duong_dan_url ? (
-                                  <img
-                                    src={varMediaObj.duong_dan_url}
-                                    alt="var"
-                                    className="w-16 h-16 rounded-xl object-cover border border-emerald-300 shadow-sm cursor-pointer hover:scale-105 transition mx-auto"
+                              {/* 🌟 CỘT HÀNH ĐỘNG NÂNG CẤP */}
+                              <td className="py-3.5 px-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  {/* 1. Nút Xem chi tiết (Mắt) */}
+                                  <Link
+                                    to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
+                                    className="p-1.5 text-slate-400 hover:text-[#006c49] hover:bg-emerald-50 rounded-lg transition shadow-sm border border-transparent hover:border-emerald-200"
+                                    title="Xem chi tiết biến thể"
+                                  >
+                                    <Eye size={16} />
+                                  </Link>
+
+                                  {/* 2. Nút Sửa (Bút chì) - Nhảy sang form EAV */}
+                                  <button
                                     onClick={() =>
-                                      setActiveMediaObj(varMediaObj)
+                                      navigate(
+                                        `/admin/products/create-variant/${product.ma_san_pham}/${bt.ma_bien_the}`,
+                                        {
+                                          state: {
+                                            existingVariants: product.bien_the,
+                                          },
+                                        },
+                                      )
                                     }
-                                    title="Nhấp để phóng to ở khung bên trái"
-                                  />
-                                ) : (
-                                  <div className="w-16 h-16 rounded-xl bg-slate-100 text-gray-300 flex items-center justify-center mx-auto text-[10px]">
-                                    No img
-                                  </div>
-                                )}
+                                    className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition shadow-sm border border-transparent hover:border-sky-200"
+                                    title="Chỉnh sửa EAV & Giá"
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                </div>
                               </td>
 
                               <td className="py-3.5 px-3">

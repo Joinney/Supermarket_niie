@@ -167,20 +167,26 @@ export default function ProductCreate() {
               </select>
             </div>
 
-            {/* Ô NHẬP XUẤT XỨ */}
-            <div>
-              <label className="block text-[11px] font-extrabold text-gray-400 uppercase tracking-wider mb-2">
+            {/* CỘT XUẤT XỨ - Đã chuẩn hóa theo Database Enum */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
                 Xuất xứ
               </label>
-              <input
-                type="text"
-                placeholder="Ví dụ: Việt Nam, Nhật Bản, Thái Lan..."
-                value={formData.xuat_xu}
+              <select
+                value={formData.xuat_xu || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, xuat_xu: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 outline-none focus:bg-white focus:border-[#006c49] transition"
-              />
+                className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer"
+              >
+                <option value="" disabled>
+                  -- Chọn xuất xứ --
+                </option>
+                <option value="vn">Sản xuất nội địa (vn)</option>
+                <option value="nhap-khau">Hàng nhập khẩu (nhap-khau)</option>
+                <option value="jp">Nhật Bản (jp)</option>
+                <option value="kr">Hàn Quốc (kr)</option>
+              </select>
             </div>
           </div>
 
