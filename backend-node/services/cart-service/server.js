@@ -14,13 +14,32 @@ connectDB();
 const app = express();
 
 // =========================================================================
-// --- 1. Cấu hình CORS kết nối Frontend Demi Mart ---
+// 🌟 1. XỬ LÝ CORS VÀ PREFLIGHT OPTIONS BẰNG TAY (PHẢI ĐẶT TRÊN CÙNG)
+// Đảm bảo đánh chặn request OPTIONS và trả về 200 ngay lập tức, không cho đi tiếp
 // =========================================================================
 const allowedOrigins = [
     'http://localhost:5173', 
     'https://demimart-fe.onrender.com'
 ];
 
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (!origin || allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin || '*');
+    }
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, authorization, content-type, x-requested-with');
+    
+    // ✅ Nếu là Preflight OPTIONS -> Trả về 200 OK ngay lập tức và kết thúc request tại đây.
+    // Việc này ngăn không cho request OPTIONS trống đi xuống bodyParser gây sập Docker.
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
+// Sử dụng thêm cấu hình cors plugin để bọc lót an toàn nâng cao
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin || allowedOrigins.includes(origin)) {
@@ -29,23 +48,19 @@ app.use(cors({
             callback(null, false); 
         }
     },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    credentials: true
 }));
 
 // =========================================================================
-// 🔥 2. ĐẬP TAN LỖI TYPER.TEST BẰNG CUSTOM TYPE FILTER (VÁ LỖI VĨNH VIỄN)
-// Chặn body-parser tự động quét Header của các request không có body (GET, DELETE)
+// 🔥 2. ĐẶP TAN LỖI TYPER.TEST BẰNG CUSTOM TYPE FILTER (VÁ LỖI VĨ NH VIỄN)
+// Đặt sau CORS để đảm bảo an toàn, chỉ lọc dữ liệu khi request thực sự có Body
 // =========================================================================
 app.use(bodyParser.json({
     type: (req) => {
         const method = req.method.toUpperCase();
-        // Nếu là GET hoặc DELETE -> Dứt khoát KHÔNG parse JSON (Tránh chạm vào type-is gây sập)
-        if (method === 'GET' || method === 'DELETE') {
+        if (method === 'GET' || method === 'DELETE' || method === 'OPTIONS') {
             return false;
         }
-        // Đối với POST/PUT/PATCH -> Cho phép parse bình thường để nhận diện req.body
         return true; 
     }
 }));
@@ -53,7 +68,7 @@ app.use(bodyParser.json({
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // =========================================================================
-// --- 3. Cấu hình Swagger Docs ---
+// 3. CẤU HÌNH SWAGGER UI DOCS
 // =========================================================================
 const swaggerOptions = {
     definition: {
@@ -68,7 +83,7 @@ const swaggerOptions = {
             { url: 'https://cartservice-i6s1.onrender.com', description: 'Production Server' }
         ],
     },
-    apis: ['./server.js'], 
+    apis: ['./server.js', './routes/*.js'], 
 };
 
 try {
@@ -79,7 +94,7 @@ try {
 }
 
 // =========================================================================
-// --- 4. Log Debug Request trước khi vào Sub-Routes ---
+// 4. LOG DEBUG REQUEST VÀ ĐIỀU HƯỚNG SUB-ROUTES API
 // =========================================================================
 app.use('/api/cart', (req, res, next) => {
     console.log(`🚀 [Cart Request]: ${req.method} ${req.originalUrl}`);
@@ -96,9 +111,9 @@ app.use((req, res) => {
 });
 
 // =========================================================================
-// --- 5. Khởi chạy Server dịch vụ ---
+// 5. KHỞI CHẠY SERVER DỊCH VỤ
 // =========================================================================
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 5003;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🛒 Cart Service running on port ${PORT}`);
 });
