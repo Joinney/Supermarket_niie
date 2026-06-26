@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom"; // 👈 Thêm import này để điều hướng route
 
 // 📦 Dữ liệu mẫu tĩnh chuẩn hóa theo cấu trúc quản lý thông tin các kho Demi Mart
 const MOCK_WAREHOUSE_DATA = [
@@ -37,13 +38,20 @@ const MOCK_WAREHOUSE_DATA = [
 ];
 
 const NhapKhoForm = () => {
+  const navigate = useNavigate(); // 👈 Khởi tạo hàm điều hướng hệ thống
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+
+  // Hàm xử lý xóa nhanh bộ lọc (Reset)
+  const handleResetFilters = () => {
+    setSearch("");
+    setStatus("");
+  };
 
   return (
     <div className="w-full min-h-screen bg-[#fafafa] font-sans text-gray-800 antialiased p-1 text-left">
       
-      {/* ---------------- TIÊU ĐỀ HOẠT ĐỘNG (ĐÃ XÓA NÚT TẠO PHIẾU NHẬP) ---------------- */}
+      {/* ---------------- TIÊU ĐỀ HOẠT ĐỘNG ---------------- */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Danh sách kho</h1>
@@ -51,6 +59,17 @@ const NhapKhoForm = () => {
             Dashboard &gt; Kho Hàng &gt; <span className="text-emerald-600 font-medium">Danh sách kho</span>
           </nav>
         </div>
+
+        {/* Nút thêm kho dẫn sang Route tạo kho riêng biệt */}
+        <button 
+          onClick={() => navigate("/admin/inventory/create-warehouse")}
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-sm font-bold rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Thêm kho
+        </button>
       </div>
 
       {/* ---------------- BLOCK TÌM KIẾM & BỘ LỌC ---------------- */}
@@ -83,18 +102,22 @@ const NhapKhoForm = () => {
             <option value="maintenance">Bảo trì</option>
           </select>
 
-          {/* Nút Reset Hàng */}
-          <button className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 transition-colors">
+          {/* Nút Reset Bộ Lọc */}
+          <button 
+            onClick={handleResetFilters}
+            title="Xóa bộ lọc"
+            className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-500 transition-colors cursor-pointer"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
             </svg>
           </button>
         </div>
 
-        {/* Nút Lọc & Xuất */}
+        {/* Nút Lọc & Xuất báo cáo */}
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-sm text-gray-600 font-bold transition">Lọc</button>
-          <button className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-sm text-gray-600 font-bold transition">Xuất</button>
+          <button className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-sm text-gray-600 font-bold transition cursor-pointer">Lọc</button>
+          <button className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-sm text-gray-600 font-bold transition cursor-pointer">Xuất</button>
         </div>
       </div>
 
@@ -113,41 +136,48 @@ const NhapKhoForm = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
-              {MOCK_WAREHOUSE_DATA.map((row) => (
-                <tr key={row.maKho} className="hover:bg-slate-50/60 transition-colors">
-                  {/* Mã Kho */}
-                  <td className="py-4 px-6 text-center text-[#006c49] font-black font-mono">
-                    {row.maKho}
-                  </td>
-                  {/* Tên Kho */}
-                  <td className="py-4 px-6 text-gray-900 font-bold">
-                    {row.tenKho}
-                  </td>
-                  {/* Địa Chỉ */}
-                  <td className="py-4 px-6 text-gray-500 font-medium whitespace-normal break-words">
-                    {row.diaChi}
-                  </td>
-                  {/* Trạng Thái */}
-                  <td className="py-4 px-6 text-center">
-                    {row.trangThai === "active" ? (
-                      <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-emerald-50 text-emerald-600 uppercase">
-                        Hoạt động
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-amber-50 text-amber-600 uppercase">
-                        Bảo trì
-                      </span>
-                    )}
-                  </td>
-                  {/* Ngày Tạo */}
-                  <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
-                    {row.ngayTao}
-                  </td>
-                  {/* Ngày Cập Nhật */}
-                  <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
-                    {row.ngayCapNhat}
-                  </td>
-                </tr>
+              {MOCK_WAREHOUSE_DATA
+                .filter((row) => {
+                  // Logic tìm kiếm & lọc cơ bản trực tiếp trên giao diện
+                  const matchesSearch = row.tenKho.toLowerCase().includes(search.toLowerCase()) || row.maKho.toLowerCase().includes(search.toLowerCase());
+                  const matchesStatus = status === "" || row.trangThai === status;
+                  return matchesSearch && matchesStatus;
+                })
+                .map((row) => (
+                  <tr key={row.maKho} className="hover:bg-slate-50/60 transition-colors">
+                    {/* Mã Kho */}
+                    <td className="py-4 px-6 text-center text-[#006c49] font-black font-mono">
+                      {row.maKho}
+                    </td>
+                    {/* Tên Kho */}
+                    <td className="py-4 px-6 text-gray-900 font-bold">
+                      {row.tenKho}
+                    </td>
+                    {/* Địa Chỉ */}
+                    <td className="py-4 px-6 text-gray-500 font-medium whitespace-normal break-words">
+                      {row.diaChi}
+                    </td>
+                    {/* Trạng Thái */}
+                    <td className="py-4 px-6 text-center">
+                      {row.trangThai === "active" ? (
+                        <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-emerald-50 text-emerald-600 uppercase">
+                          Hoạt động
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-amber-50 text-amber-600 uppercase">
+                          Bảo trì
+                        </span>
+                      )}
+                    </td>
+                    {/* Ngày Tạo */}
+                    <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
+                      {row.ngayTao}
+                    </td>
+                    {/* Ngày Cập Nhật */}
+                    <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
+                      {row.ngayCapNhat}
+                    </td>
+                  </tr>
               ))}
             </tbody>
           </table>

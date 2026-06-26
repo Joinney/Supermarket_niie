@@ -49,11 +49,14 @@ import ChildCategories from "./admindb/pages/Products/ChildCategories";
 import Units from "./admindb/pages/Products/Units";
 
 // Import các Form/Page thực tế từ Warehouse
-import DanhSachPhieuNhap from "./admindb/pages/Warehouse/DanhSachPhieuNhap.jsx";
-import NhapKhoForm from "./admindb/pages/Warehouse/NhapKhoForm.jsx";
+import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
+import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx"; 
+import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx"; // 👈 Đã thêm dòng import trang chi tiết phiếu nhập
+import NhapKhoForm from "./admindb/pages/Warehouse/danhsachkho/NhapKhoForm.jsx";
+import TaoKhoForm from "./admindb/pages/Warehouse/danhsachkho/TaoKhoForm.jsx";
 import LoHang from "./admindb/pages/Warehouse/LoHang.jsx";
 import TonKho from "./admindb/pages/Warehouse/TonKho.jsx";
-import ChuyenKho from "./admindb/pages/Warehouse/ChuyenKho.jsx";
+import ChuyenKho from "./admindb/pages/Warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG - NHÓM KHÁCH HÀNG - LOẠI KHÁCH HÀNG ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
@@ -271,7 +274,10 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="import-list" replace />} />
         <Route path="create-import" element={<NhapKhoForm />} />
+        <Route path="create-warehouse" element={<TaoKhoForm />} />
         <Route path="import-list" element={<DanhSachPhieuNhap />} />
+        <Route path="create-import-ticket" element={<TaoPhieuNhapForm />} />
+        <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} /> {/* 👈 Đã thêm route xem chi tiết động bằng ID tại đây */}
         <Route path="batches" element={<LoHang />} />
         <Route path="stock" element={<TonKho />} />
         <Route path="transfer" element={<ChuyenKho />} />

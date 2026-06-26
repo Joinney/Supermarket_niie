@@ -559,7 +559,7 @@ export default function Sidebar() {
 
                     <button onClick={() => handleSubMenuClick("/admin/inventory/create-import")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/create-import")}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/create-import" ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
-      <span>Nhập kho </span> {/* 🎯 Đổi nhãn này để nhân viên kho biết đây là nơi thêm mới hàng hóa */}
+      <span> Danh sách kho hàng </span> {/* 🎯 Đổi nhãn này để nhân viên kho biết đây là nơi thêm mới hàng hóa */}
     </button>
 
     <button onClick={() => handleSubMenuClick("/admin/inventory/import-list")} className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/import-list")}`}>
