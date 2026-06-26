@@ -30,15 +30,16 @@ const getYouTubeEmbedUrl = (url) => {
 };
 
 export default function ProductDetail() {
-  const { country_code, category_slug, id } = useParams();
+  // 🌟 NÂNG CẤP 1: Bổ sung variantId vào useParams để hứng từ URL
+  const { country_code, category_slug, id, variantId } = useParams();
   const country = String(country_code || "vn").toLowerCase();
   const category = category_slug;
   const navigate = useNavigate();
-  const location = useLocation(); 
+  const location = useLocation();
   const { addToCart } = useCart();
 
   const { currentStore, formatPrice } = useStore();
-  const { t } = useLanguage(); 
+  const { t } = useLanguage();
 
   const [product, setProduct] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -77,25 +78,44 @@ export default function ProductDetail() {
         if (productData && productData.ma_san_pham) {
           setProduct(productData);
 
-          const targetVariant =
-            productData.bien_the?.find((v) => v.la_ban_chay) ||
-            productData.bien_the?.[0];
-
-          setSelectedVariant(targetVariant);
-          setQuantity(1);
-
-          if (targetVariant?.thuoc_tinh) {
-            setSelectedAttributes(targetVariant.thuoc_tinh);
+          let targetVariant = null;
+          if (variantId) {
+            targetVariant = productData.bien_the?.find(
+              (v) => v.ma_bien_the === variantId,
+            );
           }
 
-          const variantMedia = productData.media?.find(
-            (m) => m.ma_bien_the === targetVariant?.ma_bien_the,
-          );
-          setMainMedia(
-            variantMedia ||
-              productData.media?.find((m) => m.la_anh_chinh) ||
-              productData.media?.[0],
-          );
+          if (!targetVariant) {
+            targetVariant =
+              productData.bien_the?.find((v) => v.la_ban_chay) ||
+              productData.bien_the?.[0];
+          }
+
+          if (targetVariant) {
+            setSelectedVariant(targetVariant);
+            setQuantity(1);
+
+            if (targetVariant.thuoc_tinh) {
+              setSelectedAttributes(targetVariant.thuoc_tinh);
+            }
+
+            const variantMedia = productData.media?.find(
+              (m) => m.ma_bien_the === targetVariant.ma_bien_the,
+            );
+            setMainMedia(
+              variantMedia ||
+                productData.media?.find((m) => m.la_anh_chinh) ||
+                productData.media?.[0],
+            );
+
+            if (!variantId || variantId !== targetVariant.ma_bien_the) {
+              const cSlug = category_slug || productData.slug_danh_muc || "all";
+              navigate(
+                `/${currentCountry}/product/${cSlug}/${id}/${targetVariant.ma_bien_the}`,
+                { replace: true },
+              );
+            }
+          }
         } else {
           setProduct(null);
         }
@@ -105,7 +125,7 @@ export default function ProductDetail() {
         console.error("Error fetching product:", error);
         setLoading(false);
       });
-  }, [id, country]);
+  }, [id, country, variantId]);
 
   // 🛠️ PHÂN RÃ THUỘC TÍNH: Thêm .trim() dọn khoảng trắng thừa để gộp nút trùng
   const nhomPhanLoai = useMemo(() => {
@@ -115,7 +135,7 @@ export default function ProductDetail() {
       if (bt.thuoc_tinh && Object.keys(bt.thuoc_tinh).length > 0) {
         Object.entries(bt.thuoc_tinh).forEach(([key, value]) => {
           if (!groups[key]) groups[key] = new Set();
-          
+
           // Loại bỏ hoàn toàn khoảng trắng thừa ở hai đầu chuỗi chữ
           const cleanValue = typeof value === "string" ? value.trim() : value;
           groups[key].add(cleanValue);
@@ -135,7 +155,8 @@ export default function ProductDetail() {
     return product.bien_the.some((bt) => {
       if (!bt.thuoc_tinh) return false;
       const targetVal = bt.thuoc_tinh[key];
-      const cleanTargetVal = typeof targetVal === "string" ? targetVal.trim() : targetVal;
+      const cleanTargetVal =
+        typeof targetVal === "string" ? targetVal.trim() : targetVal;
       return cleanTargetVal === cleanValue;
     });
   };
@@ -163,16 +184,27 @@ export default function ProductDetail() {
     // 3. Nếu cấu hình chéo hợp lệ -> Cập nhật giá tiền, hình ảnh
     if (matchedVariant) {
       setSelectedVariant(matchedVariant);
-      const vMedia = product.media?.find((m) => m.ma_bien_the === matchedVariant.ma_bien_the);
+      const vMedia = product.media?.find(
+        (m) => m.ma_bien_the === matchedVariant.ma_bien_the,
+      );
       if (vMedia) setMainMedia(vMedia);
+
+      // 🌟 NÂNG CẤP 3: Ép thanh URL nhảy số theo mã biến thể khách vừa bấm (Deep Linking)
+      navigate(
+        `/${country}/product/${category_slug}/${id}/${matchedVariant.ma_bien_the}`,
+        { replace: true },
+      );
     } else {
       // 4. Nếu chưa có data cấu hình chéo -> Set null để báo Tạm hết hàng
       setSelectedVariant(null);
     }
   };
 
-  const currentPrice = selectedVariant?.gia_khuyen_mai || selectedVariant?.gia_ban_le || 0;
-  const originalPrice = selectedVariant?.gia_khuyen_mai ? selectedVariant?.gia_ban_le : null;
+  const currentPrice =
+    selectedVariant?.gia_khuyen_mai || selectedVariant?.gia_ban_le || 0;
+  const originalPrice = selectedVariant?.gia_khuyen_mai
+    ? selectedVariant?.gia_ban_le
+    : null;
 
   const handleBuyNow = () => {
     if (!product || !selectedVariant) return;
@@ -284,16 +316,25 @@ export default function ProductDetail() {
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10 transition-all duration-300">
         {/* BREADCRUMB */}
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
-          <Link to={`/${country}`} className="hover:text-slate-900 flex-shrink-0 transition-colors">
+          <Link
+            to={`/${country}`}
+            className="hover:text-slate-900 flex-shrink-0 transition-colors"
+          >
             Home
           </Link>
           <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
           {displayCategoryName && (
             <>
-              <Link to={`/${country}/category/${displayCategorySlug}`} className="text-slate-400 hover:text-slate-900 truncate transition-colors">
+              <Link
+                to={`/${country}/category/${displayCategorySlug}`}
+                className="text-slate-400 hover:text-slate-900 truncate transition-colors"
+              >
                 {displayCategoryName}
               </Link>
-              <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
+              <ChevronRight
+                size={10}
+                className="text-slate-300 flex-shrink-0"
+              />
             </>
           )}
           <span className="text-[#006c49] truncate font-black italic">
@@ -310,13 +351,21 @@ export default function ProductDetail() {
                   key={i}
                   onClick={() => setMainMedia(m)}
                   className={`aspect-square w-12 sm:w-full rounded-lg border-2 transition-all p-0.5 bg-white flex-shrink-0 ${
-                    mainMedia?.ma_media === m.ma_media ? "border-[#006c49] shadow-sm" : "border-slate-100 opacity-60 hover:opacity-100 hover:border-slate-300"
+                    mainMedia?.ma_media === m.ma_media
+                      ? "border-[#006c49] shadow-sm"
+                      : "border-slate-100 opacity-60 hover:opacity-100 hover:border-slate-300"
                   }`}
                 >
                   {m.loai_media === "video" ? (
-                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-[8px] font-bold text-slate-500 rounded-md">VIDEO</div>
+                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-[8px] font-bold text-slate-500 rounded-md">
+                      VIDEO
+                    </div>
                   ) : (
-                    <img src={m.duong_dan_url} className="w-full h-full object-cover rounded-md" alt="thumb" />
+                    <img
+                      src={m.duong_dan_url}
+                      className="w-full h-full object-cover rounded-md"
+                      alt="thumb"
+                    />
                   )}
                 </button>
               ))}
@@ -325,16 +374,28 @@ export default function ProductDetail() {
             <div className="flex-1 relative aspect-square sm:aspect-[4/5] max-h-[45vh] lg:max-h-[65vh] rounded-[16px] lg:rounded-[32px] bg-[#f9f9f9] border border-slate-50 overflow-hidden flex items-center justify-center shadow-sm">
               {mainMedia?.loai_media === "video" ? (
                 getYouTubeEmbedUrl(mainMedia.duong_dan_url) ? (
-                  <iframe src={getYouTubeEmbedUrl(mainMedia.duong_dan_url)} title="YouTube player" className="w-full h-full object-cover rounded-[16px] p-2" allowFullScreen></iframe>
+                  <iframe
+                    src={getYouTubeEmbedUrl(mainMedia.duong_dan_url)}
+                    title="YouTube player"
+                    className="w-full h-full object-cover rounded-[16px] p-2"
+                    allowFullScreen
+                  ></iframe>
                 ) : (
-                  <video src={mainMedia.duong_dan_url} controls className="w-full h-full object-contain p-4 bg-black rounded-[16px]" />
+                  <video
+                    src={mainMedia.duong_dan_url}
+                    controls
+                    className="w-full h-full object-contain p-4 bg-black rounded-[16px]"
+                  />
                 )
               ) : (
                 <img
                   src={mainMedia?.duong_dan_url}
                   className="w-full h-full object-contain p-4 transition-transform duration-500 hover:scale-105"
                   alt={product.ten_san_pham}
-                  onError={(e) => { e.target.src = "https://placehold.co/600x600?text=Demi+Mart"; }}
+                  onError={(e) => {
+                    e.target.src =
+                      "https://placehold.co/600x600?text=Demi+Mart";
+                  }}
                 />
               )}
             </div>
@@ -343,12 +404,20 @@ export default function ProductDetail() {
           <div className="lg:col-span-6 xl:col-span-5 text-left space-y-4 lg:space-y-5 lg:sticky lg:top-4 px-1">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="bg-[#006c49] text-white text-[7px] 2xl:text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter italic">Demi Fresh</span>
-                <p className="text-[9px] 2xl:text-[11px] text-slate-400 font-bold uppercase tracking-widest pt-1">SKU: {selectedVariant?.sku || "N/A"}</p>
+                <span className="bg-[#006c49] text-white text-[7px] 2xl:text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter italic">
+                  Demi Fresh
+                </span>
+                <p className="text-[9px] 2xl:text-[11px] text-slate-400 font-bold uppercase tracking-widest pt-1">
+                  SKU: {selectedVariant?.sku || "N/A"}
+                </p>
               </div>
-              <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">{product.ten_san_pham}</h1>
+              <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
+                {product.ten_san_pham}
+              </h1>
               {selectedVariant && selectedVariant.ten_bien_the && (
-                <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">Phân loại: {selectedVariant.ten_bien_the}</h2>
+                <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
+                  Phân loại: {selectedVariant.ten_bien_the}
+                </h2>
               )}
             </div>
 
@@ -356,11 +425,17 @@ export default function ProductDetail() {
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
               {selectedVariant ? (
                 <>
-                  <span className="text-2xl lg:text-3xl 2xl:text-5xl font-black text-[#006c49] tracking-tighter" translate="no">
+                  <span
+                    className="text-2xl lg:text-3xl 2xl:text-5xl font-black text-[#006c49] tracking-tighter"
+                    translate="no"
+                  >
                     {formatPrice(currentPrice)}
                   </span>
                   {originalPrice && (
-                    <span className="text-xs 2xl:text-lg text-slate-300 line-through font-bold" translate="no">
+                    <span
+                      className="text-xs 2xl:text-lg text-slate-300 line-through font-bold"
+                      translate="no"
+                    >
                       {formatPrice(originalPrice)}
                     </span>
                   )}
@@ -373,40 +448,52 @@ export default function ProductDetail() {
             </div>
 
             <div className="space-y-3 lg:space-y-4">
-              <p className="text-[10px] lg:text-[11px] 2xl:text-[13px] text-slate-500 leading-relaxed italic border-l-4 border-[#006c49] pl-3">"{product.mo_ta || "Sản phẩm tuyển chọn từ Demi Mart."}"</p>
+              <p className="text-[10px] lg:text-[11px] 2xl:text-[13px] text-slate-500 leading-relaxed italic border-l-4 border-[#006c49] pl-3">
+                "{product.mo_ta || "Sản phẩm tuyển chọn từ Demi Mart."}"
+              </p>
 
               <div className="pt-2 space-y-4">
                 {isMultiTier ? (
-                  Object.entries(nhomPhanLoai).map(([tenThuocTinh, danhSachGiaTri]) => (
-                    <div key={tenThuocTinh} className="space-y-2">
-                      <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">{tenThuocTinh}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {danhSachGiaTri.map((giaTri) => {
-                          const isSelected = typeof selectedAttributes[tenThuocTinh] === "string" && typeof giaTri === "string"
-                            ? selectedAttributes[tenThuocTinh].trim() === giaTri.trim()
-                            : selectedAttributes[tenThuocTinh] === giaTri;
-                          const isValid = isOptionValid(tenThuocTinh, giaTri);
+                  Object.entries(nhomPhanLoai).map(
+                    ([tenThuocTinh, danhSachGiaTri]) => (
+                      <div key={tenThuocTinh} className="space-y-2">
+                        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                          {tenThuocTinh}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {danhSachGiaTri.map((giaTri) => {
+                            const isSelected =
+                              typeof selectedAttributes[tenThuocTinh] ===
+                                "string" && typeof giaTri === "string"
+                                ? selectedAttributes[tenThuocTinh].trim() ===
+                                  giaTri.trim()
+                                : selectedAttributes[tenThuocTinh] === giaTri;
+                            const isValid = isOptionValid(tenThuocTinh, giaTri);
 
-                          return (
-                            <button
-                              key={giaTri}
-                              onClick={() => isValid && handleAttributeSelect(tenThuocTinh, giaTri)}
-                              disabled={!isValid}
-                              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 ${
-                                isSelected
-                                  ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
-                                  : isValid
-                                    ? "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
-                                    : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-50"
-                              }`}
-                            >
-                              {giaTri}
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button
+                                key={giaTri}
+                                onClick={() =>
+                                  isValid &&
+                                  handleAttributeSelect(tenThuocTinh, giaTri)
+                                }
+                                disabled={!isValid}
+                                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 ${
+                                  isSelected
+                                    ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
+                                    : isValid
+                                      ? "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
+                                      : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-50"
+                                }`}
+                              >
+                                {giaTri}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ),
+                  )
                 ) : (
                   <div className="flex flex-wrap gap-1.5 lg:gap-2">
                     {product.bien_the?.map((v, i) => (
@@ -414,11 +501,21 @@ export default function ProductDetail() {
                         key={i}
                         onClick={() => {
                           setSelectedVariant(v);
-                          const vMedia = product.media?.find((m) => m.ma_bien_the === v.ma_bien_the);
+                          const vMedia = product.media?.find(
+                            (m) => m.ma_bien_the === v.ma_bien_the,
+                          );
                           if (vMedia) setMainMedia(vMedia);
+
+                          // 🌟 Bổ sung nhảy URL cho biến thể đơn tuyến
+                          navigate(
+                            `/${country}/product/${category_slug}/${id}/${v.ma_bien_the}`,
+                            { replace: true },
+                          );
                         }}
                         className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all border-2 ${
-                          selectedVariant?.ma_bien_the === v.ma_bien_the ? "border-[#006c49] bg-[#006c49] text-white shadow-md" : "border-slate-100 bg-[#fcfcfc] text-slate-400 hover:border-slate-200"
+                          selectedVariant?.ma_bien_the === v.ma_bien_the
+                            ? "border-[#006c49] bg-[#006c49] text-white shadow-md"
+                            : "border-slate-100 bg-[#fcfcfc] text-slate-400 hover:border-slate-200"
                         }`}
                       >
                         {v.ten_bien_the}
@@ -434,19 +531,37 @@ export default function ProductDetail() {
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Số lượng</p>
-                    <span className="text-[9px] text-[#006c49] font-bold">(Kho: {selectedVariant?.ton_kho || 0})</span>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      Số lượng
+                    </p>
+                    <span className="text-[9px] text-[#006c49] font-bold">
+                      (Kho: {selectedVariant?.ton_kho || 0})
+                    </span>
                   </div>
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 lg:p-1 shadow-sm">
-                    <button onClick={() => setQuantity(Math.max(1, quantity - 1))} disabled={!selectedVariant} className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-20"><Minus size={14} /></button>
-                    <span className="w-8 lg:w-10 text-center font-bold text-slate-800">{selectedVariant ? quantity : 0}</span>
+                    <button
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      disabled={!selectedVariant}
+                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-20"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="w-8 lg:w-10 text-center font-bold text-slate-800">
+                      {selectedVariant ? quantity : 0}
+                    </span>
                     <button
                       onClick={() => {
                         const maxStock = selectedVariant?.ton_kho || 0;
                         if (quantity < maxStock) setQuantity(quantity + 1);
-                        else alert(`Kho tại khu vực này chỉ còn tối đa ${maxStock} sản phẩm!`);
+                        else
+                          alert(
+                            `Kho tại khu vực này chỉ còn tối đa ${maxStock} sản phẩm!`,
+                          );
                       }}
-                      disabled={!selectedVariant || quantity >= (selectedVariant?.ton_kho || 0)}
+                      disabled={
+                        !selectedVariant ||
+                        quantity >= (selectedVariant?.ton_kho || 0)
+                      }
                       className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Plus size={14} />
@@ -454,31 +569,63 @@ export default function ProductDetail() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest" translate="no">Tạm tính</p>
-                  <p className="text-xl lg:text-3xl font-black text-[#1a1a1a] tracking-tighter" translate="no">
-                    {selectedVariant ? formatPrice(currentPrice * quantity) : formatPrice(0)}
+                  <p
+                    className="text-[9px] font-black text-slate-400 uppercase tracking-widest"
+                    translate="no"
+                  >
+                    Tạm tính
+                  </p>
+                  <p
+                    className="text-xl lg:text-3xl font-black text-[#1a1a1a] tracking-tighter"
+                    translate="no"
+                  >
+                    {selectedVariant
+                      ? formatPrice(currentPrice * quantity)
+                      : formatPrice(0)}
                   </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
-                <button onClick={handleAddToCart} disabled={!selectedVariant} className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"><ShoppingCart size={16} strokeWidth={2.5} /> GIỎ HÀNG</button>
-                <button onClick={handleBuyNow} disabled={!selectedVariant} className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] active:scale-95 shadow-lg transition-transform disabled:opacity-40 disabled:cursor-not-allowed"><CreditCard size={16} strokeWidth={2.5} /> MUA NGAY</button>
+                <button
+                  onClick={handleAddToCart}
+                  disabled={!selectedVariant}
+                  className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ShoppingCart size={16} strokeWidth={2.5} /> GIỎ HÀNG
+                </button>
+                <button
+                  onClick={handleBuyNow}
+                  disabled={!selectedVariant}
+                  className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] active:scale-95 shadow-lg transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CreditCard size={16} strokeWidth={2.5} /> MUA NGAY
+                </button>
               </div>
             </div>
 
             <div className="flex gap-5 lg:gap-6 pt-2 border-t border-slate-50">
-              <div className="flex items-center gap-2 text-[#006c49] font-bold text-[9px] uppercase tracking-tighter"><Truck size={16} /> Giao nhanh 2h</div>
-              <div className="flex items-center gap-2 text-[#006c49] font-bold text-[9px] uppercase tracking-tighter"><ShieldCheck size={16} /> Bảo hành chính hãng</div>
+              <div className="flex items-center gap-2 text-[#006c49] font-bold text-[9px] uppercase tracking-tighter">
+                <Truck size={16} /> Giao nhanh 2h
+              </div>
+              <div className="flex items-center gap-2 text-[#006c49] font-bold text-[9px] uppercase tracking-tighter">
+                <ShieldCheck size={16} /> Bảo hành chính hãng
+              </div>
             </div>
           </div>
         </div>
 
         {/* BOTTOM REVIEWS */}
         <div className="mt-12 lg:mt-16 pt-8 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
-          <div className="lg:col-span-8"><Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} /></div>
-          <div className="lg:col-span-4 lg:sticky lg:top-6"><RelatedProducts currentProduct={product} countryCode={country} /></div>
+          <div className="lg:col-span-8">
+            <Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} />
+          </div>
+          <div className="lg:col-span-4 lg:sticky lg:top-6">
+            <RelatedProducts currentProduct={product} countryCode={country} />
+          </div>
         </div>
-        <div className="w-full mt-12"><RecommendedProducts currentProduct={product} /></div>
+        <div className="w-full mt-12">
+          <RecommendedProducts currentProduct={product} />
+        </div>
       </div>
     </div>
   );

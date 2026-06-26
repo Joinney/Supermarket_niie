@@ -1153,6 +1153,7 @@ export const createAttribute = async (req, res) => {
 
         const name = ten_thuoc_tinh.trim();
 
+        // 1. Kiểm tra xem tên đã tồn tại chưa
         const checkQuery = `SELECT ma_thuoc_tinh, ten_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE LOWER(ten_thuoc_tinh) = LOWER($1);`;
         const checkRes = await pool.query(checkQuery, [name]);
 
@@ -1160,10 +1161,27 @@ export const createAttribute = async (req, res) => {
             return res.status(200).json(checkRes.rows[0]);
         }
 
-        const countRes = await pool.query('SELECT COUNT(*) FROM public.danh_muc_thuoc_tinh');
-        const nextIdNum = parseInt(countRes.rows[0].count) + 1;
+        // 2. TÌM MÃ ID LỚN NHẤT THỰC TẾ (Lọc bỏ các mã ngoại lai như MDMTT)
+        const allAttRes = await pool.query(`
+            SELECT ma_thuoc_tinh 
+            FROM public.danh_muc_thuoc_tinh 
+            WHERE ma_thuoc_tinh LIKE 'ATT%'
+        `);
+
+        let maxIdNum = 0;
+        allAttRes.rows.forEach(row => {
+            // Tách chỉ lấy số, ví dụ ATT017 -> 17
+            const num = parseInt(row.ma_thuoc_tinh.replace(/\D/g, '')) || 0;
+            if (num > maxIdNum) {
+                maxIdNum = num;
+            }
+        });
+        
+        // Cộng 1 vào số lớn nhất tìm được
+        const nextIdNum = maxIdNum + 1;
         const ma_thuoc_tinh_moi = `ATT${String(nextIdNum).padStart(3, '0')}`;
 
+        // 3. Tiến hành Insert vào DB
         const insertQuery = `
             INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh)
             VALUES ($1, $2)

@@ -18,11 +18,11 @@ import {
 import axios from "axios";
 
 export default function AdminCreateVariant() {
-  const { id } = useParams();
+  const { id, variantId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
-
+  const [parentProductImage, setParentProductImage] = useState("");
   const [productName, setProductName] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -72,6 +72,13 @@ export default function AdminCreateVariant() {
           const currentProductTitle = data.ten_san_pham || "Sản phẩm gốc";
           setProductName(currentProductTitle);
 
+          const mainImg =
+            data.hinh_anh_chinh ||
+            (data.media && data.media.length > 0
+              ? data.media[0].duong_dan_url
+              : "");
+          setParentProductImage(mainImg);
+
           let variantsList = [];
           if (location.state?.existingVariants) {
             variantsList = location.state.existingVariants;
@@ -103,7 +110,18 @@ export default function AdminCreateVariant() {
               };
             },
           );
-
+          if (variantId && variantsList.length > 0) {
+            const targetVar = variantsList.find(
+              (v) => v.ma_bien_the === variantId,
+            );
+            if (targetVar && targetVar.thuoc_tinh) {
+              dynamicMatrix.forEach((attr) => {
+                if (targetVar.thuoc_tinh[attr.name]) {
+                  attr.selected = targetVar.thuoc_tinh[attr.name]; // Gán đúng giá trị của biến thể
+                }
+              });
+            }
+          }
           setAvailableAttributes(dynamicMatrix);
 
           const comboText = dynamicMatrix
@@ -320,16 +338,43 @@ export default function AdminCreateVariant() {
       setEditStock(matchedVariant.ton_kho || matchedVariant.so_luong_ton || 0);
       setEditUnit(matchedVariant.ten_don_vi || "Chai");
       setVariantImageUrl(
-        matchedVariant.hinh_anh_url || matchedVariant.duong_dan_url || "",
-      ); // Đồng bộ ảnh cũ của biến thể
+        matchedVariant.hinh_anh_url ||
+          matchedVariant.duong_dan_url ||
+          parentProductImage ||
+          "",
+      );
+
+      if (variantId !== matchedVariant.ma_bien_the) {
+        navigate(
+          `/admin/products/create-variant/${id}/${matchedVariant.ma_bien_the}`,
+          {
+            replace: true,
+            state: location.state,
+          },
+        );
+      }
     } else {
       setEditSku("");
       setEditPrice(0);
       setEditStock(0);
       setEditUnit("Chai");
-      setVariantImageUrl("");
+      setVariantImageUrl(parentProductImage || "");
+
+      if (variantId) {
+        navigate(`/admin/products/create-variant/${id}`, {
+          replace: true,
+          state: location.state,
+        });
+      }
     }
-  }, [matchedVariant]);
+  }, [
+    matchedVariant,
+    parentProductImage,
+    id,
+    variantId,
+    navigate,
+    location.state,
+  ]);
 
   // 🌟 HÀM XỬ LÝ UPLOAD ẢNH TỪ MÁY LÊN CLOUDINARY
   const handleLocalImageUpload = async (e) => {
@@ -430,6 +475,7 @@ export default function AdminCreateVariant() {
     }
   };
 
+  // 🌟 NÂNG CẤP UX: XỬ LÝ LƯU BIẾN THỂ TRƠN TRU
   const handleSaveVariant = async (e) => {
     e.preventDefault();
     if (!sku.trim()) return alert("Vui lòng điền mã định danh SKU!");
@@ -458,25 +504,37 @@ export default function AdminCreateVariant() {
         so_luong_ton: stock,
         ten_don_vi: unit,
         thuoc_tinh: filterAttributesPayload,
-        hinh_anh_url: variantImageUrl, // Gửi link ảnh lên backend để lưu trữ
+        hinh_anh_url: variantImageUrl,
       };
 
       if (matchedVariant) {
+        // TRƯỜNG HỢP UPDATE: Update xong thì văng ra ngoài danh sách
         await axios.put(
           `${apiUrl}/api/products/variants/${matchedVariant.ma_bien_the}`,
           payload,
         );
         alert(`💾 Đã cập nhật thành công biến thể [${matchedVariant.sku}]`);
+        navigate(-1); // Đã chuyển navigate vào TRONG phần cập nhật
       } else {
-        await axios.post(`${apiUrl}/api/products/${id}/variants`, payload);
+        const res = await axios.post(
+          `${apiUrl}/api/products/${id}/variants`,
+          payload,
+        );
         alert("🎉 Đã khởi tạo biến thể mới thành công vào Database!");
+
+        const newVariantData = {
+          ...res.data.data,
+          thuoc_tinh: filterAttributesPayload,
+        };
+        setExistingVariants([newVariantData, ...existingVariants]);
+
+        setEditSku("");
+        setEditPrice(0);
+        setVariantImageUrl("");
       }
-      navigate(-1);
     } catch (err) {
       console.error("Lỗi xử lý lưu dữ liệu biến thể:", err);
-      alert(
-        "Gặp sự cố khi lưu biến thể xuống DB. Vui lòng kiểm tra lại log hệ thống!",
-      );
+      alert("Gặp sự cố khi lưu biến thể xuống DB. Mã SKU có thể đã bị trùng!");
     } finally {
       setSaving(false);
     }
