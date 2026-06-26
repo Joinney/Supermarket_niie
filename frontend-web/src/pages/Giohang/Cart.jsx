@@ -16,6 +16,7 @@ export default function Cart() {
     }
   }, [fetchCart]);
 
+  // Gom các phân loại trùng productId lại
   const groupedCart = useMemo(() => {
     const groups = {};
     cart.forEach(item => {
@@ -37,6 +38,16 @@ export default function Cart() {
     return Object.values(groups);
   }, [cart]);
 
+  // 🚀 CẢI TIẾN 1: TỰ ĐỘNG BUNG SỔ TẤT CẢ SẢN PHẨM CÓ NHIỀU BIẾN THỂ NGAY KHI CÓ DỮ LIỆU
+  useEffect(() => {
+    if (groupedCart.length > 0 && expandedProducts.length === 0) {
+      const multiVariantIds = groupedCart
+        .filter(group => group.subVariants.length > 1)
+        .map(group => group.productId);
+      setExpandedOrigins(multiVariantIds);
+    }
+  }, [groupedCart]);
+
   useEffect(() => {
     if (cart && cart.length > 0) {
       setSelectedItems(cart.map(item => item.variantId));
@@ -55,6 +66,20 @@ export default function Cart() {
     setSelectedItems(prev => 
       prev.includes(variantId) ? prev.filter(id => id !== variantId) : [...prev, variantId]
     );
+  };
+
+  // 🚀 CẢI TIẾN 2: LOGIC CHECKBOX CHO HÀNG TỔNG GOM BIẾN THỂ
+  const toggleSelectGroup = (subVariants) => {
+    const subVariantIds = subVariants.map(v => v.variantId);
+    const isAllGroupSelected = subVariantIds.every(id => selectedItems.includes(id));
+
+    if (isAllGroupSelected) {
+      // Nếu đã chọn hết thì bỏ chọn cả nhóm con
+      setSelectedItems(prev => prev.filter(id => !subVariantIds.includes(id)));
+    } else {
+      // Nếu chưa chọn hết thì nạp thêm những phân loại con còn thiếu vào state chọn
+      setSelectedItems(prev => [...new Set([...prev, ...subVariantIds])]);
+    }
   };
 
   const toggleSelectAll = () => {
@@ -98,8 +123,8 @@ export default function Cart() {
             <ShoppingBag size={36} className="text-[#006c49]" />
             <Sparkles size={14} className="absolute top-2 right-4 text-amber-400 animate-spin" />
           </div>
-          <h2 className="text-xl font-black text-slate-800 uppercase italic tracking-tight">Túi hàng trống</h2>
-          <Link to="/" className="mt-6 inline-block w-full bg-gradient-to-r from-[#006c49] to-[#00523d] text-white py-3.5 rounded-xl font-black uppercase tracking-widest hover:shadow-lg transition-all shadow-md text-center">
+          <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tight">Túi hàng trống</h2>
+          <Link to="/" className="mt-6 inline-block w-full bg-gradient-to-r from-[#006c49] to-[#00523d] text-white py-3.5 rounded-xl font-black uppercase tracking-widest transition-all shadow-md text-center">
             Quay lại mua sắm
           </Link>
         </div>
@@ -149,7 +174,7 @@ export default function Cart() {
                 const category = group.categorySlug || 'san-pham';
                 const hasMultipleVariants = group.subVariants.length > 1;
 
-                // 🚀 TRƯỜNG HỢP 1: SẢN PHẨM ĐƠN (Góc bo tinh chỉnh gọn gàng thành rounded-2xl)
+                // ─── TRƯỜNG HỢP 1: SẢN PHẨM ĐƠN ───
                 if (!hasMultipleVariants) {
                   const singleItem = group.subVariants[0];
                   const isSelected = selectedItems.includes(singleItem.variantId);
@@ -164,12 +189,12 @@ export default function Cart() {
                     >
                       <input type="checkbox" checked={isSelected} onChange={() => toggleSelectItem(singleItem.variantId)} className="w-5 h-5 rounded accent-[#006c49] cursor-pointer border-slate-300" />
 
-                      <div className="w-16 h-16 bg-white border border-slate-200/60 rounded-xl overflow-hidden p-1 shadow-sm flex-shrink-0 flex items-center justify-center">
+                      <div className="w-16 h-16 bg-white border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
                         <img src={singleItem.image || 'https://via.placeholder.com/150'} alt={singleItem.name} className="w-full h-full object-contain" />
                       </div>
 
                       <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 text-left">
                           <Link to={productDetailUrl} className="font-black text-slate-800 text-sm lg:text-base uppercase truncate italic hover:text-[#006c49] block">
                             {singleItem.name || "Sản phẩm"}
                           </Link>
@@ -177,14 +202,14 @@ export default function Cart() {
                           {singleItem.thuoc_tinh_hop_nhat && singleItem.thuoc_tinh_hop_nhat.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                               {singleItem.thuoc_tinh_hop_nhat.map((attr, idx) => (
-                                <span key={idx} className="inline-flex items-center text-[10px] font-bold tracking-wide text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100/60 shadow-sm">
+                                <span key={idx} className="inline-flex items-center text-[10px] font-bold tracking-wide text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-100/60 shadow-sm">
                                   {attr.ten_thuoc_tinh}: <b className="text-slate-700 ml-1 font-black">{attr.gia_tri}</b>
                                 </span>
                               ))}
                             </div>
                           ) : (
                             singleItem.variantName && (
-                              <span className="inline-block mt-1.5 text-[10px] font-bold tracking-wide text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                              <span className="inline-block mt-1.5 text-[10px] font-bold tracking-wide text-slate-400 bg-slate-50 px-2.5 py-0.5 rounded border border-slate-100">
                                 Phân loại: {singleItem.variantName}
                               </span>
                             )
@@ -215,20 +240,32 @@ export default function Cart() {
                   );
                 }
 
-                // 🚀 TRƯỜNG HỢP 2: SẢN PHẨM GOM BIẾN THỂ (Góc bo tổng thể đồng bộ vuông vắn thành rounded-2xl)
+                // ─── TRƯỜNG HỢP 2: SẢN PHẨM GOM BIẾN THỂ ───
                 const isExpanded = expandedProducts.includes(group.productId);
                 const mainProductUrl = `/${country.toLowerCase()}/product/${category}/${group.productId}`;
+                
+                // Kiểm tra xem tất cả phân loại con trong nhóm đã được tick chọn chưa
+                const isAllGroupSelected = group.subVariants.map(v => v.variantId).every(id => selectedItems.includes(id));
 
                 return (
                   <div key={group.productId} className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 border-slate-100 ${isExpanded ? 'ring-1 ring-slate-200 shadow-md' : ''}`}>
                     
+                    {/* HÀNG TỔNG (SẢN PHẨM CHA) */}
                     <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 via-slate-50/30 to-white justify-between">
                       <div className="flex items-center gap-4 flex-1 min-w-0">
+                        {/* 🚀 ĐÃ BỔ SUNG: Checkbox chọn nhanh cho hàng tổng sản phẩm gom */}
+                        <input 
+                          type="checkbox" 
+                          checked={isAllGroupSelected} 
+                          onChange={() => toggleSelectGroup(group.subVariants)} 
+                          className="w-5 h-5 rounded accent-[#006c49] cursor-pointer border-slate-300" 
+                        />
+
                         <div className="w-16 h-16 bg-white border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
                           <img src={group.image} alt={group.name} className="w-full h-full object-contain" />
                         </div>
                         
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-left">
                           <Link to={mainProductUrl} className="font-black text-slate-800 text-sm lg:text-base uppercase truncate italic hover:text-[#006c49] block transition-colors">
                             {group.name}
                           </Link>
@@ -254,6 +291,7 @@ export default function Cart() {
                       </button>
                     </div>
 
+                    {/* HIỂN THỊ CÁC BIẾN THỂ CON BÊN TRONG KHI BUNG RA */}
                     {isExpanded && (
                       <div className="divide-y divide-slate-100 bg-white border-t border-slate-50/50">
                         {group.subVariants.map((subItem) => {
@@ -269,7 +307,7 @@ export default function Cart() {
                               </div>
 
                               <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
-                                <div className="min-w-0 flex-1">
+                                <div className="min-w-0 flex-1 text-left">
                                   {subItem.thuoc_tinh_hop_nhat && subItem.thuoc_tinh_hop_nhat.length > 0 ? (
                                     <div className="flex flex-wrap gap-1.5">
                                       {subItem.thuoc_tinh_hop_nhat.map((attr, idx) => (
@@ -314,7 +352,7 @@ export default function Cart() {
             </div>
           </div>
 
-          {/* TÓM TẮT HÓA ĐƠN */}
+          {/* CỘT PHẢI: TÓM TẮT HÓA ĐƠN */}
           <div className="lg:col-span-4 lg:sticky lg:top-24">
             <div className="bg-white border border-slate-100 rounded-2xl p-6 lg:p-8 shadow-2xl shadow-slate-200/60 space-y-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-500/10 to-transparent rounded-bl-full pointer-events-none"></div>
