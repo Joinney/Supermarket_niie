@@ -16,11 +16,13 @@
     "framer-motion": "^12.38.0",
     "i18next": "^26.0.8",
     "i18next-browser-languagedetector": "^8.2.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.11.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-easy-crop": "^6.0.2",
     "react-i18next": "^17.0.4",
+    "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.14.2",
     "socket.io-client": "^4.8.3"
   },

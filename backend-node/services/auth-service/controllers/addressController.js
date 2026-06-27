@@ -29,7 +29,8 @@ export const addAddress = async (req, res) => {
         const { 
             receiver_name, receiver_phone, province_name, province_id, ProvinceID,
             district_name, district_id, DistrictID, ward_name, ward_id, ward_code, WardCode,
-            detail_address, is_default, address_type 
+            detail_address, is_default, address_type,
+            latitude, longitude // 👈 Bổ sung nhận tọa độ từ Body
         } = req.body;
 
         const isDefaultBool = is_default === 1 || is_default === true;
@@ -37,12 +38,14 @@ export const addAddress = async (req, res) => {
             await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
         }
 
+        // Cập nhật câu lệnh INSERT thêm 2 cột latitude và longitude
         const query = `
             INSERT INTO user_addresses (
                 user_id, receiver_name, receiver_phone, province_name, province_id, 
-                district_name, district_id, ward_name, ward_code, detail_address, is_default, address_type
+                district_name, district_id, ward_name, ward_code, detail_address, is_default, address_type,
+                latitude, longitude
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *
         `;
 
         const finalProvinceId = province_id || ProvinceID || 1;
@@ -52,7 +55,9 @@ export const addAddress = async (req, res) => {
         const values = [
             userId, receiver_name, receiver_phone, province_name, Number(finalProvinceId),    
             district_name, Number(finalDistrictId), ward_name, String(finalWardCode), 
-            detail_address, isDefaultBool, address_type || 'home'
+            detail_address, isDefaultBool, address_type || 'home',
+            latitude ? parseFloat(latitude) : null,   // 👈 Ép kiểu số thực an toàn
+            longitude ? parseFloat(longitude) : null // 👈 Ép kiểu số thực an toàn
         ];
 
         const result = await pool.query(query, values);
@@ -70,13 +75,16 @@ export const updateAddress = async (req, res) => {
     try {
         const userId = req.user.id;
         const addressId = req.params.id || req.params.address_id;
+        
         const { 
             receiver_name, receiver_phone, province_name, province_id, ProvinceID,
             district_name, district_id, DistrictID, ward_name, ward_id, ward_code, WardCode, 
-            detail_address, is_default, address_type 
+            detail_address, is_default, address_type,
+            latitude, longitude // 👈 ĐÃ SỬA: Bổ sung lấy tọa độ từ req.body
         } = req.body;
 
         const isDefaultBool = is_default === 1 || is_default === true;
+
         if (isDefaultBool) {
             await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
         }
@@ -85,11 +93,12 @@ export const updateAddress = async (req, res) => {
             UPDATE user_addresses 
             SET receiver_name = $1, receiver_phone = $2, province_name = $3, province_id = $4, 
                 district_name = $5, district_id = $6, ward_name = $7, ward_code = $8, 
-                detail_address = $9, is_default = $10, address_type = $11
-            WHERE address_id = $12 AND user_id = $13 RETURNING *
+                detail_address = $9, is_default = $10, 
+                address_type = $11, latitude = $12, longitude = $13
+            WHERE address_id = $14 AND user_id = $15 RETURNING *
         `;
 
-        // 🛡️ ĐÃ VÁ LỖI CRASH: Định nghĩa đầy đủ các biến để tránh dính ReferenceError
+        // 🛡️ Định nghĩa đầy đủ các biến để tránh dính ReferenceError
         const finalProvinceId = province_id || ProvinceID || 1;
         const finalDistrictId = district_id || DistrictID || 1;
         const finalWardCode = ward_code || ward_id || WardCode || '1';
@@ -97,11 +106,15 @@ export const updateAddress = async (req, res) => {
         const values = [
             receiver_name, receiver_phone, province_name, Number(finalProvinceId), 
             district_name, Number(finalDistrictId), ward_name, String(finalWardCode), 
-            detail_address, isDefaultBool, address_type || 'home', addressId, userId     
+            detail_address, isDefaultBool, address_type || 'home', 
+            latitude ? parseFloat(latitude) : null,   // 👈 ĐÃ SỬA: Ép kiểu an toàn giống hàm Thêm
+            longitude ? parseFloat(longitude) : null, // 👈 ĐÃ SỬA: Ép kiểu an toàn giống hàm Thêm
+            addressId, userId     
         ];
 
         const result = await pool.query(query, values);
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy địa chỉ" });
+
         return res.status(200).json({ success: true, data: result.rows[0] });
     } catch (error) {
         console.error("Lỗi updateAddress:", error.message);

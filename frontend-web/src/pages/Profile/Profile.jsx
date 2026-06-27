@@ -2,6 +2,20 @@ import React, { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { AuthContext } from "../../context/AuthContext"; 
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+// Fix lỗi icon mặc định của Leaflet khi build trên React
+import iconMarker from 'leaflet/dist/images/marker-icon.png';
+import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: iconRetina,
+  iconUrl: iconMarker,
+  shadowUrl: iconShadow,
+});
 import { 
   User, Mail, Phone, MapPin, Camera, CheckCircle2, Lock, Heart, 
   ChevronRight, Clock, Package, ShieldCheck, CreditCard, 
@@ -67,6 +81,8 @@ const getCroppedImg = (imageSrc, pixelCrop) => {
 };
 
 export default function ProfilePage() {
+  // --- STATE BẢN ĐỒ ---
+  const [markerPos, setMarkerPos] = useState({ lat: 10.762622, lng: 106.660172 }); // Mặc định TP.HCM
   const { user: authUser, updateUser } = useContext(AuthContext);
   const navigate = useNavigate();
   const { tab } = useParams();
@@ -137,6 +153,7 @@ export default function ProfilePage() {
       ) {
         setOpenDropdown(null);
       }
+      
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -204,6 +221,13 @@ export default function ProfilePage() {
       console.error("Lỗi tải danh sách địa chỉ:", error);
     }
   };
+  function ChangeMapView({ coords }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([coords.lat, coords.lng], 16);
+  }, [coords]);
+  return null;
+}
 
   // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động cho Quận/Huyện
   const selectProvince = async (id, name) => {
@@ -285,6 +309,58 @@ export default function ProfilePage() {
     setIsAddressModalOpen(true);
   };
 
+// Tìm tọa độ từ chuỗi địa chỉ (Forward Geocoding)
+  const handleAutoLocate = async (e) => {
+    if (e) e.preventDefault();
+    
+    // Ghép chuỗi từ chi tiết đến tổng quát để API dễ tìm nhất
+    const fullStr = `${addressForm.detail_address}, ${addressForm.ward_name}, ${addressForm.district_name}, ${addressForm.province_name}, Việt Nam`;
+    
+    try {
+      showToast("Đang quét vị trí trên bản đồ...", "success");
+      const res = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullStr)}&limit=1`);
+      
+      if (res.data && res.data.length > 0) {
+        const foundLat = parseFloat(res.data[0].lat);
+        const foundLng = parseFloat(res.data[0].lon);
+        setMarkerPos({ lat: foundLat, lng: foundLng });
+        showToast("Đã ghim vị trí thành công!");
+      } else {
+        // Fallback: Nếu gõ số nhà quá chi tiết API free không tìm ra, thử tìm theo Phường/Xã
+        const fallbackStr = `${addressForm.ward_name}, ${addressForm.district_name}, ${addressForm.province_name}, Việt Nam`;
+        const resFallback = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackStr)}&limit=1`);
+        
+        if (resFallback.data && resFallback.data.length > 0) {
+          setMarkerPos({ lat: parseFloat(resFallback.data[0].lat), lng: parseFloat(resFallback.data[0].lon) });
+          showToast("Chỉ tìm thấy khu vực Phường/Xã. Vui lòng kéo ghim đỏ tới đúng nhà bạn nhé!", "error");
+        }
+      }
+    } catch (err) {
+      console.log("Không tìm thấy tọa độ");
+    }
+  };
+
+// Dịch tọa độ thành địa chỉ chi tiết khi người dùng kéo ghim (Reverse Geocoding)
+  const fetchAddressFromCoords = async (lat, lng) => {
+    try {
+      const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      if (res.data && res.data.display_name) {
+        // Tách lấy phần số nhà, tên đường (bỏ qua Tỉnh/Huyện đã chọn ở dropdown)
+        const addressParts = res.data.display_name.split(', ');
+        // Thường lấy 1-2 thành phần đầu tiên của mảng (số nhà, tên đường)
+        const streetAddress = addressParts.slice(0, 2).join(', ');
+        
+        // Cập nhật lại ô text địa chỉ chi tiết
+        setAddressForm(prev => ({
+          ...prev,
+          detail_address: streetAddress || res.data.display_name
+        }));
+      }
+    } catch (err) {
+      console.log("Lỗi dịch ngược tọa độ:", err);
+    }
+  };
+
   // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động khi sửa địa chỉ cũ
   const handleOpenEditModal = async (addr) => {
     setEditingAddressId(addr.address_id);
@@ -313,7 +389,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveAddress = async (e) => {
+const handleSaveAddress = async (e) => {
     e.preventDefault();
     if (!addressForm.province_id || !addressForm.district_id || !addressForm.ward_code) {
       return alert("Vui lòng chọn đầy đủ danh mục địa chính từ bảng tìm kiếm!");
@@ -325,7 +401,9 @@ export default function ProfilePage() {
         province_id: Number(addressForm.province_id),
         district_id: Number(addressForm.district_id),
         ward_id: String(addressForm.ward_code),
-        ward_code: String(addressForm.ward_code)
+        ward_code: String(addressForm.ward_code), // <--- ĐÃ SỬA: Thêm dấu phẩy ở đây
+        latitude: markerPos.lat,  // 👈 Truyền kinh vĩ độ xuống API
+        longitude: markerPos.lng
       };
       
       const res = editingAddressId 
@@ -701,10 +779,63 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Địa chỉ chi tiết (Số nhà, thôn, đường)</label>
-                <textarea required className="w-full bg-[#f8fafc] border border-slate-100 p-3.5 rounded-2xl text-sm font-bold outline-none focus:border-[#006c49] transition-all h-20 resize-none" value={addressForm.detail_address} onChange={e => setAddressForm({...addressForm, detail_address: e.target.value})} />
+                <div className="flex justify-between items-end">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Địa chỉ chi tiết (Số nhà, thôn, đường)</label>
+                  {/* Nút bấm để kích hoạt dò tìm vị trí trên map giống Shopee */}
+                  <button 
+                    type="button" 
+                    onClick={handleAutoLocate}
+                    disabled={!addressForm.province_name || !addressForm.district_name}
+                    className="text-[9px] bg-emerald-50 text-[#006c49] px-2 py-1 rounded-lg font-bold uppercase hover:bg-[#006c49] hover:text-white transition-all disabled:opacity-50"
+                  >
+                    📍 Tìm trên bản đồ
+                  </button>
+                </div>
+                
+                <textarea 
+                  required 
+                  className="w-full bg-[#f8fafc] border border-slate-100 p-3.5 rounded-2xl text-sm font-bold outline-none focus:border-[#006c49] transition-all h-20 resize-none" 
+                  placeholder="Ví dụ: Số 12, Ngõ 34, Đường ABC..."
+                  value={addressForm.detail_address} 
+                  onChange={e => setAddressForm({...addressForm, detail_address: e.target.value})} 
+                  // Bỏ onBlur ở đây đi để tránh gọi API liên tục gây lag
+                />
               </div>
 
+              {/* KHU VỰC BẢN ĐỒ CHỌN TỌA ĐỘ */}
+              {addressForm.province_name && addressForm.district_name && (
+                <div className="space-y-1.5 pt-2 animate-fadeIn">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1">
+                      📍 Kéo thả ghim đỏ để tinh chỉnh vị trí nhà bạn
+                    </label>
+                    <span className="text-[9px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500">
+                      {markerPos.lat.toFixed(5)}, {markerPos.lng.toFixed(5)}
+                    </span>
+                  </div>
+                  
+                  <div className="w-full h-56 rounded-2xl overflow-hidden border border-slate-200 relative z-10 shadow-inner">
+                    <MapContainer center={[markerPos.lat, markerPos.lng]} zoom={16} style={{ height: "100%", width: "100%" }}>
+                      <ChangeMapView coords={markerPos} />
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      <Marker 
+                        position={[markerPos.lat, markerPos.lng]} 
+                        draggable={true}
+                        eventHandlers={{
+                          dragend: (e) => {
+                            const marker = e.target;
+                            const position = marker.getLatLng();
+                            // 1. Lưu tọa độ mới
+                            setMarkerPos({ lat: position.lat, lng: position.lng });
+                            // 2. Dịch ngược tọa độ ra địa chỉ text và điền vào form
+                            fetchAddressFromCoords(position.lat, position.lng);
+                          }
+                        }}
+                      />
+                    </MapContainer>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-1">
                 <div className="flex gap-2">
                   {['home', 'office'].map(type => (

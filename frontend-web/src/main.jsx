@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css' // Phải có dòng này để Tailwind chạy
+import 'leaflet/dist/leaflet.css';
 
 // Read saved language from localStorage so the app renders in the correct
 // language immediately (avoids flash-of-default-language).
