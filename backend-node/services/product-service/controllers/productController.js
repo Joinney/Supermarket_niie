@@ -517,6 +517,48 @@ export const createProduct = async (req, res) => {
 };
 
 // =========================================================================
+// 8.1 CẬP NHẬT THÔNG TIN CƠ BẢN SẢN PHẨM (Tên, Danh mục, Mô tả, Quốc gia)
+// =========================================================================
+export const updateProduct = async (req, res) => {
+    try {
+        const { id } = req.params; 
+        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia } = req.body; 
+
+        if (!ten_san_pham || !ma_dm_con || !ma_quoc_gia) {
+            return res.status(400).json({ success: false, message: "Tên sản phẩm, Danh mục và Quốc gia là bắt buộc." });
+        }
+
+        const query = `
+            UPDATE public.san_pham 
+            SET ten_san_pham = $1, 
+                ma_dm_con = $2, 
+                mo_ta = $3, 
+                ma_quoc_gia = $4,
+                ngay_cap_nhat = NOW() 
+            WHERE ma_san_pham = $5 
+            RETURNING *;
+        `;
+        
+        const { rows } = await pool.query(query, [
+            ten_san_pham, 
+            ma_dm_con, 
+            mo_ta, 
+            ma_quoc_gia.toUpperCase(), 
+            id
+        ]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm để cập nhật." });
+        }
+
+        res.status(200).json({ success: true, data: rows[0], message: "Cập nhật sản phẩm thành công!" });
+    } catch (error) {
+        console.error("❌ Lỗi API updateProduct:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi máy chủ khi cập nhật sản phẩm." });
+    }
+};
+
+// =========================================================================
 // 8.5 BẬT / TẮT TRẠNG THÁI SẢN PHẨM (TOGGLE STATUS)
 // =========================================================================
 export const toggleProductStatus = async (req, res) => {

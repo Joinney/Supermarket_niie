@@ -44,6 +44,7 @@ import AdminProductDetail from "./admindb/pages/Products/ProductDetail";
 import AdminVariantDetail from "./admindb/pages/products/VariantDetail";
 import AdminCreateVariant from "./admindb/pages/Products/CreateVariant";
 import ProductCreate from "./admindb/pages/Products/ProductCreate";
+import ProductEdit from "./admindb/pages/Products/ProductEdit";
 import ParentCategories from "./admindb/pages/Products/ParentCategories";
 import ParentCategoryForm from "./admindb/pages/Products/ParentCategoryForm";
 import ChildCategories from "./admindb/pages/Products/ChildCategories";
@@ -238,6 +239,7 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="Danhsachsanpham" replace />} />
         <Route path="create" element={<ProductCreate />} />
+        <Route path="edit/:id" element={<ProductEdit />} />
         <Route path="Danhsachsanpham" element={<Danhsachsanpham />} />
         <Route path="detail/:id" element={<AdminProductDetail />} />
         <Route

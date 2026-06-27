@@ -496,16 +496,13 @@ export default function ProductList() {
                           />
                         </svg>
                       </button>
-                      {/* NÚT BÚT CHÌ: Nhảy vào chi tiết và tự động mở Tab Biến thể */}
+                      {/* NÚT BÚT CHÌ: Nhảy thẳng vào trang Edit sản phẩm */}
                       <button
                         onClick={() =>
-                          navigate(
-                            `/admin/products/detail/${item.ma_san_pham}`,
-                            { state: { targetTab: "variants" } },
-                          )
+                          navigate(`/admin/products/edit/${item.ma_san_pham}`)
                         }
-                        className="p-1.5 hover:text-sky-600 hover:bg-sky-50 rounded-lg shadow-sm transition"
-                        title="Chỉnh sửa SKU & Biến thể"
+                        className="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg shadow-sm transition"
+                        title="Chỉnh sửa thông tin sản phẩm"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"

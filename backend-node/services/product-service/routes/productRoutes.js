@@ -14,7 +14,8 @@ import {
     toggleProductStatus,
     deleteProduct,
     getReviewsByProduct,          
-    getRelatedProducts,         
+    getRelatedProducts,
+    updateProduct,         
     getVariantById,
     getAllAvailableAttributes,  
     createVariant,
@@ -70,6 +71,7 @@ router.put('/variants/:variantId/restore', restoreVariant);
 router.get('/category/:slug', getProductsByCategorySlug);
 router.get('/', getAllProducts);
 router.post('/', createProduct);
+router.put('/:id', updateProduct);
 router.put('/:id/toggle-status', toggleProductStatus);
 router.delete('/:id', deleteProduct);
 

@@ -4,14 +4,15 @@ import axios from "axios";
 import { UploadCloud, Loader2, ChevronLeft, Save } from "lucide-react";
 
 export default function ParentCategoryForm() {
-  const { id } = useParams(); // Lấy mã danh mục từ URL (nếu có)
+  const { id } = useParams();
   const navigate = useNavigate();
-  const isEditMode = Boolean(id); // Nếu có ID trên URL thì là chế độ Sửa
+  const isEditMode = Boolean(id);
 
   const [countries, setCountries] = useState([]);
   const [loading, setLoading] = useState(isEditMode);
   const [submitLoading, setSubmitLoading] = useState(false);
   const fileInputRef = useRef(null);
+  const [codeSuffix, setCodeSuffix] = useState("");
 
   const [formData, setFormData] = useState({
     ma_dm_cha: "",
@@ -77,30 +78,38 @@ export default function ParentCategoryForm() {
     }
   };
 
+  const generatedCode = isEditMode
+    ? formData.ma_dm_cha
+    : codeSuffix
+      ? `MDC_${formData.ma_quoc_gia}_${codeSuffix.toUpperCase().replace(/\s+/g, "_")}`
+      : "";
+
   const handleSubmitForm = async (e) => {
     e.preventDefault();
     setSubmitLoading(true);
 
     try {
+      // Logic: Nếu không phải edit và có nhập suffix, thì tạo mã theo prefix
+      const finalPayload = { ...formData };
+      if (!isEditMode && codeSuffix.trim() !== "") {
+        finalPayload.ma_dm_cha = generatedCode;
+      }
+
       if (isEditMode) {
-        // CHẾ ĐỘ SỬA
-        await axios.put(`${apiUrl}/api/categories/parents/${id}`, formData);
+        await axios.put(`${apiUrl}/api/categories/parents/${id}`, finalPayload);
         alert("✅ Cập nhật danh mục thành công!");
       } else {
-        // CHẾ ĐỘ THÊM
         const payload = {
-          ...formData,
+          ...finalPayload,
           duong_dan_seo: formData.ten_danh_muc_cha
             .toLowerCase()
             .replace(/ /g, "-")
             .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, ""), // Sinh slug SEO
+            .replace(/[\u0300-\u036f]/g, ""),
         };
         await axios.post(`${apiUrl}/api/categories/parents`, payload);
         alert("✅ Thêm danh mục mới thành công!");
       }
-
-      // Thành công thì chuyển hướng về lại trang danh sách
       navigate("/admin/products/parent-categories");
     } catch (error) {
       alert(
@@ -189,20 +198,32 @@ export default function ParentCategoryForm() {
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                 Mã danh mục (Tùy chọn)
               </label>
-              <input
-                type="text"
-                placeholder={
-                  isEditMode
-                    ? "Không thể sửa mã danh mục"
-                    : "Để trống hệ thống sẽ tự cấp"
-                }
-                value={formData.ma_dm_cha}
-                disabled={isEditMode} // Không cho sửa mã khi đang ở chế độ Edit
-                onChange={(e) =>
-                  setFormData({ ...formData, ma_dm_cha: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+
+              {/* Nếu Edit thì vẫn hiện input bình thường, nếu Create thì hiện input suffix */}
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.ma_dm_cha}
+                  disabled
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed"
+                />
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: SNACK, TEA, HEALTH"
+                    value={codeSuffix}
+                    onChange={(e) => setCodeSuffix(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
+                  />
+                  {generatedCode && (
+                    <p className="text-[11px] font-bold text-[#006c49] bg-emerald-50 px-3 py-1 rounded-lg">
+                      Mã dự kiến:{" "}
+                      <span className="font-mono">{generatedCode}</span>
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Hình ảnh */}
