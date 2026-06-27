@@ -6,7 +6,12 @@ import { useOrder } from '../../context/OrderContext';
 import { authApi, orderApi, paymentApi } from '../../api/axios'; 
 import AddressModal from '../Checkout/AddressModal'; 
 import ShippingModal from '../Checkout/ShippingModal'; 
+import PaymentModal from '../Checkout/PaymentModal'; 
 import PayPalButton from '../Checkout/PayPalButton';
+import MoMoButton from './MoMoButton';
+import VNPAYButton from './VNPAYButton';
+import CODButton from './CODButton'; 
+import VietQRButton from './VietQRButton'; 
 
 export default function Checkout() {
   const { cart: contextCart, clearCart, clearPurchasedItems } = useCart(); 
@@ -44,7 +49,6 @@ export default function Checkout() {
     return cleanUrl;
   };
 
-  // 🚀 ĐỒNG BỘ MA TRẬN CHÉO: Gom nhóm sản phẩm giống hệt trang Giỏ hàng
   const groupedCheckoutCart = useMemo(() => {
     const groups = {};
     checkoutCart.forEach(item => {
@@ -71,6 +75,10 @@ export default function Checkout() {
   const [selectedShipping, setSelectedShipping] = useState(null);
   const [isLoadingShipping, setIsLoadingShipping] = useState(false);
   const [isShippingModalOpen, setIsShippingModalOpen] = useState(false);
+
+  // 🎯 QUẢN LÝ TRẠNG THÁI POPUP THANH TOÁN
+  const [selectedPayment, setSelectedPayment] = useState('COD');
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   const fetchAddresses = async () => {
     try {
@@ -139,9 +147,6 @@ export default function Checkout() {
     fetchShippingFees();
   }, [address]);
   
-  const [selectedPayment, setSelectedPayment] = useState('COD');
-  const [isEditingPayment, setIsEditingPayment] = useState(false);
-  
   const itemTotal = checkoutCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const shippingFee = selectedShipping ? selectedShipping.cost : 0;
   const xuDiscount = 500;
@@ -200,7 +205,6 @@ export default function Checkout() {
           const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
           localStorage.setItem('vnpay_pending_variants', JSON.stringify(boughtVariantIds));
 
-          // 🎯 SỬA LỖI 404: Bỏ chữ /payments thừa đi
           const paymentRes = await paymentApi.post('/create-transaction', {
             ma_don_hang: maDonHangText,
             tong_thanh_toan: tongThanhToanNum,
@@ -241,26 +245,20 @@ export default function Checkout() {
     setIsPlacing(false);
   };
 
-const handlePayPalSuccess = async (details) => {
+  const handlePayPalSuccess = async (details) => {
     try {
       setIsPlacing(true);
       const transactionId = details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
-
       console.log("🚀 PayPal capture thành công ở Client, tiến hành lưu hóa đơn hệ thống...");
 
-      // 1. Thực thi tạo đơn hàng bên Order-Service (Cổng 5005)
       const maDonHangText = await executePlaceOrder({
         trang_thai_thanh_toan: "completed",
         paypal_transaction_id: String(transactionId),
         paypal_order_id: String(details.id)
       });
 
-      // Nếu tạo đơn hàng thành công và có mã đơn hàng thật
       if (maDonHangText) {
         try {
-          console.log("💥 Bắn gói tin đối soát phẳng sang payment-service...");
-          
-          // Gọi API sang cổng 5004 với cấu trúc phẳng hoàn toàn vượt qua mọi tầng Filter chặn
           await paymentApi.post('/paypal-capture', {
             ma_don_hang: String(maDonHangText),
             paypal_order_id: String(details.id),
@@ -289,6 +287,14 @@ const handlePayPalSuccess = async (details) => {
   };
 
   const isGlobalLoading = orderContextLoading || isPlacing;
+
+  // Hàm hiển thị text chuẩn hóa cho phương thức thanh toán
+  const getPaymentName = (id) => {
+    if (id === 'COD') return 'Thanh toán khi nhận hàng (COD)';
+    if (id === 'PayPal') return 'PayPal System';
+    if (id === 'VNPay') return 'VNPay Cổng Chính';
+    return id;
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 pt-10 text-left selection:bg-[#006c49] selection:text-white">
@@ -322,7 +328,7 @@ const handlePayPalSuccess = async (details) => {
             )}
           </section>
 
-          {/* 2. SẢN PHẨM PHẲNG HÓA VÀ GOM BIẾN THỂ HOÀN HẢO */}
+          {/* 2. SẢN PHẨM */}
           <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <h2 className="text-gray-700 font-black text-xs lg:text-sm uppercase tracking-wide border-b border-slate-100 pb-3 mb-2">
               Kiện hàng sản phẩm ({checkoutCart.length} loại phân loại)
@@ -332,7 +338,6 @@ const handlePayPalSuccess = async (details) => {
               {groupedCheckoutCart.map((group) => {
                 const hasMultipleVariants = group.subVariants.length > 1;
 
-                // ─── TRƯỜNG HỢP 1: SẢN PHẨM ĐƠN LẺ ───
                 if (!hasMultipleVariants) {
                   const item = group.subVariants[0];
                   return (
@@ -371,10 +376,8 @@ const handlePayPalSuccess = async (details) => {
                   );
                 }
 
-                // ─── TRƯỜNG HỢP 2: SẢN PHẨM NHIỀU PHÂN LOẠI (GOM LẠI VÀ BUNG SẴN SỔ XỊN SÒ) ───
                 return (
                   <div key={group.productId} className="bg-white border rounded-2xl shadow-sm overflow-hidden border-slate-100">
-                    {/* HÀNG TỔNG KHÔNG CÓ CHECKBOX VÀ KHÔNG CÓ NÚT THU GỌN */}
                     <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 via-slate-50/30 to-white border-b border-slate-100">
                       <div className="w-16 h-16 bg-white border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
                         <img src={group.image} alt={group.name} className="w-full h-full object-contain" />
@@ -387,7 +390,6 @@ const handlePayPalSuccess = async (details) => {
                       </div>
                     </div>
 
-                    {/* MẶC ĐỊNH BUNG SẴN TOÀN BỘ DANH SÁCH CON SẠCH SẼ */}
                     <div className="divide-y divide-slate-100 bg-white">
                       {group.subVariants.map((subItem) => (
                         <div key={subItem.variantId} className="flex items-center gap-4 p-4 pl-6 transition-all duration-200">
@@ -459,29 +461,29 @@ const handlePayPalSuccess = async (details) => {
             </div>
           </section>
 
-          {/* 4. PHƯƠNG THỨC THANH TOÁN */}
+          {/* 4. PHƯƠNG THỨC THANH TOÁN (ĐÃ SỬA SANG CƠ CHẾ POPUP ĐỒNG BỘ 100%) */}
           <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
-              <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider"><CreditCard size={18} /> Phương thức thanh toán</h2>
-              <button onClick={() => setIsEditingPayment(!isEditingPayment)} className="text-[#006c49] font-black text-xs uppercase hover:underline">{isEditingPayment ? 'Xong' : 'Thay đổi'}</button>
+              <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider">
+                <CreditCard size={18} /> Phương thức thanh toán
+              </h2>
+              {/* BẤM NÚT NÀY SẼ BẬT POPUP CHỨ KHÔNG HIỆN CO GIÃN TẠI CHỖ */}
+              <button 
+                onClick={() => setIsPaymentModalOpen(true)} 
+                className="text-[#006c49] font-black text-xs uppercase hover:underline"
+              >
+                Thay đổi
+              </button>
             </div>
-            {!isEditingPayment ? (
-              <div className="px-5 py-2.5 rounded-xl border-2 border-[#006c49] bg-emerald-50/50 text-[#006c49] text-xs font-black uppercase tracking-wider inline-block">
-                {selectedPayment === 'COD' ? 'Thanh toán khi nhận hàng (COD)' : selectedPayment}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                {['COD', 'PayPal', 'VNPay', 'MoMo', 'Banking'].map(method => (
-                  <button key={method} onClick={() => { setSelectedPayment(method); setIsEditingPayment(false); }} className={`px-5 py-2.5 rounded-xl border-2 text-xs font-black uppercase tracking-wider transition-all ${selectedPayment === method ? 'border-[#006c49] bg-emerald-50/40 text-[#006c49]' : 'border-gray-200 text-gray-500'}`}>
-                    {method === 'COD' ? 'Thanh toán khi nhận hàng' : method}
-                  </button>
-                ))}
-              </div>
-            )}
+            
+            {/* HIỂN THỊ PHƯƠNG THỨC ĐANG CHỌN GỌN GÀNG TẠI KHỐI SECTION */}
+            <div className="px-5 py-2.5 rounded-xl border-2 border-[#006c49] bg-emerald-50/50 text-[#006c49] text-xs font-black uppercase tracking-wider inline-block">
+              {getPaymentName(selectedPayment)}
+            </div>
           </section>
         </div>
 
-        {/* CỘT PHẢI: KẾT QUẢ TỔNG THÀNH TOÁN HÓA ĐƠN */}
+        {/* CỘT PHẢI: KẾT QUẢ TỔNG THANH TOÁN HÓA ĐƠN */}
         <div className="lg:col-span-4">
           <div className="lg:sticky lg:top-24 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-left space-y-5">
             <h2 className="font-black italic text-slate-900 border-b pb-2 tracking-tight">TỔNG THANH TOÁN</h2>
@@ -495,30 +497,68 @@ const handlePayPalSuccess = async (details) => {
             </div>
             <p className="text-[10px] text-gray-400 text-center leading-relaxed">Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân thủ theo các chính sách bảo mật và Điều khoản mua sắm của Demi Mart.</p>
             
-            {selectedPayment === 'PayPal' ? (
-              <div className="w-full pt-2">
+            <div className="w-full pt-2">
+              {/* 1. NÚT PAYPAL CHUẨN SDK HÃNG */}
+              {selectedPayment === 'PayPal' && (
                 <PayPalButton 
                   amount={finalTotal} 
                   onSuccess={handlePayPalSuccess}
                   onError={() => alert("Giao dịch PayPal bị gián đoạn, Demi vui lòng kiểm tra lại cấu hình hệ thống nhé!")}
                 />
-              </div>
-            ) : (
-              <button 
-                onClick={handlePlaceOrder}
-                disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0}
-                className="w-full bg-[#006c49] text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-[#005a3d] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-lg shadow-[#006c49]/20"
-              >
-                {isGlobalLoading && <Loader2 className="animate-spin" size={16} />}
-                {isGlobalLoading ? 'Đang xử lý đơn...' : selectedPayment === 'VNPay' ? 'Thanh toán qua VNPay' : 'Xác nhận đặt hàng'}
-              </button>
-            )}
+              )}
+
+              {/* 2. NÚT VNPAY IDENTITY MÀU XANH HOÀNG GIA */}
+              {selectedPayment === 'VNPay' && (
+                <VNPAYButton 
+                  amount={finalTotal} 
+                  onClick={handlePlaceOrder}
+                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0} 
+                />
+              )}
+
+              {/* 3. NÚT MOMO CHUẨN LOGO WIKIMEDIA TRÊN NỀN HỒNG KHÍT KHÁO */}
+              {selectedPayment === 'MoMo' && (
+                <MoMoButton 
+                  amount={finalTotal} 
+                  onClick={() => alert("Chức năng thanh toán qua MoMo đang cấu hình SIT thử nghiệm!")}
+                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0} 
+                />
+              )}
+
+              {/* 4. NÚT VIETQR MÀU GRADIENT SẶC SỠ */}
+              {selectedPayment === 'Banking' && (
+                <VietQRButton 
+                  amount={finalTotal}
+                  onClick={() => alert("Hệ thống đang tạo cổng quét mã VietQR động theo Đơn hàng!")}
+                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0}
+                />
+              )}
+
+              {/* 5. NÚT COD GIAO HÀNG TIN CẬY MÀU XANH EMERALD DEMI MART */}
+              {selectedPayment === 'COD' && (
+                <CODButton 
+                  amount={finalTotal}
+                  onClick={handlePlaceOrder}
+                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0}
+                />
+              )}
+            </div>
+
           </div>
         </div>
       </div>
 
+      {/* GỌI ĐỒNG BỘ 3 MODAL QUẢN LÝ DƯỚI FOOTER TRANG CHECKOUT */}
       <AddressModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSelect={(addr) => setAddress(addr)} currentAddresses={addresses} selectedAddressId={address?.address_id || address?.id} onRefresh={fetchAddresses} />
       <ShippingModal isOpen={isShippingModalOpen} onClose={() => setIsShippingModalOpen(false)} onSelect={(method) => setSelectedShipping(method)} shippingMethods={shippingMethods} selectedMethodId={selectedShipping?.id} />
+      
+      {/* POPUP CHỌN PHƯƠNG THỨC THANH TOÁN */}
+      <PaymentModal 
+        isOpen={isPaymentModalOpen} 
+        onClose={() => setIsPaymentModalOpen(false)} 
+        onSelect={(methodId) => setSelectedPayment(methodId)} 
+        selectedMethod={selectedPayment} 
+      />
     </div>
   );
 }
