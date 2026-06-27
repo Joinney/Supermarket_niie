@@ -2,14 +2,13 @@ require 'sinatra/base'
 require 'json'
 require_relative '../controllers/payment_controller'
 require_relative '../controllers/vnpay_controller'
+require_relative '../controllers/paypal_controller'
 
 class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 🛡️ CẤU HÌNH VÔ HIỆU HÓA HOÀN TOÀN LỚP CHẶN BẢO VỆ HOST ĐỐI VỚI DOCKER
   # ========================================================
-  disable :protection
   set :protection, false # Tắt triệt để mọi lớp chặn trung gian bảo vệ Host của Rack
-  set :protection, :except => [:host_authorization, :json_csrf, :remote_token]
 
   # ========================================================
   # 🛡️ MIDDLEWARE CORS CHO RIÊNG CỔNG THANH TOÁN
@@ -34,7 +33,7 @@ class PaymentRoutes < Sinatra::Base
   end
 
   # ========================================================
-  # 💳 1. API Khởi tạo thanh toán (Đã sửa luồng VNPay sang VnpayController)
+  # 💳 1. API Khởi tạo thanh toán (VNPay và PayPal sang Controller riêng)
   # ========================================================
   post '/api/create-transaction' do
     begin
@@ -44,6 +43,8 @@ class PaymentRoutes < Sinatra::Base
 
       if payload['phuong_thuc_thanh_toan'] == 'VNPay'
         result = VnpayController.init_payment(payload, '127.0.0.1')
+      elsif payload['phuong_thuc_thanh_toan'] == 'PayPal'
+        result = PaypalController.init_payment(payload, '127.0.0.1')
       else
         result = PaymentController.process_payment(payload, '127.0.0.1')
       end
@@ -56,7 +57,9 @@ class PaymentRoutes < Sinatra::Base
     end
   end
 
-  # 2. API Đối soát VNPay trả về từ Trạm trung chuyển React
+  # ========================================================
+  # 💳 2. API Đối soát VNPay trả về từ Trạm trung chuyển React
+  # ========================================================
   get '/api/vnpay-return' do
     query_params = params.transform_keys(&:to_s)
     result = VnpayController.verify_return(query_params)
@@ -67,30 +70,21 @@ class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 🚀 3. API TIẾP NHẬN PHẢN HỒI CALLBACK/CAPTURE TỪ PAYPAL SYSTEM
   # ========================================================
-  # 🎯 SỬA ĐẠI LỘ ROUTE: Thêm tiền tố '/api' để khớp chuẩn 100% với baseURL từ Axios Frontend
-post '/api/paypal-capture' do
+  post '/api/paypal-capture' do
     begin
       request_body = request.body.read
-      if request_body.empty?
-        status 400
-        return { success: false, message: 'Dữ liệu đối soát trống!' }.to_json
-      end
+      return { success: false, message: 'Dữ liệu đối soát trống!' }.to_json if request_body.empty?
 
-      request_payload = JSON.parse(request_body)
-      
-      ma_don_hang = request_payload['ma_don_hang'] || "DM_UNKNOWN_#{Time.now.to_i}"
-      # Gán fallback để không bao giờ bị nil khi nhận dữ liệu share từ Order
-      paypal_order_id = request_payload['paypal_order_id'] || "SHARE_#{ma_don_hang}"
-      so_tien = request_payload['so_tien'] || 0
-      capture_data = request_payload['capture_data'] || { status: 'COMPLETED' }
+      payload = JSON.parse(request_body)
 
-      result = PaymentController.handle_paypal_callback(ma_don_hang, paypal_order_id, so_tien, capture_data)
+      # Gọi trực tiếp sang PaypalController đảm bảo nghiệp vụ tách biệt
+      result = PaypalController.capture(payload, request.ip || '127.0.0.1')
 
       status result[:success] ? 200 : 400
       result.to_json
     rescue => e
       status 500
-      { success: false, message: 'Gặp sự cố hệ thống phân hệ thanh toán!', error: e.message }.to_json
+      { success: false, message: e.message }.to_json
     end
   end
-end
+end # <--- TỪ KHÓA QUYẾT ĐỊNH: ĐÓNG ĐÚNG CLASS PAYMENTROUTES CHỐNG CRASH DOCKER

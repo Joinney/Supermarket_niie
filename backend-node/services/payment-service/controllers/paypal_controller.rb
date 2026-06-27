@@ -15,7 +15,7 @@ class PaypalController
 
     if result[:status] == 'success'
       begin
-        # 🎯 CHUẨN HÓA 100% CỘT VẬT LÝ MỚI: phuong_thuc
+        # BƯỚC 1: Tạo bản ghi mẹ (Để PostgreSQL tự động nhảy số id BIGSERIAL)
         record = PaymentTransaction.create(
           ma_don_hang: ma_don_hang,
           phuong_thuc: 'PayPal',
@@ -26,6 +26,7 @@ class PaypalController
           client_ip: client_ip
         )
 
+        # BƯỚC 2: Ghi hộp đen máy bay nhật ký xin URL
         PaymentTransaction.db[
           "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
            VALUES (?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?)",
@@ -52,24 +53,27 @@ class PaypalController
     capture_data = req_params['capture_data'] || {}
 
     capture_id = capture_data['id'] || paypal_order_id
+    status_paypal = capture_data['status'] # Thường là 'COMPLETED'
 
     begin
+      # Tìm lại đơn hàng PENDING ở Nhịp 1
       record = PaymentTransaction.where(gateway_order_id: paypal_order_id, phuong_thuc: 'PayPal').first
       record ||= PaymentTransaction.where(ma_don_hang: ma_don_hang, phuong_thuc: 'PayPal').first
 
-      # NẾU TÌM THẤY MẸ -> CẬP NHẬT TRẠNG THÁI
       if record
         record.update(
           trang_thai: 'COMPLETED',
-          gateway_transaction_id: capture_id,
-          raw_response: capture_data.to_json
+          gateway_transaction_id: capture_id
         )
 
-        parent_id = record.id
-        event_name = 'CAPTURE_SUCCESS'
+        PaymentTransaction.db[
+          "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
+           VALUES (?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?)",
+          record.id, 'PayPal', 'CAPTURE_SUCCESS', 200, req_params.to_json, capture_data.to_json, client_ip
+        ].insert
       else
-        # NẾU KHÔNG THẤY MẸ (Do lúc nãy test rớt mạng Nhịp 1) -> TỰ SINH RA MẸ MỚI ĐỂ HỨNG CON!
-        new_parent = PaymentTransaction.create(
+        # Fallback siêu an toàn: Khách mua nhanh bỏ qua bước Init, tự tạo dòng COMPLETED mới
+        new_rec = PaymentTransaction.create(
           ma_don_hang: ma_don_hang,
           phuong_thuc: 'PayPal',
           so_tien: so_tien_vnd.to_f,
@@ -77,21 +81,17 @@ class PaypalController
           trang_thai: 'COMPLETED',
           gateway_order_id: paypal_order_id,
           gateway_transaction_id: capture_id,
-          raw_response: capture_data.to_json,
           client_ip: client_ip
         )
-        parent_id = new_parent.id
-        event_name = 'DIRECT_CAPTURE_FALLBACK_SUCCESS'
+
+        PaymentTransaction.db[
+          "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
+           VALUES (?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?)",
+          new_rec.id, 'PayPal', 'DIRECT_CAPTURE_SUCCESS', 200, req_params.to_json, capture_data.to_json, client_ip
+        ].insert
       end
 
-      # CHÈN CON VÀO HỘP ĐEN (Lúc này parent_id 100% tồn tại trong DB)
-      PaymentTransaction.db[
-        "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
-         VALUES (?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?)",
-        parent_id, 'PayPal', event_name, 200, req_params.to_json, capture_data.to_json, client_ip
-      ].insert
-
-      puts "🔒 [DATABASE PAYPAL CHỐT ĐƠN]: Thành công rực rỡ mã #{ma_don_hang} (ID Mẹ: #{parent_id})!"
+      puts "🔒 [DATABASE PAYPAL SUCCESS]: Đã chốt sổ thành công đơn #{ma_don_hang}!"
       { success: true, ma_don_hang: ma_don_hang, message: 'Ghi nhận giao dịch PayPal hoàn tất!' }
 
     rescue => e
