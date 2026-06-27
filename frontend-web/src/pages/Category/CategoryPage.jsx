@@ -117,7 +117,7 @@ export default function CategoryPage() {
 
         const targetCountry = country_code || currentStore?.code || "vn";
         const response = await productApi.get(
-          `/products/categories?country=${targetCountry}`,
+          `/categories/tree?country=${targetCountry}`,
         );
         const allCategories = response.data;
 

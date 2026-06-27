@@ -59,7 +59,7 @@ export default function Sidebar({ isOpen, onClose }) {
       try {
         const storeCode = currentStore.code.toLowerCase();
         const response = await productApi.get(
-          `/products/categories?country=${storeCode}`,
+          `/categories/tree?country=${storeCode}`,
         );
         const data = response.data;
 

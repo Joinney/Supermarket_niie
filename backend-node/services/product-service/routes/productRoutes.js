@@ -4,18 +4,15 @@ import upload from '../configs/cloudinary/cloudinary.js';
 import {
     getInternalVariants,
     getAllProducts,
-    getAllCategories,
     getProductById,
     getProductsByCategorySlug,
     searchProducts,
-    searchCategories,
     batchGenerateDescriptionsController,
     getProductsWithoutDescriptions,
     refreshEmptyDescriptions,
     createProduct,
     toggleProductStatus,
     deleteProduct,
-    getAllCountries,
     getReviewsByProduct,        
     getRelatedProducts,       
     getVariantById,
@@ -45,10 +42,7 @@ router.post('/internal/variants', getInternalVariants);
 // 🏢 1. NHÓM ROUTE TĨNH (STATIC ROUTES) - Đặt lên hàng đầu tránh xung đột params
 // =========================================================================
 //router.get('/internal/migrate-eav', migrateLegacyAttributes);
-router.get('/countries', getAllCountries);
 router.get('/search', searchProducts);
-router.get('/categories', getAllCategories);
-router.get('/categories/search', searchCategories);
 router.get('/without-descriptions', getProductsWithoutDescriptions);
 router.post('/batch-generate-descriptions', batchGenerateDescriptionsController);
 router.post('/refresh-empty-descriptions', refreshEmptyDescriptions);

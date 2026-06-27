@@ -19,6 +19,7 @@ const PORT = process.env.PORT_PRODUCT || 5002;
 // --- 3. Import Routes ---
 import productRoutes from './routes/productRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js'; 
+import categoryRoutes from './routes/categoryRoutes.js';
 import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
 
 const app = express();
@@ -34,7 +35,7 @@ const swaggerOptions = {
         },
         servers: [{ url: `http://localhost:${PORT}` }],
     },
-    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js'], 
+    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js', './routes/categoryRoutes.js'], 
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
@@ -80,6 +81,7 @@ app.get('/api-docs-json', (req, res) => {
 
 // --- 8. Đăng ký Route API ---
 app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/chatbot', chatbotRoutes); 
 
 // Bổ sung thêm route này để Uptime Kuma ping không bị 404
@@ -108,6 +110,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`📦 PRODUCT & CHATBOT SERVICE IS RUNNING`);
     console.log(`📡 Port: ${PORT}`);
     console.log(`🔗 API Products: http://localhost:${PORT}/api/products`);
+    console.log(`🔗 API Categories: http://localhost:${PORT}/api/categories`);
     console.log(`🔗 API Chatbot:  http://localhost:${PORT}/api/chatbot`);
     console.log(`📝 Swagger:      http://localhost:${PORT}/api-docs`);
     console.log('===========================================');

@@ -29,7 +29,7 @@ export default function ProductCreate() {
     const fetchCategories = async () => {
       try {
         const response = await axios.get(
-          `${apiUrl}/api/products/categories?country=${formData.ma_quoc_gia}`,
+          `${apiUrl}/api/categories/tree?country=${formData.ma_quoc_gia}`,
         );
 
         // Làm phẳng cấu trúc cây danh mục hoặc trích xuất danh mục con (children)

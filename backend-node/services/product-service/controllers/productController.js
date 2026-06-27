@@ -138,67 +138,6 @@ export const getAllProducts = async (req, res) => {
     }
 };
 
-// =========================================================================
-// 1.5 LẤY TẤT CẢ DANH MỤC (SIDEBAR) - Tối ưu hóa xử lý Connection chạy tuần tự
-// =========================================================================
-export const getAllCategories = async (req, res) => {
-    try {
-        const countryCode = (req.query.country || 'VN').toUpperCase();
-
-        const queryCha = `
-            SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, bieu_tuong, hinh_anh 
-            FROM public.danh_muc_cha 
-            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $1
-            ORDER BY ma_dm_cha ASC;
-        `;
-        
-        const queryCon = `
-            SELECT dmc.ma_dm_con, dmc.ma_dm_cha, dmc.ten_danh_muc_con, dmc.duong_dan_seo, dmc.la_danh_muc_hot, dmc.hinh_anh 
-            FROM public.danh_muc_con dmc
-            WHERE dmc.trang_thai = true AND UPPER(dmc.ma_quoc_gia) = $1
-            ORDER BY dmc.ma_dm_con ASC;
-        `;
-
-        const resCha = await pool.query(queryCha, [countryCode]);
-        const resCon = await pool.query(queryCon, [countryCode]);
-
-        const tree = [];
-        const categoryMap = {};
-
-        resCha.rows.forEach(row => {
-            categoryMap[row.ma_dm_cha] = {
-                id: row.ma_dm_cha,
-                name: row.ten_danh_muc_cha,
-                slug: row.duong_dan_seo,
-                i: row.bieu_tuong || "", 
-                image: row.hinh_anh || "",
-                children: []
-            };
-            tree.push(categoryMap[row.ma_dm_cha]);
-        });
-
-        resCon.rows.forEach(row => {
-            const childNode = {
-                id: row.ma_dm_con,
-                name: row.ten_danh_muc_con,
-                slug: row.duong_dan_seo,
-                hot: row.la_danh_muc_hot || false,
-                image: row.hinh_anh || "",
-                parentId: row.ma_dm_cha
-            };
-
-            if (categoryMap[row.ma_dm_cha]) {
-                categoryMap[row.ma_dm_cha].children.push(childNode);
-            }
-        });
-
-        const cleanTree = tree.filter(cat => cat.children && cat.children.length > 0);
-        res.status(200).json(cleanTree);
-    } catch (error) {
-        console.error("❌ Lỗi API getAllCategories:", error.message);
-        res.status(500).json({ error: "Không thể tải cây danh mục hệ thống." });
-    }
-};
 
 // =========================================================================
 // 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ CẤP QUYỀN ADMIN TỐI ĐA
@@ -695,64 +634,6 @@ export const schedulePeriodicDescriptionGeneration = () => {
     setTimeout(runScheduler, checkInterval);
 };
 
-// =========================================================================
-// 10. LẤY DANH SÁCH QUỐC GIA KÈM CẤU HÌNH TIỀN TỆ ĐỘNG TỪ DATABASE
-// =========================================================================
-export const getAllCountries = async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                ma_quoc_gia, 
-                ten_quoc_gia, 
-                dinh_dang_vung, 
-                ma_tien_te, 
-                bieu_tuong_tien, 
-                ty_gia, 
-                bieu_tuong_co
-            FROM public.danh_muc_quoc_gia 
-            WHERE trang_thai = true 
-            ORDER BY ten_quoc_gia ASC;
-        `;
-        const { rows: countries } = await pool.query(query);
-        res.status(200).json(countries);
-    } catch (error) {
-        console.error("❌ Lỗi API getAllCountries:", error.message);
-        res.status(500).json({ error: "Gặp sự cố hệ thống, không thể tải danh sách quốc gia." });
-    }
-};
-
-// =========================================================================
-// 11. TÌM KIẾM DANH MỤC (CẢ CHA VÀ CON) - HỖ TRỢ TÌM KHÔNG DẤU
-// =========================================================================
-export const searchCategories = async (req, res) => {
-    const keyword = req.query.keyword || '';
-    const countryCode = (req.query.country || 'VN').toUpperCase();
-
-    try {
-        const searchTerm = `%${keyword}%`;
-        const query = `
-            SELECT ma_dm_cha AS ma_danh_muc, text_danh_muc_cha AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'cha' AS loai_danh_muc
-            FROM public.danh_muc_cha
-            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $2 
-              AND unaccent(ten_danh_muc_cha) ILIKE unaccent($1)
-            
-            UNION ALL
-            
-            SELECT ma_dm_con AS ma_danh_muc, ten_danh_muc_con AS ten_danh_muc, duong_dan_seo AS slug, hinh_anh, 'con' AS loai_danh_muc
-            FROM public.danh_muc_con
-            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $2 
-              AND unaccent(ten_danh_muc_con) ILIKE unaccent($1)
-            
-            LIMIT 12;
-        `;
-        
-        const { rows: categories } = await pool.query(query, [searchTerm, countryCode]);
-        res.status(200).json(categories);
-    } catch (error) {
-        console.error("❌ Lỗi API searchCategories:", error.message);
-        res.status(500).json({ error: "Lỗi hệ thống khi tìm kiếm danh mục." });
-    }
-};
 
 // =========================================================================
 // 12. LẤY ĐÁNH GIÁ SẢN PHẨM (XỬ LÝ ĐỒNG BỘ MICROSERVICES GỌI SANG AUTH)
