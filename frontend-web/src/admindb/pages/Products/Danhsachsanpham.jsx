@@ -361,6 +361,7 @@ export default function ProductList() {
                 <th className="py-3 px-4">Danh mục con</th>
                 <th className="py-3 px-4">Thị trường / Xuất xứ</th>
                 <th className="py-3 px-4">Giá bán thấp nhất</th>
+                <th className="py-3 px-4">Mở/khóa sản phẩm</th>
                 <th className="py-3 px-4 text-right pr-6">Thao tác</th>
               </tr>
             </thead>

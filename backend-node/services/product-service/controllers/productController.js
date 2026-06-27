@@ -1439,37 +1439,4 @@ export const setMainProductImage = async (req, res) => {
     }
 };
 
-// =========================================================================
-// 20. QUẢN LÝ ĐƠN VỊ SẢN PHẨM (ĐÓNG GÓI)
-// =========================================================================
-export const getAllUnits = async (req, res) => {
-    try {
-        const { rows } = await pool.query('SELECT * FROM public.don_vi_san_pham WHERE trang_thai = true ORDER BY id ASC');
-        res.status(200).json(rows);
-    } catch (error) {
-        res.status(500).json({ error: "Lỗi tải danh sách đơn vị." });
-    }
-};
-
-export const createUnit = async (req, res) => {
-    try {
-        const { ten_don_vi } = req.body;
-        if (!ten_don_vi) return res.status(400).json({ message: "Thiếu tên đơn vị." });
-
-        // Kiểm tra xem đã tồn tại chưa để tránh tạo rác DB
-        const checkRes = await pool.query('SELECT * FROM public.don_vi_san_pham WHERE LOWER(ten_don_vi) = LOWER($1)', [ten_don_vi]);
-        if (checkRes.rows.length > 0) return res.status(200).json(checkRes.rows[0]);
-
-        // PostgreSQL sẽ tự động sinh id (auto-increment)
-        const query = `
-            INSERT INTO public.don_vi_san_pham (ten_don_vi, mo_ta, trang_thai, ngay_tao, ngay_cap_nhat) 
-            VALUES ($1, $2, true, NOW(), NOW()) 
-            RETURNING *;
-        `;
-        const { rows } = await pool.query(query, [ten_don_vi, `Đơn vị quy chuẩn ${ten_don_vi}`]);
-        res.status(201).json(rows[0]);
-    } catch (error) {
-        res.status(500).json({ error: "Lỗi thêm đơn vị mới." });
-    }
-};
 

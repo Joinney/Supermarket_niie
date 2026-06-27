@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
+import unitRoutes from './routes/unitRoutes.js';
 
 // --- 1. Cấu hình ES Module ---
 const __filename = fileURLToPath(import.meta.url);
@@ -35,7 +36,7 @@ const swaggerOptions = {
         },
         servers: [{ url: `http://localhost:${PORT}` }],
     },
-    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js', './routes/categoryRoutes.js'], 
+    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js', './routes/categoryRoutes.js', './routes/unitRoutes.js'], 
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
@@ -80,9 +81,11 @@ app.get('/api-docs-json', (req, res) => {
 });
 
 // --- 8. Đăng ký Route API ---
+app.use('/api/products/units', unitRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/chatbot', chatbotRoutes); 
+
 
 // Bổ sung thêm route này để Uptime Kuma ping không bị 404
 app.get('/', (req, res) => {

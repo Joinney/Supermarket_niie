@@ -45,12 +45,15 @@ import AdminVariantDetail from "./admindb/pages/products/VariantDetail";
 import AdminCreateVariant from "./admindb/pages/Products/CreateVariant";
 import ProductCreate from "./admindb/pages/Products/ProductCreate";
 import ParentCategories from "./admindb/pages/Products/ParentCategories";
+import ParentCategoryForm from "./admindb/pages/Products/ParentCategoryForm";
 import ChildCategories from "./admindb/pages/Products/ChildCategories";
+import ChildCategoryForm from "./admindb/pages/Products/ChildCategoryForm";
 import Units from "./admindb/pages/Products/Units";
+import UnitForm from "./admindb/pages/Products/UnitsForm";
 
 // Import các Form/Page thực tế từ Warehouse
 import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
-import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx"; 
+import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
 import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx"; // 👈 Đã thêm dòng import trang chi tiết phiếu nhập
 import NhapKhoForm from "./admindb/pages/Warehouse/danhsachkho/NhapKhoForm.jsx";
 import TaoKhoForm from "./admindb/pages/Warehouse/danhsachkho/TaoKhoForm.jsx";
@@ -246,8 +249,26 @@ const AppRoutes = () => (
           element={<AdminCreateVariant />}
         />
         <Route path="parent-categories" element={<ParentCategories />} />
+        <Route
+          path="/admin/products/parent-categories/create"
+          element={<ParentCategoryForm />}
+        />
+        <Route
+          path="/admin/products/parent-categories/edit/:id"
+          element={<ParentCategoryForm />}
+        />
         <Route path="child-categories" element={<ChildCategories />} />
+        <Route
+          path="/admin/products/child-categories/create"
+          element={<ChildCategoryForm />}
+        />
+        <Route
+          path="/admin/products/child-categories/edit/:id"
+          element={<ChildCategoryForm />}
+        />
         <Route path="units" element={<Units />} />
+        <Route path="/admin/products/units/create" element={<UnitForm />} />
+        <Route path="/admin/products/units/edit/:id" element={<UnitForm />} />
       </Route>
 
       {/* 📄 Bọc Đơn Hàng */}
@@ -277,7 +298,8 @@ const AppRoutes = () => (
         <Route path="create-warehouse" element={<TaoKhoForm />} />
         <Route path="import-list" element={<DanhSachPhieuNhap />} />
         <Route path="create-import-ticket" element={<TaoPhieuNhapForm />} />
-        <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} /> {/* 👈 Đã thêm route xem chi tiết động bằng ID tại đây */}
+        <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} />{" "}
+        {/* 👈 Đã thêm route xem chi tiết động bằng ID tại đây */}
         <Route path="batches" element={<LoHang />} />
         <Route path="stock" element={<TonKho />} />
         <Route path="transfer" element={<ChuyenKho />} />
