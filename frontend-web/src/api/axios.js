@@ -75,7 +75,7 @@ const createInstance = (baseURL) => {
                 console.log("Giữ lại phiên làm việc, không tự động Logout do lỗi data trống.");
             }
 
-            // Nếu dính lỗi 403 (Bị từ chối quyền truy cập)
+            // Nếu dính lỗi 403 (BBi từ chối quyền truy cập)
             if (error.response?.status === 403) {
                 console.warn(`⚠️ Lỗi 403 (Forbidden) tại API: ${baseURL}. Tạm thời bỏ qua không clear token.`);
             }
@@ -105,9 +105,14 @@ export const orderApi = createInstance(
     isLocal ? 'http://localhost:5005/api' : 'https://orderservice-url.onrender.com/api'
 );
 
-// ✨ BỔ SUNG: Cổng kết nối đến cổng 5004 của Ruby service
+// Cổng kết nối đến cổng 5004 của Ruby service
 export const paymentApi = createInstance(
     isLocal ? 'http://localhost:5004/api' : 'https://paymentservice-url.onrender.com/api'
+);
+
+// ✨ BỔ SUNG: Cổng kết nối đến cổng 5006 của Go warehouse-service kèm tiền tố nhóm v1
+export const warehouseApi = createInstance(
+    isLocal ? 'http://localhost:5006/api/v1' : 'https://warehouseservice-url.onrender.com/api/v1'
 );
 
 export default authApi;

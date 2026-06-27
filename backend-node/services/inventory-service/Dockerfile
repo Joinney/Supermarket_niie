@@ -3,8 +3,8 @@
 # ========================================================
 FROM golang:1.26-alpine AS builder
 
-# Cài đặt git
-RUN apk add --no-cache git
+# Cài đặt các công cụ biên dịch thiết yếu
+RUN apk add --no-cache git build-base
 
 WORKDIR /app
 
@@ -21,8 +21,11 @@ COPY . .
 # Tự động generate swagger docs
 RUN swag init
 
-# Biên dịch ứng dụng
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main main.go
+# 🌟 ĐỒNG BỘ: Chạy lệnh đồng bộ thư viện tránh lỗi lệch pha go.sum trong container
+RUN go mod tidy
+
+# Biên dịch ứng dụng theo thư mục hiện hành (.) thay vì chỉ định đích danh file lẻ
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # ========================================================
 # 🚀 STAGE 2: MÔI TRƯỜNG RUNTIME SIÊU GỌN (ALPINE LINUX)

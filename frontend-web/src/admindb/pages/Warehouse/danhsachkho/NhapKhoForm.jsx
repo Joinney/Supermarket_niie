@@ -1,47 +1,62 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom"; // 👈 Thêm import này để điều hướng route
-
-// 📦 Dữ liệu mẫu tĩnh chuẩn hóa theo cấu trúc quản lý thông tin các kho Demi Mart
-const MOCK_WAREHOUSE_DATA = [
-  { 
-    maKho: "KHO-001", 
-    tenKho: "Kho Tổng (Quận 1)", 
-    diaChi: "123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. HCM", 
-    trangThai: "active", 
-    ngayTao: "20/01/2024 08:00", 
-    ngayCapNhat: "26/06/2026 14:20" 
-  },
-  { 
-    maKho: "KHO-002", 
-    tenKho: "Kho Nông Sản Cầu Đất", 
-    diaChi: "Quốc lộ 20, Xã Xuân Trường, TP. Đà Lạt, Lâm Đồng", 
-    trangThai: "active", 
-    ngayTao: "22/01/2024 08:30", 
-    ngayCapNhat: "25/06/2026 09:15" 
-  },
-  { 
-    maKho: "KHO-003", 
-    tenKho: "Kho Vật TW", 
-    diaChi: "456 Lê Duẩn, Phường Hải Châu I, Quận Hải Châu, Đà Nẵng", 
-    trangThai: "active", 
-    ngayTao: "24/01/2024 16:45", 
-    ngayCapNhat: "24/06/2026 10:30" 
-  },
-  { 
-    maKho: "KHO-004", 
-    tenKho: "Kho Lạnh Vùng 2", 
-    diaChi: "789 Nguyễn Văn Linh, Phường Tân Phong, Quận 7, TP. HCM", 
-    trangThai: "maintenance", // Đang bảo trì hệ thống lạnh
-    ngayTao: "26/01/2024 14:20", 
-    ngayCapNhat: "20/06/2026 17:00" 
-  },
-];
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; 
+// 🌟 Import instance API quản lý kho hàng từ file cấu hình axios của bạn
+import { warehouseApi } from "../../../../api/axios"; // Hãy điều chỉnh lại đường dẫn file cho đúng thực tế
 
 const NhapKhoForm = () => {
-  const navigate = useNavigate(); // 👈 Khởi tạo hàm điều hướng hệ thống
+  const navigate = useNavigate(); 
+  
+  // 📦 Quản lý dữ liệu kho hàng động lấy từ database
+  const [warehouseData, setWarehouseData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
+  // ========================================================
+  // 🔄 GỌI API LẤY DANH SÁCH KHO HÀNG THỰC TẾ
+  // ========================================================
+  // 📁 Cập nhật lại duy nhất hàm useEffect này trong NhapKhoForm.jsx:
+useEffect(() => {
+  let isMounted = true;
+  setLoading(true);
+
+  warehouseApi.get("/warehouses")
+    .then((response) => {
+      if (!isMounted) return;
+
+      console.log("=== KIỂM TRA PHẢN HỒI AXIOS ===");
+      console.log("Gốc (response):", response);
+
+      // 🌟 TỰ ĐỘNG NHẬN DIỆN TẦNG DỮ LIỆU CHỐNG LỖI INTERCEPTOR
+      let finalData = [];
+      
+      if (response && Array.isArray(response)) {
+        // Trường hợp 1: Axios Interceptor đã bóc sẵn response thành mảng dữ liệu
+        finalData = response;
+      } else if (response && response.data && Array.isArray(response.data)) {
+        // Trường hợp 2: Axios trả về Object Response nguyên bản, chứa mảng trong .data
+        finalData = response.data;
+      } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
+        // Trường hợp 3: Dữ liệu bị bọc sâu trong response.data.data
+        finalData = response.data.data;
+      }
+
+      console.log("Mảng dữ liệu sau khi lọc tầng:", finalData);
+      setWarehouseData(finalData);
+      setLoading(false);
+    })
+    .catch((error) => {
+      if (isMounted) {
+        console.error("❌ Lỗi kết nối API kho hàng:", error);
+        setLoading(false);
+      }
+    });
+
+  return () => {
+    isMounted = false;
+  };
+}, []);
   // Hàm xử lý xóa nhanh bộ lọc (Reset)
   const handleResetFilters = () => {
     setSearch("");
@@ -136,56 +151,78 @@ const NhapKhoForm = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
-              {MOCK_WAREHOUSE_DATA
-                .filter((row) => {
-                  // Logic tìm kiếm & lọc cơ bản trực tiếp trên giao diện
-                  const matchesSearch = row.tenKho.toLowerCase().includes(search.toLowerCase()) || row.maKho.toLowerCase().includes(search.toLowerCase());
-                  const matchesStatus = status === "" || row.trangThai === status;
-                  return matchesSearch && matchesStatus;
-                })
-                .map((row) => (
-                  <tr key={row.maKho} className="hover:bg-slate-50/60 transition-colors">
-                    {/* Mã Kho */}
-                    <td className="py-4 px-6 text-center text-[#006c49] font-black font-mono">
-                      {row.maKho}
-                    </td>
-                    {/* Tên Kho */}
-                    <td className="py-4 px-6 text-gray-900 font-bold">
-                      {row.tenKho}
-                    </td>
-                    {/* Địa Chỉ */}
-                    <td className="py-4 px-6 text-gray-500 font-medium whitespace-normal break-words">
-                      {row.diaChi}
-                    </td>
-                    {/* Trạng Thái */}
-                    <td className="py-4 px-6 text-center">
-                      {row.trangThai === "active" ? (
-                        <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-emerald-50 text-emerald-600 uppercase">
-                          Hoạt động
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-amber-50 text-amber-600 uppercase">
-                          Bảo trì
-                        </span>
-                      )}
-                    </td>
-                    {/* Ngày Tạo */}
-                    <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
-                      {row.ngayTao}
-                    </td>
-                    {/* Ngày Cập Nhật */}
-                    <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
-                      {row.ngayCapNhat}
-                    </td>
-                  </tr>
-              ))}
+              {loading ? (
+                // Hiển thị trạng thái đang tải dữ liệu từ API
+                <tr>
+                  <td colSpan="6" className="py-10 text-center text-sm text-gray-400 font-medium">
+                    <span className="inline-block animate-pulse">Đang tải dữ liệu từ hệ thống kho...</span>
+                  </td>
+                </tr>
+              ) : !Array.isArray(warehouseData) || warehouseData.length === 0 ? (
+                // Hiển thị nếu cơ sở dữ liệu trống hoặc không tìm thấy dữ liệu
+                <tr>
+                  <td colSpan="6" className="py-10 text-center text-sm text-gray-400 font-medium">
+                    Không có thông tin kho hàng nào được tìm thấy.
+                  </td>
+                </tr>
+              ) : (
+                warehouseData
+                  .filter((row) => {
+                    // Phòng vệ gán chuỗi rỗng đề phòng trường hợp trả về có field rỗng ngầm
+                    const tenKho = row.ten_kho || "";
+                    const maKho = row.ma_kho || "";
+                    const trangThai = row.trang_thai || "";
+
+                    const matchesSearch = 
+                      tenKho.toLowerCase().includes(search.toLowerCase()) || 
+                      maKho.toLowerCase().includes(search.toLowerCase());
+                    const matchesStatus = status === "" || trangThai === status;
+                    return matchesSearch && matchesStatus;
+                  })
+                  .map((row) => (
+                    <tr key={row.ma_kho} className="hover:bg-slate-50/60 transition-colors">
+                      {/* Mã Kho */}
+                      <td className="py-4 px-6 text-center text-[#006c49] font-black font-mono">
+                        {row.ma_kho}
+                      </td>
+                      {/* Tên Kho */}
+                      <td className="py-4 px-6 text-gray-900 font-bold">
+                        {row.ten_kho}
+                      </td>
+                      {/* Địa Chỉ */}
+                      <td className="py-4 px-6 text-gray-500 font-medium whitespace-normal break-words">
+                        {row.dia_chi}
+                      </td>
+                      {/* Trạng Thái */}
+                      <td className="py-4 px-6 text-center">
+                        {row.trang_thai === "active" ? (
+                          <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-emerald-50 text-emerald-600 uppercase">
+                            Hoạt động
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-amber-50 text-amber-600 uppercase">
+                            Bảo trì
+                          </span>
+                        )}
+                      </td>
+                      {/* Ngày Tạo */}
+                      <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
+                        {row.ngay_tao}
+                      </td>
+                      {/* Ngày Cập Nhật */}
+                      <td className="py-4 px-6 text-gray-400 font-medium font-mono text-xs">
+                        {row.ngay_cap_nhat}
+                      </td>
+                    </tr>
+                  ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* FOOTER ĐIỀU HƯỚNG PHÂN TRANG GỌN GÀNG */}
         <div className="p-4 bg-white border-t border-gray-50 flex items-center justify-between text-xs text-gray-400 font-bold select-none">
-          <div>Hiển thị 1 - {MOCK_WAREHOUSE_DATA.length} trên tổng số {MOCK_WAREHOUSE_DATA.length} Kho</div>
+          <div>Hiển thị 1 - {warehouseData.length} trên tổng số {warehouseData.length} Kho</div>
           <div className="flex items-center gap-4 text-xs font-medium text-gray-400">
             <div className="flex items-center gap-2">
               <span>The page on</span>

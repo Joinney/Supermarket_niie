@@ -9,7 +9,7 @@ import (
 	"supermarket/warehouse-service/config"
 	"supermarket/warehouse-service/controllers"
 
-	// 🌟 Khớp hoàn toàn với module trong go.mod và thư mục docs vừa sinh ra
+	// 🌟 ĐỒNG BỘ KHỚP HOÀN TOÀN gói docs sinh tự động từ module gốc
 	_ "supermarket/warehouse-service/docs"
 
 	"github.com/gin-contrib/cors"
@@ -20,9 +20,7 @@ import (
 )
 
 func main() {
-	// ========================================================
-	// 🌟 NẠP CONFIG MÔI TRƯỜNG (.env)
-	// ========================================================
+	// Nạp biến môi trường .env
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Cảnh báo: Không tìm thấy file .env, hệ thống sẽ dùng biến môi trường hệ thống!")
@@ -30,39 +28,41 @@ func main() {
 
 	r := gin.Default()
 
-	// ========================================================
-	// 🛡️ CẤU HÌNH PHÒNG VỆ VÀ NỚI LỎNG BẢO MẬT (CORS)
-	// ========================================================
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	// 🌟 KHẮC PHỤC CHỐNG REDIRECT LÀM MẤT DATA: Tắt tự động thêm/bớt xuyệt đuôi của Gin
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
+
+	// Cấu hình CORS nới lỏng bảo mật kết nối với Frontend React
+	// 📁 Sửa lại đoạn này trong file main.go ở Backend của bạn:
+r.Use(cors.New(cors.Config{
+    // 🌟 KHẮC PHỤC CHÍNH: Chỉ định chính xác URL Frontend thay vì dùng "*"
+    AllowOrigins:     []string{"http://localhost:5173"}, 
+    AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+    AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+    ExposeHeaders:    []string{"Content-Length"},
+    AllowCredentials: true, // Do thuộc tính này bật nên bắt buộc AllowOrigins không được để "*"
+    MaxAge:           12 * time.Hour,
+}))
 
 	// Kết nối Database Supabase
 	config.ConnectDatabase()
 
-	// ========================================================
-	// 🚀 ĐĂNG KÝ CÁC ROUTE PHỤC VỤ API INVENTORY
-	// ========================================================
+	// 🚀 ĐĂNG KÝ ROUTE API V1
 	api := r.Group("/api/v1")
 	{
-		api.GET("/inventory/", controllers.GetInventory)
-		api.POST("/inventory/", controllers.CreateItem)
+		// 🌟 CHUẨN HÓA: Bỏ toàn bộ dấu xuyệt (/) ở cuối để khớp 100% với Axios Frontend
+		api.GET("/inventory", controllers.GetInventory)
+		api.POST("/inventory", controllers.CreateItem)
 		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
+
+		// Kho hàng (Warehouse) phục vụ trực tiếp component NhapKhoForm
+		api.GET("/warehouses", controllers.GetWarehouses)
 	}
 
-	// ========================================================
-	// 📜 ROUTE PHỤC VỤ TÀI LIỆU SWAGGER API (/docs)
-	// ========================================================
+	// Tài liệu API Swagger
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// ========================================================
-	// 🩺 ENDPOINT KIỂM TRA TRẠNG THÁI HỆ THỐNG (HEALTH CHECK)
-	// ========================================================
+	// Health Check dịch vụ kho hàng
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "OK",
@@ -71,9 +71,7 @@ func main() {
 		})
 	})
 
-	// ========================================================
-	// 🏠 GIAO DIỆN TRANG CHỦ CHÀO MỪNG CHUẨN MÀU #006c49
-	// ========================================================
+	// Giao diện chào mừng mặc định màu #006c49
 	r.GET("/", func(c *gin.Context) {
 		htmlContent := `<!DOCTYPE html>
         <html lang="vi">
@@ -146,9 +144,6 @@ func main() {
 		c.String(http.StatusOK, htmlContent)
 	})
 
-	// ========================================================
-	// 🔌 KHỞI CHẠY SERVER
-	// ========================================================
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "5006"
