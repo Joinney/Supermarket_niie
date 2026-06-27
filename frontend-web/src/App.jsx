@@ -14,6 +14,7 @@ import { ProtectedRoute } from "./components/Auth/ProtectedRoute";
 
 // --- IMPORTS GIAO DIỆN KHÁCH HÀNG ---
 import Checkout from "./pages/Checkout/Checkout";
+import VnpayReturn from "./pages/Checkout/VnpayReturn";
 import HeaderKhachHang from "./components/Header";
 import SidebarKhachHang from "./components/Sidebar";
 import Footer from "./components/Footer";
@@ -188,6 +189,7 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       />
+      <Route path="/checkout/vnpay-return" element={<VnpayReturn />} />
       <Route path="/profile/:tab?" element={<Profile />} />
     </Route>
 

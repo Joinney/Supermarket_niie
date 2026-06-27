@@ -1,6 +1,7 @@
 require 'sinatra/base'
 require 'json'
 require_relative '../controllers/payment_controller'
+require_relative '../controllers/vnpay_controller'
 
 class PaymentRoutes < Sinatra::Base
   # ========================================================
@@ -33,48 +34,34 @@ class PaymentRoutes < Sinatra::Base
   end
 
   # ========================================================
-  # 💳 1. API KHỞI TẠO GIAO DỊCH (VNPay / PayPal)
+  # 💳 1. API Khởi tạo thanh toán (Đã sửa luồng VNPay sang VnpayController)
   # ========================================================
-  post '/create-transaction' do
+  post '/api/create-transaction' do
     begin
       request_body = request.body.read
-      if request_body.empty?
-        status 400
-        return { success: false, message: 'Dữ liệu đầu vào trống (Body empty)!' }.to_json
+      return { success: false, message: 'Body trống!' }.to_json if request_body.empty?
+      payload = JSON.parse(request_body)
+
+      if payload['phuong_thuc_thanh_toan'] == 'VNPay'
+        result = VnpayController.init_payment(payload, '127.0.0.1')
+      else
+        result = PaymentController.process_payment(payload, '127.0.0.1')
       end
 
-      request_payload = JSON.parse(request_body)
-      
-      client_ip = request.env['HTTP_X_FORWARDED_FOR'] || request.env['REMOTE_ADDR'] || '127.0.0.1'
-      client_ip = client_ip.split(',').first.strip if client_ip.include?(',')
-
-      result = PaymentController.process_payment(request_payload, client_ip)
-      
       status result[:success] ? 200 : 400
       result.to_json
-    rescue JSON::ParserError => e
-      status 400
-      { success: false, message: 'Định dạng JSON gửi lên không hợp lệ!', error: e.message }.to_json
     rescue => e
       status 500
-      { success: false, message: 'Lỗi hệ thống xử lý giao dịch nội bộ!', error: e.message }.to_json
+      { success: false, message: e.message }.to_json
     end
   end
 
-  # ========================================================
-  # 🔄 2. API TIẾP NHẬN PHẢN HỒI CALLBACK TỪ VNPAY CỔNG CHÍNH
-  # ========================================================
-  get '/vnpay-callback' do
+  # 2. API Đối soát VNPay trả về từ Trạm trung chuyển React
+  get '/api/vnpay-return' do
     query_params = params.transform_keys(&:to_s)
-    result = PaymentController.handle_vnpay_callback(query_params)
-    
-    if result[:redirect_url]
-      redirect result[:redirect_url]
-    else
-      status 400
-      content_type :json
-      { success: false, message: result[:message] }.to_json
-    end
+    result = VnpayController.verify_return(query_params)
+    status result[:success] ? 200 : 400
+    result.to_json
   end
 
   # ========================================================

@@ -7,14 +7,16 @@ module PaymentGateway
   # ========================================================
   # 🔑 1. CỔNG THANH TOÁN VNPAY (Version 2.1.0)
   # ========================================================
-  def self.create_vnpay_url(data, client_ip)
+def self.create_vnpay_url(data, client_ip)
     ma_don_hang = data['ma_don_hang']
     tong_thanh_toan = data['tong_thanh_toan'].to_i
 
-    tmn_code = ENV['VNP_TMN_CODE'] || '2QXUIISW'
-    secret_key = ENV['VNP_HASH_SECRET'] || '9O6E27MXV4LCOZJWQ4M9RFEZ9C1QW2L4'
+    # 🎯 FIX CHÍ MẠNG: Xóa bỏ ENV, gán chết chuỗi thật 100% không cho bốc biến môi trường cũ
+    tmn_code = 'R1GZ045M'
+    secret_key = 'F6GIYA4894EW07CHMUOXODSXCTY87JQ6'
+    
     vnp_url = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
-    return_url = ENV['VNP_RETURN_URL'] || 'http://localhost:5004/api/payments/vnpay-callback'
+    return_url = 'http://localhost:5173/checkout/vnpay-return'
 
     vnp_params = {
       'vnp_Version' => '2.1.0',
@@ -22,25 +24,25 @@ module PaymentGateway
       'vnp_TmnCode' => tmn_code,
       'vnp_Locale' => 'vn',
       'vnp_CurrCode' => 'VND',
-      'vnp_TxnRef' => "#{ma_don_hang}_#{Time.now.to_i}", # Tránh trùng mã giao dịch khi bấm thanh toán lại
-      'vnp_OrderInfo' => "Thanh toan don hang Demi Mart: #{ma_don_hang}",
+      'vnp_TxnRef' => "#{ma_don_hang}_#{Time.now.to_i}", 
+      'vnp_OrderInfo' => "Thanh toan don hang Demi Mart #{ma_don_hang}", 
       'vnp_OrderType' => 'other',
-      'vnp_Amount' => (tong_thanh_toan * 100).to_s, # VNPay yêu cầu nhân 100
+      'vnp_Amount' => (tong_thanh_toan * 100).to_s, 
       'vnp_ReturnUrl' => return_url,
       'vnp_IpAddr' => client_ip,
       'vnp_CreateDate' => Time.now.strftime('%Y%m%d%H%M%S')
     }
 
-    # Sắp xếp tham số theo bảng chữ cái từ A-Z (Bắt buộc bảo mật)
     sorted_params = vnp_params.sort.to_h
-    
-    # Chuẩn hóa Encode Query String RFC 3986
     query_string = URI.encode_www_form(sorted_params)
-
-    # Băm mã mã hóa bảo mật SHA512
     hmac = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new('sha512'), secret_key, query_string)
     
-    # Trả về URL hoàn chỉnh để redirect
+    # 🚨 BẮT ĐẶT CAMERA GIÁM SÁT NGẦM (NẾU VẪN LỖI 70 COPY DÒNG NÀY ĐƯA MÌNH)
+    puts "\n================== [VNPAY CAMERA DEBUG] =================="
+    puts "👉 CHUỖI ĐEM BĂM: #{query_string}"
+    puts "👉 MÁY CHỦ RUBY BĂM RA HMAC: #{hmac}"
+    puts "==========================================================\n"
+
     "#{vnp_url}?#{query_string}&vnp_SecureHash=#{hmac}"
   end
 

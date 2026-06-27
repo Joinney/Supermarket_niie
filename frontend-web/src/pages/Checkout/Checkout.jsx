@@ -200,7 +200,8 @@ export default function Checkout() {
           const boughtVariantIds = checkoutCart.map(item => item.variantId || item.variant_id);
           localStorage.setItem('vnpay_pending_variants', JSON.stringify(boughtVariantIds));
 
-          const paymentRes = await paymentApi.post('/payments/create-transaction', {
+          // 🎯 SỬA LỖI 404: Bỏ chữ /payments thừa đi
+          const paymentRes = await paymentApi.post('/create-transaction', {
             ma_don_hang: maDonHangText,
             tong_thanh_toan: tongThanhToanNum,
             phuong_thuc_thanh_toan: 'VNPay'
@@ -210,7 +211,7 @@ export default function Checkout() {
             window.location.href = `${paymentRes.data.paymentUrl}&vnp_BrowserNonce=${new Date().getTime()}`;
             return true;
           } else {
-            throw new Error("Không lấy được link từ cổng thanh toán Payment Service!");
+            throw new Error("Không lấy được link từ cổng thanh toán VNPay!");
           }
         }
         return maDonHangText;
