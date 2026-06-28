@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom"; // Import useNavigate để điều hướng URL
 
 const Danhsachkhachhang = () => {
+  const navigate = useNavigate(); // Khởi tạo điều hướng
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -16,8 +19,8 @@ const Danhsachkhachhang = () => {
   const [selectedIds, setSelectedIds] = useState([]);
 
   // --- STATES PHỤC VỤ CHỈNH SỬA VÀ XÓA ---
-  const [editingUser, setEditingUser] = useState(null); // Lưu trữ object khách hàng đang chọn sửa
-  const [deletingUserId, setDeletingUserId] = useState(null); // Lưu ID khách hàng đang chọn xóa
+  const [editingUser, setEditingUser] = useState(null); 
+  const [deletingUserId, setDeletingUserId] = useState(null); 
   const [submitLoading, setSubmitLoading] = useState(false);
 
   const userApiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
@@ -68,20 +71,19 @@ const Danhsachkhachhang = () => {
     e.preventDefault();
     setSubmitLoading(true);
     try {
-      // Map chuẩn tên hàm updateUserDetail bốc body tại backend công nhận
       await axios.put(`${userApiUrl}/api/auth/internal/users/${editingUser.user_id}`, {
         full_name: editingUser.full_name,
         phone_number: editingUser.phone_number,
         gender: editingUser.gender,
         status: editingUser.status,
-        role: "Buyer", // Đảm bảo giữ nguyên vai trò
+        role: "Buyer", 
         avatar_url: editingUser.avatar_url,
         birthday: editingUser.birthday
       });
 
       alert("Cập nhật thông tin khách hàng thành công! 🎉");
       setEditingUser(null);
-      fetchBuyers(); // Tải lại bảng dữ liệu sạch
+      fetchBuyers(); 
     } catch (err) {
       console.error("❌ Lỗi khi cập nhật khách hàng:", err);
       alert(err.response?.data?.message || "Không thể cập nhật thông tin khách hàng.");
@@ -94,13 +96,10 @@ const Danhsachkhachhang = () => {
   const handleConfirmDelete = async () => {
     setSubmitLoading(true);
     try {
-      // 🎯 FIX CHÍ MẠNG: Thêm '/auth' vào đúng cấu trúc bọc của server.js
       await axios.delete(`${userApiUrl}/api/auth/internal/users/${deletingUserId}`);
-      
       alert("Đã xóa tài khoản khách hàng thành công. 🎉");
       setDeletingUserId(null);
       
-      // Nếu xóa dòng cuối cùng của trang thì lùi lại 1 trang
       if (customers.length === 1 && currentPage > 1) {
         setCurrentPage(prev => prev - 1);
       } else {
@@ -146,6 +145,11 @@ const Danhsachkhachhang = () => {
         <p className="text-gray-400 text-[10px] mt-0.5">{date.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}</p>
       </div>
     );
+  };
+
+  // Hàm chuyển hướng sang trang chi tiết bằng URL mong muốn
+  const handleViewDetail = (userId) => {
+    navigate("/admin/customers/list/Chitietkhachhang", { state: { userId } });
   };
 
   return (
@@ -237,7 +241,8 @@ const Danhsachkhachhang = () => {
                     />
                   </td>
                   
-                  <td className="py-4 px-6">
+                  {/* Click thẳng vào vùng tên khách hàng để mở URL chi tiết */}
+                  <td className="py-4 px-6 cursor-pointer group" onClick={() => handleViewDetail(row.user_id)}>
                     <div className="flex items-center gap-3">
                       {row.avatar_url ? (
                         <img src={row.avatar_url} alt="avatar" className="w-9 h-9 rounded-full object-cover border border-gray-100 shadow-sm" />
@@ -247,7 +252,7 @@ const Danhsachkhachhang = () => {
                         </div>
                       )}
                       <div>
-                        <div className="font-bold text-slate-800">{row.full_name || "Chưa cập nhật"}</div>
+                        <div className="font-bold text-slate-800 group-hover:text-emerald-600 transition-colors">{row.full_name || "Chưa cập nhật"}</div>
                         <div className="text-[10px] text-blue-500 font-mono mt-0.5">ID: {row.user_id}</div>
                       </div>
                     </div>
@@ -270,9 +275,17 @@ const Danhsachkhachhang = () => {
                   
                   <td className="py-4 px-6 text-center">{formatLastLogin(row.last_login)}</td>
                   
-                  {/* THAO TÁC CHỈNH SỬA / XÓA THEO MOCKUP */}
                   <td className="py-4 px-6 text-center">
                     <div className="flex items-center justify-center gap-3">
+                      {/* Nút Xem chi tiết (👁️) kích hoạt chuyển URL */}
+                      <button 
+                        onClick={() => handleViewDetail(row.user_id)}
+                        className="text-slate-400 hover:text-emerald-600 transition p-1.5 hover:bg-slate-50 rounded-lg"
+                        title="Xem chi tiết khách hàng"
+                      >
+                        👁️
+                      </button>
+
                       <button 
                         onClick={() => setEditingUser({ ...row })}
                         className="text-slate-300 hover:text-amber-500 transition p-1.5 hover:bg-slate-50 rounded-lg" 

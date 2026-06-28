@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -55,7 +55,7 @@ import UnitForm from "./admindb/pages/Products/UnitsForm";
 import Nation from "./admindb/pages/Products/National";
 import NationalForm from "./admindb/pages/Products/NationalForm";
 
-// Import các Form/Page thực tế từ Warehouse
+// Import các Form/Page từ Warehouse
 import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
 import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
 import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
@@ -65,10 +65,9 @@ import LoHang from "./admindb/pages/Warehouse/LoHang.jsx";
 import TonKho from "./admindb/pages/Warehouse/TonKho.jsx";
 import ChuyenKho from "./admindb/pages/Warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
-// --- IMPORTS KHÁCH HÀNG - NHÓM KHÁCH HÀNG - LOẠI KHÁCH HÀNG ---
+// --- IMPORTS KHÁCH HÀNG (ADMIN CONTROL) ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
-import Nhomkhachhang from "./admindb/pages/Customers/Nhomkhachhang";
-import Loaikhachhang from "./admindb/pages/Customers/Loaikhachhang";
+import Chitietkhachhang from "./admindb/pages/Customers/Chitietkhachhang"; // 🎯 ĐÃ ĐƯỢC THÊM BIẾN IMPORT
 
 // Nhóm quản lý nội bộ
 import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo";
@@ -319,14 +318,13 @@ const AppRoutes = () => (
         <Route path="create-warehouse" element={<TaoKhoForm />} />
         <Route path="import-list" element={<DanhSachPhieuNhap />} />
         <Route path="create-import-ticket" element={<TaoPhieuNhapForm />} />
-        <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} />{" "}
-        {/* 👈 Đã thêm route xem chi tiết động bằng ID tại đây */}
+        <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} />
         <Route path="batches" element={<LoHang />} />
         <Route path="stock" element={<TonKho />} />
         <Route path="transfer" element={<ChuyenKho />} />
       </Route>
 
-      {/* 👥 Bọc Khách Hàng */}
+      {/* 👥 Bọc Khách Hàng (Tích hợp thêm Route chi tiết tĩnh) */}
       <Route
         path="customers"
         element={
@@ -337,8 +335,8 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="list" replace />} />
         <Route path="list" element={<Danhsachkhachhang />} />
-        <Route path="groups" element={<Nhomkhachhang />} />
-        <Route path="types" element={<Loaikhachhang />} />
+        {/* 🎯 ĐƯỜNG DẪN ĐỊA CHỈ KHỚP TOÀN VẸN: /admin/customers/list/Chitietkhachhang */}
+        <Route path="list/Chitietkhachhang" element={<Chitietkhachhang />} />
       </Route>
 
       {/* 🛡️ Bọc Tài khoản & Phân quyền */}
