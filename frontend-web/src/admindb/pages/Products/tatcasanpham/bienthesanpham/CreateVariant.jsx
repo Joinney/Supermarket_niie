@@ -49,6 +49,9 @@ export default function AdminCreateVariant() {
   const [newAttrName, setNewAttrName] = useState("");
   const [newValInputs, setNewValInputs] = useState({});
 
+  // Chế độ Ma trận: "group" (Nhóm thuộc tính) hoặc "single" (Thuộc tính đơn)
+  const [matrixType, setMatrixType] = useState("group");
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -109,8 +112,9 @@ export default function AdminCreateVariant() {
             },
           );
 
+          let targetVar = null;
           if (variantId && variantsList.length > 0) {
-            const targetVar = variantsList.find(
+            targetVar = variantsList.find(
               (v) => v.ma_bien_the === variantId,
             );
             if (targetVar && targetVar.thuoc_tinh) {
@@ -123,12 +127,20 @@ export default function AdminCreateVariant() {
           }
           setAvailableAttributes(dynamicMatrix);
 
+          if (dynamicMatrix.length === 1 && dynamicMatrix[0].name === "ten_bien_the") {
+            setMatrixType("single");
+          } else if (dynamicMatrix.length <= 1) {
+            setMatrixType("single");
+          } else {
+            setMatrixType("group");
+          }
+
           const comboText = dynamicMatrix
             .map((attr) => attr.selected)
             .filter(Boolean)
             .join(" - ");
           setEditVariantName(
-            `${currentProductTitle} ${comboText ? `- ${comboText}` : ""}`,
+            targetVar ? targetVar.ten_bien_the : `${currentProductTitle} ${comboText ? `- ${comboText}` : ""}`
           );
         }
 
@@ -148,6 +160,7 @@ export default function AdminCreateVariant() {
   }, [id, variantId, location.state]);
 
   const updateVariantNameSuggestion = (productTitle, updatedAttributes) => {
+    if (matrixType === "single") return;
     const comboText = updatedAttributes
       .map((attr) => attr.selected)
       .filter(Boolean)
@@ -305,7 +318,6 @@ export default function AdminCreateVariant() {
 
   const matchedVariant = useMemo(() => {
     if (availableAttributes.length === 0) {
-      // Tự động tìm biến thể mặc định (thuoc_tinh rỗng) do Backend tự sinh ra
       const defaultVariant = existingVariants.find(
         (variant) =>
           !variant.thuoc_tinh || Object.keys(variant.thuoc_tinh).length === 0,
@@ -318,10 +330,8 @@ export default function AdminCreateVariant() {
       return acc;
     }, {});
 
-    // Nếu có ma trận mà chưa chọn đủ thông số -> Không match (Chuyển sang chế độ Tạo mới)
     if (Object.keys(currentSelection).length === 0) return null;
 
-    // Tìm biến thể khớp chính xác 100% với các lựa chọn hiện tại
     return existingVariants.find((variant) => {
       if (!variant.thuoc_tinh) return false;
       const isMatch = Object.keys(currentSelection).every(
@@ -340,6 +350,7 @@ export default function AdminCreateVariant() {
       setEditPrice(matchedVariant.gia_ban_le || 0);
       setEditStock(matchedVariant.ton_kho || matchedVariant.so_luong_ton || 0);
       setEditUnit(matchedVariant.ten_don_vi || units[0]?.ten_don_vi || "Chai");
+      setEditVariantName(matchedVariant.ten_bien_the || "");
 
       const specificMedia = productMedia.find(
         (m) => m.ma_bien_the === matchedVariant.ma_bien_the,
@@ -360,7 +371,7 @@ export default function AdminCreateVariant() {
       setEditStock(0);
       setVariantImageUrl(parentProductImage || "");
 
-      if (availableAttributes.length > 0) {
+      if (availableAttributes.length > 0 && matrixType === "group") {
         const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
         const attrParts = availableAttributes
           .map((a) => {
@@ -375,6 +386,15 @@ export default function AdminCreateVariant() {
           .filter(Boolean)
           .join("-");
         setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
+      } else if (matrixType === "single" && variantName) {
+        const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+        const namePart = variantName
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, "")
+          .substring(0, 4)
+          .toUpperCase();
+        setEditSku(`SKU-${idSuffix}-${namePart}`);
       } else {
         setEditSku("");
       }
@@ -396,6 +416,8 @@ export default function AdminCreateVariant() {
     location.state,
     availableAttributes,
     units,
+    matrixType,
+    variantName,
   ]);
 
   const handleLocalImageUpload = async (e) => {
@@ -489,41 +511,30 @@ export default function AdminCreateVariant() {
     }
   };
 
-  // 🌟 NÂNG CẤP 1: XỬ LÝ LƯU BIẾN THỂ (CHUẨN EAV & NGĂN CHẶN RÁC DỮ LIỆU)
   const handleSaveVariant = async (e) => {
     e.preventDefault();
     if (!sku.trim()) return alert("Vui lòng điền mã định danh SKU!");
     if (price < 0) return alert("Giá niêm yết không hợp lệ!");
-
-    // 🛑 KIỂM TRA BẢO MẬT: Chặn không cho lưu nếu Ma Trận tạo ra nhưng bị quên chọn giá trị
-    if (availableAttributes.length > 0) {
-      const missingSelections = availableAttributes.filter(
-        (attr) => !attr.selected || attr.selected.trim() === "",
-      );
-      if (missingSelections.length > 0) {
-        const missingNames = missingSelections.map((a) => a.name).join(", ");
-        return alert(
-          `🛑 Lỗi Ma Trận: Bạn chưa chọn giá trị cho thuộc tính [${missingNames}]. Vui lòng chọn hoặc điền mới!`,
-        );
-      }
-    }
 
     setSaving(true);
     try {
       const apiUrl =
         import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-      // 🌟 NÂNG CẤP 2: Đóng gói Payload Thuộc Tính.
-      // Nếu availableAttributes rỗng (Sản phẩm không biến thể) -> Nó sẽ trả về {} -> Đúng chuẩn Backend!
-      const filterAttributesPayload = availableAttributes.reduce(
-        (acc, attr) => {
+      let filterAttributesPayload = {};
+      if (matrixType === "group") {
+        filterAttributesPayload = availableAttributes.reduce((acc, attr) => {
           if (attr.selected && attr.selected.trim() !== "") {
             acc[attr.name] = attr.selected;
           }
           return acc;
-        },
-        {},
-      );
+        }, {});
+      } else {
+        const finalValue = variantName.trim() || productName || "Phiên bản gốc";
+        filterAttributesPayload = {
+          ten_bien_the: finalValue,
+        };
+      }
 
       const payload = {
         ma_san_pham: id,
@@ -532,7 +543,7 @@ export default function AdminCreateVariant() {
         gia_ban_le: price,
         so_luong_ton: stock,
         ten_don_vi: unit,
-        thuoc_tinh: filterAttributesPayload, // Sẽ tự động truyền {} nếu là Sản phẩm Đơn
+        thuoc_tinh: filterAttributesPayload,
         hinh_anh_url: variantImageUrl,
       };
 
@@ -549,7 +560,6 @@ export default function AdminCreateVariant() {
         );
         alert("🎉 Đã khởi tạo biến thể mới thành công vào Database!");
 
-        // Cập nhật lại UI cho Admin tiếp tục thao tác nhanh
         const newVariantData = {
           ...res.data.data,
           thuoc_tinh: filterAttributesPayload,
@@ -565,6 +575,26 @@ export default function AdminCreateVariant() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // 🌟 NÂNG CẤP BẢO MẬT: Xử lý chuyển đổi chế độ ma trận kèm theo ràng buộc bắt buộc xóa sạch dữ liệu
+  const handleMatrixTypeChange = (e) => {
+    const nextType = e.target.value;
+    
+    // Nếu chuyển sang Đơn khi đang có các Group thuộc tính hiện hành
+    if (matrixType === "group" && availableAttributes.length > 0) {
+      alert("🛑 Ràng buộc cấu hình: Bạn đang chạy ma trận 'Nhóm thuộc tính'. Hãy xóa tất cả các nhóm thuộc tính hiện tại bên dưới trước khi đổi sang chế độ 'Thuộc tính đơn'!");
+      return;
+    }
+    
+    // Nếu chuyển sang Nhóm khi đang tồn tại dữ liệu thuộc tính Đơn lẻ (variantName có chữ)
+    if (matrixType === "single" && variantName.trim() !== "") {
+      alert("🛑 Ràng buộc cấu hình: Bạn đang lưu dữ liệu 'Thuộc tính đơn'. Vui lòng xóa sạch chuỗi định danh (Tên hiển thị biến thể) ở cột bên phải trước khi chuyển đổi sang 'Nhóm thuộc tính'!");
+      return;
+    }
+
+    setMatrixType(nextType);
+    setAvailableAttributes([]);
   };
 
   if (loading) {
@@ -613,118 +643,26 @@ export default function AdminCreateVariant() {
         {/* CỘT TRÁI: QUẢN LÝ MA TRẬN */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-5">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <Tag size={16} className="text-amber-500" /> Bước 1: Ma trận EAV
-              riêng biệt
-            </h3>
-
-            <div className="space-y-5">
-              {availableAttributes.map((attr) => (
-                <div
-                  key={attr.id}
-                  className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3 relative group/box"
-                >
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-black text-slate-900 uppercase tracking-wide">
-                      👑 Nhóm: {attr.name}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveAttributeGroup(attr.id)}
-                      className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover/box:opacity-100"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {attr.values &&
-                      attr.values.map((val) => {
-                        const isSelected = attr.selected === val;
-                        const isGloballyUsed =
-                          usedAttributesMap[attr.name]?.has(val);
-                        const isComboValid = checkComboExists(attr.name, val);
-
-                        return (
-                          <button
-                            type="button"
-                            key={val}
-                            onClick={() => handleSelectAttribute(attr.id, val)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${
-                              isSelected
-                                ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
-                                : isComboValid
-                                  ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm"
-                                  : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"
-                            }`}
-                          >
-                            {val}
-                            {!isGloballyUsed && !isSelected && (
-                              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 border border-white"></span>
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                  </div>
-
-                  {(!attr.values || attr.values.length === 0) && (
-                    <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-700 font-bold leading-normal">
-                      ⚠️ Nhóm rỗng! Hãy thêm nhanh ít nhất 1 giá trị ở dưới.
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder={`Thêm giá trị ${attr.name}...`}
-                      value={newValInputs[attr.id] || ""}
-                      onChange={(e) =>
-                        setNewValInputs({
-                          ...newValInputs,
-                          [attr.id]: e.target.value,
-                        })
-                      }
-                      className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] px-2.5 py-1 rounded-lg text-[11px] font-medium outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleAddNewValueToAttribute(attr.id)}
-                      className="bg-slate-100 hover:bg-[#006c49] p-1.5 rounded-lg border border-gray-200 text-slate-600 hover:text-white transition"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {availableAttributes.length === 0 && (
-                <div className="text-center text-gray-400 italic text-[11px] py-6 bg-slate-50 rounded-2xl border border-dashed border-gray-200">
-                  Sản phẩm này hiện tại không chia theo nhóm ma trận.
-                  <br />
-                  Hệ thống sẽ mặc định lưu cấu hình dưới dạng Sản phẩm đơn (Một
-                  phiên bản duy nhất).
-                </div>
-              )}
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 gap-3">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                <Tag size={16} className="text-amber-500" /> Bước 1: Ma trận EAV
+              </h3>
+              
+              <select
+                value={matrixType}
+                onChange={handleMatrixTypeChange}
+                className="bg-slate-50 border border-gray-200 focus:border-[#006c49] text-[11px] font-black text-[#006c49] px-2.5 py-1.5 rounded-xl outline-none cursor-pointer transition shadow-sm"
+              >
+                <option value="group">📦 Nhóm thuộc tính</option>
+                <option value="single">🧩 Thuộc tính đơn</option>
+              </select>
             </div>
 
-            {availableAttributes.length > 0 && (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleSuggestMissingCombination}
-                  className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 px-4 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition shadow-sm"
-                >
-                  <Layers size={16} /> Gợi ý cấu hình còn thiếu
-                </button>
-              </div>
-            )}
-
-            <div className="pt-4 border-t border-gray-100 space-y-2 relative">
+            {/* 🌟 ĐỒNG BỘ GIAO DIỆN HOÀN TOÀN GIỐNG HÌNH image_34c8dc.png CHO CẢ HAI CHẾ ĐỘ */}
+            <div className="space-y-2 relative pt-1">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
-                ✨ Khởi tạo nhóm thuộc tính (Ví dụ: Màu sắc)
+                ✨ {matrixType === "group" ? "Khởi tạo nhóm thuộc tính (Ví dụ: Màu sắc, Kích thước)" : "Khởi tạo thuộc tính đơn (Ví dụ: Tên mặt hàng)"}
               </label>
               <div className="flex gap-2 relative">
                 <div className="flex-1 relative">
@@ -734,19 +672,20 @@ export default function AdminCreateVariant() {
                     value={newAttrName}
                     onFocus={() => setShowDropdown(true)}
                     onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                    onChange={(e) => setNewAttrName(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] px-3 py-2 rounded-xl text-xs font-bold outline-none"
+                    onChange={(e) => {
+                      setNewAttrName(e.target.value);
+                      if (matrixType === "single") setEditVariantName(e.target.value);
+                    }}
+                    className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] px-3 py-2.5 rounded-xl text-xs font-bold outline-none"
                   />
-                  {showDropdown && (
+                  {showDropdown && matrixType === "group" && (
                     <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 shadow-xl rounded-xl divide-y divide-gray-50 text-left">
                       {filteredGlobalAttributes.length > 0 ? (
                         filteredGlobalAttributes.map((name, idx) => (
                           <button
                             key={idx}
                             type="button"
-                            onMouseDown={() =>
-                              handleAddOrCreateAttributeGroup(name)
-                            }
+                            onMouseDown={() => handleAddOrCreateAttributeGroup(name)}
                             className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[#006c49]/10 hover:text-[#006c49] transition text-left flex items-center justify-between"
                           >
                             <span>📦 {name}</span>
@@ -757,7 +696,7 @@ export default function AdminCreateVariant() {
                         ))
                       ) : (
                         <div className="p-3 text-[11px] text-gray-400 italic">
-                          Gõ enter để tạo mới nhóm thuộc tính.
+                          Gõ nút phía bên để tạo mới.
                         </div>
                       )}
                     </div>
@@ -765,15 +704,149 @@ export default function AdminCreateVariant() {
                 </div>
                 <button
                   type="button"
-                  disabled={!newAttrName.trim() || isAlreadyInProductMatrix}
-                  onClick={() => handleAddOrCreateAttributeGroup()}
-                  className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 transition shrink-0 text-white ${isAlreadyInProductMatrix ? "bg-gray-300 cursor-not-allowed" : isExistingInGlobal ? "bg-amber-500 hover:bg-amber-600" : "bg-[#006c49] hover:bg-[#005137]"}`}
+                  disabled={matrixType === "group" ? (!newAttrName.trim() || isAlreadyInProductMatrix) : !newAttrName.trim()}
+                  onClick={() => {
+                    if (matrixType === "group") {
+                      handleAddOrCreateAttributeGroup();
+                    } else {
+                      setEditVariantName(newAttrName.trim());
+                      setNewAttrName("");
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 transition shrink-0 text-white ${matrixType === "group" && isAlreadyInProductMatrix ? "bg-gray-300 cursor-not-allowed" : isExistingInGlobal && matrixType === "group" ? "bg-amber-500 hover:bg-amber-600" : "bg-[#006c49] hover:bg-[#005137]"}`}
                 >
                   <Plus size={14} />
-                  {isExistingInGlobal ? "Chọn" : "Tạo mới"}
+                  Tạo mới
                 </button>
               </div>
             </div>
+
+            {/* KHU VỰC HIỂN THỊ ĐỘNG KẾT QUẢ DỰA TRÊN CHẾ ĐỘ MA TRẬN */}
+            {matrixType === "group" ? (
+              // HIỂN THỊ CHẾ ĐỘ NHÓM THUỘC TÍNH
+              <div className="space-y-5 pt-2">
+                {availableAttributes.map((attr) => (
+                  <div
+                    key={attr.id}
+                    className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3 relative group/box shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black text-slate-900 uppercase tracking-wide">
+                        👑 Nhóm: {attr.name}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttributeGroup(attr.id)}
+                        className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover/box:opacity-100"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {attr.values &&
+                        attr.values.map((val) => {
+                          const isSelected = attr.selected === val;
+                          const isGloballyUsed = usedAttributesMap[attr.name]?.has(val);
+                          const isComboValid = checkComboExists(attr.name, val);
+
+                          return (
+                            <button
+                              type="button"
+                              key={val}
+                              onClick={() => handleSelectAttribute(attr.id, val)}
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${
+                                isSelected
+                                  ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
+                                  : isComboValid
+                                    ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm"
+                                    : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"
+                              }`}
+                            >
+                              {val}
+                              {!isGloballyUsed && !isSelected && (
+                                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 border border-white"></span>
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder={`Thêm giá trị ${attr.name}...`}
+                        value={newValInputs[attr.id] || ""}
+                        onChange={(e) =>
+                          setNewValInputs({
+                            ...newValInputs,
+                            [attr.id]: e.target.value,
+                          })
+                        }
+                        className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] px-2.5 py-1 rounded-lg text-[11px] font-medium outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddNewValueToAttribute(attr.id)}
+                        className="bg-slate-100 hover:bg-[#006c49] p-1.5 rounded-lg border border-gray-200 text-slate-600 hover:text-white transition"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {availableAttributes.length === 0 && (
+                  <div className="text-center text-gray-400 italic text-[11px] py-8 bg-slate-50 rounded-2xl border border-dashed border-gray-200 px-4">
+                    Sản phẩm này hiện tại không chia theo nhóm ma trận.
+                    <br />
+                    Hệ thống sẽ mặc định lưu cấu hình dưới dạng Sản phẩm đơn (Một phiên bản duy nhất).
+                  </div>
+                )}
+              </div>
+            ) : (
+              // 🧩 HIỂN THỊ BIẾN THỂ ĐƠN KÈM NÚT XÓA THUỘC TÍNH ĐƠN
+              <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="inline-flex items-center rounded-full bg-[#006c49] px-4 py-1.5 text-xs font-black text-white shadow-sm max-w-[75%] truncate">
+                  {variantName.trim() || productName || "Chưa nhập tên"}
+                </div>
+                
+                {/* NÚT XÓA THUỘC TÍNH ĐƠN */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if(window.confirm("Bạn có chắc chắn muốn xóa thuộc tính đơn lẻ này không?")) {
+                      setEditVariantName("");
+                    }
+                  }}
+                  className="bg-white hover:bg-red-500 border border-gray-200 text-slate-500 hover:text-white p-2 rounded-xl transition shadow-sm shrink-0"
+                  title="Xóa thuộc tính đơn"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
+
+            {matrixType === "single" && (
+              <div className="text-center text-gray-400 italic text-[11px] py-4 bg-slate-50 rounded-2xl border border-dashed border-gray-200 px-4 mt-2">
+                Hệ thống tự động sử dụng cột: <span className="text-[#006c49] font-black">"ten_bien_the"</span> làm cấu trúc dữ liệu chính xác khi đồng bộ xuống Database.
+              </div>
+            )}
+
+            {matrixType === "group" && availableAttributes.length > 0 && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSuggestMissingCombination}
+                  className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 px-4 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition shadow-sm"
+                >
+                  <Layers size={16} /> Gợi ý cấu hình còn thiếu
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -791,8 +864,7 @@ export default function AdminCreateVariant() {
                   Phiên bản này đã tồn tại!
                 </h4>
                 <p className="text-xs font-medium text-blue-700 mt-1">
-                  Hệ thống đang ở chế độ <b>Cập nhật (Update)</b>. Các thay đổi
-                  của bạn sẽ ghi đè lên SKU hiện tại.
+                  Hệ thống đang ở chế độ <b>Cập nhật (Update)</b>. Các thay đổi của bạn sẽ ghi đè lên SKU hiện tại.
                 </p>
               </div>
             </motion.div>
@@ -918,8 +990,7 @@ export default function AdminCreateVariant() {
           {/* BLOCK HÌNH ẢNH */}
           <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <ImageIcon size={16} className="text-[#006c49]" /> Bước 3: Hình
-              ảnh riêng (Không bắt buộc)
+              <ImageIcon size={16} className="text-[#006c49]" /> Bước 3: Hình ảnh riêng (Không bắt buộc)
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
               <div className="md:col-span-4 flex justify-center">
