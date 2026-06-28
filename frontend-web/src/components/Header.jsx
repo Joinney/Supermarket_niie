@@ -80,7 +80,7 @@ export default function Header({ onOpenMenu }) {
         )
       : [];
 
-  const handleLanguageChange = (langCode) => {
+  const handleLanguageChange = (langCode, countryCode) => {
     changeLanguage(langCode);
 
     if (langCode === "vi") {
@@ -91,9 +91,7 @@ export default function Header({ onOpenMenu }) {
         locale: "vi-VN",
         rate: 1,
       });
-    }
-
-    if (langCode === "en") {
+    } else if (langCode === "en") {
       setCurrencyStore({
         code: "US",
         currency: "USD",
@@ -101,9 +99,7 @@ export default function Header({ onOpenMenu }) {
         locale: "en-US",
         rate: 0.00004,
       });
-    }
-
-    if (langCode === "zh") {
+    } else if (langCode === "zh") {
       setCurrencyStore({
         code: "CN",
         currency: "CNY",
@@ -113,6 +109,8 @@ export default function Header({ onOpenMenu }) {
       });
     }
 
+    const targetCode = (countryCode || "vn").toLowerCase();
+    window.location.href = `/${targetCode}`;
     setIsLangOpen(false);
   };
 
@@ -532,11 +530,13 @@ export default function Header({ onOpenMenu }) {
                   return (
                     <button
                       key={store.code}
-                      onClick={() => {
-                        handleLanguageChange(langCode);
-                        setIsLangOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentLanguage.code === langCode ? "bg-[#e6f0ed] text-[#006c49]" : "text-slate-600 hover:bg-slate-50"}`}
+                      type="button" // Thêm type để tránh submit form nhầm
+                      onClick={() => handleLanguageChange(langCode, store.code)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                        currentLanguage.code === langCode
+                          ? "bg-[#e6f0ed] text-[#006c49]"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
                     >
                       <div className="flex items-center gap-2">
                         <span>{store.flag}</span>

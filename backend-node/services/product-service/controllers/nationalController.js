@@ -96,7 +96,7 @@ export const updateNation = async (req, res) => {
 };
 
 // =========================================================================
-// 5. BẬT/TẮT TRẠNG THÁI QUỐC GIA (SOFT DELETE)
+// 5. BẬT/TẮT TRẠNG THÁI QUỐC GIA (Có Socket.io)
 // =========================================================================
 export const toggleNationStatus = async (req, res) => {
     try {
@@ -105,17 +105,25 @@ export const toggleNationStatus = async (req, res) => {
             UPDATE public.danh_muc_quoc_gia 
             SET trang_thai = NOT trang_thai 
             WHERE ma_quoc_gia = $1 
-            RETURNING trang_thai;
+            RETURNING ma_quoc_gia, trang_thai;
         `;
         const { rows } = await pool.query(query, [id.toUpperCase()]);
         
         if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy quốc gia." });
+        
+        if (req.io) {
+            req.io.emit("store_status_changed", { 
+                ma_quoc_gia: rows[0].ma_quoc_gia, 
+                trang_thai: rows[0].trang_thai 
+            });
+        }
         
         res.status(200).json({ 
             success: true, 
             message: rows[0].trang_thai ? "Đã bật hoạt động quốc gia." : "Đã tạm khóa quốc gia." 
         });
     } catch (error) {
+        console.error("Lỗi toggleNationStatus:", error);
         res.status(500).json({ success: false, message: "Lỗi thay đổi trạng thái." });
     }
 };
@@ -168,5 +176,24 @@ export const deleteNation = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API deleteNation:", error.message);
         res.status(500).json({ success: false, message: "Lỗi hệ thống khi xóa vĩnh viễn quốc gia." });
+    }
+};
+
+const updateNationStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { trang_thai } = req.body;
+        
+        // 1. Cập nhật vào Database
+        await Nation.findByIdAndUpdate(id, { trang_thai });
+
+        req.io.emit("store_status_changed", { 
+            ma_quoc_gia: "AR", 
+            trang_thai: trang_thai 
+        });
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };

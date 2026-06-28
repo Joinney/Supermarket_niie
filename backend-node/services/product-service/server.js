@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http'; // BỔ SUNG: Import http để chạy chung với Socket
+import { Server } from 'socket.io'; // BỔ SUNG: Import Socket.io
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 
@@ -23,7 +25,16 @@ import productRoutes from './routes/productRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js'; 
 import categoryRoutes from './routes/categoryRoutes.js';
 import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
+
+// --- KHỞI TẠO APP & SERVER SOCKET ---
 const app = express();
+const httpServer = http.createServer(app); // BỔ SUNG: Tạo server HTTP bọc lấy app Express
+const io = new Server(httpServer, {       // BỔ SUNG: Khởi tạo Socket.io trên server này
+    cors: {
+        origin: "*", // Chấp nhận mọi kết nối socket (có thể tinh chỉnh lại bảo mật sau)
+        methods: ["GET", "POST"]
+    }
+});
 
 // --- 4. CẤU HÌNH SWAGGER OPTIONS ---
 const swaggerOptions = {
@@ -41,7 +52,6 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
 // --- 5. Cấu hình CORS ---
-// 🛠️ ĐÃ TỐI ƯU: Thêm trực tiếp địa chỉ local vào mảng fallback phòng hờ file .env chưa nhận diện kịp
 const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
@@ -50,7 +60,6 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Chấp nhận request không có origin (như Postman/Mobile app) hoặc nằm trong danh sách được phép
         if (!origin || allowedOrigins.includes(origin) || !process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
@@ -65,6 +74,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// BỔ SUNG QUAN TRỌNG: Gắn io vào req để các controller có thể sử dụng (req.io.emit)
+app.use((req, res, next) => {
+    req.io = io;
+    next();
+});
+
 // Log check request để dễ debug
 app.use((req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] [Product-Service] ${req.method} -> ${req.url}`);
@@ -73,8 +88,6 @@ app.use((req, res, next) => {
 
 // --- 7. Đăng ký Swagger UI ---
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-
-// BỔ SUNG: Endpoint phụ để phục vụ kiểm tra JSON thô nếu giao diện UI gặp trục trặc thụt lề JSDoc
 app.get('/api-docs-json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.status(200).send(swaggerDocs);
@@ -87,44 +100,46 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/chatbot', chatbotRoutes); 
 
-
-// Bổ sung thêm route này để Uptime Kuma ping không bị 404
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(`
         <div style="text-align: center; margin-top: 50px; font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
             <h1 style="color: #006c49; font-size: 2.5rem;">Demi Mart Product & AI Service</h1>
             <p style="color: #64748b; font-size: 1.2rem;">Hệ thống đang hoạt động xanh mướt! 🚀</p>
-            <div style="margin-top: 20px;">
-                <a href="/api-docs" style="background-color: #006c49; color: white; padding: 12px 24px; border-radius: 10px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(0, 108, 73, 0.2);">Vào Swagger xem API →</a>
-            </div>
         </div>
     `);
 });
 
-// --- 9. Xử lý lỗi tập trung (Bắt lỗi để server không sập) ---
+// --- 9. Xử lý lỗi tập trung ---
 app.use((err, req, res, next) => {
     console.error('❌ Lỗi Server:', err.stack);
     res.status(500).send('Có lỗi xảy ra trên Product Service!');
 });
 
+// --- LẮNG NGHE KẾT NỐI SOCKET ---
+io.on('connection', (socket) => {
+    console.log(`🔗 [Socket] Client đã kết nối: ${socket.id}`);
+    
+    socket.on('disconnect', () => {
+        console.log(`❌ [Socket] Client ngắt kết nối: ${socket.id}`);
+    });
+});
+
 // --- 10. Khởi chạy server ---
-const server = app.listen(PORT, '0.0.0.0', () => {
+// SỬA ĐỔI QUAN TRỌNG: Phải dùng httpServer.listen thay vì app.listen
+httpServer.listen(PORT, '0.0.0.0', () => {
     console.log('===========================================');
-    console.log(`📦 PRODUCT & CHATBOT SERVICE IS RUNNING`);
+    console.log(`📦 PRODUCT, CHATBOT & SOCKET SERVICE IS RUNNING`);
     console.log(`📡 Port: ${PORT}`);
     console.log(`🔗 API Products: http://localhost:${PORT}/api/products`);
-    console.log(`🔗 API Categories: http://localhost:${PORT}/api/categories`);
-    console.log(`🔗 API Chatbot:  http://localhost:${PORT}/api/chatbot`);
-    console.log(`📝 Swagger:      http://localhost:${PORT}/api-docs`);
+    console.log(`🔗 API Nations:  http://localhost:${PORT}/api/nations`);
     console.log('===========================================');
     
-    // Start periodic description generation scheduler
     schedulePeriodicDescriptionGeneration();
 });
 
-// Bắt lỗi nếu cổng bị chiếm hoặc lỗi hệ thống
-server.on('error', (e) => {
+// Bắt lỗi nếu cổng bị chiếm
+httpServer.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
         console.error(`❌ Cổng ${PORT} đã bị chiếm dụng!`);
     } else {
