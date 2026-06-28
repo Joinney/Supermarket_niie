@@ -2,7 +2,6 @@ import express from 'express';
 import { 
     getAllCategories, 
     searchCategories, 
-    getAllCountries,
     getParentCategories,
     createParentCategory,
     updateParentCategory,
@@ -23,9 +22,6 @@ const router = express.Router();
 // Route cho Danh mục
 router.get('/tree', getAllCategories); // Lấy cây danh mục
 router.get('/search', searchCategories); // Tìm kiếm danh mục
-
-// Route cho Quốc gia (Dropdown bộ lọc)
-router.get('/countries', getAllCountries); 
 
 // Route cho Admin quản lý danh mục (cha)
 router.get('/parents', getParentCategories);

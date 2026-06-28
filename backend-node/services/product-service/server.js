@@ -5,7 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
-import unitRoutes from './routes/unitRoutes.js';
 
 // --- 1. Cấu hình ES Module ---
 const __filename = fileURLToPath(import.meta.url);
@@ -18,11 +17,12 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 const PORT = process.env.PORT_PRODUCT || 5002;
 
 // --- 3. Import Routes ---
+import nationalRoutes from './routes/nationalRoutes.js';
+import unitRoutes from './routes/unitRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js'; 
 import categoryRoutes from './routes/categoryRoutes.js';
 import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
-
 const app = express();
 
 // --- 4. CẤU HÌNH SWAGGER OPTIONS ---
@@ -36,7 +36,7 @@ const swaggerOptions = {
         },
         servers: [{ url: `http://localhost:${PORT}` }],
     },
-    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js', './routes/categoryRoutes.js', './routes/unitRoutes.js'], 
+    apis: ['./server.js', './routes/productRoutes.js', './routes/chatbotRoutes.js', './routes/categoryRoutes.js', './routes/unitRoutes.js', './routes/nationRoutes.js'], 
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
@@ -81,6 +81,7 @@ app.get('/api-docs-json', (req, res) => {
 });
 
 // --- 8. Đăng ký Route API ---
+app.use('/api/nations', nationalRoutes);
 app.use('/api/products/units', unitRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);

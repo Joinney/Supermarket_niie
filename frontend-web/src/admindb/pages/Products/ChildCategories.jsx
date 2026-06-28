@@ -40,6 +40,7 @@ export default function ChildCategories() {
     try {
       const apiUrl =
         import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+
       const res = await axios.get(
         `${apiUrl}/api/categories/children?country=${selectedCountry}`,
       );
@@ -51,10 +52,9 @@ export default function ChildCategories() {
       setParentCategories(resParents.data.data || []);
 
       if (countries.length === 0) {
-        const resCountries = await axios.get(
-          `${apiUrl}/api/categories/countries`,
-        );
-        setCountries(resCountries.data);
+        const resNations = await axios.get(`${apiUrl}/api/nations`);
+
+        setCountries(resNations.data.data || []);
       }
     } catch (error) {
       console.error("Lỗi tải dữ liệu:", error);

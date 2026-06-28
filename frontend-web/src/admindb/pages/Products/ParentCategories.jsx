@@ -41,10 +41,22 @@ export default function ParentCategories() {
       try {
         const apiUrl =
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        const res = await axios.get(`${apiUrl}/api/categories/countries`);
-        setCountries(res.data);
+
+        // 1. Đổi endpoint sang api/nations
+        const res = await axios.get(`${apiUrl}/api/nations`);
+
+        console.log("Dữ liệu quốc gia trả về:", res.data);
+
+        if (res.data && res.data.success) {
+          setCountries(res.data.data);
+        } else if (Array.isArray(res.data)) {
+          setCountries(res.data);
+        } else {
+          setCountries([]);
+        }
       } catch (error) {
         console.error("Lỗi tải danh sách quốc gia:", error);
+        setCountries([]);
       }
     };
     fetchCountries();

@@ -95,34 +95,9 @@ export const searchCategories = async (req, res) => {
     }
 };
 
-// =========================================================================
-// 3. LẤY DANH SÁCH QUỐC GIA (DÙNG CHO DROPDOWN BỘ LỌC ADMIN)
-// =========================================================================
-export const getAllCountries = async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                ma_quoc_gia, 
-                ten_quoc_gia, 
-                dinh_dang_vung, 
-                ma_tien_te, 
-                bieu_tuong_tien, 
-                ty_gia, 
-                bieu_tuong_co
-            FROM public.danh_muc_quoc_gia 
-            WHERE trang_thai = true 
-            ORDER BY ten_quoc_gia ASC;
-        `;
-        const { rows: countries } = await pool.query(query);
-        res.status(200).json(countries);
-    } catch (error) {
-        console.error("❌ Lỗi API getAllCountries:", error.message);
-        res.status(500).json({ error: "Gặp sự cố hệ thống, không thể tải danh sách quốc gia." });
-    }
-};
 
 // =========================================================================
-// 4. LẤY DANH SÁCH DANH MỤC CHA DÀNH CHO ADMIN (CÓ LỌC QUỐC GIA)
+// 3. LẤY DANH SÁCH DANH MỤC CHA DÀNH CHO ADMIN (CÓ LỌC QUỐC GIA)
 // =========================================================================
 export const getParentCategories = async (req, res) => {
     try {
@@ -152,7 +127,7 @@ export const getParentCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 5. THÊM MỚI DANH MỤC CHA (ĐÃ SỬA TÊN HÀM Ở ĐÂY)
+// 4. THÊM MỚI DANH MỤC CHA (ĐÃ SỬA TÊN HÀM Ở ĐÂY)
 // =========================================================================
 export const createParentCategory = async (req, res) => {
     try {
@@ -187,7 +162,7 @@ export const createParentCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 6. XÓA MỀM DANH MỤC CHA (CÓ BẢO VỆ DỮ LIỆU)
+// 5. XÓA MỀM DANH MỤC CHA (CÓ BẢO VỆ DỮ LIỆU)
 // =========================================================================
 export const deleteParentCategory = async (req, res) => {
     try {
@@ -227,7 +202,7 @@ export const deleteParentCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 7. KHÔI PHỤC DANH MỤC CHA ĐÃ XÓA MỀM (RESTORE)
+// 6. KHÔI PHỤC DANH MỤC CHA ĐÃ XÓA MỀM (RESTORE)
 // =========================================================================
 export const restoreParentCategory = async (req, res) => {
     try {
@@ -243,7 +218,7 @@ export const restoreParentCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 8. CẬP NHẬT DANH MỤC CHA
+// 7. CẬP NHẬT DANH MỤC CHA
 // =========================================================================
 export const updateParentCategory = async (req, res) => {
     try {
@@ -273,7 +248,7 @@ export const updateParentCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 9. XÓA VĨNH VIỄN DANH MỤC CHA (HARD DELETE)
+// 8. XÓA VĨNH VIỄN DANH MỤC CHA (HARD DELETE)
 // =========================================================================
 export const hardDeleteParentCategory = async (req, res) => {
     try {
@@ -294,7 +269,7 @@ export const hardDeleteParentCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 10. LẤY DANH SÁCH DANH MỤC CON (CÓ LỌC THEO QUỐC GIA & CHA)
+// 9. LẤY DANH SÁCH DANH MỤC CON (CÓ LỌC THEO QUỐC GIA & CHA)
 // =========================================================================
 export const getChildCategories = async (req, res) => {
     try {
@@ -321,7 +296,7 @@ export const getChildCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 11. THÊM MỚI DANH MỤC CON
+// 10. THÊM MỚI DANH MỤC CON
 // =========================================================================
 export const createChildCategory = async (req, res) => {
     try {
@@ -342,7 +317,7 @@ export const createChildCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 12. XÓA DANH MỤC CON (SOFT DELETE)
+// 11. XÓA DANH MỤC CON (SOFT DELETE)
 // =========================================================================
 export const deleteChildCategory = async (req, res) => {
     try {
@@ -358,7 +333,7 @@ export const deleteChildCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 13. XÓA VĨNH VIỄN DANH MỤC CON (HARD DELETE)
+// 12. XÓA VĨNH VIỄN DANH MỤC CON (HARD DELETE)
 // =========================================================================
 export const hardDeleteChildCategory = async (req, res) => {
     try {
@@ -384,7 +359,7 @@ export const hardDeleteChildCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 14. CẬP NHẬT DANH MỤC CON
+// 13. CẬP NHẬT DANH MỤC CON
 // =========================================================================
 export const updateChildCategory = async (req, res) => {
     try {
@@ -411,7 +386,7 @@ export const updateChildCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 15. KHÔI PHỤC DANH MỤC CON (RESTORE)
+// 14. KHÔI PHỤC DANH MỤC CON (RESTORE)
 // =========================================================================
 export const restoreChildCategory = async (req, res) => {
     try {

@@ -31,9 +31,7 @@ export default function ChildCategoryForm() {
     const fetchInitData = async () => {
       try {
         // 1. Lấy danh sách quốc gia
-        const resCountries = await axios.get(
-          `${apiUrl}/api/categories/countries`,
-        );
+        const res = await axios.get(`${apiUrl}/api/nations`);
         setCountries(resCountries.data);
 
         // 2. Lấy danh sách danh mục cha (để đưa vào dropdown)

@@ -52,11 +52,13 @@ import ChildCategories from "./admindb/pages/Products/ChildCategories";
 import ChildCategoryForm from "./admindb/pages/Products/ChildCategoryForm";
 import Units from "./admindb/pages/Products/Units";
 import UnitForm from "./admindb/pages/Products/UnitsForm";
+import Nation from "./admindb/pages/Products/National";
+import NationalForm from "./admindb/pages/Products/NationalForm";
 
 // Import các Form/Page thực tế từ Warehouse
 import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
 import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
-import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx"; // 👈 Đã thêm dòng import trang chi tiết phiếu nhập
+import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
 import NhapKhoForm from "./admindb/pages/Warehouse/danhsachkho/NhapKhoForm.jsx";
 import TaoKhoForm from "./admindb/pages/Warehouse/danhsachkho/TaoKhoForm.jsx";
 import LoHang from "./admindb/pages/Warehouse/LoHang.jsx";
@@ -273,6 +275,21 @@ const AppRoutes = () => (
         <Route path="units" element={<Units />} />
         <Route path="/admin/products/units/create" element={<UnitForm />} />
         <Route path="/admin/products/units/edit/:id" element={<UnitForm />} />
+      </Route>
+
+      {/* 🌍 Bọc Quản Lý Cửa Hàng / Quốc Gia */}
+      <Route
+        path="nations"
+        element={
+          <AdminModuleGuard moduleName="Quốc Gia">
+            <Outlet />
+          </AdminModuleGuard>
+        }
+      >
+        <Route index element={<Navigate to="list" replace />} />
+        <Route path="list" element={<Nation />} />
+        <Route path="create" element={<NationalForm />} />
+        <Route path="edit/:id" element={<NationalForm />} />
       </Route>
 
       {/* 📄 Bọc Đơn Hàng */}
