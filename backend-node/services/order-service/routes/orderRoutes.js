@@ -1,17 +1,26 @@
 import express from 'express';
-import { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin } from '../controllers/orderController.js';
+import { 
+  getShippingFee, 
+  placeOrder, 
+  updateInternalOrderStatus, 
+  getOrderStatistics, 
+  getAllOrdersAdmin,
+  getMyOrders 
+} from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { calculateShipping } from '../controllers/storeController.js';
 
 const router = express.Router();
 
-// Không còn một dòng comment Swagger nào ở đây nữa, tránh bị Prettier phá lề
+// Các tuyến đường xử lý Đơn hàng & Vận chuyển (POST)
 router.post('/shipping-fee', protect, getShippingFee);
 router.post('/place-order', protect, placeOrder);
 router.post('/internal/update-status', updateInternalOrderStatus);
 router.post('/shipping/calc', calculateShipping);
 
+// Các tuyến đường truy vấn Dữ liệu (GET)
 router.get('/admin/statistics', protect, getOrderStatistics);
 router.get('/', getAllOrdersAdmin);
+router.get('/my-orders', protect, getMyOrders); // Sử dụng thống nhất middleware 'protect'
 
 export default router;

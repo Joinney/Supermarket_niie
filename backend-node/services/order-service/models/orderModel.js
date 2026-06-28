@@ -132,3 +132,21 @@ export const create = async (userId, data) => {
     }
   }
 };
+
+/**
+ * Lấy toàn bộ danh sách đơn hàng của 1 User kèm chi tiết từng món hàng bên trong
+ */
+export const getByUserId = async (userId) => {
+  // 1. Lấy danh sách các đơn hàng gốc
+  const query = `SELECT * FROM orders WHERE user_id = $1 ORDER BY id DESC;`;
+  const res = await db.query(query, [userId]);
+  const orders = res.rows;
+
+  // 2. Lặp nhanh qua từng đơn để bốc các sản phẩm (order_items) nhét vào mảng items
+  for (let order of orders) {
+    const itemRes = await db.query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+    order.items = itemRes.rows;
+  }
+  
+  return orders;
+};
