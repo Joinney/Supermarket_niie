@@ -142,11 +142,11 @@ const placeOrder = async (req, res) => {
         paypal_order_id: req.body.paypal_order_id || null
     };
 
-// 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE
+    // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công tại Order-Service với ID:", order.id);
 
-// ========================================================
+    // ========================================================
     // 🌟 🚀 CƠ CHẾ SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD & CÙNG TÊN CỘT)
     // ========================================================
     const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
@@ -156,14 +156,12 @@ const placeOrder = async (req, res) => {
         const safeOrderId = req.body.paypal_order_id || `GATEWAY_${order.ma_don_hang}`;
         const safeTxnId = req.body.paypal_transaction_id || `TXN_${Date.now()}`;
 
-        // Đóng gói CHÍNH XÁC các cột trùng tên giữa bảng orders và payment_transactions
         const sharePayload = {
           ma_don_hang: String(order.ma_don_hang),
           so_tien: Number(finalTotal),
           phuong_thuc_thanh_toan: methodUpper,
           trang_thai_thanh_toan: String(req.body.trang_thai_thanh_toan || 'PENDING'),
           
-          // 2 tham số mồi để vượt qua lớp validation của payment_routes.rb
           paypal_order_id: String(safeOrderId),
           capture_data: {
             status: 'COMPLETED',
@@ -172,7 +170,6 @@ const placeOrder = async (req, res) => {
           }
         };
 
-        // 🎯 GỌI NỘI BỘ DOCKER: Dùng tên container 'demi_payment_service' và port 5004
         await axios.post('http://demi_payment_service:5004/api/paypal-capture', sharePayload);
         console.log(`🔒 [MICROSERVICES SHARE]: Đã chia sẻ đơn ${order.ma_don_hang} (${methodUpper}) sang Payment-Service!`);
       } catch (syncErr) {
@@ -229,28 +226,25 @@ const updateInternalOrderStatus = async (req, res) => {
 // ========================================================
 const getOrderStatistics = async (req, res) => {
   try {
-    // 1. Kiểm tra an ninh: Chỉ Admin, Manager, Staff mới được xem
     if (!req.user || !['Admin', 'Manager', 'Staff'].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập dữ liệu thống kê!" });
     }
 
-    // 2. Chạy song song 4 câu truy vấn SQL để tối ưu tốc độ phản hồi (Non-blocking)
+    // 🛠️ ĐÃ FIX: Chuyển toàn bộ tên cột 'status' -> 'trang_thai_don_hang', 'created_at' -> 'ngay_tao' để khớp Database
     const queryTotal = `SELECT COUNT(*) as total FROM public.orders`;
-    const queryDelivered = `SELECT COUNT(*) as delivered FROM public.orders WHERE status = 'Đã giao' OR trang_thai_thanh_toan = 'COMPLETED'`;
-    const queryPending = `SELECT COUNT(*) as pending FROM public.orders WHERE status = 'Chờ xử lý' OR status IS NULL`;
-    const queryToday = `SELECT COUNT(*) as today FROM public.orders WHERE created_at >= CURRENT_DATE`;
-    const queryRevenue = `SELECT SUM(tong_thanh_toan) as revenue FROM public.orders WHERE trang_thai_thanh_toan = 'COMPLETED' OR status = 'Đã giao'`;
+    const queryDelivered = `SELECT COUNT(*) as delivered FROM public.orders WHERE trang_thai_don_hang = 'Đã giao' OR trang_thai_thanh_toan = 'COMPLETED'`;
+    const queryPending = `SELECT COUNT(*) as pending FROM public.orders WHERE trang_thai_don_hang = 'Chờ xử lý' OR trang_thai_don_hang IS NULL`;
+    const queryToday = `SELECT COUNT(*) as today FROM public.orders WHERE ngay_tao >= CURRENT_DATE`;
+    const queryRevenue = `SELECT SUM(tong_thanh_toan) as revenue FROM public.orders WHERE trang_thai_thanh_toan = 'COMPLETED' OR trang_thai_don_hang = 'Đã giao'`;
     const queryAvg = `SELECT AVG(tong_thanh_toan) as avg_val FROM public.orders WHERE tong_thanh_toan > 0`;
     
-    // Lấy 10 đơn hàng mới nhất
     const queryRecent = `
-      SELECT ma_don_hang, tong_thanh_toan, COALESCE(status, 'Chờ xử lý') as status, TO_CHAR(created_at, 'DD/MM/YYYY') as date
+      SELECT ma_don_hang, tong_thanh_toan, COALESCE(trang_thai_don_hang, 'Chờ xử lý') as status, TO_CHAR(ngay_tao, 'DD/MM/YYYY') as date
       FROM public.orders 
-      ORDER BY created_at DESC 
+      ORDER BY ngay_tao DESC 
       LIMIT 10
     `;
 
-    // Thực thi query thông qua helper db hiện có của bạn
     const executeSql = async (sql) => {
       const res = db.query ? await db.query(sql) : await db.execute(sql);
       return res.rows ? res.rows : res;
@@ -266,7 +260,6 @@ const getOrderStatistics = async (req, res) => {
       executeSql(queryRecent)
     ]);
 
-    // Format an toàn các con số trả về Frontend
     const totalOrders = Number(totRes[0]?.total || 0);
     const deliveredOrders = Number(delRes[0]?.delivered || 0);
     const pendingOrders = Number(penRes[0]?.pending || 0);
@@ -287,7 +280,7 @@ const getOrderStatistics = async (req, res) => {
         },
         recent_orders: recRes.map(item => ({
           id: item.ma_don_hang || "DH-N/A",
-          customer: "Khách hàng Demi", // Giấu hoặc join bảng users nếu cần
+          customer: "Khách hàng Demi", 
           date: item.date,
           total: Number(item.tong_thanh_toan).toLocaleString('vi-VN') + ' đ',
           status: item.status
@@ -302,7 +295,7 @@ const getOrderStatistics = async (req, res) => {
 };
 
 // ========================================================
-// 🎯 API MỚI: LẤY DANH SÁCH ĐƠN HÀNG PHÂN TRANG CHO ADMIN
+// 🎯 API 5: LẤY DANH SÁCH ĐƠN HÀNG PHÂN TRANG CHO ADMIN
 // ========================================================
 const getAllOrdersAdmin = async (req, res) => {
   try {
@@ -321,13 +314,11 @@ const getAllOrdersAdmin = async (req, res) => {
       pIdx++;
     }
 
-    // 1. Đếm tổng số đơn hàng phục vụ phân trang
     const countSql = `SELECT COUNT(*) as total FROM public.orders ${whereClause}`;
     const countRes = db.query ? await db.query(countSql, queryParams) : await db.execute(countSql, queryParams);
     const totalItems = parseInt((countRes.rows ? countRes.rows[0] : countRes[0])?.total || 0);
     const totalPages = Math.ceil(totalItems / limit);
 
-    // 2. Lấy dữ liệu đơn hàng khớp chính xác 100% theo tên cột của Thuận
     const dataSql = `
       SELECT 
         id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
@@ -356,5 +347,20 @@ const getAllOrdersAdmin = async (req, res) => {
   }
 };
 
-// Thuận nhớ thêm tên hàm mới vào lệnh export cuối file nhé!
-export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin };
+// ========================================================
+// 🛒 🛠️ ĐÃ BỔ SUNG: API LẤY ĐƠN HÀNG CHO NGƯỜI DÙNG ĐĂNG NHẬP
+// ========================================================
+const getMyOrders = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
+
+    const orders = await Order.getByUserId(userId);
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    console.error("🔥 Lỗi API getMyOrders:", error.message);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi lấy lịch sử đơn hàng cá nhân." });
+  }
+};
+
+export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders };

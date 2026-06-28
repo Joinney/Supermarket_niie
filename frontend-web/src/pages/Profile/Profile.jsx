@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import { orderApi } from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext"; 
 import L from 'leaflet';
 import Cropper from "react-easy-crop";
@@ -62,11 +63,35 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { tab } = useParams();
 
-  const [profile, setProfile] = useState(null); 
-  const [addresses, setAddresses] = useState([]);
+  // 1. ĐƯA CÁC STATE NÀY LÊN TRƯỚC (Bắt buộc phải khai báo trước khi dùng)
   const [activeTab, setActiveTab] = useState("profile");
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
   const [loading, setLoading] = useState(true);
+
+  const [profile, setProfile] = useState(null); 
+  const [addresses, setAddresses] = useState([]);
+  const [ordersList, setOrdersList] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // 2. ĐẶT USEEFFECT NẰM PHÍA DƯỚI BỘ STATE VỪA KHAI BÁO
+  useEffect(() => {
+    if (activeTab === "orders") {
+      const fetchRealOrders = async () => {
+        setLoadingOrders(true);
+        try {
+          const res = await orderApi.get("/orders/my-orders");
+          if (res.data && res.data.success) {
+            setOrdersList(res.data.data || []);
+          }
+        } catch (err) {
+          console.error("Lỗi lấy đơn hàng cá nhân:", err);
+        } finally {
+          setLoadingOrders(false);
+        }
+      };
+      fetchRealOrders();
+    }
+  }, [activeTab]);
 
   const [imageSrc, setImageSrc] = useState(null); 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -621,7 +646,7 @@ export default function ProfilePage() {
                 )}
 
                 {activeTab === "notifications" && <Tabthongbao notifications={notifications} />}
-                {activeTab === "orders" && <Tabdonhang orders={orders} />}
+                {activeTab === "orders" && <Tabdonhang orders={ordersList} />}
                 {activeTab === "vouchers" && <Tabvoucher />}
                 {activeTab === "favorites" && <Tabdathich />}
               </div>
