@@ -6,6 +6,7 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import orderRoutes from './routes/orderRoutes.js';
+import { connectDB } from './configs/mongo/databasemg.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,7 +62,6 @@ const swaggerOptions = {
         },
       },
     },
-    // ĐỊNH NGHĨA ROUTE TRỰC TIẾP TẠI ĐÂY (Bỏ qua bước quét file comment lỗi lề)
     paths: {
       '/api/orders/shipping-fee': {
         post: {
@@ -129,7 +129,7 @@ const swaggerOptions = {
       }
     }
   },
-  apis: [], // Không cần quét file ngoài nữa!
+  apis: [], 
 };
 
 const swaggerDocs = swaggerJSDoc(swaggerOptions);
@@ -166,9 +166,13 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5005;
-app.listen(PORT, () => {
-  console.log(`\n=========================================`);
-  console.log(`✅ Order Service Live: http://localhost:${PORT}`);
-  console.log(`📝 Swagger Docs:       http://localhost:${PORT}/api-docs`);
-  console.log(`=========================================\n`);
+
+// Khởi động kết nối DB trước, sau đó mới lắng nghe HTTP Port
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n=========================================`);
+    console.log(`✅ Order Service Live: http://localhost:${PORT}`);
+    console.log(`📝 Swagger Docs:       http://localhost:${PORT}/api-docs`);
+    console.log(`=========================================\n`);
+  });
 });

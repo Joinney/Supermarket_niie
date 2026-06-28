@@ -1,6 +1,7 @@
 import express from 'express';
 import { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js';
+import { calculateShipping } from '../controllers/storeController.js';
 
 const router = express.Router();
 
@@ -8,8 +9,9 @@ const router = express.Router();
 router.post('/shipping-fee', protect, getShippingFee);
 router.post('/place-order', protect, placeOrder);
 router.post('/internal/update-status', updateInternalOrderStatus);
-router.get('/admin/statistics', protect, getOrderStatistics);
+router.post('/shipping/calc', calculateShipping);
 
+router.get('/admin/statistics', protect, getOrderStatistics);
 router.get('/', getAllOrdersAdmin);
 
 export default router;

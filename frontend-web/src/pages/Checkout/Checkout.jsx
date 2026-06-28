@@ -80,6 +80,40 @@ export default function Checkout() {
   const [selectedPayment, setSelectedPayment] = useState('COD');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
+  const [shippingInfo, setShippingInfo] = useState({
+    fee: 0, timeText: '', storeName: '', loading: false
+  });
+
+  useEffect(() => {
+    const fetchDistanceShipping = async () => {
+      // Kiểm tra xem địa chỉ người dùng chọn đã được nạp tọa độ GPS từ bản đồ chưa
+      if (!address || !address.latitude || !address.longitude) return;
+
+      setShippingInfo(prev => ({ ...prev, loading: true }));
+      try {
+        const response = await orderApi.post('/orders/shipping/calc', { 
+          userLat: address.latitude,
+          userLng: address.longitude
+        });
+
+        if (response.data && response.data.success) {
+          const { shippingFee, estimatedMinutes, distanceKm, nearestStore } = response.data.data;
+          setShippingInfo({
+            fee: shippingFee,
+            timeText: `${estimatedMinutes} phút (${distanceKm}km)`,
+            storeName: nearestStore.name,
+            loading: false
+          });
+        }
+      } catch (error) {
+        console.error("Lỗi API tính cước vận chuyển:", error);
+        setShippingInfo(prev => ({ ...prev, loading: false }));
+      }
+    };
+
+    fetchDistanceShipping();
+  }, [address]); // Hàm tự chạy lại khi người dùng thay đổi địa chỉ nhận hàng
+
   const fetchAddresses = async () => {
     try {
       const res = await authApi.get('/addresses');
@@ -148,7 +182,7 @@ export default function Checkout() {
   }, [address]);
   
   const itemTotal = checkoutCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const shippingFee = selectedShipping ? selectedShipping.cost : 0;
+  const shippingFee = shippingInfo.fee; 
   const xuDiscount = 500;
   const finalTotal = itemTotal + shippingFee - xuDiscount;
 
@@ -184,11 +218,14 @@ export default function Checkout() {
         price: Number(item.price)
       })),
       
-      don_vi_van_chuyen: selectedShipping?.name || 'Giao Hàng Nhanh (Dự phòng)',
+      don_vi_van_chuyen: shippingInfo.storeName || 'Giao hàng siêu thị',
+      tong_khoang_cach_km: shippingInfo.distanceKm || 0,
+      thoi_gian_du_kien_phut: shippingInfo.estimatedMinutes || 0,
+      tong_thoi_gian_du_kien_phut: shippingInfo.estimatedMinutes || 0,
       tong_tien_hang: itemTotal,
       phi_van_chuyen: shippingFee,
       so_tien_giam_gia: xuDiscount,
-      tong_thanh_toan: finalTotal,
+      tong_thanh_toan: finalTotal,  
       phuong_thuc_thanh_toan: selectedPayment,
       ...extraPaymentInfo
     };
@@ -489,7 +526,22 @@ export default function Checkout() {
             <h2 className="font-black italic text-slate-900 border-b pb-2 tracking-tight">TỔNG THANH TOÁN</h2>
             <div className="space-y-3 font-bold text-sm text-slate-600">
               <div className="flex justify-between"><span>Tổng tiền hàng</span> <span className="text-slate-900 font-semibold">{itemTotal.toLocaleString()}đ</span></div>
-              <div className="flex justify-between"><span>Phí vận chuyển</span> <span className="text-slate-900 font-semibold">{shippingFee.toLocaleString()}đ</span></div>
+              {/* PHÍ VẬN CHUYỂN ĐỘNG THEO KM VÀ TRỤ SỞ GẦN NHẤT */}
+              <div className="flex flex-col gap-1 border-b border-slate-100 pb-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-bold">Phí vận chuyển</span> 
+                  <span className="text-slate-900 font-black">
+                    {shippingInfo.loading ? (
+                      <Loader2 className="animate-spin inline w-4 h-4 text-[#006c49]"/>
+                    ) : `${shippingInfo.fee.toLocaleString()}đ`}
+                  </span>
+                </div>
+                {shippingInfo.storeName && !shippingInfo.loading && (
+                  <span className="text-[11px] text-[#006c49] font-black italic text-right block bg-emerald-50/60 px-2 py-1 rounded-lg border border-emerald-100/40">
+                    🚀 Giao từ: {shippingInfo.storeName} ({shippingInfo.timeText})
+                  </span>
+                )}
+              </div>
               <div className="flex justify-between text-red-500"><span>Shopee Xu ưu đãi</span> <span>-{xuDiscount.toLocaleString()}đ</span></div>
               <div className="flex justify-between text-lg font-black text-[#006c49] border-t pt-3">
                 <span>TỔNG ĐƠN</span> <span>{finalTotal.toLocaleString()}đ</span>
