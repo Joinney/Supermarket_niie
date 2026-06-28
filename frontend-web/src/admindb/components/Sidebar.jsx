@@ -453,7 +453,7 @@ export default function Sidebar() {
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/units" ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
-                      <span>Quy chuẩn đóng gói</span>
+                      <span>Đóng gói</span>
                     </button>
 
                     {/* 5. Thị trường quốc gia */}
