@@ -16,6 +16,7 @@ L.Icon.Default.mergeOptions({
   iconUrl: iconMarker,
   shadowUrl: iconShadow,
 });
+
 import { 
   User, Mail, Phone, MapPin, Camera, CheckCircle2, Lock, Heart, 
   ChevronRight, Clock, Package, ShieldCheck, CreditCard, 
@@ -80,6 +81,47 @@ const getCroppedImg = (imageSrc, pixelCrop) => {
   });
 };
 
+// --- SUB-COMPONENTS HỖ TRỢ BẢN ĐỒ LEAFLET ---
+function ChangeMapView({ coords }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords && coords.lat && coords.lng) {
+      map.setView([coords.lat, coords.lng], 16);
+      // Buộc bản đồ vẽ lại hoàn chỉnh để tránh lỗi bị xám/vỡ hình khi modal bật tắt
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 200);
+    }
+  }, [coords, map]);
+  return null;
+}
+
+function DraggableMarker({ position, setPosition, onDragEnd }) {
+  const markerRef = useRef(null);
+  
+  const eventHandlers = React.useMemo(() => ({
+    dragend() {
+      const marker = markerRef.current;
+      if (marker != null) {
+        const newLatLng = marker.getLatLng();
+        setPosition({ lat: newLatLng.lat, lng: newLatLng.lng });
+        if (onDragEnd) {
+          onDragEnd(newLatLng.lat, newLatLng.lng);
+        }
+      }
+    },
+  }), [setPosition, onDragEnd]);
+
+  return (
+    <Marker
+      draggable={true}
+      eventHandlers={eventHandlers}
+      position={[position.lat, position.lng]}
+      ref={markerRef}
+    />
+  );
+}
+
 export default function ProfilePage() {
   // --- STATE BẢN ĐỒ ---
   const [markerPos, setMarkerPos] = useState({ lat: 10.762622, lng: 106.660172 }); // Mặc định TP.HCM
@@ -110,9 +152,15 @@ export default function ProfilePage() {
   const [openDropdown, setOpenDropdown] = useState(null); 
   const [searchTerm, setSearchTerm] = useState('');
 
+  // --- STATES GỢI Ý TÌM KIẾM ĐỊA CHỈ THỰC TẾ ---
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
   const provinceRef = useRef(null);
   const districtRef = useRef(null);
   const wardRef = useRef(null);
+  const suggestionRef = useRef(null);
 
   const [addressForm, setAddressForm] = useState({
     receiver_name: "", receiver_phone: "",
@@ -144,21 +192,24 @@ export default function ProfilePage() {
     { title: "Mua sắm", items: mobileTabs.slice(4) }
   ];
 
+  // Đóng các gợi ý và dropdown khi bấm ra bên ngoài khu vực chọn
   useEffect(() => {
     function handleClickOutside(event) {
       if (
         (provinceRef.current && !provinceRef.current.contains(event.target)) &&
         (districtRef.current && !districtRef.current.contains(event.target)) &&
-        (wardRef.current && !wardRef.current.contains(event.target))
+        (wardRef.current && !wardRef.current.contains(event.target)) &&
+        (suggestionRef.current && !suggestionRef.current.contains(event.target))
       ) {
         setOpenDropdown(null);
+        setShowSuggestions(false);
       }
-      
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Sync tab từ thanh URL route params
   useEffect(() => {
     const currentTab = mobileTabs.find(t => t.path === (tab || ""));
     if (currentTab) {
@@ -168,6 +219,7 @@ export default function ProfilePage() {
     }
   }, [tab]);
 
+  // Fetch dữ liệu hồ sơ cá nhân lần đầu tiên bật trang
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -185,13 +237,14 @@ export default function ProfilePage() {
     fetchProfile();
   }, []);
 
+  // Tự động tải danh sách địa chỉ khi chuyển qua tab addresses
   useEffect(() => {
     if (activeTab === "addresses") {
       fetchAddresses();
     }
   }, [activeTab]);
 
-  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL để Render bốc được dữ liệu Tỉnh/Thành
+  // Gọi danh mục dữ liệu Tỉnh/Thành
   useEffect(() => {
     if (isAddressModalOpen) {
       const fetchProvincesGeo = async () => {
@@ -211,6 +264,72 @@ export default function ProfilePage() {
     }
   }, [isAddressModalOpen]);
 
+  // 🔥 THUẬT TOÁN QUÉT CHI TIẾT ĐỊA ĐIỂM TỰ ĐỘNG + KHÓA PHẠM VI THEO TỈNH THÀNH ĐÃ CHỌN
+  useEffect(() => {
+    if (!addressForm.detail_address || addressForm.detail_address.trim().length < 2) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsLoadingSuggestions(true);
+      
+      let searchParams = {
+        q: addressForm.detail_address.trim(),
+        format: "json",
+        limit: 6,
+        addressdetails: 1,
+        "accept-language": "vi",
+        countrycodes: "vn" // Chỉ giới hạn quét khu vực Việt Nam
+      };
+
+      // TỐI ƯU CƠ CHẾ KHÓA PHẠM VI TỈNH THÀNH: chèn thêm tên tỉnh thành vào cụm text tìm kiếm
+      if (addressForm.province_name) {
+        searchParams.q = `${addressForm.detail_address.trim()}, ${addressForm.province_name}`;
+        
+        if (addressForm.province_name.includes("Hồ Chí Minh") || addressForm.province_name.includes("HCM")) {
+          searchParams.viewbox = "10.37,106.36,11.16,107.02"; 
+          searchParams.bounded = 1;
+        } else if (addressForm.province_name.includes("Hà Nội")) {
+          searchParams.viewbox = "20.61,105.28,21.36,106.03";
+          searchParams.bounded = 1;
+        }
+      }
+
+      try {
+        const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+          params: searchParams,
+          headers: { "User-Agent": "DemiMartApp_HighAccuracy/2.0 (dev@demimart.com)" }
+        });
+
+        if (res.data && res.data.length > 0) {
+          setAddressSuggestions(res.data);
+          setShowSuggestions(true);
+        } else {
+          // Fallback tìm mở rộng nếu thắt chặt viewbox chưa tìm ra ngay kết quả
+          const fallbackRes = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+            params: {
+              q: `${addressForm.detail_address.trim()}, ${addressForm.district_name || ''} ${addressForm.province_name || 'Việt Nam'}`,
+              format: "json",
+              limit: 4,
+              "accept-language": "vi"
+            },
+            headers: { "User-Agent": "DemiMartApp_HighAccuracy/2.0" }
+          });
+          setAddressSuggestions(fallbackRes.data || []);
+          setShowSuggestions(fallbackRes.data && fallbackRes.data.length > 0);
+        }
+      } catch (err) {
+        console.error("Lỗi khi kết nối API bản đồ gợi ý:", err);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    }, 600); // Debounce 600ms chống spam và gõ mượt mà hơn
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [addressForm.detail_address, addressForm.province_name, addressForm.district_name]);
+
   const fetchAddresses = async () => {
     try {
       const response = await api.get("/addresses");
@@ -221,15 +340,7 @@ export default function ProfilePage() {
       console.error("Lỗi tải danh sách địa chỉ:", error);
     }
   };
-  function ChangeMapView({ coords }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([coords.lat, coords.lng], 16);
-  }, [coords]);
-  return null;
-}
 
-  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động cho Quận/Huyện
   const selectProvince = async (id, name) => {
     setDistricts([]);
     setWards([]);
@@ -258,7 +369,6 @@ export default function ProfilePage() {
     }
   };
 
-  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động cho Phường/Xã
   const selectDistrict = async (id, name) => {
     setWards([]);
     setAddressForm(prev => ({
@@ -298,6 +408,7 @@ export default function ProfilePage() {
     setEditingAddressId(null);
     setDistricts([]);
     setWards([]);
+    setMarkerPos({ lat: 10.762622, lng: 106.660172 }); // Mặc định tọa độ HCM
     setAddressForm({
       receiver_name: profile?.full_name || "",
       receiver_phone: profile?.phone_number || "",
@@ -309,59 +420,47 @@ export default function ProfilePage() {
     setIsAddressModalOpen(true);
   };
 
-// Tìm tọa độ từ chuỗi địa chỉ (Forward Geocoding)
-  const handleAutoLocate = async (e) => {
-    if (e) e.preventDefault();
+  const handleSelectSuggestion = (suggestion) => {
+    const { lat, lon, display_name, address } = suggestion;
     
-    // Ghép chuỗi từ chi tiết đến tổng quát để API dễ tìm nhất
-    const fullStr = `${addressForm.detail_address}, ${addressForm.ward_name}, ${addressForm.district_name}, ${addressForm.province_name}, Việt Nam`;
-    
-    try {
-      showToast("Đang quét vị trí trên bản đồ...", "success");
-      const res = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullStr)}&limit=1`);
-      
-      if (res.data && res.data.length > 0) {
-        const foundLat = parseFloat(res.data[0].lat);
-        const foundLng = parseFloat(res.data[0].lon);
-        setMarkerPos({ lat: foundLat, lng: foundLng });
-        showToast("Đã ghim vị trí thành công!");
-      } else {
-        // Fallback: Nếu gõ số nhà quá chi tiết API free không tìm ra, thử tìm theo Phường/Xã
-        const fallbackStr = `${addressForm.ward_name}, ${addressForm.district_name}, ${addressForm.province_name}, Việt Nam`;
-        const resFallback = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fallbackStr)}&limit=1`);
-        
-        if (resFallback.data && resFallback.data.length > 0) {
-          setMarkerPos({ lat: parseFloat(resFallback.data[0].lat), lng: parseFloat(resFallback.data[0].lon) });
-          showToast("Chỉ tìm thấy khu vực Phường/Xã. Vui lòng kéo ghim đỏ tới đúng nhà bạn nhé!", "error");
-        }
-      }
-    } catch (err) {
-      console.log("Không tìm thấy tọa độ");
+    let cleanDetailAddress = display_name;
+    if (address) {
+      const road = address.road || address.suburb || address.neighbourhood || "";
+      const house_number = address.house_number || "";
+      cleanDetailAddress = house_number ? `${house_number} ${road}` : road || display_name.split(',')[0];
     }
+
+    setAddressForm(prev => ({
+      ...prev,
+      detail_address: cleanDetailAddress
+    }));
+    
+    setMarkerPos({ lat: parseFloat(lat), lng: parseFloat(lon) });
+    setShowSuggestions(false);
+    showToast("Đã đồng bộ tọa độ không gian bản đồ!");
   };
 
-// Dịch tọa độ thành địa chỉ chi tiết khi người dùng kéo ghim (Reverse Geocoding)
+  // Kéo thả ghim tự động dịch ngược tọa độ độ chính xác cao (Reverse Geocoding)
   const fetchAddressFromCoords = async (lat, lng) => {
     try {
-      const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      const res = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
+        params: { format: "json", lat, lon: lng, zoom: 18, addressdetails: 1, "accept-language": "vi" },
+        headers: { "User-Agent": "DemiMartApp_HighAccuracy/2.0" }
+      });
       if (res.data && res.data.display_name) {
-        // Tách lấy phần số nhà, tên đường (bỏ qua Tỉnh/Huyện đã chọn ở dropdown)
         const addressParts = res.data.display_name.split(', ');
-        // Thường lấy 1-2 thành phần đầu tiên của mảng (số nhà, tên đường)
         const streetAddress = addressParts.slice(0, 2).join(', ');
         
-        // Cập nhật lại ô text địa chỉ chi tiết
         setAddressForm(prev => ({
           ...prev,
           detail_address: streetAddress || res.data.display_name
         }));
       }
     } catch (err) {
-      console.log("Lỗi dịch ngược tọa độ:", err);
+      console.log("Lỗi dịch ngược tọa độ bản đồ:", err);
     }
   };
 
-  // 🔴 ĐÃ SỬA: Chuyển sang gọi API_BASE_URL động khi sửa địa chỉ cũ
   const handleOpenEditModal = async (addr) => {
     setEditingAddressId(addr.address_id);
     setAddressForm({ 
@@ -369,6 +468,16 @@ export default function ProfilePage() {
       ward_code: addr.ward_code || addr.ward_id || "", 
       is_default: Boolean(addr.is_default) 
     });
+    
+    if (addr.latitude && addr.longitude) {
+      setMarkerPos({ 
+        lat: parseFloat(addr.latitude), 
+        lng: parseFloat(addr.longitude) 
+      });
+    } else {
+      setMarkerPos({ lat: 10.762622, lng: 106.660172 });
+    }
+
     setIsAddressModalOpen(true);
 
     if (addr.province_id) {
@@ -389,7 +498,7 @@ export default function ProfilePage() {
     }
   };
 
-const handleSaveAddress = async (e) => {
+  const handleSaveAddress = async (e) => {
     e.preventDefault();
     if (!addressForm.province_id || !addressForm.district_id || !addressForm.ward_code) {
       return alert("Vui lòng chọn đầy đủ danh mục địa chính từ bảng tìm kiếm!");
@@ -401,8 +510,8 @@ const handleSaveAddress = async (e) => {
         province_id: Number(addressForm.province_id),
         district_id: Number(addressForm.district_id),
         ward_id: String(addressForm.ward_code),
-        ward_code: String(addressForm.ward_code), // <--- ĐÃ SỬA: Thêm dấu phẩy ở đây
-        latitude: markerPos.lat,  // 👈 Truyền kinh vĩ độ xuống API
+        ward_code: String(addressForm.ward_code),
+        latitude: markerPos.lat,  
         longitude: markerPos.lng
       };
       
@@ -666,7 +775,7 @@ const handleSaveAddress = async (e) => {
       {/* MODAL NHẬP LIỆU ĐỊA CHÍNH */}
       {isAddressModalOpen && (
         <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-fadeIn">
-          <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-toastIn border border-slate-100">
+          <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden border border-slate-100">
             <div className="p-6 border-b flex justify-between items-center bg-white">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">
                 {editingAddressId ? "Chỉnh sửa vị trí" : "Thêm điểm nhận hàng mới"}
@@ -694,7 +803,7 @@ const handleSaveAddress = async (e) => {
                   className="w-full border p-3 rounded-2xl text-sm flex justify-between items-center bg-[#f8fafc] cursor-pointer hover:border-gray-300 focus:border-[#006c49]"
                 >
                   <span className={`font-bold ${addressForm.province_name ? 'text-slate-800' : 'text-slate-400'}`}>
-                    {addressForm.province_name || '-- Gõ từ khóa tìm Tỉnh / Thành --'}
+                    {addressForm.province_name || '-- Chọn Tỉnh / Thành phố --'}
                   </span>
                   <ChevronDown size={16} className="text-gray-400" />
                 </div>
@@ -741,7 +850,7 @@ const handleSaveAddress = async (e) => {
                           filteredDistricts.map(d => (
                             <div key={d.DistrictID} onClick={() => selectDistrict(d.DistrictID, d.DistrictName)} className="p-2.5 text-sm font-bold hover:bg-emerald-50 hover:text-[#006c49] cursor-pointer transition-all">{d.DistrictName}</div>
                           ))
-                        ) : ( <div className="p-3 text-xs text-slate-400 text-center">Không tìm thấy vùng này</div> )}
+                        ) : ( <div className="p-3 text-xs text-slate-400 text-center">Không tìm thấy dữ liệu</div> )}
                       </div>
                     </div>
                   )}
@@ -771,72 +880,81 @@ const handleSaveAddress = async (e) => {
                           filteredWards.map(w => (
                             <div key={w.WardCode} onClick={() => selectWard(w.WardCode, w.WardName)} className="p-2.5 text-sm font-bold hover:bg-emerald-50 hover:text-[#006c49] cursor-pointer transition-all">{w.WardName}</div>
                           ))
-                        ) : ( <div className="p-3 text-xs text-slate-400 text-center">Không tìm thấy phường xã</div> )}
+                        ) : ( <div className="p-3 text-xs text-slate-400 text-center">Không tìm thấy dữ liệu</div> )}
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <div className="flex justify-between items-end">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Địa chỉ chi tiết (Số nhà, thôn, đường)</label>
-                  {/* Nút bấm để kích hoạt dò tìm vị trí trên map giống Shopee */}
-                  <button 
-                    type="button" 
-                    onClick={handleAutoLocate}
-                    disabled={!addressForm.province_name || !addressForm.district_name}
-                    className="text-[9px] bg-emerald-50 text-[#006c49] px-2 py-1 rounded-lg font-bold uppercase hover:bg-[#006c49] hover:text-white transition-all disabled:opacity-50"
-                  >
-                    📍 Tìm trên bản đồ
-                  </button>
+              {/* Ô NHẬP ĐỊA CHỈ CHI TIẾT TỰ ĐỘNG HIỂN THỊ GỢI Ý (ĐÃ KHÓA PHẠM VI TỈNH THÀNH) */}
+              <div className="space-y-1 relative" ref={suggestionRef}>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Số nhà, tên đường chi tiết</label>
+                <div className="relative flex items-center">
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder={addressForm.province_name ? `Nhập địa chỉ thuộc ${addressForm.province_name}...` : "Vui lòng chọn Tỉnh/Thành trước để định vị..."}
+                    className="w-full bg-[#f8fafc] border border-slate-100 p-3 rounded-2xl text-sm font-bold outline-none focus:border-[#006c49] transition-all pr-10" 
+                    value={addressForm.detail_address} 
+                    onChange={e => setAddressForm({...addressForm, detail_address: e.target.value})}
+                    onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
+                  />
+                  {isLoadingSuggestions && (
+                    <div className="absolute right-3">
+                      <Loader2 size={16} className="animate-spin text-[#006c49]" />
+                    </div>
+                  )}
                 </div>
-                
-                <textarea 
-                  required 
-                  className="w-full bg-[#f8fafc] border border-slate-100 p-3.5 rounded-2xl text-sm font-bold outline-none focus:border-[#006c49] transition-all h-20 resize-none" 
-                  placeholder="Ví dụ: Số 12, Ngõ 34, Đường ABC..."
-                  value={addressForm.detail_address} 
-                  onChange={e => setAddressForm({...addressForm, detail_address: e.target.value})} 
-                  // Bỏ onBlur ở đây đi để tránh gọi API liên tục gây lag
-                />
+
+                {/* MENU THẢ XUỐNG HIỂN THỊ GỢI Ý ĐỊA CHỈ CHI TIẾT */}
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <div className="absolute z-[10007] w-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-56">
+                    <div className="overflow-y-auto no-scrollbar">
+                      {addressSuggestions.map((suggestion, index) => (
+                        <div 
+                          key={index} 
+                          onClick={() => handleSelectSuggestion(suggestion)} 
+                          className="p-3 text-xs font-bold hover:bg-emerald-50 hover:text-[#006c49] cursor-pointer border-b border-slate-50 last:border-none transition-all flex items-start gap-2 text-left"
+                        >
+                          <MapPin size={14} className="mt-0.5 text-[#006c49] shrink-0" />
+                          <span className="text-slate-700 leading-normal">{suggestion.display_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* KHU VỰC BẢN ĐỒ CHỌN TỌA ĐỘ */}
-              {addressForm.province_name && addressForm.district_name && (
-                <div className="space-y-1.5 pt-2 animate-fadeIn">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1">
-                      📍 Kéo thả ghim đỏ để tinh chỉnh vị trí nhà bạn
-                    </label>
-                    <span className="text-[9px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500">
-                      {markerPos.lat.toFixed(5)}, {markerPos.lng.toFixed(5)}
-                    </span>
-                  </div>
-                  
-                  <div className="w-full h-56 rounded-2xl overflow-hidden border border-slate-200 relative z-10 shadow-inner">
-                    <MapContainer center={[markerPos.lat, markerPos.lng]} zoom={16} style={{ height: "100%", width: "100%" }}>
-                      <ChangeMapView coords={markerPos} />
-                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                      <Marker 
-                        position={[markerPos.lat, markerPos.lng]} 
-                        draggable={true}
-                        eventHandlers={{
-                          dragend: (e) => {
-                            const marker = e.target;
-                            const position = marker.getLatLng();
-                            // 1. Lưu tọa độ mới
-                            setMarkerPos({ lat: position.lat, lng: position.lng });
-                            // 2. Dịch ngược tọa độ ra địa chỉ text và điền vào form
-                            fetchAddressFromCoords(position.lat, position.lng);
-                          }
-                        }}
-                      />
-                    </MapContainer>
-                  </div>
+              {/* KHỐI HIỂN THỊ BẢN ĐỒ ESRI ĐỘ NÉT CAO (CẬP NHẬT TỪ FILE 2) */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono bg-slate-50 p-2 rounded-lg border border-dashed">
+                  <span>Hệ tọa độ vệ tinh WGS84:</span>
+                  <span>{markerPos.lat.toFixed(5)}, {markerPos.lng.toFixed(5)}</span>
                 </div>
-              )}
-              <div className="flex items-center justify-between pt-1">
+                <div className="w-full h-56 rounded-2xl overflow-hidden border relative z-10 mt-1">
+                  <MapContainer 
+                    center={[markerPos.lat, markerPos.lng]} 
+                    zoom={16} 
+                    scrollWheelZoom={false} 
+                    className="w-full h-full"
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.esri.com/">Esri</a>, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                    />
+                    <ChangeMapView coords={markerPos} />
+                    <DraggableMarker 
+                      position={markerPos} 
+                      setPosition={setMarkerPos} 
+                      onDragEnd={(lat, lng) => fetchAddressFromCoords(lat, lng)}
+                    />
+                  </MapContainer>
+                </div>
+              </div>
+
+              {/* PHÂN LOẠI & MẶC ĐỊNH */}
+              <div className="flex justify-between items-center pt-1">
                 <div className="flex gap-2">
                   {['home', 'office'].map(type => (
                     <button key={type} type="button" onClick={() => setAddressForm({...addressForm, address_type: type})} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${addressForm.address_type === type ? 'bg-[#006c49] text-white border-[#006c49]' : 'bg-white text-slate-400 border-slate-100'}`}>
@@ -845,7 +963,7 @@ const handleSaveAddress = async (e) => {
                   ))}
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer group">
-                  <input type="checkbox" className="hidden" checked={addressForm.is_default} onChange={e => setAddressForm({...addressForm, is_default: e.target.checked})} />
+                  <input type="checkbox" className="hidden" checked={addressForm.is_default} disabled={addresses.length === 0 && addressForm.is_default} onChange={e => setAddressForm({...addressForm, is_default: e.target.checked})} />
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${addressForm.is_default ? 'bg-[#006c49] border-[#006c49]' : 'border-slate-200'}`}>
                     {addressForm.is_default && <CheckCircle2 size={12} className="text-white"/>}
                   </div>
@@ -853,6 +971,7 @@ const handleSaveAddress = async (e) => {
                 </label>
               </div>
 
+              {/* BUTTONS ACTION */}
               <div className="flex gap-3 pt-3 border-t">
                 <button type="button" onClick={() => setIsAddressModalOpen(false)} className="flex-1 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider text-slate-400 hover:bg-slate-50">Hủy</button>
                 <button type="submit" className="flex-1 bg-[#006c49] text-white py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-wider shadow-md">Lưu dữ liệu</button>
@@ -881,7 +1000,7 @@ const handleSaveAddress = async (e) => {
 
       {/* TOAST SYSTEM */}
       {toast.show && (
-        <div className="fixed top-20 md:top-6 right-4 left-4 md:left-auto z-[10002] animate-toastIn">
+        <div className="fixed top-20 md:top-6 right-4 left-4 md:left-auto z-[10009] animate-toastIn">
           <div className={`bg-white border-l-4 ${toast.type === 'success' ? 'border-[#006c49]' : 'border-red-500'} shadow-2xl rounded-xl p-3 flex items-center gap-3`}>
             {toast.type === 'error' ? <X size={18} className="text-red-500" /> : <CheckCircle2 size={18} className="text-[#006c49]" />}
             <p className="text-xs font-bold">{toast.message}</p>
@@ -912,7 +1031,7 @@ const handleSaveAddress = async (e) => {
                   {group.items.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => navigate(item.path ? `/profile/${item.path}` : '/profile')}
+                      onClick={() => { setActiveTab(item.id); navigate(item.path ? `/profile/${item.path}` : '/profile'); }}
                       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all ${activeTab === item.id ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}
                     >
                       <span className={activeTab === item.id ? "text-white" : "text-slate-300"}>{item.icon}</span>
@@ -960,7 +1079,7 @@ const handleSaveAddress = async (e) => {
               {mobileTabs.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => navigate(item.path ? `/profile/${item.path}` : '/profile')}
+                  onClick={() => { setActiveTab(item.id); navigate(item.path ? `/profile/${item.path}` : '/profile'); }}
                   className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase border shadow-sm ${activeTab === item.id ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}
                 >
                   {item.icon} {item.label}
@@ -1006,7 +1125,7 @@ const handleSaveAddress = async (e) => {
                         </div>
                         <div className="grid grid-cols-3 items-center gap-4">
                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Email</label>
-                          <input type="email" value={profile.email || ""} onChange={(e) => setProfile({ ...profile, email: e.target.value })} className="col-span-2 bg-[#f8fafc] p-3.5 rounded-xl border border-slate-100 font-bold text-slate-800 text-sm focus:border-[#006c49] outline-none" />
+                          <input disabled type="email" value={profile.email || ""} className="col-span-2 bg-slate-50 p-3.5 rounded-xl border border-slate-100 font-bold text-slate-400 text-sm cursor-not-allowed outline-none" />
                         </div>
                         <div className="grid grid-cols-3 items-center gap-4">
                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Số điện thoại</label>
@@ -1046,7 +1165,7 @@ const handleSaveAddress = async (e) => {
                   </div>
                 )}
 
-                {/* --- TAB 2: SỔ ĐỊA CHỈ --- */}
+                {/* --- TAB 2: SỔ ĐIỂM ĐỊA CHỈ --- */}
                 {activeTab === "addresses" && (
                   <div className="space-y-6 animate-fadeIn">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-4 text-left">
@@ -1075,11 +1194,19 @@ const handleSaveAddress = async (e) => {
                                 <span className="font-black text-slate-900 text-sm">{addr.receiver_name}</span>
                                 <span className="text-slate-200 hidden sm:inline">|</span>
                                 <span className="text-[#006c49] bg-emerald-50 px-2.5 py-0.5 rounded-lg text-xs font-bold font-mono tracking-wide">{addr.receiver_phone}</span>
+                                <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded border ${addr.address_type === 'home' ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-amber-50 border-amber-100 text-amber-600'}`}>
+                                  {addr.address_type === 'home' ? 'Nhà riêng' : 'Văn phòng'}
+                                </span>
                                 {Boolean(addr.is_default) && <span className="text-[9px] bg-red-50 text-red-500 px-2 py-0.5 rounded-md border border-red-100 font-black uppercase tracking-wider">Mặc định</span>}
                               </div>
                               <div className="space-y-0.5">
                                 <p className="text-xs text-slate-600 font-semibold leading-relaxed">{addr.detail_address}</p>
                                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest"><span className="text-slate-300">📍</span> {`${addr.ward_name} • ${addr.district_name} • ${addr.province_name}`}</p>
+                                {addr.latitude && addr.longitude && (
+                                  <span className="text-[10px] font-mono bg-slate-100 text-slate-400 px-2 py-0.5 rounded border border-dashed block w-max mt-1">
+                                    GPS: {parseFloat(addr.latitude).toFixed(4)}, {parseFloat(addr.longitude).toFixed(4)}
+                                  </span>
+                                )}
                               </div>
                             </div>
 
