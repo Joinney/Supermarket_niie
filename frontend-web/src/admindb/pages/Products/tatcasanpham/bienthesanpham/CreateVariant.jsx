@@ -61,6 +61,9 @@ export default function AdminCreateVariant() {
   const [newAttrName, setNewAttrName] = useState("");
   const [newValInputs, setNewValInputs] = useState({});
 
+  // Chế độ Ma trận: "group" (Nhóm thuộc tính) hoặc "single" (Thuộc tính đơn)
+  const [matrixType, setMatrixType] = useState("group");
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -121,10 +124,9 @@ export default function AdminCreateVariant() {
             },
           );
 
+          let targetVar = null;
           if (variantId && variantsList.length > 0) {
-            const targetVar = variantsList.find(
-              (v) => v.ma_bien_the === variantId,
-            );
+            targetVar = variantsList.find((v) => v.ma_bien_the === variantId);
             if (targetVar && targetVar.thuoc_tinh) {
               dynamicMatrix.forEach((attr) => {
                 if (targetVar.thuoc_tinh[attr.name]) {
@@ -140,6 +142,17 @@ export default function AdminCreateVariant() {
             setAvailableAttributes((prev) =>
               prev.length > 0 ? prev : dynamicMatrix,
             );
+          }
+
+          if (
+            dynamicMatrix.length === 1 &&
+            dynamicMatrix[0].name === "ten_bien_the"
+          ) {
+            setMatrixType("single");
+          } else if (dynamicMatrix.length <= 1) {
+            setMatrixType("single");
+          } else {
+            setMatrixType("group");
           }
 
           const comboText = dynamicMatrix
@@ -189,6 +202,7 @@ export default function AdminCreateVariant() {
   }, []);
 
   const updateVariantNameSuggestion = (productTitle, updatedAttributes) => {
+    if (matrixType === "single") return;
     const comboText = updatedAttributes
       .map((attr) => attr.selected)
       .filter(Boolean)
@@ -378,16 +392,23 @@ export default function AdminCreateVariant() {
   useEffect(() => {
     if (matchedVariant) {
       setEditSku(matchedVariant.sku || "");
+
       setEditPrice(matchedVariant.gia_ban_le || 0);
+
       setEditStock(matchedVariant.ton_kho || matchedVariant.so_luong_ton || 0);
+
       setEditUnit(matchedVariant.ten_don_vi || units[0]?.ten_don_vi || "Chai");
+
+      setEditVariantName(matchedVariant.ten_bien_the || "");
 
       const specificMedia = productMedia.find(
         (m) => m.ma_bien_the === matchedVariant.ma_bien_the,
       );
+
       const specificImgUrl = specificMedia
         ? specificMedia.duong_dan_url
         : matchedVariant.hinh_anh_url || matchedVariant.duong_dan_url;
+
       setVariantImageUrl(specificImgUrl || parentProductImage || "");
 
       if (variantId !== matchedVariant.ma_bien_the) {
@@ -399,15 +420,20 @@ export default function AdminCreateVariant() {
     } else {
       if (!location.state?.preserveMatrix) {
         setEditPrice(0);
+
         setEditStock(0);
       }
+
       setVariantImageUrl(parentProductImage || "");
 
-      if (availableAttributes.length > 0) {
+      if (availableAttributes.length > 0 && matrixType === "group") {
         const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+
         const attrParts = availableAttributes
+
           .map((a) => {
             if (!a.selected) return "";
+
             return a.selected
               .normalize("NFD")
               .replace(/[\u0300-\u036f]/g, "")
@@ -417,15 +443,28 @@ export default function AdminCreateVariant() {
           })
           .filter(Boolean)
           .join("-");
+
         setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
+      } else if (matrixType === "single" && variantName) {
+        const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+
+        const namePart = variantName
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, "")
+          .substring(0, 4)
+          .toUpperCase();
+
+        setEditSku(`SKU-${idSuffix}-${namePart}`);
       } else {
         setEditSku("");
       }
 
-      if (variantId && existingVariants.length > 1) {
+      if (variantId) {
         navigate(`/admin/products/create-variant/${id}`, {
           replace: true,
-          state: location.state,
+
+          state: { ...location.state, preserveMatrix: true },
         });
       }
     }
@@ -439,7 +478,8 @@ export default function AdminCreateVariant() {
     location.state,
     availableAttributes,
     units,
-    existingVariants,
+    matrixType,
+    variantName,
   ]);
 
   const handleLocalImageUpload = async (e) => {
@@ -700,6 +740,30 @@ export default function AdminCreateVariant() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // 🌟 NÂNG CẤP BẢO MẬT: Xử lý chuyển đổi chế độ ma trận kèm theo ràng buộc bắt buộc xóa sạch dữ liệu
+  const handleMatrixTypeChange = (e) => {
+    const nextType = e.target.value;
+
+    // Nếu chuyển sang Đơn khi đang có các Group thuộc tính hiện hành
+    if (matrixType === "group" && availableAttributes.length > 0) {
+      alert(
+        "🛑 Ràng buộc cấu hình: Bạn đang chạy ma trận 'Nhóm thuộc tính'. Hãy xóa tất cả các nhóm thuộc tính hiện tại bên dưới trước khi đổi sang chế độ 'Thuộc tính đơn'!",
+      );
+      return;
+    }
+
+    // Nếu chuyển sang Nhóm khi đang tồn tại dữ liệu thuộc tính Đơn lẻ (variantName có chữ)
+    if (matrixType === "single" && variantName.trim() !== "") {
+      alert(
+        "🛑 Ràng buộc cấu hình: Bạn đang lưu dữ liệu 'Thuộc tính đơn'. Vui lòng xóa sạch chuỗi định danh (Tên hiển thị biến thể) ở cột bên phải trước khi chuyển đổi sang 'Nhóm thuộc tính'!",
+      );
+      return;
+    }
+
+    setMatrixType(nextType);
+    setAvailableAttributes([]);
   };
 
   if (loading) {
