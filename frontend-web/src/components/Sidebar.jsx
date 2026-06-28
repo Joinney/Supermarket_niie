@@ -139,7 +139,7 @@ export default function Sidebar({ isOpen, onClose }) {
     setCurrentStore(store);
     setIsStoreOpen(false);
     const storeCode = store.code?.toLowerCase() || "vn";
-    navigate(`/${storeCode}`);
+    window.location.href = `/${storeCode}`;
   };
 
   return (

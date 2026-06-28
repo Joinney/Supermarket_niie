@@ -518,17 +518,23 @@ export default function AdminProductDetail() {
                                     <>
                                       {/* Nút Sửa */}
                                       <button
-                                        onClick={() =>
+                                        onClick={() => {
+                                          const isGroupMode =
+                                            bt.thuoc_tinh &&
+                                            Object.keys(bt.thuoc_tinh).length >
+                                              0;
+
                                           navigate(
                                             `/admin/products/create-variant/${product.ma_san_pham}/${bt.ma_bien_the}`,
                                             {
                                               state: {
                                                 existingVariants:
                                                   product.bien_the,
+                                                initMode: isGroupMode,
                                               },
                                             },
-                                          )
-                                        }
+                                          );
+                                        }}
                                         className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition shadow-sm border border-transparent hover:border-sky-200"
                                         title="Chỉnh sửa EAV & Giá"
                                       >

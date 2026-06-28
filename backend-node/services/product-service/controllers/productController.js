@@ -574,7 +574,7 @@ export const updateProduct = async (req, res) => {
 };
 
 // =========================================================================
-// 8.5 BẬT / TẮT TRẠNG THÁI SẢN PHẨM (TOGGLE STATUS)
+// 8.5 BẬT / TẮT TRẠNG THÁI SẢN PHẨM (TOGGLE STATUS & REAL-TIME SOCKET)
 // =========================================================================
 export const toggleProductStatus = async (req, res) => {
     try {
@@ -596,6 +596,16 @@ export const toggleProductStatus = async (req, res) => {
         const newStatus = result.rows[0].trang_thai;
         await pool.query(`UPDATE public.bien_the_san_pham SET trang_thai = $1 WHERE ma_san_pham = $2`, [newStatus, id]);
 
+        // 🌟 NÂNG CẤP REAL-TIME: Phát tín hiệu Socket cho Client
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('product_status_changed', {
+                ma_san_pham: id,
+                trang_thai: newStatus
+            });
+            console.log(`📡 Socket Emit: Đã báo cho Client trạng thái SP [${id}] -> ${newStatus}`);
+        }
+
         res.status(200).json({ 
             success: true, 
             message: newStatus ? "Đã MỞ BÁN sản phẩm!" : "Đã TẠM NGƯNG sản phẩm!",
@@ -608,7 +618,7 @@ export const toggleProductStatus = async (req, res) => {
 };
 
 // =========================================================================
-// 8.6 DELETE PRODUCT (HARD DELETE - CÓ BẢO VỆ SKU)
+// 8.6 DELETE PRODUCT (HARD DELETE - CÓ BẢO VỆ SKU & REAL-TIME SOCKET)
 // =========================================================================
 export const deleteProduct = async (req, res) => {
     const client = await pool.connect();
@@ -616,7 +626,7 @@ export const deleteProduct = async (req, res) => {
         const { id } = req.params;
         await client.query('BEGIN');
 
-        // 🌟 1. LÁ CHẮN BẢO VỆ: KIỂM TRA SỐ LƯỢNG SKU (BIẾN THỂ)
+        // 1. LÁ CHẮN BẢO VỆ: KIỂM TRA SỐ LƯỢNG SKU (BIẾN THỂ)
         const checkVariants = await client.query(
             'SELECT COUNT(*) FROM public.bien_the_san_pham WHERE ma_san_pham = $1',
             [id]
@@ -626,7 +636,6 @@ export const deleteProduct = async (req, res) => {
 
         if (skuCount > 0) {
             await client.query('ROLLBACK');
-            // Trả về lỗi 400 (Bad Request) kèm thông báo chi tiết
             return res.status(400).json({ 
                 success: false, 
                 message: `Từ chối xóa! Sản phẩm này đang chứa ${skuCount} phiên bản (SKU). Vui lòng vào chi tiết sản phẩm, xóa hết các SKU trước khi xóa sản phẩm gốc.` 
@@ -645,6 +654,17 @@ export const deleteProduct = async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // 🌟 NÂNG CẤP REAL-TIME: Báo cho Client văng trang vì SP đã bị xóa vĩnh viễn
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('product_status_changed', {
+                ma_san_pham: id,
+                trang_thai: false // Truyền false để Client hiểu là SP không còn khả dụng và tự động văng về trang chủ
+            });
+            console.log(`📡 Socket Emit: Đã báo Client SP [${id}] bị xóa vĩnh viễn`);
+        }
+
         res.status(200).json({ success: true, message: "Đã xóa vĩnh viễn sản phẩm khỏi hệ thống!" });
     } catch (error) {
         await client.query('ROLLBACK');
@@ -874,7 +894,8 @@ export const createVariant = async (req, res) => {
     const client = await pool.connect(); 
     try {
         const { id } = req.params; 
-        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url } = req.body;
+        // 🌟 Đã lấy thêm ten_don_vi từ req.body
+        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
 
         if (!sku || !gia_ban_le) {
             return res.status(400).json({ success: false, message: "Mã SKU và Giá bán lẻ không được để trống." });
@@ -887,12 +908,22 @@ export const createVariant = async (req, res) => {
 
         const ma_bien_the_moi = generateUniqueId(`MBT_${countryCode}`);
 
+        // 🌟 BƯỚC MỚI: TÌM ID ĐƠN VỊ TỪ TÊN ĐƠN VỊ FRONTEND GỬI LÊN
+        let don_vi_id = null;
+        if (ten_don_vi) {
+            const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
+            if (unitRes.rows.length > 0) {
+                don_vi_id = unitRes.rows[0].id;
+            }
+        }
+
+        // 🌟 Đã bổ sung don_vi_id vào câu lệnh INSERT
         const insertVariantQuery = `
-            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
-            VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW()) RETURNING *;
+            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW()) RETURNING *;
         `;
         const variantResult = await client.query(insertVariantQuery, [
-            ma_bien_the_moi, id, ten_bien_the || `Phiên bản mới ${sku}`, sku, gia_ban_le
+            ma_bien_the_moi, id, don_vi_id, ten_bien_the || `Phiên bản mới ${sku}`, sku, gia_ban_le
         ]);
 
         if (hinh_anh_url && hinh_anh_url.trim() !== '') {
@@ -915,7 +946,6 @@ export const createVariant = async (req, res) => {
 
                 let ma_thuoc_tinh;
                 if (attrRes.rows.length === 0) {
-                    // Nếu "Vị" chưa tồn tại -> TỰ ĐỘNG TẠO MỚI (Admin gõ tùy ý, hệ thống vẫn phục vụ)
                     ma_thuoc_tinh = generateUniqueId('ATT');
                     await client.query(
                         `INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh) VALUES ($1, $2)`,
@@ -925,7 +955,6 @@ export const createVariant = async (req, res) => {
                     ma_thuoc_tinh = attrRes.rows[0].ma_thuoc_tinh;
                 }
 
-                // Tiếp tục tìm Giá trị (Ví dụ: "Dâu tây")
                 let valueRes = await client.query(
                     `SELECT ma_gia_tri FROM public.gia_tri_thuoc_tinh WHERE ma_thuoc_tinh = $1 AND LOWER(gia_tri) = LOWER($2)`,
                     [ma_thuoc_tinh, gia_tri.trim()]
@@ -942,7 +971,6 @@ export const createVariant = async (req, res) => {
                     ma_gia_tri = valueRes.rows[0].ma_gia_tri;
                 }
 
-                // Nối biến thể với Giá trị
                 await client.query(
                     `INSERT INTO public.chi_tiet_bien_the_thuoc_tinh (ma_bien_the, ma_gia_tri) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
                     [ma_bien_the_moi, ma_gia_tri]
@@ -968,14 +996,29 @@ export const updateVariant = async (req, res) => {
     const client = await pool.connect();
     try {
         const { variantId } = req.params;
-        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url } = req.body;
+        // 🌟 Đã lấy thêm ten_don_vi từ req.body
+        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
 
         if (!sku || !gia_ban_le) return res.status(400).json({ success: false, message: "Mã SKU và Giá bán không được trống." });
 
         await client.query('BEGIN');
 
-        const updateVariantQuery = `UPDATE public.bien_the_san_pham SET ten_bien_the = $1, sku = $2, gia_ban_le = $3, ngay_cap_nhat = NOW() WHERE ma_bien_the = $4 RETURNING *;`;
-        const variantResult = await client.query(updateVariantQuery, [ten_bien_the, sku, gia_ban_le, variantId]);
+        // 🌟 BƯỚC MỚI: TÌM ID ĐƠN VỊ TỪ TÊN ĐƠN VỊ FRONTEND GỬI LÊN
+        let don_vi_id = null;
+        if (ten_don_vi) {
+            const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
+            if (unitRes.rows.length > 0) {
+                don_vi_id = unitRes.rows[0].id;
+            }
+        }
+
+        // 🌟 Đã bổ sung don_vi_id vào lệnh UPDATE
+        const updateVariantQuery = `
+            UPDATE public.bien_the_san_pham 
+            SET ten_bien_the = $1, sku = $2, gia_ban_le = $3, don_vi_id = $4, ngay_cap_nhat = NOW() 
+            WHERE ma_bien_the = $5 RETURNING *;
+        `;
+        const variantResult = await client.query(updateVariantQuery, [ten_bien_the, sku, gia_ban_le, don_vi_id, variantId]);
 
         if (variantResult.rows.length === 0) {
             await client.query('ROLLBACK');

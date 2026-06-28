@@ -162,7 +162,7 @@ export const createParentCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 5. XÓA MỀM DANH MỤC CHA (CÓ BẢO VỆ DỮ LIỆU)
+// 5. XÓA MỀM DANH MỤC CHA (CÓ BẢO VỆ DỮ LIỆU & REAL-TIME SOCKET)
 // =========================================================================
 export const deleteParentCategory = async (req, res) => {
     try {
@@ -192,6 +192,17 @@ export const deleteParentCategory = async (req, res) => {
 
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục.' });
+        }
+
+        // 🌟 NÂNG CẤP REAL-TIME: Phát tín hiệu Socket cho Client
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('category_status_changed', {
+                ma_danh_muc: id,
+                trang_thai: false,
+                loai_danh_muc: 'cha' // Truyền thêm loại để Client dễ xử lý nếu cần
+            });
+            console.log(`📡 Socket Emit: Đã báo cho Client ẩn danh mục cha [${id}]`);
         }
 
         res.status(200).json({ success: true, message: 'Đã lưu trữ (xóa) danh mục thành công.' });
@@ -317,7 +328,7 @@ export const createChildCategory = async (req, res) => {
 };
 
 // =========================================================================
-// 11. XÓA DANH MỤC CON (SOFT DELETE)
+// 11. XÓA DANH MỤC CON (SOFT DELETE & REAL-TIME SOCKET)
 // =========================================================================
 export const deleteChildCategory = async (req, res) => {
     try {
@@ -325,9 +336,24 @@ export const deleteChildCategory = async (req, res) => {
         const query = `UPDATE public.danh_muc_con SET trang_thai = false WHERE ma_dm_con = $1 RETURNING *;`;
         const result = await pool.query(query, [id]);
         
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục con.' });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục con.' });
+        }
+
+        // 🌟 NÂNG CẤP REAL-TIME: Phát tín hiệu Socket cho Client
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('category_status_changed', {
+                ma_danh_muc: id,
+                trang_thai: false,
+                loai_danh_muc: 'con'
+            });
+            console.log(`📡 Socket Emit: Đã báo cho Client ẩn danh mục con [${id}]`);
+        }
+
         res.status(200).json({ success: true, message: 'Đã xóa mềm danh mục con.' });
     } catch (error) {
+        console.error('❌ Lỗi API deleteChildCategory:', error.message);
         res.status(500).json({ success: false, message: 'Lỗi xóa danh mục con.' });
     }
 };

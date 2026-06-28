@@ -16,6 +16,7 @@ import {
 import { productApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
 import { useStore } from "../../context/StoreContext";
+import { io } from "socket.io-client"; // 🌟 THÊM IMPORT SOCKET.IO
 
 export default function CategoryPage() {
   const { country_code, parentSlug, slug } = useParams();
@@ -23,7 +24,6 @@ export default function CategoryPage() {
 
   const { currentStore, formatPrice } = useStore();
 
-  // 1. SỬ DỤNG BỘ LỌC TỪ URL (Single Source of Truth)
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSort = searchParams.get("sort") || "noi-bat";
   const selectedPrice = searchParams.get("price") || "tat-ca";
@@ -42,10 +42,12 @@ export default function CategoryPage() {
 
   const sliderRef = useRef(null);
 
+  // 🌟 REF LƯU TRỮ ID DANH MỤC ĐANG XEM (Dùng cho Socket đối chiếu)
+  const viewedCategoryIds = useRef([]);
+
   const formatSlugName = (s) =>
     s === "tat-ca" ? "Tất cả sản phẩm" : s?.replace(/-/g, " ") || "";
 
-  // --- MẢNG LỌC GIÁ ĐỘNG TỰ ĐỘNG CHUYỂN ĐỔI TIỀN TỆ ---
   const priceFilters = [
     { label: "Tất cả khoảng giá", value: "tat-ca" },
     { label: `Dưới ${formatPrice(50000)}`, value: "0-50000" },
@@ -69,17 +71,12 @@ export default function CategoryPage() {
       label: `${formatPrice(800000)} - ${formatPrice(1000000)}`,
       value: "800000-1000000",
     },
-    {
-      label: `Trên ${formatPrice(1000000)}`,
-      value: "1000000-up",
-    },
+    { label: `Trên ${formatPrice(1000000)}`, value: "1000000-up" },
   ];
 
-  // 2. HÀM CẬP NHẬT BỘ LỌC LÊN URL
   const updateFilter = (key, value) => {
     const currentParams = Object.fromEntries([...searchParams]);
 
-    // Bỏ tham số khỏi URL nếu nó là mặc định hoặc false để URL gọn gàng
     if (
       !value ||
       value === "tat-ca" ||
@@ -91,7 +88,6 @@ export default function CategoryPage() {
       currentParams[key] = String(value);
     }
 
-    // Luôn reset về trang 1 khi thay đổi bất kỳ bộ lọc nào khác ngoài 'page'
     if (key !== "page") {
       delete currentParams.page;
     }
@@ -99,7 +95,6 @@ export default function CategoryPage() {
     setSearchParams(currentParams);
   };
 
-  // Hàm chuyển trang
   const handlePageChange = (pageNumber) => {
     if (pageNumber >= 1 && pageNumber <= totalPages) {
       updateFilter("page", pageNumber);
@@ -112,6 +107,7 @@ export default function CategoryPage() {
         const targetParentSlug = parentSlug || slug;
         if (targetParentSlug === "tat-ca" || !targetParentSlug) {
           setSubCategories([]);
+          viewedCategoryIds.current = []; // Reset ID
           return;
         }
 
@@ -125,10 +121,26 @@ export default function CategoryPage() {
           (c) => c.slug === targetParentSlug,
         );
 
-        if (currentCategory && currentCategory.children) {
-          setSubCategories(currentCategory.children);
+        if (currentCategory) {
+          // 🌟 LƯU ID CỦA DANH MỤC CHA VÀ CON HIỆN TẠI VÀO REF ĐỂ SOCKET KIỂM TRA
+          let activeIds = [currentCategory.id || currentCategory.ma_dm_cha];
+
+          if (currentCategory.children) {
+            setSubCategories(currentCategory.children);
+            if (slug && slug !== targetParentSlug) {
+              const activeSub = currentCategory.children.find(
+                (c) => c.slug === slug,
+              );
+              if (activeSub)
+                activeIds.push(activeSub.id || activeSub.ma_dm_con);
+            }
+          } else {
+            setSubCategories([]);
+          }
+          viewedCategoryIds.current = activeIds.filter(Boolean);
         } else {
           setSubCategories([]);
+          viewedCategoryIds.current = [];
         }
       } catch (err) {
         console.error("Lỗi lấy danh mục con:", err);
@@ -136,6 +148,35 @@ export default function CategoryPage() {
     };
     fetchSubCategories();
   }, [parentSlug, slug, country_code, currentStore?.code]);
+
+  // 🌟 KHỞI TẠO LẮNG NGHE SOCKET REAL-TIME TỪ BACKEND
+  useEffect(() => {
+    const apiUrl =
+      import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+    const socket = io(apiUrl);
+
+    // Lắng nghe sự kiện Admin tắt/xóa Danh mục
+    socket.on("category_status_changed", (data) => {
+      if (data.trang_thai === false) {
+        // Nếu danh mục bị tắt TRÙNG với danh mục mà khách hàng đang xem -> Âm thầm văng về Home
+        if (viewedCategoryIds.current.includes(data.ma_danh_muc)) {
+          window.location.href = "/";
+        }
+      }
+    });
+
+    // Lắng nghe sự kiện Admin tắt/xóa Sản phẩm
+    socket.on("product_status_changed", (data) => {
+      if (data.trang_thai === false) {
+        // Âm thầm loại bỏ sản phẩm đó khỏi mảng hiển thị hiện tại (sản phẩm biến mất tự nhiên)
+        setProducts((prevProducts) =>
+          prevProducts.filter((p) => p.ma_san_pham !== data.ma_san_pham),
+        );
+      }
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   useEffect(() => {
     if (parentSlug && slug) {
@@ -153,7 +194,6 @@ export default function CategoryPage() {
         const currentCountry = country_code || currentStore?.code || "vn";
         const targetSlug = slug || "tat-ca";
 
-        // GỌI API LẤY SẢN PHẨM DỰA VÀO CÁC STATE TỪ URL
         const response = await productApi.get(
           `/products/category/${targetSlug}`,
           {
@@ -219,7 +259,6 @@ export default function CategoryPage() {
     const mainSlug = parentSlug || slug;
     const prefix = country_code ? `/${String(country_code).toLowerCase()}` : "";
 
-    // Khi chuyển danh mục, bộ lọc trên URL sẽ tự động được xóa sạch để hiển thị toàn bộ
     if (activeSubCategory === subSlug) {
       navigate(`${prefix}/category/${mainSlug}`);
     } else {
@@ -369,7 +408,6 @@ export default function CategoryPage() {
                   <ProductCard
                     key={p.ma_san_pham}
                     p={p}
-                    // 🟢 Truyền tên và slug danh mục hiện tại xuống cho ProductCard
                     categoryName={categoryName || formatSlugName(slug)}
                     categorySlug={slug || "tat-ca"}
                   />
