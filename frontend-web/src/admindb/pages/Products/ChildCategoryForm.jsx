@@ -26,25 +26,28 @@ export default function ChildCategoryForm() {
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-  // Khởi tạo dữ liệu (Quốc gia, Danh mục cha, và Dữ liệu sửa)
+  // Khởi tạo dữ liệu
   useEffect(() => {
     const fetchInitData = async () => {
       try {
-        // 1. Lấy danh sách quốc gia
-        const res = await axios.get(`${apiUrl}/api/nations`);
-        setCountries(resCountries.data);
+        setLoading(true);
+        // 1. Lấy danh sách quốc gia (SỬA ĐOẠN NÀY)
+        const resNations = await axios.get(`${apiUrl}/api/nations`);
+        // Kiểm tra đúng cấu trúc { success: true, data: [...] }
+        setCountries(resNations.data.data || []);
 
-        // 2. Lấy danh sách danh mục cha (để đưa vào dropdown)
+        // 2. Lấy danh sách danh mục cha
         const resParents = await axios.get(
           `${apiUrl}/api/categories/parents?country=ALL`,
         );
         setParentCategories(resParents.data.data || []);
 
-        // 3. Nếu đang ở chế độ Sửa, lấy thông tin danh mục con đó
+        // 3. Nếu đang ở chế độ Sửa, lấy thông tin danh mục con
         if (isEditMode) {
           const resChildren = await axios.get(
             `${apiUrl}/api/categories/children?country=ALL`,
           );
+          // ... (giữ nguyên logic tìm targetCategory của bạn)
           const targetCategory = resChildren.data.data.find(
             (c) => c.ma_dm_con === id,
           );
@@ -57,9 +60,6 @@ export default function ChildCategoryForm() {
               ma_quoc_gia: targetCategory.ma_quoc_gia,
               hinh_anh: targetCategory.hinh_anh || "",
             });
-          } else {
-            alert("Không tìm thấy dữ liệu danh mục con này!");
-            navigate(-1);
           }
         }
       } catch (error) {
@@ -183,15 +183,10 @@ export default function ChildCategoryForm() {
               </label>
               <select
                 value={formData.ma_quoc_gia}
-                onChange={
-                  (e) =>
-                    setFormData({
-                      ...formData,
-                      ma_quoc_gia: e.target.value,
-                      ma_dm_cha: "",
-                    }) // Reset cha khi đổi quốc gia
+                onChange={(e) =>
+                  setFormData({ ...formData, ma_quoc_gia: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer appearance-none"
               >
                 {countries.map((c) => (
                   <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>

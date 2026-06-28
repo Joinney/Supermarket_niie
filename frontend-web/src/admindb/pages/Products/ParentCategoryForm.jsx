@@ -25,23 +25,20 @@ export default function ParentCategoryForm() {
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-  // Khởi tạo dữ liệu (Lấy danh sách quốc gia + Lấy dữ liệu cũ nếu đang Sửa)
+  // Khởi tạo dữ liệu
   useEffect(() => {
     const fetchInitData = async () => {
       try {
-        // 1. Lấy danh sách quốc gia
-        const res = await axios.get(`${apiUrl}/api/nations`);
-        setCountries(resCountries.data);
+        setLoading(true);
+        const resNations = await axios.get(`${apiUrl}/api/nations`);
+        setCountries(resNations.data.data || []);
 
-        // 2. Nếu là chế độ sửa, lấy thông tin danh mục đổ vào form
         if (isEditMode) {
-          // Tạm thời gọi API lấy danh sách cha (country=ALL) rồi lọc ra mã cần sửa
           const resParents = await axios.get(
             `${apiUrl}/api/categories/parents?country=ALL`,
           );
-          const targetCategory = resParents.data.data.find(
-            (p) => p.ma_dm_cha === id,
-          );
+          const parentList = resParents.data.data || [];
+          const targetCategory = parentList.find((p) => p.ma_dm_cha === id);
 
           if (targetCategory) {
             setFormData({
@@ -64,7 +61,7 @@ export default function ParentCategoryForm() {
     };
 
     fetchInitData();
-  }, [id, apiUrl, navigate]);
+  }, [id, apiUrl, navigate, isEditMode]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -171,7 +168,7 @@ export default function ParentCategoryForm() {
               />
             </div>
 
-            {/* Quốc Gia */}
+            {/* Thị trường Quốc gia */}
             <div>
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                 Thị trường Quốc gia
@@ -179,9 +176,13 @@ export default function ParentCategoryForm() {
               <select
                 value={formData.ma_quoc_gia}
                 onChange={(e) =>
-                  setFormData({ ...formData, ma_quoc_gia: e.target.value })
+                  setFormData({
+                    ...formData,
+                    ma_quoc_gia: e.target.value,
+                  })
                 }
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer"
+                // appearance-none giúp khung select trông giống input hơn, không bị trình duyệt làm lệch
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer appearance-none"
               >
                 {countries.map((c) => (
                   <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>

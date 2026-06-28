@@ -30,28 +30,41 @@ export default function ProductEdit() {
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
+  // ... (các import giữ nguyên)
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [resProduct, resCat, resParents, resCountries] =
-          await Promise.all([
-            axios.get(`${apiUrl}/api/products/${id}`),
-            axios.get(`${apiUrl}/api/categories/children?country=ALL`),
-            axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
-            axios.get(`${apiUrl}/api/nations`),
-          ]);
+
+        // Sử dụng Promise.all để lấy dữ liệu song song cho nhanh
+        const [resProduct, resCat, resParents, resNations] = await Promise.all([
+          axios.get(`${apiUrl}/api/products/${id}`),
+          axios.get(`${apiUrl}/api/categories/children?country=ALL`),
+          axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
+          axios.get(`${apiUrl}/api/nations`), // API mới
+        ]);
 
         const product = resProduct.data;
         const allChildren = resCat.data.data || [];
         const allParents = resParents.data.data || [];
+        const nations = resNations.data.data || []; // Lấy đúng mảng dữ liệu
 
+        // Tìm danh mục cha dựa trên mã danh mục con của sản phẩm
         const currentChild = allChildren.find(
           (c) => c.ma_dm_con === product.ma_dm_con,
         );
         const parentId = currentChild ? currentChild.ma_dm_cha : "";
 
-        setFormData(product);
+        // Gán dữ liệu vào state
+        setFormData({
+          ma_san_pham: product.ma_san_pham,
+          ten_san_pham: product.ten_san_pham,
+          ma_dm_con: product.ma_dm_con,
+          ma_quoc_gia: product.ma_quoc_gia || "VN",
+          mo_ta: product.mo_ta || "",
+        });
+
         setFilter({
           ma_quoc_gia: product.ma_quoc_gia || "VN",
           ma_dm_cha: parentId,
@@ -59,7 +72,7 @@ export default function ProductEdit() {
 
         setChildren(allChildren);
         setParents(allParents);
-        setCountries(resCountries.data);
+        setCountries(nations);
       } catch (err) {
         console.error("Lỗi tải dữ liệu:", err);
         alert("Không thể tải thông tin sản phẩm!");
@@ -69,6 +82,11 @@ export default function ProductEdit() {
     };
     fetchData();
   }, [id, apiUrl]);
+
+  useEffect(() => {
+    setFilter((prev) => ({ ...prev, ma_dm_cha: "" }));
+    setFormData((prev) => ({ ...prev, ma_dm_con: "" }));
+  }, [filter.ma_quoc_gia]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -20,6 +20,7 @@ export default function ProductCreate() {
 
   const [parents, setParents] = useState([]);
   const [children, setChildren] = useState([]);
+  const [nations, setNations] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -104,6 +105,20 @@ export default function ProductCreate() {
       reader.readAsDataURL(file);
     }
   };
+
+  useEffect(() => {
+    const fetchNations = async () => {
+      try {
+        const res = await axios.get(`${apiUrl}/api/nations`);
+        if (res.data && res.data.success) {
+          setNations(res.data.data);
+        }
+      } catch (err) {
+        console.error("Lỗi nạp danh sách quốc gia:", err);
+      }
+    };
+    fetchNations();
+  }, [apiUrl]);
 
   // --- SUBMIT TẠO DANH MỤC CHA ---
   const handleCreateParent = async (e) => {
@@ -258,38 +273,30 @@ export default function ProductCreate() {
               />
             </div>
 
-            {/* QUỐC GIA */}
-            <div>
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-3 tracking-wide">
-                Thị trường phân phối
-              </label>
-              <div className="flex items-center gap-6 bg-slate-50 p-3.5 rounded-xl border border-slate-100 w-fit">
-                {["VN", "US", "CN"].map((country) => (
-                  <label
-                    key={country}
-                    className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-700 hover:text-slate-900"
-                  >
-                    <input
-                      type="radio"
-                      name="ma_quoc_gia"
-                      value={country}
-                      checked={formData.ma_quoc_gia === country}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          ma_quoc_gia: e.target.value,
-                        })
-                      }
-                      className="w-4 h-4 text-[#006c49] focus:ring-[#006c49] border-slate-300 cursor-pointer"
-                    />
-                    {country === "VN"
-                      ? "🇻🇳 Việt Nam (VN)"
-                      : country === "US"
-                        ? "🇺🇸 Mỹ (US)"
-                        : "🇨🇳 Trung Quốc (CN)"}
-                  </label>
-                ))}
-              </div>
+            {/* QUỐC GIA ĐỘNG */}
+            <div className="flex flex-wrap items-center gap-6 bg-slate-50 p-3.5 rounded-xl border border-slate-100 w-fit">
+              {nations.map((nation) => (
+                <label
+                  key={nation.ma_quoc_gia}
+                  className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-700 hover:text-slate-800"
+                >
+                  <input
+                    type="radio"
+                    name="ma_quoc_gia"
+                    value={nation.ma_quoc_gia}
+                    checked={formData.ma_quoc_gia === nation.ma_quoc_gia}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        ma_quoc_gia: e.target.value,
+                      })
+                    }
+                    className="w-4 h-4 text-[#006c49] focus:ring-[#006c49] border-slate-300 cursor-pointer"
+                  />
+                  {nation.bieu_tuong_co} {nation.ten_quoc_gia} (
+                  {nation.ma_quoc_gia})
+                </label>
+              ))}
             </div>
 
             {/* CASCADING GRID */}

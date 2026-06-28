@@ -5,11 +5,14 @@ import axios from "axios";
 
 export default function ProductList() {
   const navigate = useNavigate();
+  const apiUrl =
+    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
   // 1. State lưu trữ dữ liệu từ Backend
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [countries, setCountries] = useState([]);
 
   // 2. State Phân trang (Pagination)
   const [page, setPage] = useState(1);
@@ -43,8 +46,6 @@ export default function ProductList() {
     setError("");
 
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
       let response;
 
       // Đóng gói toàn bộ params (Phân trang + Bộ lọc)
@@ -115,9 +116,6 @@ export default function ProductList() {
       )
     ) {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
         // 1. Gọi API Delete xuống Backend để chém bay dữ liệu trong DB
         await axios.delete(`${apiUrl}/api/products/${id}`);
 
@@ -137,8 +135,6 @@ export default function ProductList() {
   // HÀM BẬT / TẮT TRẠNG THÁI SẢN PHẨM
   const handleToggleStatus = async (id, currentStatus) => {
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
       await axios.put(`${apiUrl}/api/products/${id}/toggle-status`);
 
       // Cập nhật lại UI ngay lập tức mà không cần F5
@@ -158,6 +154,19 @@ export default function ProductList() {
 
   const startItem = totalItems === 0 ? 0 : (page - 1) * limit + 1;
   const endItem = Math.min(page * limit, totalItems);
+
+  useEffect(() => {
+    const fetchNations = async () => {
+      try {
+        // Sử dụng apiUrl toàn cục
+        const res = await axios.get(`${apiUrl}/api/nations`);
+        setCountries(res.data.data || []);
+      } catch (err) {
+        console.error("Lỗi lấy danh sách quốc gia:", err);
+      }
+    };
+    fetchNations();
+  }, [apiUrl]);
 
   return (
     <motion.div
@@ -314,9 +323,12 @@ export default function ProductList() {
                     className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49]"
                   >
                     <option value="all">Tất cả thị trường</option>
-                    <option value="VN">Việt Nam (VN)</option>
-                    <option value="US">Mỹ (US)</option>
-                    <option value="CN">Trung Quốc (CN)</option>
+                    {/* MAP TỪ DATABASE */}
+                    {countries.map((c) => (
+                      <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>
+                        {c.bieu_tuong_co} {c.ten_quoc_gia}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
