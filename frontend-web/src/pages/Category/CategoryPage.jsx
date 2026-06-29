@@ -16,7 +16,7 @@ import {
 import { productApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
 import { useStore } from "../../context/StoreContext";
-import { io } from "socket.io-client"; // 🌟 THÊM IMPORT SOCKET.IO
+import { io } from "socket.io-client";
 
 export default function CategoryPage() {
   const { country_code, parentSlug, slug } = useParams();
@@ -42,7 +42,7 @@ export default function CategoryPage() {
 
   const sliderRef = useRef(null);
 
-  // 🌟 REF LƯU TRỮ ID DANH MỤC ĐANG XEM (Dùng cho Socket đối chiếu)
+  // 🌟 REF LƯU TRỮ CHÍNH XÁC ID ĐỂ SOCKET ĐỐI CHIẾU
   const viewedCategoryIds = useRef([]);
 
   const formatSlugName = (s) =>
@@ -101,19 +101,65 @@ export default function CategoryPage() {
     }
   };
 
+  // 🌟 KHỞI TẠO LẮNG NGHE SOCKET REAL-TIME
+  useEffect(() => {
+    const apiUrl =
+      import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+    const socket = io(apiUrl);
+
+    socket.on("category_status_changed", (data) => {
+      if (data.trang_thai === false) {
+        const incomingId = String(data.ma_danh_muc);
+
+        // 1. Nếu Danh mục ĐANG XEM bị tắt -> Văng về trang chủ
+        const isMatch = viewedCategoryIds.current.includes(incomingId);
+        if (isMatch) {
+          console.log(
+            "⚡ [Real-time] Danh mục đang xem bị Admin khóa. Văng trang!",
+          );
+          window.location.href = "/";
+        }
+        // 2. Nếu một danh mục con (chưa click vào) bị tắt -> Âm thầm xóa nó khỏi thanh trượt ngang
+        else {
+          setSubCategories((prev) =>
+            prev.filter(
+              (c) =>
+                String(c.id) !== incomingId &&
+                String(c.ma_dm_con) !== incomingId &&
+                String(c.ma_danh_muc) !== incomingId,
+            ),
+          );
+        }
+      }
+    });
+
+    socket.on("product_status_changed", (data) => {
+      if (data.trang_thai === false) {
+        setProducts((prevProducts) =>
+          prevProducts.filter(
+            (p) => String(p.ma_san_pham) !== String(data.ma_san_pham),
+          ),
+        );
+      }
+    });
+
+    return () => socket.disconnect();
+  }, []);
+
+  // 🌟 FETCH CÂY DANH MỤC VÀ KIỂM TRA BẢO MẬT (CHẶN F5)
   useEffect(() => {
     const fetchSubCategories = async () => {
       try {
         const targetParentSlug = parentSlug || slug;
         if (targetParentSlug === "tat-ca" || !targetParentSlug) {
           setSubCategories([]);
-          viewedCategoryIds.current = []; // Reset ID
+          viewedCategoryIds.current = [];
           return;
         }
 
         const targetCountry = country_code || currentStore?.code || "vn";
         const response = await productApi.get(
-          `/categories/tree?country=${targetCountry}`,
+          `/categories/tree?country=${targetCountry}&role=client`,
         );
         const allCategories = response.data;
 
@@ -121,62 +167,55 @@ export default function CategoryPage() {
           (c) => c.slug === targetParentSlug,
         );
 
-        if (currentCategory) {
-          // 🌟 LƯU ID CỦA DANH MỤC CHA VÀ CON HIỆN TẠI VÀO REF ĐỂ SOCKET KIỂM TRA
-          let activeIds = [currentCategory.id || currentCategory.ma_dm_cha];
+        // 🛑 LỚP BẢO VỆ 1: NẾU DANH MỤC CHA KHÔNG TỒN TẠI HOẶC BỊ TẮT (trang_thai = false) -> VĂNG
+        if (!currentCategory || currentCategory.trang_thai === false) {
+          window.location.href = "/";
+          return;
+        }
 
-          if (currentCategory.children) {
-            setSubCategories(currentCategory.children);
-            if (slug && slug !== targetParentSlug) {
-              const activeSub = currentCategory.children.find(
-                (c) => c.slug === slug,
-              );
-              if (activeSub)
-                activeIds.push(activeSub.id || activeSub.ma_dm_con);
+        let activeIds = [];
+
+        // Gắn mọi loại ID có thể có của Backend vào mảng để Socket quét không bị trượt
+        ["id", "ma_dm_cha", "ma_danh_muc", "_id"].forEach((key) => {
+          if (currentCategory[key])
+            activeIds.push(String(currentCategory[key]));
+        });
+
+        if (currentCategory.children) {
+          // Chỉ hiển thị các danh mục con đang mở (trang_thai !== false)
+          const activeChildren = currentCategory.children.filter(
+            (c) => c.trang_thai !== false,
+          );
+          setSubCategories(activeChildren);
+
+          if (slug && slug !== targetParentSlug) {
+            const activeSub = currentCategory.children.find(
+              (c) => c.slug === slug,
+            );
+
+            // 🛑 LỚP BẢO VỆ 2: NẾU DANH MỤC CON KHÔNG TỒN TẠI HOẶC BỊ TẮT -> VĂNG
+            if (!activeSub || activeSub.trang_thai === false) {
+              window.location.href = "/";
+              return;
             }
-          } else {
-            setSubCategories([]);
+
+            ["id", "ma_dm_con", "ma_danh_muc", "_id"].forEach((key) => {
+              if (activeSub[key]) activeIds.push(String(activeSub[key]));
+            });
           }
-          viewedCategoryIds.current = activeIds.filter(Boolean);
         } else {
           setSubCategories([]);
-          viewedCategoryIds.current = [];
         }
+
+        // Lưu vào Ref để Socket theo dõi
+        viewedCategoryIds.current = activeIds;
       } catch (err) {
-        console.error("Lỗi lấy danh mục con:", err);
+        console.error("Lỗi lấy danh mục:", err);
       }
     };
+
     fetchSubCategories();
   }, [parentSlug, slug, country_code, currentStore?.code]);
-
-  // 🌟 KHỞI TẠO LẮNG NGHE SOCKET REAL-TIME TỪ BACKEND
-  useEffect(() => {
-    const apiUrl =
-      import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-    const socket = io(apiUrl);
-
-    // Lắng nghe sự kiện Admin tắt/xóa Danh mục
-    socket.on("category_status_changed", (data) => {
-      if (data.trang_thai === false) {
-        // Nếu danh mục bị tắt TRÙNG với danh mục mà khách hàng đang xem -> Âm thầm văng về Home
-        if (viewedCategoryIds.current.includes(data.ma_danh_muc)) {
-          window.location.href = "/";
-        }
-      }
-    });
-
-    // Lắng nghe sự kiện Admin tắt/xóa Sản phẩm
-    socket.on("product_status_changed", (data) => {
-      if (data.trang_thai === false) {
-        // Âm thầm loại bỏ sản phẩm đó khỏi mảng hiển thị hiện tại (sản phẩm biến mất tự nhiên)
-        setProducts((prevProducts) =>
-          prevProducts.filter((p) => p.ma_san_pham !== data.ma_san_pham),
-        );
-      }
-    });
-
-    return () => socket.disconnect();
-  }, []);
 
   useEffect(() => {
     if (parentSlug && slug) {
@@ -199,6 +238,7 @@ export default function CategoryPage() {
           {
             params: {
               country: currentCountry,
+              role: "client",
               sort: selectedSort,
               price: selectedPrice,
               origin: selectedOrigin,

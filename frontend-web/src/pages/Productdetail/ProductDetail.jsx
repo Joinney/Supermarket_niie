@@ -9,7 +9,7 @@ import {
   ChevronRight,
   CreditCard,
 } from "lucide-react";
-import { io } from "socket.io-client"; // 🌟 THÊM IMPORT SOCKET.IO
+import { io } from "socket.io-client";
 
 import { useLanguage } from "../../context/LanguageContext";
 import { useStore } from "../../context/StoreContext";
@@ -59,16 +59,21 @@ export default function ProductDetail() {
     }
   }, [currentStore, country, id, category_slug, navigate, product]);
 
-  // 🌟 NÂNG CẤP REAL-TIME: Lắng nghe Socket để văng trang khi Admin tắt/xóa SP
+  // 🌟 NÂNG CẤP REAL-TIME: BẢO VỆ CHẮC CHẮN ÉP KIỂU STRING
   useEffect(() => {
     const apiUrl =
       import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
     const socket = io(apiUrl);
 
     socket.on("product_status_changed", (data) => {
-      // Nếu ID sản phẩm bị tắt trùng với ID trên URL đang xem
-      if (data.ma_san_pham === id && data.trang_thai === false) {
-        console.log("⚠️ Sản phẩm này vừa bị Admin khóa, tự động văng trang...");
+      // 🛑 LỚP BẢO VỆ 1: Phải ép kiểu String để tránh so sánh lệch giữa "123" và 123
+      if (
+        String(data.ma_san_pham) === String(id) &&
+        data.trang_thai === false
+      ) {
+        console.log(
+          "⚡ [Real-time] Sản phẩm đang xem bị Admin khóa. Văng trang!",
+        );
         window.location.href = "/"; // Âm thầm ép văng về trang chủ
       }
     });
@@ -87,12 +92,19 @@ export default function ProductDetail() {
 
     const currentCountry = country || "vn";
     productApi
-      .get(`/products/${id}?country=${currentCountry}`)
+      .get(`/products/${id}?country=${currentCountry}&role=client`)
       .then((res) => {
         const data = res.data;
         const productData = Array.isArray(data) ? data[0] : data;
 
         if (productData && productData.ma_san_pham) {
+          // 🛑 LỚP BẢO VỆ 2 (CHỐNG F5): KIỂM TRA TRẠNG THÁI SẢN PHẨM TRƯỚC KHI RENDER
+          if (productData.trang_thai === false) {
+            console.warn("🚫 Sản phẩm này đã bị Admin khóa. Ép văng về Home.");
+            window.location.href = "/";
+            return; // Dừng luôn việc xử lý UI phía dưới
+          }
+
           const bienTheList =
             productData.bien_the || productData.variants || [];
 
@@ -115,7 +127,7 @@ export default function ProductDetail() {
           let targetVariant = null;
           if (variantId) {
             targetVariant = productData.bien_the.find(
-              (v) => v.ma_bien_the === variantId,
+              (v) => String(v.ma_bien_the) === String(variantId), // Ép chuỗi cho chắc ăn
             );
           }
 
@@ -131,7 +143,8 @@ export default function ProductDetail() {
             setSelectedAttributes(targetVariant.thuoc_tinh || {});
 
             const variantMedia = productData.media?.find(
-              (m) => m.ma_bien_the === targetVariant.ma_bien_the,
+              (m) =>
+                String(m.ma_bien_the) === String(targetVariant.ma_bien_the),
             );
             setMainMedia(
               variantMedia ||
@@ -139,7 +152,10 @@ export default function ProductDetail() {
                 productData.media?.[0],
             );
 
-            if (!variantId || variantId !== targetVariant.ma_bien_the) {
+            if (
+              !variantId ||
+              String(variantId) !== String(targetVariant.ma_bien_the)
+            ) {
               const cSlug = category_slug || productData.slug_danh_muc || "all";
               navigate(
                 `/${currentCountry}/product/${cSlug}/${id}/${targetVariant.ma_bien_the}`,
@@ -212,7 +228,7 @@ export default function ProductDetail() {
     if (matchedVariant) {
       setSelectedVariant(matchedVariant);
       const vMedia = product.media?.find(
-        (m) => m.ma_bien_the === matchedVariant.ma_bien_the,
+        (m) => String(m.ma_bien_the) === String(matchedVariant.ma_bien_the),
       );
       if (vMedia) setMainMedia(vMedia);
       navigate(
@@ -547,7 +563,8 @@ export default function ProductDetail() {
                         onClick={() => {
                           setSelectedVariant(v);
                           const vMedia = product.media?.find(
-                            (m) => m.ma_bien_the === v.ma_bien_the,
+                            (m) =>
+                              String(m.ma_bien_the) === String(v.ma_bien_the),
                           );
                           if (vMedia) setMainMedia(vMedia);
                           navigate(
@@ -556,7 +573,8 @@ export default function ProductDetail() {
                           );
                         }}
                         className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all border-2 ${
-                          selectedVariant?.ma_bien_the === v.ma_bien_the
+                          String(selectedVariant?.ma_bien_the) ===
+                          String(v.ma_bien_the)
                             ? "border-[#006c49] bg-[#006c49] text-white shadow-md"
                             : "border-slate-100 bg-[#fcfcfc] text-slate-400 hover:border-slate-200"
                         }`}

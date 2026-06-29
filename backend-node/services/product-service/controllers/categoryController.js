@@ -1,23 +1,28 @@
 import pool from '../configs/database.js'; 
 
 // =========================================================================
-// 1. LẤY CÂY DANH MỤC (TRANG CHỦ / SIDEBAR) - ĐÃ CÓ HÌNH ẢNH & QUỐC GIA
+// 1. LẤY CÂY DANH MỤC (TRANG CHỦ / SIDEBAR) - ĐÃ PHÂN LUỒNG ROLE TỐI ƯU
 // =========================================================================
 export const getAllCategories = async (req, res) => {
     try {
         const countryCode = (req.query.country || 'VN').toUpperCase();
+        const role = req.query.role; // 🌟 1. Hứng role từ Frontend
+
+        // 🌟 2. Điều kiện động: Client chỉ thấy danh mục đang mở, Admin thấy tất cả
+        const statusFilterCha = role === 'client' ? 'AND trang_thai = true' : '';
+        const statusFilterCon = role === 'client' ? 'AND dmc.trang_thai = true' : '';
 
         const queryCha = `
-            SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, bieu_tuong, hinh_anh 
+            SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, bieu_tuong, hinh_anh, trang_thai 
             FROM public.danh_muc_cha 
-            WHERE trang_thai = true AND UPPER(ma_quoc_gia) = $1
+            WHERE UPPER(ma_quoc_gia) = $1 ${statusFilterCha}
             ORDER BY ma_dm_cha ASC;
         `;
         
         const queryCon = `
-            SELECT dmc.ma_dm_con, dmc.ma_dm_cha, dmc.ten_danh_muc_con, dmc.duong_dan_seo, dmc.la_danh_muc_hot, dmc.hinh_anh 
+            SELECT dmc.ma_dm_con, dmc.ma_dm_cha, dmc.ten_danh_muc_con, dmc.duong_dan_seo, dmc.la_danh_muc_hot, dmc.hinh_anh, dmc.trang_thai 
             FROM public.danh_muc_con dmc
-            WHERE dmc.trang_thai = true AND UPPER(dmc.ma_quoc_gia) = $1
+            WHERE UPPER(dmc.ma_quoc_gia) = $1 ${statusFilterCon}
             ORDER BY dmc.ma_dm_con ASC;
         `;
 
@@ -34,6 +39,7 @@ export const getAllCategories = async (req, res) => {
                 slug: row.duong_dan_seo,
                 i: row.bieu_tuong || "", 
                 image: row.hinh_anh || "",
+                trang_thai: row.trang_thai, // 🌟 Gửi kèm trạng thái về Frontend
                 children: []
             };
             tree.push(categoryMap[row.ma_dm_cha]);
@@ -46,6 +52,7 @@ export const getAllCategories = async (req, res) => {
                 slug: row.duong_dan_seo,
                 hot: row.la_danh_muc_hot || false,
                 image: row.hinh_anh || "",
+                trang_thai: row.trang_thai, // 🌟 Gửi kèm trạng thái về Frontend
                 parentId: row.ma_dm_cha
             };
 
@@ -54,8 +61,12 @@ export const getAllCategories = async (req, res) => {
             }
         });
 
-        const cleanTree = tree.filter(cat => cat.children && cat.children.length > 0);
-        res.status(200).json(cleanTree);
+        let finalTree = tree;
+        if (role === 'client') {
+            finalTree = tree.filter(cat => cat.children && cat.children.length > 0);
+        }
+
+        res.status(200).json(finalTree);
     } catch (error) {
         console.error("❌ Lỗi API getAllCategories:", error.message);
         res.status(500).json({ error: "Không thể tải cây danh mục hệ thống." });

@@ -460,10 +460,9 @@ export default function AdminCreateVariant() {
         setEditSku("");
       }
 
-      if (variantId) {
+      if (variantId && !location.state?.preserveMatrix) {
         navigate(`/admin/products/create-variant/${id}`, {
           replace: true,
-
           state: { ...location.state, preserveMatrix: true },
         });
       }

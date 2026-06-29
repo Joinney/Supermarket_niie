@@ -60,20 +60,25 @@ export const getInternalVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Đã nâng cấp Lọc Động
+// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Phân luồng Role Client/Admin
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         
-        // 🌟 Lấy các tham số filter từ Frontend gửi lên
-        const { sort, market, origin } = req.query;
+        // 🌟 Lấy các tham số filter và ROLE từ Frontend gửi lên
+        const { sort, market, origin, role } = req.query;
 
         // 🌟 1. XÂY DỰNG CÂU LỆNH WHERE ĐỘNG
-        let whereClause = `WHERE 1=1`; // Móng nhà vững chắc (LUÔN ĐÚNG)
+        let whereClause = `WHERE 1=1`; // Móng nhà vững chắc
         let values = [];
         let valueIndex = 1;
+
+        // 🛑 LỚP BẢO VỆ: Nếu là khách hàng (client), CHỈ lấy các sản phẩm đang mở bán
+        if (role === 'client') {
+            whereClause += ` AND sp.trang_thai = true`;
+        }
 
         // Lọc theo thị trường (Nếu có chọn)
         if (market && market !== 'all') {
@@ -106,13 +111,13 @@ export const getAllProducts = async (req, res) => {
         if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
         if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
 
-        // 🌟 4. CÂU LỆNH TRUY VẤN CHÍNH (Đã bỏ trang_thai = true để Admin thấy hết)
+        // 🌟 4. CÂU LỆNH TRUY VẤN CHÍNH
         const query = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                sp.ma_quoc_gia, sp.xuat_xu, -- ĐÃ BỔ SUNG LẤY DỮ LIỆU XUẤT XỨ
+                sp.ma_quoc_gia, sp.xuat_xu, 
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS gia_ban_thap_nhat,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -140,11 +145,11 @@ export const getAllProducts = async (req, res) => {
 
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (TRANG CHI TIẾT) - ĐÃ CẤP QUYỀN ADMIN TỐI ĐA
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (PHÂN LUỒNG QUYỀN ADMIN / CLIENT)
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
-    // Đã có ID đích danh thì không cần ép cứng CountryCode nữa
+    const { role } = req.query; // 🌟 Nhận thêm cờ role từ Frontend gửi lên
 
     try {
         const productQuery = `
@@ -152,9 +157,7 @@ export const getProductById = async (req, res) => {
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code
             FROM public.san_pham sp
-            -- 🌟 SỬA THÀNH LEFT JOIN: SP chưa có danh mục vẫn xem được bình thường
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            -- 🌟 XÓA BỎ CHẶN QUỐC GIA: Admin xem được mọi SP bất kể là VN, US hay CN
             WHERE sp.ma_san_pham = $1;
         `;
         const productResult = await pool.query(productQuery, [id]);
@@ -165,9 +168,14 @@ export const getProductById = async (req, res) => {
 
         const product = productResult.rows[0];
 
+        // 🛑 LỚP BẢO VỆ THÉP: Khách hàng tuyệt đối không được xem sản phẩm bị khóa
+        if (role === 'client' && product.trang_thai === false) {
+            return res.status(404).json({ message: "Sản phẩm này đã ngừng kinh doanh hoặc đang tạm khóa." });
+        }
+
         const variantsQuery = `
             SELECT 
-                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai, -- 🌟 1. BỔ SUNG TRẠNG THÁI VÀO CÂU SELECT
+                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai,
                 dm.ten_thuoc_tinh, gt.gia_tri,
                 dv.ten_don_vi AS ten_don_vi
             FROM public.bien_the_san_pham bt
@@ -175,7 +183,6 @@ export const getProductById = async (req, res) => {
             LEFT JOIN public.gia_tri_thuoc_tinh gt ON ct.ma_gia_tri = gt.ma_gia_tri
             LEFT JOIN public.danh_muc_thuoc_tinh dm ON gt.ma_thuoc_tinh = dm.ma_thuoc_tinh
             LEFT JOIN public.don_vi_san_pham dv ON bt.don_vi_id = dv.id
-            -- 🌟 BỎ LỌC 'bt.trang_thai = true': Admin cần xem được cả các biến thể đang bị Tạm Khóa
             WHERE bt.ma_san_pham = $1;
         `;
         const variantsResult = await pool.query(variantsQuery, [id]);
@@ -184,6 +191,9 @@ export const getProductById = async (req, res) => {
         const attributesRaw = {};
 
         variantsResult.rows.forEach(row => {
+            // 🛑 BẢO VỆ BIẾN THỂ: Khách hàng không được thấy các SKU đã bị khóa/xóa mềm
+            if (role === 'client' && row.trang_thai === false) return;
+
             if (!variantsMap[row.ma_bien_the]) {
                 variantsMap[row.ma_bien_the] = {
                     ma_bien_the: row.ma_bien_the,
@@ -214,18 +224,22 @@ export const getProductById = async (req, res) => {
         }));
 
         const mediaQuery = `
-            SELECT ma_media, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, thoi_luong_video
+            SELECT ma_media, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, thoi_luong_video, trang_thai
             FROM public.media_san_pham
-            -- 🌟 BỎ LỌC 'trang_thai = true': Admin xem được mọi hình ảnh
             WHERE ma_san_pham = $1;
         `;
         const mediaResult = await pool.query(mediaQuery, [id]);
+
+        // 🛑 BẢO VỆ HÌNH ẢNH: Lọc bỏ hình ảnh đã bị tắt nếu là khách hàng
+        const finalMedia = role === 'client' 
+            ? mediaResult.rows.filter(m => m.trang_thai === true) 
+            : mediaResult.rows;
 
         res.status(200).json({
             ...product,
             attributes,
             bien_the,
-            media: mediaResult.rows
+            media: finalMedia
         });
 
     } catch (error) {
