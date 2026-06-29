@@ -16,7 +16,8 @@ export const create = async (userId, data) => {
     paypal_transaction_id,
     paypal_order_id,
     to_district_id, // Bóc tách trực tiếp để tái sử dụng an toàn
-    to_ward_code
+    to_ward_code,
+    to_lat, to_lng, tong_khoang_cach_km, thoi_gian_du_kien_phut
   } = data;
 
   // 1. Khởi tạo mã đơn hàng dựa trên thời gian
@@ -46,9 +47,13 @@ export const create = async (userId, data) => {
         trang_thai_thanh_toan, 
         trang_thai_don_hang,
         paypal_transaction_id, 
-        paypal_order_id
+        paypal_order_id,
+        to_lat, 
+        to_lng, 
+        tong_khoang_cach_km, 
+        thoi_gian_du_kien_phut
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING id, ma_don_hang;
     `;
 
@@ -79,7 +84,12 @@ export const create = async (userId, data) => {
       trangThaiThanhToan,
       'pending',
       paypal_transaction_id ? String(paypal_transaction_id) : null,
-      paypal_order_id ? String(paypal_order_id) : null
+      paypal_order_id ? String(paypal_order_id) : null,
+
+      to_lat ? parseFloat(to_lat) : null,
+      to_lng ? parseFloat(to_lng) : null,
+      Number(tong_khoang_cach_km || 0),
+      Number(thoi_gian_du_kien_phut || 0)
     ];
 
     const orderRes = await client.query(orderQuery, orderValues);

@@ -219,6 +219,8 @@ export default function Checkout() {
       })),
       
       don_vi_van_chuyen: shippingInfo.storeName || 'Giao hàng siêu thị',
+      to_lat: address.latitude,
+      to_lng: address.longitude,
       tong_khoang_cach_km: shippingInfo.distanceKm || 0,
       thoi_gian_du_kien_phut: shippingInfo.estimatedMinutes || 0,
       tong_thoi_gian_du_kien_phut: shippingInfo.estimatedMinutes || 0,

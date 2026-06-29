@@ -139,7 +139,13 @@ const placeOrder = async (req, res) => {
         ...req.body,
         danh_sach_san_pham: normalizedItems,
         paypal_transaction_id: req.body.paypal_transaction_id || null, 
-        paypal_order_id: req.body.paypal_order_id || null
+        paypal_order_id: req.body.paypal_order_id || null,
+
+        to_lat: req.body.to_lat || null,
+        to_lng: req.body.to_lng || null,
+        tong_khoang_cach_km: req.body.tong_khoang_cach_km || 0,
+        thoi_gian_du_kien_phut: req.body.thoi_gian_du_kien_phut || 0
+        
     };
 
     // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE

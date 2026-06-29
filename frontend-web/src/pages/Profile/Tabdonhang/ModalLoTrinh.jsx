@@ -37,8 +37,8 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
       setRouteInfo(prev => ({ ...prev, loading: true }));
 
       // 1. Lấy tọa độ Khách hàng (Sử dụng tọa độ fallback nếu đơn hàng chưa lưu)
-      const userLat = parseFloat(order.latitude || order.user_lat || 10.762622);
-      const userLng = parseFloat(order.longitude || order.user_lng || 106.660172);
+      const userLat = parseFloat(order.to_lat || order.latitude || order.user_lat || 10.762622);
+      const userLng = parseFloat(order.to_lng || order.longitude || order.user_lng || 106.660172);
 
       try {
         // 2. Gọi API backend để lấy tọa độ kho (Fallback nếu API chưa sẵn sàng)
@@ -118,8 +118,8 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
           // Cập nhật khoảng cách & thời gian lên UI
           setRouteInfo({
-            distanceKm: (route.distance / 1000).toFixed(1),
-            durationMin: Math.ceil(route.duration / 60),
+            distanceKm: order.tong_khoang_cach_km || (route.distance / 1000).toFixed(1),
+            durationMin: order.thoi_gian_du_kien_phut || Math.ceil(route.duration / 60),
             storeName: storeName,
             loading: false
           });
@@ -158,10 +158,10 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
   }, [isOpen]);
 
   if (!isOpen) return null;
-
+<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"></div>
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full max-w-3xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 max-h-[90vh] mt-36">
         
         {/* Header Modal */}
         <div className="p-4 border-b flex justify-between items-center bg-[#006c49] text-white shrink-0">
