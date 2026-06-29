@@ -16,6 +16,7 @@ export default function NationalForm() {
   const [formData, setFormData] = useState({
     ma_quoc_gia: "",
     ten_quoc_gia: "",
+    ma_dinh_danh_sp: "",
     dinh_dang_vung: "vi-VN",
     ma_tien_te: "VND",
     bieu_tuong_tien: "đ",
@@ -158,6 +159,31 @@ export default function NationalForm() {
                   }
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition"
                 />
+              </div>
+
+              {/* Mã Định Danh Sản Phẩm */}
+              <div>
+                <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide text-indigo-600">
+                  Mã Định Danh SP (GS1) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={10}
+                  placeholder="VD: 893 (VN), 000 (US), 690 (CN)"
+                  value={formData.ma_dinh_danh_sp}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      ma_dinh_danh_sp: e.target.value.trim(),
+                    })
+                  }
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-indigo-500 transition"
+                />
+                <p className="text-[10px] text-slate-400 mt-1.5 italic">
+                  Dùng làm tiền tố sinh mã sản phẩm tự động (VD: MSP
+                  <span className="font-bold text-slate-600">893</span>...)
+                </p>
               </div>
 
               {/* Biểu tượng cờ & Định dạng vùng */}

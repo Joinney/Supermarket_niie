@@ -6,8 +6,9 @@ import pool from '../configs/database.js';
 export const getAllNations = async (req, res) => {
     try {
         const { activeOnly } = req.query;
+        // 🌟 Đã bổ sung ma_dinh_danh_sp vào SELECT
         let query = `
-            SELECT ma_quoc_gia, ten_quoc_gia, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co, trang_thai 
+            SELECT ma_quoc_gia, ten_quoc_gia, ma_dinh_danh_sp, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co, trang_thai 
             FROM public.danh_muc_quoc_gia
         `;
         
@@ -46,25 +47,39 @@ export const getNationById = async (req, res) => {
 // =========================================================================
 export const createNation = async (req, res) => {
     try {
-        const { ma_quoc_gia, ten_quoc_gia, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co } = req.body;
+        // 🌟 Lấy thêm ma_dinh_danh_sp từ Frontend gửi lên
+        const { ma_quoc_gia, ten_quoc_gia, ma_dinh_danh_sp, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co } = req.body;
 
-        if (!ma_quoc_gia || !ten_quoc_gia) {
-            return res.status(400).json({ success: false, message: "Mã và Tên quốc gia là bắt buộc." });
+        // 🌟 Bắt buộc phải có mã định danh SP
+        if (!ma_quoc_gia || !ten_quoc_gia || !ma_dinh_danh_sp) {
+            return res.status(400).json({ success: false, message: "Mã, Tên quốc gia và Mã định danh SP là bắt buộc." });
         }
 
+        // 🌟 Thêm ma_dinh_danh_sp vào câu query
         const query = `
             INSERT INTO public.danh_muc_quoc_gia 
-            (ma_quoc_gia, ten_quoc_gia, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co, trang_thai) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, true) 
+            (ma_quoc_gia, ten_quoc_gia, ma_dinh_danh_sp, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co, trang_thai) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) 
             RETURNING *;
         `;
-        const values = [ma_quoc_gia.toUpperCase(), ten_quoc_gia, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia || 1, bieu_tuong_co];
+        
+        // 🌟 Bổ sung biến thứ 3
+        const values = [
+            ma_quoc_gia.toUpperCase(), 
+            ten_quoc_gia, 
+            ma_dinh_danh_sp.trim(), 
+            dinh_dang_vung, 
+            ma_tien_te, 
+            bieu_tuong_tien, 
+            ty_gia || 1, 
+            bieu_tuong_co
+        ];
         
         const { rows } = await pool.query(query, values);
         res.status(201).json({ success: true, message: "Thêm quốc gia thành công!", data: rows[0] });
     } catch (error) {
-        if (error.code === '23505') { // Mã lỗi trùng lặp Primary Key trong PostgreSQL
-            return res.status(400).json({ success: false, message: "Mã quốc gia này đã tồn tại!" });
+        if (error.code === '23505') { 
+            return res.status(400).json({ success: false, message: "Mã quốc gia hoặc mã định danh này đã tồn tại!" });
         }
         res.status(500).json({ success: false, message: "Lỗi khi thêm quốc gia." });
     }
@@ -76,15 +91,28 @@ export const createNation = async (req, res) => {
 export const updateNation = async (req, res) => {
     try {
         const { id } = req.params;
-        const { ten_quoc_gia, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co } = req.body;
+        // 🌟 Lấy thêm ma_dinh_danh_sp
+        const { ten_quoc_gia, ma_dinh_danh_sp, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co } = req.body;
 
+        // 🌟 Cập nhật thêm cột ma_dinh_danh_sp
         const query = `
             UPDATE public.danh_muc_quoc_gia 
-            SET ten_quoc_gia = $1, dinh_dang_vung = $2, ma_tien_te = $3, bieu_tuong_tien = $4, ty_gia = $5, bieu_tuong_co = $6
-            WHERE ma_quoc_gia = $7 
+            SET ten_quoc_gia = $1, ma_dinh_danh_sp = $2, dinh_dang_vung = $3, ma_tien_te = $4, bieu_tuong_tien = $5, ty_gia = $6, bieu_tuong_co = $7
+            WHERE ma_quoc_gia = $8 
             RETURNING *;
         `;
-        const values = [ten_quoc_gia, dinh_dang_vung, ma_tien_te, bieu_tuong_tien, ty_gia, bieu_tuong_co, id.toUpperCase()];
+        
+        // 🌟 Chỉnh lại tham số (id.toUpperCase() bị đẩy xuống vị trí số 8)
+        const values = [
+            ten_quoc_gia, 
+            ma_dinh_danh_sp.trim(), 
+            dinh_dang_vung, 
+            ma_tien_te, 
+            bieu_tuong_tien, 
+            ty_gia, 
+            bieu_tuong_co, 
+            id.toUpperCase()
+        ];
 
         const { rows } = await pool.query(query, values);
         if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy quốc gia." });
@@ -176,24 +204,5 @@ export const deleteNation = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API deleteNation:", error.message);
         res.status(500).json({ success: false, message: "Lỗi hệ thống khi xóa vĩnh viễn quốc gia." });
-    }
-};
-
-const updateNationStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { trang_thai } = req.body;
-        
-        // 1. Cập nhật vào Database
-        await Nation.findByIdAndUpdate(id, { trang_thai });
-
-        req.io.emit("store_status_changed", { 
-            ma_quoc_gia: "AR", 
-            trang_thai: trang_thai 
-        });
-
-        res.status(200).json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
     }
 };

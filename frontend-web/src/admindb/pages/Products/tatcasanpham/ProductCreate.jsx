@@ -2,7 +2,16 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { ChevronLeft, X, Loader2, UploadCloud, Save } from "lucide-react";
+import {
+  ChevronLeft,
+  X,
+  Loader2,
+  UploadCloud,
+  Save,
+  Package,
+  Layers,
+  Image as ImageIcon,
+} from "lucide-react";
 
 export default function ProductCreate() {
   const navigate = useNavigate();
@@ -14,8 +23,10 @@ export default function ProductCreate() {
     ten_san_pham: "",
     ma_dm_con: "",
     ma_quoc_gia: "VN",
-    xuat_xu: "",
     mo_ta: "",
+    co_bien_the: false, // Mặc định là Sản phẩm đơn
+    gia_ban: 0,
+    hinh_anh_chinh: "", // Thêm link ảnh chính
   });
 
   const [parents, setParents] = useState([]);
@@ -23,10 +34,11 @@ export default function ProductCreate() {
   const [nations, setNations] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
 
   const [filter, setFilter] = useState({ ma_dm_cha: "" });
-  const [isCustomOrigin, setIsCustomOrigin] = useState(false);
+  const productFileInputRef = useRef(null);
 
   // =======================================================================
   // 2. STATE POPUP: TẠO NHANH DANH MỤC CHA
@@ -61,24 +73,28 @@ export default function ProductCreate() {
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-  // Nạp danh mục khởi tạo
+  // Nạp danh mục và Quốc gia khởi tạo
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchInitData = async () => {
       try {
         setLoadingCategories(true);
-        const [resParents, resCat] = await Promise.all([
+        const [resParents, resCat, resNations] = await Promise.all([
           axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
           axios.get(`${apiUrl}/api/categories/children?country=ALL`),
+          axios.get(`${apiUrl}/api/nations`),
         ]);
         setParents(resParents.data.data || []);
         setChildren(resCat.data.data || resCat.data || []);
+        if (resNations.data && resNations.data.success) {
+          setNations(resNations.data.data);
+        }
       } catch (err) {
-        console.error("Lỗi nạp danh mục:", err);
+        console.error("Lỗi nạp dữ liệu khởi tạo:", err);
       } finally {
         setLoadingCategories(false);
       }
     };
-    fetchCategories();
+    fetchInitData();
   }, [apiUrl]);
 
   // Reset filter & danh mục con khi đổi quốc gia
@@ -87,38 +103,45 @@ export default function ProductCreate() {
     setFormData((prev) => ({ ...prev, ma_dm_con: "" }));
   }, [formData.ma_quoc_gia]);
 
-  // --- XỬ LÝ ẢNH DANH MỤC CHA & CON ---
-  const handleParentFileChange = (e) => {
+  // --- XỬ LÝ UPLOAD ẢNH SẢN PHẨM CHÍNH TRỰC TIẾP LÊN CLOUDINARY ---
+  const handleProductImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setParentImage(reader.result);
-      reader.readAsDataURL(file);
-    }
-  };
+    if (!file) return;
 
-  const handleChildFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setChildImage(reader.result);
-      reader.readAsDataURL(file);
-    }
-  };
+    if (!file.type.startsWith("image/"))
+      return alert("Vui lòng chọn tệp tin hình ảnh!");
 
-  useEffect(() => {
-    const fetchNations = async () => {
-      try {
-        const res = await axios.get(`${apiUrl}/api/nations`);
-        if (res.data && res.data.success) {
-          setNations(res.data.data);
-        }
-      } catch (err) {
-        console.error("Lỗi nạp danh sách quốc gia:", err);
+    setUploadingImage(true);
+    const formUpload = new FormData();
+    formUpload.append("image", file);
+
+    try {
+      const response = await axios.post(
+        `${apiUrl}/api/products/upload`,
+        formUpload,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+      if (response.data && response.data.url) {
+        setFormData({ ...formData, hinh_anh_chinh: response.data.url });
       }
-    };
-    fetchNations();
-  }, [apiUrl]);
+    } catch (err) {
+      alert("Lỗi upload ảnh lên hệ thống!");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // --- XỬ LÝ ẢNH DANH MỤC (BASE64) ---
+  const handleFileChange = (e, setImgState) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setImgState(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
 
   // --- SUBMIT TẠO DANH MỤC CHA ---
   const handleCreateParent = async (e) => {
@@ -137,21 +160,16 @@ export default function ProductCreate() {
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, ""),
       };
-
       const res = await axios.post(`${apiUrl}/api/categories/parents`, payload);
       const newParent = res.data.data;
-
       setParents([...parents, newParent]);
       setFilter({ ma_dm_cha: newParent.ma_dm_cha });
-
       setShowParentModal(false);
       setNewParentName("");
       setParentCodeSuffix("");
       setParentImage("");
     } catch (err) {
-      alert(
-        "Lỗi: " + (err.response?.data?.message || "Không thể tạo danh mục cha"),
-      );
+      alert("Lỗi tạo danh mục cha");
     } finally {
       setIsCreatingParent(false);
     }
@@ -175,41 +193,53 @@ export default function ProductCreate() {
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, ""),
       };
-
       const res = await axios.post(
         `${apiUrl}/api/categories/children`,
         payload,
       );
       const newChild = res.data.data;
-
       setChildren([...children, newChild]);
       setFormData({ ...formData, ma_dm_con: newChild.ma_dm_con });
-
       setShowChildModal(false);
       setNewChildName("");
       setChildCodeSuffix("");
       setChildImage("");
     } catch (err) {
-      alert(
-        "Lỗi: " + (err.response?.data?.message || "Không thể tạo danh mục con"),
-      );
+      alert("Lỗi tạo danh mục con");
     } finally {
       setIsCreatingChild(false);
     }
   };
 
-  // --- SUBMIT TẠO SẢN PHẨM ---
+  // --- SUBMIT TẠO SẢN PHẨM CHÍNH ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.ma_dm_con) return setError("Vui lòng chọn danh mục con!");
+    if (!formData.co_bien_the && formData.gia_ban <= 0)
+      return setError("Sản phẩm đơn yêu cầu phải có giá bán hợp lệ!");
+
     setSubmitting(true);
     setError("");
     try {
+      // Gửi Payload cực sạch: co_bien_the = false thì không có mảng variants nào cả
       const response = await axios.post(`${apiUrl}/api/products`, formData);
+
       if (response.data?.success) {
-        alert(
-          "🎉 Sản phẩm đã được tạo lập thành công! Hệ thống AI đang sinh mô tả tự động.",
-        );
-        navigate("/admin/products");
+        const newProductId = response.data.data?.ma_san_pham;
+
+        if (formData.co_bien_the) {
+          // 🌟 TRƯỜNG HỢP 1: SẢN PHẨM NHÓM (CÓ BIẾN THỂ)
+          alert(
+            "🎉 Khởi tạo sản phẩm thành công! Chuyển sang bước cấu hình chi tiết phân loại.",
+          );
+          navigate(`/admin/products/create-variant/${newProductId}`, {
+            state: { initMode: true },
+          });
+        } else {
+          // 🌟 TRƯỜNG HỢP 2: SẢN PHẨM ĐƠN (BÁN TRỰC TIẾP)
+          alert("🎉 Tạo sản phẩm đơn thành công! Đã có thể bán ngay.");
+          navigate(`/admin/products/detail/${newProductId}`);
+        }
       }
     } catch (err) {
       setError(
@@ -225,13 +255,12 @@ export default function ProductCreate() {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="p-6 w-full flex-1 font-sans bg-[#fafafa] min-h-screen relative"
+      className="p-6 w-full flex-1 font-sans bg-[#fafafa] min-h-screen relative text-left"
     >
       <div className="max-w-4xl mx-auto">
-        {/* HEADER SẢN PHẨM */}
+        {/* HEADER */}
         <div className="flex items-center gap-4 mb-8">
           <button
-            type="button"
             onClick={() => navigate("/admin/products")}
             className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm shrink-0"
           >
@@ -242,7 +271,7 @@ export default function ProductCreate() {
               Thêm Sản Phẩm Mới
             </h1>
             <p className="text-xs font-bold text-slate-400 mt-1">
-              Điền các thông tin cơ bản để khởi tạo sản phẩm vào hệ thống
+              Điền thông tin nền tảng để khởi tạo sản phẩm
             </p>
           </div>
         </div>
@@ -255,53 +284,151 @@ export default function ProductCreate() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* TÊN SẢN PHẨM */}
-            <div>
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
-                Tên sản phẩm <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ví dụ: Trà Đông Trai Cozy"
-                value={formData.ten_san_pham}
-                onChange={(e) =>
-                  setFormData({ ...formData, ten_san_pham: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition"
-              />
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* 1. TÊN VÀ QUỐC GIA (Đã chuyển Quốc gia thành Select Dropdown) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-b border-slate-100 pb-8">
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
+                  Tên sản phẩm <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Trà Đông Trai Cozy"
+                  value={formData.ten_san_pham}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ten_san_pham: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
+                  Thị trường Quốc gia
+                </label>
+                <select
+                  value={formData.ma_quoc_gia}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ma_quoc_gia: e.target.value })
+                  }
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition cursor-pointer"
+                >
+                  {nations.map((nation) => (
+                    <option key={nation.ma_quoc_gia} value={nation.ma_quoc_gia}>
+                      {nation.bieu_tuong_co} {nation.ten_quoc_gia} (
+                      {nation.ma_quoc_gia})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* QUỐC GIA ĐỘNG */}
-            <div className="flex flex-wrap items-center gap-6 bg-slate-50 p-3.5 rounded-xl border border-slate-100 w-fit">
-              {nations.map((nation) => (
-                <label
-                  key={nation.ma_quoc_gia}
-                  className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-700 hover:text-slate-800"
+            {/* 2. CẤU TRÚC BÁN HÀNG (ĐƠN / BIẾN THỂ) + GIÁ TIỀN */}
+            <div className="space-y-6 border-b border-slate-100 pb-8">
+              <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                Cấu trúc bán hàng <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Nút: Sản phẩm đơn */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({ ...formData, co_bien_the: false })
+                  }
+                  className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200 hover:border-emerald-200"}`}
                 >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div
+                      className={`p-2 rounded-lg ${!formData.co_bien_the ? "bg-[#006c49] text-white" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      <Package size={20} />
+                    </div>
+                    <h3
+                      className={`font-black ${!formData.co_bien_the ? "text-[#006c49]" : "text-slate-700"}`}
+                    >
+                      Sản Phẩm Đơn
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Bán trực tiếp một lựa chọn duy nhất. Không chia màu sắc,
+                    kích thước.
+                  </p>
+                  {!formData.co_bien_the && (
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-[#006c49] opacity-5 rounded-bl-full"></div>
+                  )}
+                </button>
+
+                {/* Nút: Có biến thể */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({ ...formData, co_bien_the: true, gia_ban: 0 })
+                  }
+                  className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200 hover:border-indigo-200"}`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div
+                      className={`p-2 rounded-lg ${formData.co_bien_the ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      <Layers size={20} />
+                    </div>
+                    <h3
+                      className={`font-black ${formData.co_bien_the ? "text-indigo-600" : "text-slate-700"}`}
+                    >
+                      Có Nhiều Phân Loại
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Khách hàng có thể chọn nhiều biến thể (Ví dụ: Màu sắc, Kích
+                    thước).
+                  </p>
+                  {formData.co_bien_the && (
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600 opacity-5 rounded-bl-full"></div>
+                  )}
+                </button>
+              </div>
+
+              {/* Ô nhập giá chỉ hiện khi là Sản phẩm đơn */}
+              {!formData.co_bien_the && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                >
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide mt-4">
+                    Giá Bán Niêm Yết (VND){" "}
+                    <span className="text-red-500">*</span>
+                  </label>
                   <input
-                    type="radio"
-                    name="ma_quoc_gia"
-                    value={nation.ma_quoc_gia}
-                    checked={formData.ma_quoc_gia === nation.ma_quoc_gia}
+                    type="number"
+                    min="0"
+                    required
+                    placeholder="Nhập giá bán..."
+                    value={formData.gia_ban}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        ma_quoc_gia: e.target.value,
+                        gia_ban: Number(e.target.value),
                       })
                     }
-                    className="w-4 h-4 text-[#006c49] focus:ring-[#006c49] border-slate-300 cursor-pointer"
+                    className="w-full md:w-1/2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-black text-[#006c49] outline-none focus:border-[#006c49] transition"
                   />
-                  {nation.bieu_tuong_co} {nation.ten_quoc_gia} (
-                  {nation.ma_quoc_gia})
-                </label>
-              ))}
+                </motion.div>
+              )}
+              {formData.co_bien_the && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-4 p-3 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-bold flex items-center gap-2"
+                >
+                  ✨ Bạn sẽ thiết lập giá chi tiết cho từng phân loại ở bước
+                  tiếp theo.
+                </motion.div>
+              )}
             </div>
 
-            {/* CASCADING GRID */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* DANH MỤC CHA */}
+            {/* 3. DANH MỤC */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-slate-100 pb-8">
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
                   Danh mục Cha
@@ -309,9 +436,9 @@ export default function ProductCreate() {
                 <select
                   value={filter.ma_dm_cha}
                   onChange={(e) => {
-                    if (e.target.value === "create_new_parent") {
+                    if (e.target.value === "create_new_parent")
                       setShowParentModal(true);
-                    } else {
+                    else {
                       setFilter({ ma_dm_cha: e.target.value });
                       setFormData({ ...formData, ma_dm_con: "" });
                     }
@@ -335,7 +462,6 @@ export default function ProductCreate() {
                 </select>
               </div>
 
-              {/* DANH MỤC CON */}
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
                   Danh mục con <span className="text-red-500">*</span>
@@ -345,11 +471,10 @@ export default function ProductCreate() {
                   value={formData.ma_dm_con}
                   disabled={!filter.ma_dm_cha}
                   onChange={(e) => {
-                    if (e.target.value === "create_new_child") {
+                    if (e.target.value === "create_new_child")
                       setShowChildModal(true);
-                    } else {
+                    else
                       setFormData({ ...formData, ma_dm_con: e.target.value });
-                    }
                   }}
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition cursor-pointer disabled:bg-slate-50 disabled:text-slate-400"
                 >
@@ -375,92 +500,111 @@ export default function ProductCreate() {
                   )}
                 </select>
               </div>
-
-              {/* XUẤT XỨ */}
-              <div>
-                <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
-                  Xuất xứ
-                </label>
-                {isCustomOrigin ? (
-                  <div className="flex gap-2 relative">
-                    <input
-                      type="text"
-                      autoFocus
-                      placeholder="VD: Đức, Pháp..."
-                      value={formData.xuat_xu}
-                      onChange={(e) =>
-                        setFormData({ ...formData, xuat_xu: e.target.value })
-                      }
-                      className="w-full px-4 py-3 bg-white border border-[#006c49] rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#006c49]/20 transition pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsCustomOrigin(false);
-                        setFormData({ ...formData, xuat_xu: "" });
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                      title="Hủy nhập"
-                    >
-                      <X size={16} strokeWidth={3} />
-                    </button>
-                  </div>
-                ) : (
-                  <select
-                    value={formData.xuat_xu || ""}
-                    onChange={(e) => {
-                      if (e.target.value === "custom") {
-                        setIsCustomOrigin(true);
-                        setFormData({ ...formData, xuat_xu: "" });
-                      } else {
-                        setFormData({ ...formData, xuat_xu: e.target.value });
-                      }
-                    }}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition cursor-pointer"
-                  >
-                    <option value="" disabled>
-                      -- Chọn xuất xứ --
-                    </option>
-                    <option value="Sản xuất nội địa (Việt Nam)">
-                      Sản xuất nội địa (Việt Nam)
-                    </option>
-                    <option value="Hàng nhập khẩu chung">
-                      Hàng nhập khẩu chung
-                    </option>
-                    <option value="Nhật Bản">Nhật Bản</option>
-                    <option value="Hàn Quốc">Hàn Quốc</option>
-                    <option value="Trung Quốc">Trung Quốc</option>
-                    <option value="Mỹ">Mỹ</option>
-                    <option value="custom" className="font-bold text-[#006c49]">
-                      ➕ Nhập xuất xứ khác...
-                    </option>
-                  </select>
-                )}
-              </div>
             </div>
 
-            {/* MÔ TẢ */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
+            {/* 4. HÌNH ẢNH CHÍNH & MÔ TẢ */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+              {/* Khu vực Upload Ảnh */}
+              <div className="md:col-span-5 space-y-4">
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
-                  Mô tả chi tiết
+                  Hình ảnh đại diện <span className="text-red-500">*</span>
                 </label>
-                <span className="text-[10px] text-[#006c49] font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
-                  ✨ Để trống sẽ tự động sinh bằng AI
-                </span>
+                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center relative group">
+                  {formData.hinh_anh_chinh ? (
+                    <>
+                      <img
+                        src={formData.hinh_anh_chinh}
+                        alt="Main"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({ ...formData, hinh_anh_chinh: "" })
+                          }
+                          className="text-white text-xs font-bold uppercase border border-white px-3 py-1.5 rounded-lg hover:bg-white hover:text-black transition"
+                        >
+                          Gỡ ảnh
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-slate-400">
+                      {uploadingImage ? (
+                        <Loader2 className="animate-spin" size={32} />
+                      ) : (
+                        <ImageIcon size={32} className="opacity-50" />
+                      )}
+                      <span className="text-xs font-bold">
+                        {uploadingImage ? "Đang tải lên..." : "Chưa có ảnh"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => productFileInputRef.current.click()}
+                    disabled={uploadingImage}
+                    className="w-full py-2.5 bg-slate-100 hover:bg-[#006c49] text-slate-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <UploadCloud size={16} /> Chọn ảnh từ máy tính
+                  </button>
+                  <input
+                    type="file"
+                    ref={productFileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleProductImageUpload}
+                  />
+
+                  <div className="flex items-center gap-3">
+                    <div className="h-px bg-slate-200 flex-1"></div>
+                    <span className="text-[10px] text-slate-400 font-black uppercase">
+                      Hoặc dán URL URL
+                    </span>
+                    <div className="h-px bg-slate-200 flex-1"></div>
+                  </div>
+
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={formData.hinh_anh_chinh}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        hinh_anh_chinh: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 outline-none focus:border-[#006c49] transition"
+                  />
+                </div>
               </div>
-              <textarea
-                rows="5"
-                placeholder="Nhập mô tả sản phẩm chủ động hoặc bỏ trống để hệ thống AI tự phân tích và sinh văn bản tự động..."
-                value={formData.mo_ta}
-                onChange={(e) =>
-                  setFormData({ ...formData, mo_ta: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition resize-none leading-relaxed"
-              />
+
+              {/* Khối Mô tả */}
+              <div className="md:col-span-7 flex flex-col">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                    Mô tả chi tiết
+                  </label>
+                  <span className="text-[10px] text-[#006c49] font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                    ✨ Để trống sẽ tự động sinh bằng AI
+                  </span>
+                </div>
+                <textarea
+                  placeholder="Nhập mô tả sản phẩm chủ động hoặc bỏ trống để hệ thống AI tự phân tích và sinh văn bản tự động..."
+                  value={formData.mo_ta}
+                  onChange={(e) =>
+                    setFormData({ ...formData, mo_ta: e.target.value })
+                  }
+                  className="w-full flex-1 min-h-[200px] p-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition resize-none leading-relaxed"
+                />
+              </div>
             </div>
 
-            {/* BUTTONS SẢN PHẨM */}
+            {/* BUTTONS XÁC NHẬN */}
             <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-end gap-3">
               <button
                 type="button"
@@ -479,7 +623,7 @@ export default function ProductCreate() {
                     <Loader2 size={16} className="animate-spin" /> Đang xử lý...
                   </>
                 ) : (
-                  "Hoàn Tất Tạo Mới"
+                  "Tạo Sản Phẩm & Tiếp Tục ➔"
                 )}
               </button>
             </div>
@@ -487,9 +631,7 @@ export default function ProductCreate() {
         </div>
       </div>
 
-      {/* ========================================================================================================= */}
       {/* ======================================= MODAL TẠO NHANH DANH MỤC CHA ==================================== */}
-      {/* ========================================================================================================= */}
       <AnimatePresence>
         {showParentModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
@@ -525,7 +667,6 @@ export default function ProductCreate() {
 
               <form onSubmit={handleCreateParent} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Tên & Thị trường */}
                   <div className="md:col-span-2">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                       Tên danh mục <span className="text-red-500">*</span>
@@ -534,7 +675,6 @@ export default function ProductCreate() {
                       type="text"
                       required
                       autoFocus
-                      placeholder="Ví dụ: Đồ uống nhập khẩu"
                       value={newParentName}
                       onChange={(e) => setNewParentName(e.target.value)}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
@@ -545,11 +685,9 @@ export default function ProductCreate() {
                       Thị trường Quốc gia
                     </label>
                     <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed">
-                      {formData.ma_quoc_gia === "VN"
-                        ? "🇻🇳 Việt Nam (VN)"
-                        : formData.ma_quoc_gia === "US"
-                          ? "🇺🇸 Mỹ (US)"
-                          : "🇨🇳 Trung Quốc (CN)"}
+                      {nations.find(
+                        (n) => n.ma_quoc_gia === formData.ma_quoc_gia,
+                      )?.ten_quoc_gia || formData.ma_quoc_gia}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -558,7 +696,6 @@ export default function ProductCreate() {
                     </label>
                     <input
                       type="text"
-                      placeholder="Ví dụ: SNACK, TEA, HEALTH"
                       value={parentCodeSuffix}
                       onChange={(e) => setParentCodeSuffix(e.target.value)}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
@@ -572,8 +709,6 @@ export default function ProductCreate() {
                       </p>
                     )}
                   </div>
-
-                  {/* Hình ảnh */}
                   <div className="md:col-span-2">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                       Hình ảnh Danh mục
@@ -587,7 +722,7 @@ export default function ProductCreate() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">
                             No Image
                           </span>
                         )}
@@ -598,25 +733,18 @@ export default function ProductCreate() {
                           onClick={() => parentFileInputRef.current.click()}
                           className="w-full p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-emerald-50 hover:text-[#006c49] transition font-bold"
                         >
-                          <UploadCloud size={18} /> Chọn ảnh từ máy tính
+                          <UploadCloud size={18} /> Chọn ảnh từ máy
                         </button>
                         <input
                           type="file"
                           ref={parentFileInputRef}
                           className="hidden"
                           accept="image/*"
-                          onChange={handleParentFileChange}
+                          onChange={(e) => handleFileChange(e, setParentImage)}
                         />
-                        <div className="flex items-center gap-3">
-                          <div className="h-px bg-slate-200 flex-1"></div>
-                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
-                            Hoặc dán URL
-                          </span>
-                          <div className="h-px bg-slate-200 flex-1"></div>
-                        </div>
                         <input
                           type="url"
-                          placeholder="https://example.com/image.jpg"
+                          placeholder="Hoặc dán URL..."
                           value={
                             parentImage.startsWith("http") ? parentImage : ""
                           }
@@ -627,7 +755,6 @@ export default function ProductCreate() {
                     </div>
                   </div>
                 </div>
-
                 <div className="pt-6 mt-4 border-t border-slate-100 flex justify-end gap-3">
                   <button
                     type="button"
@@ -646,7 +773,7 @@ export default function ProductCreate() {
                     ) : (
                       <Save size={18} />
                     )}{" "}
-                    Hoàn Tất Tạo Mới
+                    Lưu
                   </button>
                 </div>
               </form>
@@ -655,13 +782,10 @@ export default function ProductCreate() {
         )}
       </AnimatePresence>
 
-      {/* ========================================================================================================= */}
       {/* ======================================= MODAL TẠO NHANH DANH MỤC CON ==================================== */}
-      {/* ========================================================================================================= */}
       <AnimatePresence>
         {showChildModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-            {/* Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -669,8 +793,6 @@ export default function ProductCreate() {
               onClick={() => setShowChildModal(false)}
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
-
-            {/* Modal Content */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -696,7 +818,6 @@ export default function ProductCreate() {
 
               <form onSubmit={handleCreateChild} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Tên Danh Mục Con */}
                   <div className="md:col-span-2">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                       Tên danh mục con <span className="text-red-500">*</span>
@@ -705,24 +826,19 @@ export default function ProductCreate() {
                       type="text"
                       required
                       autoFocus
-                      placeholder="Ví dụ: Nước ngọt có gas"
                       value={newChildName}
                       onChange={(e) => setNewChildName(e.target.value)}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
                     />
                   </div>
-
-                  {/* Quốc gia & Danh mục cha (Khóa, tự động ăn theo) */}
                   <div>
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                       Thị trường Quốc gia
                     </label>
                     <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed">
-                      {formData.ma_quoc_gia === "VN"
-                        ? "🇻🇳 Việt Nam (VN)"
-                        : formData.ma_quoc_gia === "US"
-                          ? "🇺🇸 Mỹ (US)"
-                          : "🇨🇳 Trung Quốc (CN)"}
+                      {nations.find(
+                        (n) => n.ma_quoc_gia === formData.ma_quoc_gia,
+                      )?.ten_quoc_gia || formData.ma_quoc_gia}
                     </div>
                   </div>
                   <div>
@@ -731,18 +847,15 @@ export default function ProductCreate() {
                     </label>
                     <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-emerald-700 cursor-not-allowed border-l-4 border-l-emerald-500">
                       {parents.find((p) => p.ma_dm_cha === filter.ma_dm_cha)
-                        ?.ten_danh_muc_cha || "Lỗi: Chưa có danh mục cha"}
+                        ?.ten_danh_muc_cha || "Lỗi"}
                     </div>
                   </div>
-
-                  {/* Mã Danh Mục Con */}
                   <div className="md:col-span-2 space-y-2">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                       Mã danh mục con (Tùy chọn)
                     </label>
                     <input
                       type="text"
-                      placeholder="Ví dụ: SNACK, HEALTH, NOODLE..."
                       value={childCodeSuffix}
                       onChange={(e) => setChildCodeSuffix(e.target.value)}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
@@ -756,8 +869,6 @@ export default function ProductCreate() {
                       </p>
                     )}
                   </div>
-
-                  {/* Hình ảnh */}
                   <div className="md:col-span-2">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                       Hình ảnh Danh mục Con
@@ -771,7 +882,7 @@ export default function ProductCreate() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-center p-2">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase text-center">
                             No Image
                           </span>
                         )}
@@ -782,25 +893,18 @@ export default function ProductCreate() {
                           onClick={() => childFileInputRef.current.click()}
                           className="w-full p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-emerald-50 hover:text-[#006c49] transition font-bold"
                         >
-                          <UploadCloud size={18} /> Chọn ảnh từ máy tính
+                          <UploadCloud size={18} /> Chọn ảnh từ máy
                         </button>
                         <input
                           type="file"
                           ref={childFileInputRef}
                           className="hidden"
                           accept="image/*"
-                          onChange={handleChildFileChange}
+                          onChange={(e) => handleFileChange(e, setChildImage)}
                         />
-                        <div className="flex items-center gap-3">
-                          <div className="h-px bg-slate-200 flex-1"></div>
-                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">
-                            Hoặc dán URL
-                          </span>
-                          <div className="h-px bg-slate-200 flex-1"></div>
-                        </div>
                         <input
                           type="url"
-                          placeholder="https://example.com/image.jpg"
+                          placeholder="Hoặc dán URL..."
                           value={
                             childImage.startsWith("http") ? childImage : ""
                           }
@@ -811,7 +915,6 @@ export default function ProductCreate() {
                     </div>
                   </div>
                 </div>
-
                 <div className="pt-6 mt-4 border-t border-slate-100 flex justify-end gap-3">
                   <button
                     type="button"
@@ -830,7 +933,7 @@ export default function ProductCreate() {
                     ) : (
                       <Save size={18} />
                     )}{" "}
-                    Hoàn Tất Tạo Mới
+                    Lưu
                   </button>
                 </div>
               </form>

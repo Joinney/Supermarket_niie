@@ -72,7 +72,13 @@ export default function Nation() {
     const maQG = removeAccents(n.ma_quoc_gia);
     const tenQG = removeAccents(n.ten_quoc_gia);
 
-    return maQG.includes(searchStr) || tenQG.includes(searchStr);
+    const maGS1 = removeAccents(n.ma_dinh_danh_sp || "");
+
+    return (
+      maQG.includes(searchStr) ||
+      tenQG.includes(searchStr) ||
+      maGS1.includes(searchStr)
+    );
   });
 
   // Bật/Tắt trạng thái (Xóa mềm / Khôi phục)
@@ -189,6 +195,7 @@ export default function Nation() {
                 <tr>
                   <th className="py-4 px-6 w-20 text-center">Cờ</th>
                   <th className="py-4 px-6 w-24">Mã QG</th>
+                  <th className="py-4 px-6 w-24">Mã GS1</th>
                   <th className="py-4 px-6 w-48">Tên Cửa Hàng</th>
                   <th className="py-4 px-6 w-32">Định Dạng Vùng</th>
                   <th className="py-4 px-6 w-32">Tiền Tệ</th>
@@ -214,6 +221,11 @@ export default function Nation() {
                       {/* MA QUOC GIA */}
                       <td className="py-4 px-6 text-slate-400 font-mono text-xs">
                         {n.ma_quoc_gia}
+                      </td>
+
+                      {/* MA DINH DANH SP (GS1) */}
+                      <td className="py-4 px-6 text-indigo-600 font-mono text-xs font-bold">
+                        {n.ma_dinh_danh_sp || "---"}
                       </td>
 
                       {/* TEN QUOC GIA */}

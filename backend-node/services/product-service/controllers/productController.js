@@ -2,11 +2,17 @@ import pool from '../configs/database.js';
 import { batchGenerateDescriptions, generateDescriptionFromAI } from '../utils/aiDescriptionGenerator.js'; 
 
 // =========================================================================
-// HÀM UTILS HỖ TRỢ CHUẨN HÓA DỮ LIỆU ĐẦU VÀO
+// 🛠️ HELPER FUNCTIONS
 // =========================================================================
+const generateUniqueId = (prefix) => {
+    const timeStr = Date.now().toString().slice(-8);
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    return `${prefix}${timeStr}${randomNum}`;
+};
+
 const sanitizePagination = (pageInput, limitInput) => {
     const page = Math.max(1, parseInt(pageInput) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(limitInput) || 12)); 
+    const limit = Math.min(100, Math.max(1, parseInt(limitInput) || 12));
     const offset = (page - 1) * limit;
     return { limit, offset };
 };
@@ -60,41 +66,31 @@ export const getInternalVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Phân luồng Role Client/Admin
+// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Đã cập nhật Database mới
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         
-        // 🌟 Lấy các tham số filter và ROLE từ Frontend gửi lên
-        const { sort, market, origin, role } = req.query;
+        // 🌟 XÓA BỎ 'origin' (xuat_xu) vì cột này không còn trong CSDL
+        const { sort, market, role } = req.query;
 
-        // 🌟 1. XÂY DỰNG CÂU LỆNH WHERE ĐỘNG
-        let whereClause = `WHERE 1=1`; // Móng nhà vững chắc
+        let whereClause = `WHERE 1=1`; 
         let values = [];
         let valueIndex = 1;
 
-        // 🛑 LỚP BẢO VỆ: Nếu là khách hàng (client), CHỈ lấy các sản phẩm đang mở bán
         if (role === 'client') {
             whereClause += ` AND sp.trang_thai = true`;
         }
 
-        // Lọc theo thị trường (Nếu có chọn)
         if (market && market !== 'all') {
             whereClause += ` AND UPPER(sp.ma_quoc_gia) = $${valueIndex}`;
             values.push(market.toUpperCase());
             valueIndex++;
         }
 
-        // Lọc theo xuất xứ (Nếu có chọn)
-        if (origin && origin !== 'all') {
-            whereClause += ` AND sp.xuat_xu = $${valueIndex}`;
-            values.push(origin);
-            valueIndex++;
-        }
-
-        // 🌟 2. ĐẾM TỔNG SỐ LƯỢNG (Dùng LEFT JOIN để không sót sản phẩm chưa có danh mục)
+        // Đếm tổng số lượng
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM public.san_pham sp
@@ -105,19 +101,25 @@ export const getAllProducts = async (req, res) => {
         const totalItems = parseInt(countResult[0]?.total || 0);
         const totalPages = Math.ceil(totalItems / limit);
 
-        // 🌟 3. XỬ LÝ SẮP XẾP (SORT)
+        // Xử lý sắp xếp
         let orderByClause = `ORDER BY sp.ngay_tao DESC`; // Mặc định: Mới nhất
         if (sort === 'oldest') orderByClause = `ORDER BY sp.ngay_tao ASC`;
         if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
         if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
 
-        // 🌟 4. CÂU LỆNH TRUY VẤN CHÍNH
+        // 🌟 CÂU LỆNH TRUY VẤN CHÍNH (Đã cập nhật logic lấy giá tiền)
         const query = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                sp.ma_quoc_gia, sp.xuat_xu, 
+                sp.ma_quoc_gia, sp.co_bien_the, sp.gia_ban, -- Lấy thêm co_bien_the và gia_ban từ DB
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                
+                -- LOGIC TÍNH GIÁ: Nếu sản phẩm đơn thì lấy thẳng giá bán, nếu có biến thể thì tìm MIN giá bán lẻ
+                CASE 
+                    WHEN sp.co_bien_the = false THEN sp.gia_ban
+                    ELSE COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0)
+                END AS gia_ban_thap_nhat,
+                
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -249,7 +251,7 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC (HỖ TRỢ BỘ LỌC, SẮP XẾP, PHÂN TRANG)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (Đã xóa cột xuất xứ)
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
@@ -257,7 +259,7 @@ export const getProductsByCategorySlug = async (req, res) => {
     
     const sort = req.query.sort || 'noi-bat';
     const price = req.query.price || 'tat-ca';
-    const origin = req.query.origin || 'tat-ca';
+    // 🌟 XÓA BỎ 'origin' ở đây
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const offset = (page - 1) * limit;
@@ -267,7 +269,10 @@ export const getProductsByCategorySlug = async (req, res) => {
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                CASE 
+                    WHEN sp.co_bien_the = false THEN sp.gia_ban
+                    ELSE COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0)
+                END AS gia_ban_thap_nhat,
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -285,12 +290,8 @@ export const getProductsByCategorySlug = async (req, res) => {
             paramIndex++;
         }
 
-        if (origin !== 'tat-ca') {
-            baseQuery += ` AND sp.xuat_xu = $${paramIndex}`;
-            countParams.push(origin); 
-            paramIndex++;
-        }
-
+        // 🌟 XÓA BỎ Logic lọc theo 'origin' ở đây vì cột đã bị xóa trong DB
+        
         let finalQuery = `WITH ProductList AS (${baseQuery}) SELECT * FROM ProductList WHERE 1=1`;
 
         if (price !== 'tat-ca') {
@@ -493,97 +494,166 @@ export const refreshEmptyDescriptions = async (req, res) => {
 };
 
 // =========================================================================
-// 8. TẠO SẢN PHẨM MỚI 
+// 8. TẠO SẢN PHẨM MỚI (Mã thông minh + Tự động tiếp nối + AI đúng chuẩn)
 // =========================================================================
 export const createProduct = async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        // Admin có thể gửi thêm sku_mac_dinh, gia_ban_mac_dinh từ FE, nếu không thì lấy giá trị mặc định
-        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia = 'VN', sku_mac_dinh, gia_ban_mac_dinh } = req.body;
+        
+        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia = 'VN', co_bien_the = false, gia_ban = 0, hinh_anh_chinh } = req.body;
         const countryCode = ma_quoc_gia.toUpperCase();
 
         if (!ten_san_pham || !ma_dm_con) {
             return res.status(400).json({ success: false, message: 'Thiếu trường dữ liệu bắt buộc.' });
         }
 
-        // 1. Lưu sản phẩm gốc
+        // 1. Lấy mã định danh (ma_dinh_danh_sp) từ DB
+        const countryRes = await client.query(
+            'SELECT ma_dinh_danh_sp FROM public.danh_muc_quoc_gia WHERE ma_quoc_gia = $1', 
+            [countryCode]
+        );
+        const maDinhDanh = countryRes.rows[0]?.ma_dinh_danh_sp || '000';
+        
+        // 2. Định dạng ngày ddmmyy (Ví dụ: 290626)
+        const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '');
+
+        // 3. Tìm mã sản phẩm lớn nhất của ngày hôm nay để tạo Sequence tiếp nối
+        const prefix = `MSP${maDinhDanh}${dateStr}`;
+        const maxIdRes = await client.query(
+            `SELECT ma_san_pham FROM public.san_pham WHERE ma_san_pham LIKE $1 ORDER BY ma_san_pham DESC LIMIT 1`,
+            [`${prefix}%`]
+        );
+
+        let nextSequence = 1;
+        if (maxIdRes.rows.length > 0) {
+            const lastId = maxIdRes.rows[0].ma_san_pham;
+            // Cắt 3 số cuối ra và cộng thêm 1
+            const lastSeqStr = lastId.slice(-3); 
+            nextSequence = parseInt(lastSeqStr) + 1;
+        }
+        
+        // Tạo mã hoàn chỉnh: VD: MSP893290626001
+        const ma_san_pham = `${prefix}${String(nextSequence).padStart(3, '0')}`;
+
+        // 4. Lưu sản phẩm
         const insertQuery = `
-            INSERT INTO public.san_pham (ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, trang_thai, ngay_tao)
-            VALUES ($1, $2, $3, $4, true, NOW()) RETURNING *;
+            INSERT INTO public.san_pham (ma_san_pham, ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, co_bien_the, gia_ban, trang_thai, ngay_tao)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW()) RETURNING *;
         `;
-        const productRes = await client.query(insertQuery, [ten_san_pham, ma_dm_con, mo_ta || null, countryCode]);
-        const newProduct = productRes.rows[0];
-
-        const defaultSku = sku_mac_dinh || `SKU_${newProduct.ma_san_pham}`;
-        const defaultPrice = gia_ban_mac_dinh || 0;
-        const ma_bien_the_moi = generateUniqueId(`MBT_${countryCode}`);
-
-        await client.query(`
-            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
-            VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
-        `, [ma_bien_the_moi, newProduct.ma_san_pham, ten_san_pham, defaultSku, defaultPrice]);
+        const productRes = await client.query(insertQuery, [ma_san_pham, ten_san_pham.trim(), ma_dm_con, mo_ta || null, countryCode, co_bien_the, gia_ban]);
+        
+        // Lưu ảnh chính (nếu có)
+        if (hinh_anh_chinh) {
+            const ma_media = generateUniqueId('MED'); // Vẫn dùng generateUniqueId cho ảnh
+            await client.query(`
+                INSERT INTO public.media_san_pham (ma_media, ma_san_pham, duong_dan_url, la_anh_chinh, loai_media)
+                VALUES ($1, $2, $3, true, 'image')
+            `, [ma_media, ma_san_pham, hinh_anh_chinh]);
+        }
 
         await client.query('COMMIT');
 
-        // 3. Trigger AI chạy ngầm
-        const categoryRes = await pool.query('SELECT ten_danh_muc_con FROM public.danh_muc_con WHERE ma_dm_con = $1', [ma_dm_con]);
-        const categoryName = categoryRes.rows[0]?.ten_danh_muc_con || '';
-        generateDescriptionFromAI(ten_san_pham, categoryName, true)
-            .then(async (description) => {
-                if (description) await pool.query('UPDATE public.san_pham SET mo_ta = $1 WHERE ma_san_pham = $2', [description, newProduct.ma_san_pham]);
-            })
-            .catch(() => {});
+        // 5. Chạy ngầm AI tạo mô tả (Đã sửa lỗi truyền ID thành Tên danh mục)
+        if (!mo_ta || mo_ta.trim() === '') {
+            const categoryRes = await pool.query(
+                'SELECT ten_danh_muc_con FROM public.danh_muc_con WHERE ma_dm_con = $1', 
+                [ma_dm_con]
+            );
+            const categoryName = categoryRes.rows[0]?.ten_danh_muc_con || 'Sản phẩm tiêu dùng';
 
-        res.status(201).json({ success: true, data: newProduct, message: 'Sản phẩm đã được tạo lập thành công (Kèm 1 biến thể mặc định).' });
+            generateDescriptionFromAI(ten_san_pham, categoryName, true)
+                .then(async (desc) => {
+                    if (desc) {
+                        await pool.query('UPDATE public.san_pham SET mo_ta = $1 WHERE ma_san_pham = $2', [desc, ma_san_pham]);
+                    }
+                }).catch((err) => console.error("Lỗi AI ngầm:", err));
+        }
+
+        res.status(201).json({ success: true, data: productRes.rows[0], message: 'Khởi tạo sản phẩm thành công!' });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('❌ Lỗi API createProduct:', error.message);
-        res.status(500).json({ success: false, error: "Gặp sự cố khi thêm mới sản phẩm." });
+        console.error('❌ Lỗi:', error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi tạo sản phẩm." });
     } finally {
         client.release();
     }
 };
 
 // =========================================================================
-// 8.1 CẬP NHẬT THÔNG TIN CƠ BẢN SẢN PHẨM (Tên, Danh mục, Mô tả, Quốc gia)
+// 8.1 CẬP NHẬT THÔNG TIN CƠ BẢN SẢN PHẨM (Kèm Logic dọn rác Biến thể)
 // =========================================================================
 export const updateProduct = async (req, res) => {
+    const client = await pool.connect(); // 🌟 Chuyển sang dùng client để dùng Transaction
     try {
+        await client.query('BEGIN'); // Bắt đầu Transaction
+
         const { id } = req.params; 
-        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia } = req.body; 
+        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, co_bien_the, gia_ban } = req.body; 
 
         if (!ten_san_pham || !ma_dm_con || !ma_quoc_gia) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ success: false, message: "Tên sản phẩm, Danh mục và Quốc gia là bắt buộc." });
         }
 
-        const query = `
+        const newCoBienThe = co_bien_the !== undefined ? co_bien_the : false;
+
+        const oldProductRes = await client.query('SELECT co_bien_the FROM public.san_pham WHERE ma_san_pham = $1', [id]);
+        if (oldProductRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm để cập nhật." });
+        }
+        const oldCoBienThe = oldProductRes.rows[0].co_bien_the;
+
+        const updateQuery = `
             UPDATE public.san_pham 
             SET ten_san_pham = $1, 
                 ma_dm_con = $2, 
                 mo_ta = $3, 
                 ma_quoc_gia = $4,
+                co_bien_the = $5,
+                gia_ban = $6,
                 ngay_cap_nhat = NOW() 
-            WHERE ma_san_pham = $5 
+            WHERE ma_san_pham = $7 
             RETURNING *;
         `;
         
-        const { rows } = await pool.query(query, [
-            ten_san_pham, 
+        const { rows } = await client.query(updateQuery, [
+            ten_san_pham.trim(), 
             ma_dm_con, 
-            mo_ta, 
+            mo_ta || null, 
             ma_quoc_gia.toUpperCase(), 
+            newCoBienThe,
+            gia_ban || 0,
             id
         ]);
 
-        if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy sản phẩm để cập nhật." });
+        if (oldCoBienThe === true && newCoBienThe === false) {
+            
+            // a. Xóa mềm (Tắt trạng thái) toàn bộ biến thể cũ để không rác UI, nhưng vẫn bảo toàn lịch sử đơn hàng
+            await client.query(`
+                UPDATE public.bien_the_san_pham 
+                SET trang_thai = false, ngay_cap_nhat = NOW() 
+                WHERE ma_san_pham = $1
+            `, [id]);
+
+            await client.query(`
+                UPDATE public.media_san_pham 
+                SET ma_bien_the = NULL 
+                WHERE ma_san_pham = $1
+            `, [id]);
+            
+            console.log(`🧹 Đã dọn dẹp data biến thể cho sản phẩm [${id}] vì chuyển về SP Đơn.`);
         }
 
+        await client.query('COMMIT');
         res.status(200).json({ success: true, data: rows[0], message: "Cập nhật sản phẩm thành công!" });
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error("❌ Lỗi API updateProduct:", error.message);
         res.status(500).json({ success: false, message: "Lỗi máy chủ khi cập nhật sản phẩm." });
+    } finally {
+        client.release(); 
     }
 };
 
@@ -1468,4 +1538,33 @@ export const setMainProductImage = async (req, res) => {
     }
 };
 
+// =========================================================================
+// THÊM ẢNH MỚI VÀO SẢN PHẨM (TỪ TAB CHI TIẾT SẢN PHẨM)
+// =========================================================================
+export const addProductMedia = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params; // ma_san_pham
+        const { duong_dan_url } = req.body;
 
+        if (!duong_dan_url) return res.status(400).json({ success: false, message: "Thiếu URL ảnh." });
+
+        // Kiểm tra xem sản phẩm đã có ảnh nào chưa, nếu chưa thì tự động đặt làm ảnh chính
+        const checkRes = await client.query(`SELECT COUNT(*) FROM public.media_san_pham WHERE ma_san_pham = $1`, [id]);
+        const isMain = parseInt(checkRes.rows[0].count) === 0;
+
+        const ma_media = generateUniqueId('MED'); // Hàm bạn đã có ở đầu file
+        const query = `
+            INSERT INTO public.media_san_pham (ma_media, ma_san_pham, duong_dan_url, la_anh_chinh, loai_media, trang_thai, ngay_tao)
+            VALUES ($1, $2, $3, $4, 'image', true, NOW()) RETURNING *;
+        `;
+        const { rows } = await client.query(query, [ma_media, id, duong_dan_url, isMain]);
+
+        res.status(201).json({ success: true, message: "Đã thêm ảnh vào sản phẩm!", data: rows[0] });
+    } catch (error) {
+        console.error("❌ Lỗi addProductMedia:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi thêm ảnh." });
+    } finally {
+        client.release();
+    }
+};

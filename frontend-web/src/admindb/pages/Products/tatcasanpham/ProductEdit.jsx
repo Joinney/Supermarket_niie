@@ -25,6 +25,8 @@ export default function ProductEdit() {
     ma_dm_con: "",
     ma_quoc_gia: "",
     mo_ta: "",
+    co_bien_the: false,
+    gia_ban: 0,
   });
 
   const apiUrl =
@@ -63,6 +65,8 @@ export default function ProductEdit() {
           ma_dm_con: product.ma_dm_con,
           ma_quoc_gia: product.ma_quoc_gia || "VN",
           mo_ta: product.mo_ta || "",
+          co_bien_the: product.co_bien_the,
+          gia_ban: product.gia_ban || 0,
         });
 
         setFilter({
@@ -186,6 +190,49 @@ export default function ProductEdit() {
                   ))}
                 </select>
               </div>
+              {/* 🌟 CẤU TRÚC BÁN HÀNG */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({ ...formData, co_bien_the: false })
+                  }
+                  className={`p-4 rounded-2xl border-2 text-left transition-all ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200"}`}
+                >
+                  <h3 className="font-black text-slate-700">Sản Phẩm Đơn</h3>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({ ...formData, co_bien_the: true })
+                  }
+                  className={`p-4 rounded-2xl border-2 text-left transition-all ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200"}`}
+                >
+                  <h3 className="font-black text-slate-700">
+                    Có Nhiều Phân Loại
+                  </h3>
+                </button>
+              </div>
+
+              {/* Giá bán (chỉ hiện khi là sản phẩm đơn) */}
+              {!formData.co_bien_the && (
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
+                    Giá bán
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.gia_ban}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        gia_ban: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl font-bold"
+                  />
+                </div>
+              )}
 
               {/* Chọn Danh mục cha */}
               <div>

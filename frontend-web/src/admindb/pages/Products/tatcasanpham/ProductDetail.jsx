@@ -16,6 +16,9 @@ import {
   Edit,
   Trash2,
   RotateCcw,
+  UploadCloud,
+  Link as LinkIcon,
+  X,
 } from "lucide-react";
 import axios from "axios";
 
@@ -39,6 +42,10 @@ export default function AdminProductDetail() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const variantsPerPage = 5;
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  const [newMediaFile, setNewMediaFile] = useState(null);
+  const [newMediaUrl, setNewMediaUrl] = useState("");
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
   // 🌟 Đã tách hàm fetchDetail ra ngoài để có thể tái sử dụng sau khi xóa SKU
   const fetchDetail = useCallback(
@@ -209,6 +216,43 @@ export default function AdminProductDetail() {
     );
   }
 
+  const handleAddMedia = async () => {
+    if (!newMediaFile && !newMediaUrl.trim()) {
+      return alert("Vui lòng chọn ảnh từ máy tính hoặc dán URL!");
+    }
+
+    setIsUploadingMedia(true);
+    try {
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+      let finalUrl = newMediaUrl.trim();
+
+      if (newMediaFile) {
+        const formData = new FormData();
+        formData.append("image", newMediaFile);
+
+        const uploadRes = await axios.post(`${apiUrl}/api/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        finalUrl = uploadRes.data.url;
+      }
+
+      await axios.post(`${apiUrl}/api/products/${product.ma_san_pham}/media`, {
+        duong_dan_url: finalUrl,
+      });
+
+      alert("✅ Đã thêm hình ảnh thành công!");
+      setShowMediaModal(false);
+      setNewMediaFile(null);
+      setNewMediaUrl("");
+      fetchDetail(false);
+    } catch (err) {
+      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
   const tabNavigation = [
     { id: "info", label: "Thông tin sản phẩm", icon: Info },
     { id: "variants", label: "SKU & Biến thể", icon: Layers },
@@ -259,7 +303,9 @@ export default function AdminProductDetail() {
                   alt="preview"
                   className="w-full h-full object-cover rounded-2xl"
                 />
-                {activeMediaObj.ma_bien_the && (
+
+                {/* 🌟 SỬA Ở ĐÂY: Thêm product.co_bien_the để chặn tag rác trên sản phẩm đơn */}
+                {product.co_bien_the && activeMediaObj.ma_bien_the && (
                   <span className="absolute bottom-5 right-5 bg-slate-900/85 backdrop-blur-md text-amber-300 border border-amber-400/40 px-3 py-1.5 rounded-xl text-xs font-black shadow-lg">
                     🏷️ Biến thể:{" "}
                     {getVariantNameByCode(activeMediaObj.ma_bien_the)}
@@ -274,62 +320,78 @@ export default function AdminProductDetail() {
                 </span>
               </div>
             )}
+
+            {/* NÚT ĐẶT LÀM ẢNH CHÍNH (Đặt trong div relative của ảnh lớn) */}
+            {activeMediaObj && (
+              <div className="absolute top-6 left-6">
+                {activeMediaObj.la_anh_chinh ? (
+                  <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-md flex items-center gap-1.5">
+                    <Check size={14} /> ẢNH CHÍNH
+                  </span>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const apiUrl =
+                          import.meta.env.VITE_API_PRODUCT_URL ||
+                          "http://localhost:5002";
+                        await axios.put(
+                          `${apiUrl}/api/products/media/set-main`,
+                          {
+                            ma_san_pham: product.ma_san_pham,
+                            ma_media: activeMediaObj.ma_media,
+                          },
+                        );
+                        alert("Đã đặt làm ảnh chính thành công!");
+                        window.location.reload();
+                      } catch (err) {
+                        alert("Lỗi khi thiết lập ảnh chính.");
+                      }
+                    }}
+                    className="bg-white/90 backdrop-blur text-slate-700 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm transition-colors flex items-center gap-1.5 border border-slate-200"
+                  >
+                    <ImageIcon size={14} /> ĐẶT LÀM ẢNH CHÍNH
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-          {/* NÚT ĐẶT LÀM ẢNH CHÍNH */}
-          {activeMediaObj && (
-            <div className="absolute top-4 left-4">
-              {activeMediaObj.la_anh_chinh ? (
-                <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-md flex items-center gap-1.5">
-                  <Check size={14} /> ẢNH CHÍNH
-                </span>
-              ) : (
-                <button
-                  onClick={async () => {
-                    try {
-                      const apiUrl =
-                        import.meta.env.VITE_API_PRODUCT_URL ||
-                        "http://localhost:5002";
-                      await axios.put(`${apiUrl}/api/products/media/set-main`, {
-                        ma_san_pham: product.ma_san_pham,
-                        ma_media: activeMediaObj.ma_media,
-                      });
-                      alert("Đã đặt làm ảnh chính thành công!");
-                      window.location.reload();
-                    } catch (err) {
-                      alert("Lỗi khi thiết lập ảnh chính.");
-                    }
-                  }}
-                  className="bg-white/90 backdrop-blur text-slate-700 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm transition-colors flex items-center gap-1.5 border border-slate-200"
-                >
-                  <ImageIcon size={14} /> ĐẶT LÀM ẢNH CHÍNH
-                </button>
-              )}
-            </div>
-          )}
-          {product.media && product.media.length > 0 && (
-            <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar">
-              {product.media.map((imgObj) => (
-                <button
-                  key={imgObj.ma_media}
-                  onClick={() => setActiveMediaObj(imgObj)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all relative ${
-                    activeMediaObj?.ma_media === imgObj.ma_media
-                      ? "border-[#006c49] scale-105 shadow-md"
-                      : "border-gray-200 opacity-60"
-                  }`}
-                >
-                  <img
-                    src={imgObj.duong_dan_url}
-                    alt="thumb"
-                    className="w-full h-full object-cover"
-                  />
-                  {imgObj.ma_bien_the && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-black"></span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+
+          {/* DANH SÁCH ẢNH (THUMBNAILS) & NÚT THÊM ẢNH MỚI */}
+          <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar items-center mt-4">
+            {/* 🌟 NÚT GỌI POPUP THÊM ẢNH MỚI */}
+            <button
+              onClick={() => setShowMediaModal(true)}
+              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:text-[#006c49] hover:border-[#006c49] hover:bg-emerald-50 transition-all shrink-0 bg-white"
+              title="Tải thêm ảnh mới"
+            >
+              <Plus size={20} />
+            </button>
+
+            {/* Render các ảnh hiện có */}
+            {product?.media?.map((imgObj) => (
+              <button
+                key={imgObj.ma_media}
+                onClick={() => setActiveMediaObj(imgObj)}
+                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all relative ${
+                  activeMediaObj?.ma_media === imgObj.ma_media
+                    ? "border-[#006c49] scale-105 shadow-md"
+                    : "border-gray-200 opacity-60"
+                }`}
+              >
+                <img
+                  src={imgObj.duong_dan_url}
+                  alt="thumb"
+                  className="w-full h-full object-cover"
+                />
+
+                {/* 🌟 SỬA Ở ĐÂY: Thêm product.co_bien_the để chặn dấu chấm vàng trên sản phẩm đơn */}
+                {product.co_bien_the && imgObj.ma_bien_the && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-black"></span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* CỘT PHẢI */}
@@ -337,18 +399,31 @@ export default function AdminProductDetail() {
           <div className="flex items-center gap-1.5 p-1.5 bg-slate-200/70 rounded-2xl self-start overflow-x-auto max-w-max">
             {tabNavigation.map((t) => {
               const Icon = t.icon;
+              const isDisabled = t.id === "variants" && !product.co_bien_the;
               return (
                 <button
                   key={t.id}
-                  onClick={() => setActiveTab(t.id)}
+                  onClick={() => {
+                    // Chỉ cho phép đổi tab nếu không bị khóa
+                    if (!isDisabled) setActiveTab(t.id);
+                  }}
+                  disabled={isDisabled}
+                  title={
+                    isDisabled ? "Sản phẩm bán trực tiếp không có biến thể" : ""
+                  }
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl font-extrabold text-xs transition-all shrink-0 ${
-                    activeTab === t.id
-                      ? "bg-[#006c49] text-white shadow-md"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    isDisabled
+                      ? "opacity-40 cursor-not-allowed text-slate-500 grayscale" // ⬅️ LÀM MỜ TẠI ĐÂY
+                      : activeTab === t.id
+                        ? "bg-[#006c49] text-white shadow-md"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
                   }`}
                 >
                   <Icon size={15} />
                   <span>{t.label}</span>
+
+                  {/* (Tùy chọn) Hiện cái ổ khóa nhỏ kế bên tab bị mờ cho trực quan */}
+                  {isDisabled && <span className="ml-1 text-[10px]">🔒</span>}
                 </button>
               );
             })}
@@ -360,8 +435,9 @@ export default function AdminProductDetail() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4"
+                className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-6"
               >
+                {/* THÔNG TIN HỆ THỐNG */}
                 <div className="grid grid-cols-2 gap-4 pb-4 border-b border-gray-100 text-xs">
                   <div>
                     <span className="font-bold text-gray-400 uppercase block">
@@ -384,11 +460,37 @@ export default function AdminProductDetail() {
                     </span>
                   </div>
                 </div>
+                {!product.co_bien_the && (
+                  <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-black rounded uppercase">
+                          Sản phẩm đơn
+                        </span>
+                        <span className="text-xs font-bold text-emerald-700">
+                          Đang bán trực tiếp
+                        </span>
+                      </div>
+                      <h4 className="text-2xl font-black text-slate-900 mt-2">
+                        {formatPrice(product.gia_ban)}
+                      </h4>
+                    </div>
+
+                    <Link
+                      // Chuyển hướng sang trang edit sản phẩm chung để sửa giá/tên
+                      to={`/admin/products/edit/${product.ma_san_pham}`}
+                      className="bg-white border border-emerald-200 text-[#006c49] hover:bg-[#006c49] hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      <Edit size={14} /> Chỉnh sửa giá & thông tin
+                    </Link>
+                  </div>
+                )}
+                {/* MÔ TẢ SẢN PHẨM */}
                 <div>
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
                     Bài viết mô tả sản phẩm (`mo_ta`)
                   </h3>
-                  <p className="text-xs text-slate-700 font-medium leading-relaxed whitespace-pre-line bg-slate-50 p-4 rounded-2xl border border-slate-100 max-h-80 overflow-y-auto custom-scrollbar">
+                  <p className="text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-[400px] overflow-y-auto custom-scrollbar">
                     {product.mo_ta ||
                       "Sản phẩm chưa có nội dung mô tả chi tiết."}
                   </p>
@@ -670,6 +772,98 @@ export default function AdminProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* ================= POPUP UPLOAD ẢNH MỚI ================= */}
+      {showMediaModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden"
+          >
+            {/* Header Modal */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-slate-50">
+              <h3 className="font-black text-slate-800 flex items-center gap-2">
+                <ImageIcon className="text-[#006c49]" size={20} />
+                Thêm hình ảnh sản phẩm
+              </h3>
+              <button
+                onClick={() => setShowMediaModal(false)}
+                className="text-gray-400 hover:text-red-500 transition-colors p-1 bg-white rounded-full border border-gray-200 shadow-sm"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body Modal */}
+            <div className="p-6 space-y-5">
+              {/* Option 1: File máy tính */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5">
+                  <UploadCloud size={14} /> Tải lên từ thiết bị
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    setNewMediaFile(e.target.files[0]);
+                    setNewMediaUrl(""); // Clear URL nếu chọn file
+                  }}
+                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-[#006c49] hover:file:bg-emerald-100 border border-gray-200 rounded-xl p-1 bg-white cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 text-xs font-bold text-gray-300">
+                <div className="flex-1 h-px bg-gray-100"></div>
+                HOẶC
+                <div className="flex-1 h-px bg-gray-100"></div>
+              </div>
+
+              {/* Option 2: Link URL */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5">
+                  <LinkIcon size={14} /> Sử dụng URL ảnh
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://vidu.com/hinh-anh.jpg"
+                  value={newMediaUrl}
+                  onChange={(e) => {
+                    setNewMediaUrl(e.target.value);
+                    setNewMediaFile(null); // Clear file nếu nhập URL
+                  }}
+                  className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-[#006c49] transition"
+                />
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setShowMediaModal(false)}
+                className="px-5 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleAddMedia}
+                disabled={
+                  isUploadingMedia || (!newMediaFile && !newMediaUrl.trim())
+                }
+                className="bg-[#006c49] hover:bg-[#004d34] text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-md flex items-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploadingMedia ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Đang lưu...
+                  </>
+                ) : (
+                  "Lưu Hình Ảnh"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 }

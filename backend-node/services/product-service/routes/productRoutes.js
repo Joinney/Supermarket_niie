@@ -28,6 +28,7 @@ import {
     uploadVariantImage,
     migrateLegacyAttributes,
     setMainProductImage,
+    addProductMedia
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -82,7 +83,8 @@ router.post('/:id/variants', createVariant);
 router.get('/:id/reviews', getReviewsByProduct); 
 router.get('/:id/related', getRelatedProducts); 
 
-// ⚠️ CATCH-ALL: Lấy chi tiết sản phẩm
+// Lấy chi tiết sản phẩm
 router.get('/:id', getProductById);
+router.post('/:id/media', addProductMedia);
 
 export default router;
