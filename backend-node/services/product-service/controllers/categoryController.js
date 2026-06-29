@@ -6,9 +6,8 @@ import pool from '../configs/database.js';
 export const getAllCategories = async (req, res) => {
     try {
         const countryCode = (req.query.country || 'VN').toUpperCase();
-        const role = req.query.role; // 🌟 1. Hứng role từ Frontend
+        const role = req.query.role; 
 
-        // 🌟 2. Điều kiện động: Client chỉ thấy danh mục đang mở, Admin thấy tất cả
         const statusFilterCha = role === 'client' ? 'AND trang_thai = true' : '';
         const statusFilterCon = role === 'client' ? 'AND dmc.trang_thai = true' : '';
 
@@ -39,7 +38,7 @@ export const getAllCategories = async (req, res) => {
                 slug: row.duong_dan_seo,
                 i: row.bieu_tuong || "", 
                 image: row.hinh_anh || "",
-                trang_thai: row.trang_thai, // 🌟 Gửi kèm trạng thái về Frontend
+                trang_thai: row.trang_thai, 
                 children: []
             };
             tree.push(categoryMap[row.ma_dm_cha]);
@@ -52,7 +51,7 @@ export const getAllCategories = async (req, res) => {
                 slug: row.duong_dan_seo,
                 hot: row.la_danh_muc_hot || false,
                 image: row.hinh_anh || "",
-                trang_thai: row.trang_thai, // 🌟 Gửi kèm trạng thái về Frontend
+                trang_thai: row.trang_thai, 
                 parentId: row.ma_dm_cha
             };
 

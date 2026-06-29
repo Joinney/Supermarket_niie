@@ -19,6 +19,25 @@ import {
 } from "lucide-react";
 import axios from "axios";
 
+const getNextSku = (existingVariants, baseSku) => {
+  if (!existingVariants || existingVariants.length === 0) return baseSku;
+  const pattern = /^(.*?)(\d+)$/;
+  let maxNum = 0;
+  let prefix = baseSku.replace(/\d+$/, "");
+
+  existingVariants.forEach((v) => {
+    const match = v.sku.match(pattern);
+    if (match) {
+      const num = parseInt(match[2], 10);
+      if (num > maxNum) {
+        maxNum = num;
+        prefix = match[1];
+      }
+    }
+  });
+  return `${prefix}${maxNum + 1}`;
+};
+
 export default function AdminCreateVariant() {
   const { id, variantId } = useParams();
   const navigate = useNavigate();
@@ -54,6 +73,43 @@ export default function AdminCreateVariant() {
   const [saving, setSaving] = useState(false);
 
   const [existingVariants, setExistingVariants] = useState([]);
+  const [showSimpleModal, setShowSimpleModal] = useState(false);
+  const [simpleForm, setSimpleForm] = useState({
+    ten_bien_the: "",
+    sku: "",
+    gia_ban_le: 0,
+    ten_don_vi: "Chai",
+  });
+
+  const handleSaveSimpleVariant = async () => {
+    // Chỉ kiểm tra những gì có trên giao diện
+    if (!simpleForm.ten_bien_the || !simpleForm.sku)
+      return alert("Vui lòng điền tên và mã SKU!");
+
+    try {
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+
+      // Gửi giá bán lẻ mặc định là 0 nếu bạn chưa có ô nhập giá
+      const res = await axios.post(`${apiUrl}/api/products/variants/simple`, {
+        ma_san_pham: id,
+        ...simpleForm,
+        gia_ban_le: simpleForm.gia_ban_le || 0,
+      });
+
+      setExistingVariants([res.data.data, ...existingVariants]);
+      setShowSimpleModal(false);
+      setSimpleForm({
+        ten_bien_the: "",
+        sku: "",
+        gia_ban_le: 0,
+        ten_don_vi: "Chai",
+      });
+      alert("✅ Tạo biến thể đơn thành công!");
+    } catch (err) {
+      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
+    }
+  };
 
   const [availableAttributes, setAvailableAttributes] = useState([]);
   const [globalAttributes, setGlobalAttributes] = useState([]);
@@ -623,15 +679,27 @@ export default function AdminCreateVariant() {
 
   // 🌟 NÚT TẠO MỚI: Xóa form, giúp Admin bổ sung biến thể liên tục
   const handleResetToCreateNew = () => {
-    setEditSku("");
+    const lastSku =
+      existingVariants.length > 0
+        ? existingVariants[0].sku
+        : sku || `SKU-${id}-001`;
+
+    const nextSku = getNextSku(existingVariants, lastSku);
+
+    setEditSku(nextSku);
     setEditPrice(0);
     setEditStock(0);
-    setVariantImageUrl("");
+    setVariantImageUrl(parentProductImage);
+    setEditVariantName("");
+
+    // Reset attributes...
     const clearedAttrs = availableAttributes.map((attr) => ({
       ...attr,
       selected: "",
     }));
     setAvailableAttributes(clearedAttrs);
+
+    // Điều hướng
     navigate(`/admin/products/create-variant/${id}`, {
       replace: true,
       state: location.state,
@@ -815,7 +883,14 @@ export default function AdminCreateVariant() {
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                 <Tag size={16} className="text-amber-500" /> Bước 1: Phân loại
               </h3>
-
+              {/* Nút Tạo nhanh */}
+              <button
+                type="button"
+                onClick={() => setShowSimpleModal(true)}
+                className="text-[10px] bg-sky-50 text-sky-700 font-black px-3 py-1.5 rounded-lg hover:bg-sky-100 transition"
+              >
+                + Thêm biến thể đơn
+              </button>
               <select
                 value={isVariantMode ? "GROUP" : "SINGLE"}
                 onChange={(e) => handleToggleMode(e.target.value === "GROUP")}
@@ -1215,15 +1290,6 @@ export default function AdminCreateVariant() {
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-              {/* 🌟 NÚT TẠO THÊM BIẾN THỂ MỚI (Làm nổi bật và dễ hiểu) */}
-              <button
-                type="button"
-                onClick={handleResetToCreateNew}
-                className="font-black px-4 py-3 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 bg-sky-100 text-sky-700 hover:bg-sky-200 transition active:scale-95 border border-sky-200"
-              >
-                <Plus size={15} /> Tạo thêm biến thể mới
-              </button>
-
               <button
                 type="submit"
                 disabled={saving}
@@ -1377,6 +1443,58 @@ export default function AdminCreateVariant() {
               >
                 <Save size={16} />{" "}
                 {isSubmittingUnit ? "Đang lưu..." : "Hoàn Tất Tạo Mới"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {showSimpleModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setShowSimpleModal(false)}
+          ></div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10"
+          >
+            <h3 className="font-black text-slate-800 mb-5 flex items-center gap-2">
+              <Plus size={18} className="text-[#006c49]" /> Thêm biến thể đơn
+            </h3>
+
+            <div className="space-y-4">
+              {/* Chỉ 2 dòng như bạn yêu cầu */}
+              <input
+                placeholder="Tên biến thể"
+                className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
+                value={simpleForm.ten_bien_the}
+                onChange={(e) =>
+                  setSimpleForm({ ...simpleForm, ten_bien_the: e.target.value })
+                }
+              />
+              <input
+                placeholder="Mã SKU"
+                className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
+                value={simpleForm.sku}
+                onChange={(e) =>
+                  setSimpleForm({ ...simpleForm, sku: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowSimpleModal(false)}
+                className="flex-1 py-3 text-xs font-bold text-gray-500 hover:text-slate-800 transition"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveSimpleVariant}
+                className="flex-1 py-3 bg-[#006c49] text-white rounded-xl text-xs font-black shadow-lg hover:bg-[#005137] transition"
+              >
+                Lưu biến thể
               </button>
             </div>
           </motion.div>

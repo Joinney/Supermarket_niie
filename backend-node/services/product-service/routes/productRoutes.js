@@ -19,6 +19,7 @@ import {
     getVariantById,
     getAllAvailableAttributes,  
     createVariant,
+    createSimpleVariant,
     updateVariant,              
     deleteVariant,    
     deleteAllVariants,  
@@ -65,6 +66,7 @@ router.delete('/variants/:variantId', deleteVariant);
 router.delete('/:id/variants-all', deleteAllVariants); 
 router.post('/variants/:variantId/upload-image', upload.single('image'), uploadVariantImage);
 router.put('/variants/:variantId/restore', restoreVariant);
+router.post('/variants/simple', createSimpleVariant);
 
 // =========================================================================
 // 🔄 3. NHÓM ROUTE ĐỘNG SẢN PHẨM & DANH MỤC

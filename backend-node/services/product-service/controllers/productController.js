@@ -156,7 +156,8 @@ export const getProductById = async (req, res) => {
     try {
         const productQuery = `
             SELECT 
-                sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
+                sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, 
+                sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the, sp.gia_ban,  -- 🌟 THÊM 2 CỘT NÀY VÀO
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -1070,6 +1071,54 @@ export const createVariant = async (req, res) => {
         return res.status(500).json({ success: false, message: "Không thể lưu biến thể do lỗi cấu trúc." });
     } finally {
         client.release(); 
+    }
+};
+
+// =========================================================================
+// 15.1 TẠO BIẾN THỂ ĐƠN (SIMPLE VARIANT - KHÔNG THUỘC TÍNH)
+// =========================================================================
+export const createSimpleVariant = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { ma_san_pham, ten_bien_the, sku, gia_ban_le, ten_don_vi } = req.body;
+
+        if (!ma_san_pham || !sku || !gia_ban_le) {
+            return res.status(400).json({ success: false, message: "Mã sản phẩm, SKU và Giá không được để trống." });
+        }
+
+        await client.query('BEGIN');
+
+        // Lấy mã quốc gia để tạo ID cho biến thể
+        const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [ma_san_pham]);
+        const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
+        const ma_bien_the_moi = generateUniqueId(`MBT_${countryCode}`);
+
+        // Tìm ID đơn vị
+        let don_vi_id = null;
+        if (ten_don_vi) {
+            const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
+            if (unitRes.rows.length > 0) don_vi_id = unitRes.rows[0].id;
+        }
+
+        // INSERT duy nhất vào bảng bien_the_san_pham
+        const query = `
+            INSERT INTO public.bien_the_san_pham 
+            (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW()) 
+            RETURNING *;
+        `;
+        const result = await client.query(query, [
+            ma_bien_the_moi, ma_san_pham, don_vi_id, ten_bien_the || sku, sku, gia_ban_le
+        ]);
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, message: "Đã thêm biến thể đơn thành công!", data: result.rows[0] });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi createSimpleVariant:', error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi tạo biến thể đơn." });
+    } finally {
+        client.release();
     }
 };
 
