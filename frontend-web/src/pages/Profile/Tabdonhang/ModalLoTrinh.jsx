@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { X, Truck, MapPin, ShieldCheck, Loader2 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { orderApi } from "../../../api/axios"; // Nhớ kiểm tra lại đường dẫn import này cho khớp với máy bạn
+import { orderApi } from "../../../api/axios";
 
 // Sửa lỗi mất icon Marker mặc định của Leaflet khi dùng với React/Vite/Webpack
 import iconMarker from 'leaflet/dist/images/marker-icon.png';
@@ -36,49 +36,54 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     const renderRouteMap = async () => {
       setRouteInfo(prev => ({ ...prev, loading: true }));
 
-      // 1. Lấy tọa độ Khách hàng (Sử dụng tọa độ fallback nếu đơn hàng chưa lưu)
+      // 1. Tọa độ Khách hàng
       const userLat = parseFloat(order.to_lat || order.latitude || order.user_lat || 10.762622);
       const userLng = parseFloat(order.to_lng || order.longitude || order.user_lng || 106.660172);
 
       try {
-        // 2. Gọi API backend để lấy tọa độ kho (Fallback nếu API chưa sẵn sàng)
         let storeLat = 10.792622;
         let storeLng = 106.680172;
-        let storeName = "Kho Tổng Demi";
+        let storeName = "Kho Tổng Demi"; 
 
+        // 2. Gọi API lấy dữ liệu MongoDB
         try {
-          const res = await orderApi.post('/shipping/calc', { userLat, userLng });
-          if (res.data && res.data.storeLat) {
-            storeLat = res.data.storeLat;
-            storeLng = res.data.storeLng;
-            storeName = res.data.storeName || "Kho Demi Gần Nhất";
+          // 🌟 SỬA 1: Thêm đúng tiền tố '/orders' khớp với Checkout.jsx
+          const res = await orderApi.post('/orders/shipping/calc', { userLat, userLng }); 
+          
+          const nearestStore = res.data?.data?.nearestStore;
+          if (nearestStore) {
+            // 🌟 SỬA 2: Bóc tách tọa độ chuẩn GeoJSON của MongoDB (index 1 là Lat, index 0 là Lng)
+            const mongoLat = nearestStore.location?.coordinates?.[1];
+            const mongoLng = nearestStore.location?.coordinates?.[0];
+
+            storeLat = parseFloat(nearestStore.lat ?? mongoLat ?? storeLat);
+            storeLng = parseFloat(nearestStore.lng ?? mongoLng ?? storeLng);
+            storeName = nearestStore.name || storeName;
           }
         } catch (apiErr) {
-          console.warn("⚠️ Không lấy được kho từ API, sử dụng kho mặc định.");
+          console.warn("⚠️ API lấy kho bị lỗi, dùng kho mặc định:", apiErr.message);
         }
 
         if (!isMounted) return;
 
-        // 3. Khởi tạo bản đồ Leaflet (chỉ khởi tạo 1 lần)
+        // 3. Khởi tạo bản đồ Leaflet
         if (!leafletMapInstance.current) {
           leafletMapInstance.current = L.map(mapRef.current).setView([userLat, userLng], 13);
           
-          // Nạp layer bản đồ từ OpenStreetMap
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
           }).addTo(leafletMapInstance.current);
         }
 
-        // Tạo layer group để dễ dàng xóa lộ trình cũ nếu người dùng đổi đơn hàng
         if (routingLayer.current) {
           leafletMapInstance.current.removeLayer(routingLayer.current);
         }
         routingLayer.current = L.featureGroup().addTo(leafletMapInstance.current);
 
-        // Đánh dấu điểm xuất phát (Kho hàng)
+        // Đánh dấu điểm xuất phát (Kho)
         const storeIcon = L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', // Icon kho
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png',
           iconSize: [32, 32],
           iconAnchor: [16, 32]
         });
@@ -86,9 +91,9 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           .bindPopup(`<b>${storeName}</b><br/>Nơi xuất hàng`)
           .addTo(routingLayer.current);
 
-        // Đánh dấu điểm đến (Khách hàng)
+        // Đánh dấu điểm đến (Khách)
         const userIcon = L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png', // Icon nhà
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png',
           iconSize: [32, 32],
           iconAnchor: [16, 32]
         });
@@ -96,7 +101,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           .bindPopup(`<b>Điểm giao hàng</b><br/>Đơn: ${order.ma_don_hang || ''}`)
           .addTo(routingLayer.current);
 
-        // 4. Gọi API OSRM miễn phí để lấy mảng tọa độ vẽ đường đi
+        // 4. Gọi API OSRM vẽ đường đi
         const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${storeLng},${storeLat};${userLng},${userLat}?overview=full&geometries=geojson`;
         
         const routeRes = await fetch(osrmUrl);
@@ -104,11 +109,8 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
         if (routeData.code === "Ok" && isMounted) {
           const route = routeData.routes[0];
-          
-          // OSRM trả tọa độ định dạng [lng, lat], Leaflet cần [lat, lng] nên phải đảo ngược lại
           const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
           
-          // Vẽ nét đứt / nét liền cho đường đi
           L.polyline(coordinates, { 
             color: '#006c49', 
             weight: 5, 
@@ -116,15 +118,21 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             lineJoin: 'round'
           }).addTo(routingLayer.current);
 
-          // Cập nhật khoảng cách & thời gian lên UI
+          // 🌟 FIX: Ép kiểu sang số và ép phải lớn hơn 0 mới dùng, nếu không thì lấy khoảng cách thực từ API bản đồ
+          const dbDistance = Number(order.tong_khoang_cach_km);
+          const dbDuration = Number(order.thoi_gian_du_kien_phut);
+
+          const finalDistance = dbDistance > 0 ? dbDistance.toFixed(1) : (route.distance / 1000).toFixed(1);
+          const finalDuration = dbDuration > 0 ? dbDuration : Math.ceil(route.duration / 60);
+
+          // Cập nhật thông tin lên UI
           setRouteInfo({
-            distanceKm: order.tong_khoang_cach_km || (route.distance / 1000).toFixed(1),
-            durationMin: order.thoi_gian_du_kien_phut || Math.ceil(route.duration / 60),
-            storeName: storeName,
+            distanceKm: finalDistance,
+            durationMin: finalDuration,
+            storeName: storeName, 
             loading: false
           });
 
-          // Zoom bản đồ tự động co giãn để nhìn thấy cả kho và người nhận
           leafletMapInstance.current.fitBounds(routingLayer.current.getBounds(), { padding: [50, 50] });
         } else {
           throw new Error("Không tìm thấy đường đi khả dụng");
@@ -138,7 +146,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
       }
     };
 
-    // Delay 300ms đợi DOM của Modal render xong hoàn toàn rồi mới nhúng bản đồ vào
     const timeoutId = setTimeout(() => {
       renderRouteMap();
     }, 300);
@@ -149,7 +156,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     };
   }, [isOpen, order]);
 
-  // Dọn dẹp bản đồ khi đóng Modal để chống lỗi "Map container is already initialized"
   useEffect(() => {
     if (!isOpen && leafletMapInstance.current) {
       leafletMapInstance.current.remove();
@@ -158,9 +164,12 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
   }, [isOpen]);
 
   if (!isOpen) return null;
-<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"></div>
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+    // 🌟 ĐÃ GỘP CHUẨN: z-[9999] nằm ở thẻ ngoài cùng để đè Header
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+      
+      {/* 🌟 ĐÃ GỘP CHUẨN: mt-36 nằm ở thẻ chứa nội dung trắng để tụt xuống */}
       <div className="bg-white w-full max-w-3xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 max-h-[90vh] mt-36">
         
         {/* Header Modal */}
@@ -180,6 +189,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             <div className="bg-emerald-100 p-2 rounded-full text-[#006c49]"><MapPin size={16} /></div>
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Xuất phát từ</span>
+              {/* Tên kho hiển thị động */}
               <span className="text-xs font-black text-slate-700">{routeInfo.storeName}</span>
             </div>
           </div>
@@ -208,7 +218,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               <span className="text-xs font-black uppercase tracking-widest">Đang kết nối GPS...</span>
             </div>
           )}
-          {/* Rất quan trọng: Phải set chiều cao trực tiếp cho thẻ chứa map */}
           <div ref={mapRef} style={{ height: '400px', width: '100%' }} className="z-0 outline-none" />
         </div>
 
