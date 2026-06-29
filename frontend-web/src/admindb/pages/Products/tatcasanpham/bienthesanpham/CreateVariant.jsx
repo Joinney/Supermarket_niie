@@ -14,11 +14,10 @@ import {
   Edit3,
   Image as ImageIcon,
   Upload,
-  RefreshCcw,
-  X,
 } from "lucide-react";
 import axios from "axios";
 
+// 🌟 HÀM TẠO SKU TỰ ĐỘNG
 const getNextSku = (existingVariants, baseSku) => {
   if (!existingVariants || existingVariants.length === 0) return baseSku;
   const pattern = /^(.*?)(\d+)$/;
@@ -50,14 +49,17 @@ export default function AdminCreateVariant() {
   const [productName, setProductName] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // 🌟 STATE ĐIỀU KHIỂN CHẾ ĐỘ
+  // 🌟 STATE CỐT LÕI: Xác định biến thể đang được chọn để edit (Chống giật & lỗi logic)
+  const [activeVariantId, setActiveVariantId] = useState(variantId || null);
+
+  // Nhận tín hiệu từ ProductCreate truyền sang
   const [isVariantMode, setIsVariantMode] = useState(
-    location.state?.initMode || false,
+    location.state?.targetVariantType === "GROUP",
   );
+
   const [isUnitOpen, setIsUnitOpen] = useState(false);
   const unitRef = useRef(null);
 
-  // 🌟 STATE CHO POPUP THÊM ĐƠN VỊ MỚI
   const [isAddUnitModalOpen, setIsAddUnitModalOpen] = useState(false);
   const [newUnitName, setNewUnitName] = useState("");
   const [newUnitDesc, setNewUnitDesc] = useState("");
@@ -81,45 +83,59 @@ export default function AdminCreateVariant() {
     ten_don_vi: "Chai",
   });
 
-  const handleSaveSimpleVariant = async () => {
-    // Chỉ kiểm tra những gì có trên giao diện
-    if (!simpleForm.ten_bien_the || !simpleForm.sku)
-      return alert("Vui lòng điền tên và mã SKU!");
-
-    try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-      // Gửi giá bán lẻ mặc định là 0 nếu bạn chưa có ô nhập giá
-      const res = await axios.post(`${apiUrl}/api/products/variants/simple`, {
-        ma_san_pham: id,
-        ...simpleForm,
-        gia_ban_le: simpleForm.gia_ban_le || 0,
-      });
-
-      setExistingVariants([res.data.data, ...existingVariants]);
-      setShowSimpleModal(false);
-      setSimpleForm({
-        ten_bien_the: "",
-        sku: "",
-        gia_ban_le: 0,
-        ten_don_vi: "Chai",
-      });
-      alert("✅ Tạo biến thể đơn thành công!");
-    } catch (err) {
-      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
-    }
-  };
-
   const [availableAttributes, setAvailableAttributes] = useState([]);
   const [globalAttributes, setGlobalAttributes] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [newAttrName, setNewAttrName] = useState("");
   const [newValInputs, setNewValInputs] = useState({});
 
-  // Chế độ Ma trận: "group" (Nhóm thuộc tính) hoặc "single" (Thuộc tính đơn)
-  const [matrixType, setMatrixType] = useState("group");
+  // =====================================================================
+  // 🌟 HÀM XỬ LÝ CHỌN BIẾN THỂ TỪ BẢNG HOẶC NÚT (SINGLE & GROUP)
+  // =====================================================================
+  const handleSelectExistingVariant = (v) => {
+    setActiveVariantId(v.ma_bien_the);
 
+    // 1. Kiểm tra xem biến thể này là Đơn hay Nhóm để đổi UI tương ứng
+    const hasAttributes = v.thuoc_tinh && Object.keys(v.thuoc_tinh).length > 0;
+    setIsVariantMode(hasAttributes);
+
+    // 2. Điền thông tin cơ bản
+    setEditSku(v.sku || "");
+    setEditPrice(v.gia_ban_le || 0);
+    setEditStock(v.ton_kho || v.so_luong_ton || 0);
+    setEditUnit(v.ten_don_vi || "Chai");
+    setEditVariantName(v.ten_bien_the || "");
+
+    // 3. Xử lý hình ảnh
+    const specificMedia = productMedia.find(
+      (m) => m.ma_bien_the === v.ma_bien_the,
+    );
+    const specificImgUrl = specificMedia
+      ? specificMedia.duong_dan_url
+      : v.hinh_anh_url || v.duong_dan_url;
+    setVariantImageUrl(specificImgUrl || parentProductImage || "");
+
+    // 4. Nếu là Ma trận nhóm, phải làm sáng các nút thuộc tính tương ứng
+    if (hasAttributes && availableAttributes.length > 0) {
+      const updatedAttributes = availableAttributes.map((attr) => ({
+        ...attr,
+        selected: v.thuoc_tinh[attr.name] || "",
+      }));
+      setAvailableAttributes(updatedAttributes);
+    }
+  };
+
+  // Tính toán matchedVariant dựa trên activeVariantId rất đơn giản
+  const matchedVariant = useMemo(() => {
+    if (!activeVariantId) return null;
+    return (
+      existingVariants.find((v) => v.ma_bien_the === activeVariantId) || null
+    );
+  }, [activeVariantId, existingVariants]);
+
+  // =====================================================================
+  // API LOAD DỮ LIỆU BAN ĐẦU
+  // =====================================================================
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -143,8 +159,7 @@ export default function AdminCreateVariant() {
           const data = Array.isArray(productResponse.data)
             ? productResponse.data[0]
             : productResponse.data;
-          const currentProductTitle = data.ten_san_pham || "Sản phẩm gốc";
-          setProductName(currentProductTitle);
+          setProductName(data.ten_san_pham || "Sản phẩm gốc");
 
           const mainImg =
             data.hinh_anh_chinh ||
@@ -170,65 +185,32 @@ export default function AdminCreateVariant() {
 
           const dynamicMatrix = Object.entries(matrixMap).map(
             ([attrName, valuesSet], index) => {
-              const valuesArray = Array.from(valuesSet);
               return {
                 id: `attr_${index}_${Date.now()}`,
                 name: attrName,
-                values: valuesArray,
-                selected: valuesArray[0] || "",
+                values: Array.from(valuesSet),
+                selected: "",
               };
             },
           );
 
-          let targetVar = null;
+          setAvailableAttributes(dynamicMatrix);
+
+          // Nếu mới vào có truyền variantId trên URL, tự động auto-click nó
           if (variantId && variantsList.length > 0) {
-            targetVar = variantsList.find((v) => v.ma_bien_the === variantId);
-            if (targetVar && targetVar.thuoc_tinh) {
-              dynamicMatrix.forEach((attr) => {
-                if (targetVar.thuoc_tinh[attr.name]) {
-                  attr.selected = targetVar.thuoc_tinh[attr.name];
-                }
-              });
+            const target = variantsList.find(
+              (v) => v.ma_bien_the === variantId,
+            );
+            if (target) handleSelectExistingVariant(target);
+          } else {
+            // Chế độ tạo mới
+            if (location.state && location.state.targetVariantType) {
+              setIsVariantMode(location.state.targetVariantType === "GROUP");
+            } else if (dynamicMatrix.length > 0) {
+              setIsVariantMode(true);
+            } else {
+              setIsVariantMode(false);
             }
-          }
-
-          if (!location.state?.preserveMatrix) {
-            setAvailableAttributes(dynamicMatrix);
-          } else {
-            setAvailableAttributes((prev) =>
-              prev.length > 0 ? prev : dynamicMatrix,
-            );
-          }
-
-          if (
-            dynamicMatrix.length === 1 &&
-            dynamicMatrix[0].name === "ten_bien_the"
-          ) {
-            setMatrixType("single");
-          } else if (dynamicMatrix.length <= 1) {
-            setMatrixType("single");
-          } else {
-            setMatrixType("group");
-          }
-
-          const comboText = dynamicMatrix
-            .map((attr) => attr.selected)
-            .filter(Boolean)
-            .join(" - ");
-          if (!location.state?.preserveMatrix) {
-            setEditVariantName(
-              `${currentProductTitle} ${comboText ? `- ${comboText}` : ""}`,
-            );
-          }
-
-          // Kiểm tra xem sản phẩm có thực sự là biến thể nhóm hay không
-          if (location.state && location.state.initMode !== undefined) {
-            setIsVariantMode(location.state.initMode);
-          } else if (dynamicMatrix.length > 0) {
-            setIsVariantMode(true);
-          } else {
-            // Fix kẹt giao diện: Nếu list biến thể nhiều nhưng không có thuộc tính, nó là rác -> Vẫn giữ ở Sản phẩm Đơn
-            setIsVariantMode(false);
           }
         }
 
@@ -239,14 +221,47 @@ export default function AdminCreateVariant() {
           setGlobalAttributes(names);
         }
       } catch (err) {
-        console.error("Lỗi đồng bộ cấu hình dữ liệu:", err);
+        console.error("Lỗi đồng bộ dữ liệu:", err);
       } finally {
         setLoading(false);
       }
     };
     fetchAllData();
-  }, [id, variantId, location.state]);
+  }, [id]); // Rút gọn dependencies để chống loop
 
+  // Cập nhật URL Gợi ý & SKU Gợi ý khi đổi Attributes ở chế độ tạo mới (ActiveVariant = null)
+  useEffect(() => {
+    if (activeVariantId) return; // Đang edit thì ko tự động đổi
+
+    if (isVariantMode && availableAttributes.length > 0) {
+      const comboText = availableAttributes
+        .map((attr) => attr.selected)
+        .filter(Boolean)
+        .join(" - ");
+      setEditVariantName(`${productName} ${comboText ? `- ${comboText}` : ""}`);
+
+      const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+      const attrParts = availableAttributes
+        .map((a) =>
+          a.selected
+            ? a.selected
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/\s+/g, "")
+                .substring(0, 3)
+                .toUpperCase()
+            : "",
+        )
+        .filter(Boolean)
+        .join("-");
+      setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
+    } else if (!isVariantMode && !activeVariantId) {
+      const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
+      setEditSku(`SKU-${idSuffix}-001`);
+    }
+  }, [availableAttributes, isVariantMode, productName, id, activeVariantId]);
+
+  // Đóng Popup Unit khi click ngoài
   useEffect(() => {
     function handleClickOutside(event) {
       if (unitRef.current && !unitRef.current.contains(event.target)) {
@@ -257,21 +272,44 @@ export default function AdminCreateVariant() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const updateVariantNameSuggestion = (productTitle, updatedAttributes) => {
-    if (matrixType === "single") return;
-    const comboText = updatedAttributes
-      .map((attr) => attr.selected)
-      .filter(Boolean)
-      .join(" - ");
-    setEditVariantName(`${productTitle} ${comboText ? `- ${comboText}` : ""}`);
+  const handleSaveSimpleVariant = async () => {
+    if (!simpleForm.ten_bien_the || !simpleForm.sku)
+      return alert("Vui lòng điền tên và mã SKU!");
+
+    try {
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+      const res = await axios.post(`${apiUrl}/api/products/variants/simple`, {
+        ma_san_pham: id,
+        ...simpleForm,
+        gia_ban_le: simpleForm.gia_ban_le || 0,
+      });
+
+      const newVariant = res.data.data;
+      setExistingVariants([newVariant, ...existingVariants]);
+      setShowSimpleModal(false);
+
+      // 🌟 Tự động Auto-select biến thể đơn vừa tạo
+      handleSelectExistingVariant(newVariant);
+
+      setSimpleForm({
+        ten_bien_the: "",
+        sku: "",
+        gia_ban_le: 0,
+        ten_don_vi: "Chai",
+      });
+      alert("✅ Tạo biến thể đơn thành công!");
+    } catch (err) {
+      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
+    }
   };
 
   const handleSelectAttribute = (attrId, value) => {
+    setActiveVariantId(null); // Click thuộc tính mới -> chuyển sang chế độ tạo mới
     const updated = availableAttributes.map((attr) =>
       attr.id === attrId ? { ...attr, selected: value } : attr,
     );
     setAvailableAttributes(updated);
-    updateVariantNameSuggestion(productName, updated);
   };
 
   const handleAddNewValueToAttribute = (attrId) => {
@@ -294,7 +332,7 @@ export default function AdminCreateVariant() {
     });
 
     setAvailableAttributes(updated);
-    updateVariantNameSuggestion(productName, updated);
+    setActiveVariantId(null);
     setNewValInputs((prev) => ({ ...prev, [attrId]: "" }));
   };
 
@@ -360,7 +398,6 @@ export default function AdminCreateVariant() {
   const handleRemoveAttributeGroup = (attrId) => {
     const updated = availableAttributes.filter((a) => a.id !== attrId);
     setAvailableAttributes(updated);
-    updateVariantNameSuggestion(productName, updated);
   };
 
   const filteredGlobalAttributes = useMemo(() => {
@@ -417,126 +454,6 @@ export default function AdminCreateVariant() {
     });
   };
 
-  const matchedVariant = useMemo(() => {
-    if (availableAttributes.length === 0) {
-      const defaultVariant = existingVariants.find(
-        (variant) =>
-          !variant.thuoc_tinh || Object.keys(variant.thuoc_tinh).length === 0,
-      );
-      return defaultVariant || null;
-    }
-
-    const currentSelection = availableAttributes.reduce((acc, attr) => {
-      if (attr.selected) acc[attr.name] = attr.selected;
-      return acc;
-    }, {});
-
-    if (Object.keys(currentSelection).length === 0) return null;
-
-    return existingVariants.find((variant) => {
-      if (!variant.thuoc_tinh) return false;
-      const isMatch = Object.keys(currentSelection).every(
-        (key) => variant.thuoc_tinh[key] === currentSelection[key],
-      );
-      const isExactLength =
-        Object.keys(currentSelection).length ===
-        Object.keys(variant.thuoc_tinh).length;
-      return isMatch && isExactLength;
-    });
-  }, [availableAttributes, existingVariants]);
-
-  useEffect(() => {
-    if (matchedVariant) {
-      setEditSku(matchedVariant.sku || "");
-
-      setEditPrice(matchedVariant.gia_ban_le || 0);
-
-      setEditStock(matchedVariant.ton_kho || matchedVariant.so_luong_ton || 0);
-
-      setEditUnit(matchedVariant.ten_don_vi || units[0]?.ten_don_vi || "Chai");
-
-      setEditVariantName(matchedVariant.ten_bien_the || "");
-
-      const specificMedia = productMedia.find(
-        (m) => m.ma_bien_the === matchedVariant.ma_bien_the,
-      );
-
-      const specificImgUrl = specificMedia
-        ? specificMedia.duong_dan_url
-        : matchedVariant.hinh_anh_url || matchedVariant.duong_dan_url;
-
-      setVariantImageUrl(specificImgUrl || parentProductImage || "");
-
-      if (variantId !== matchedVariant.ma_bien_the) {
-        navigate(
-          `/admin/products/create-variant/${id}/${matchedVariant.ma_bien_the}`,
-          { replace: true, state: location.state },
-        );
-      }
-    } else {
-      if (!location.state?.preserveMatrix) {
-        setEditPrice(0);
-
-        setEditStock(0);
-      }
-
-      setVariantImageUrl(parentProductImage || "");
-
-      if (availableAttributes.length > 0 && matrixType === "group") {
-        const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
-
-        const attrParts = availableAttributes
-
-          .map((a) => {
-            if (!a.selected) return "";
-
-            return a.selected
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/\s+/g, "")
-              .substring(0, 3)
-              .toUpperCase();
-          })
-          .filter(Boolean)
-          .join("-");
-
-        setEditSku(`SKU-${idSuffix}${attrParts ? "-" + attrParts : ""}`);
-      } else if (matrixType === "single" && variantName) {
-        const idSuffix = id ? id.replace(/\D/g, "").slice(-3) : "NEW";
-
-        const namePart = variantName
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/\s+/g, "")
-          .substring(0, 4)
-          .toUpperCase();
-
-        setEditSku(`SKU-${idSuffix}-${namePart}`);
-      } else {
-        setEditSku("");
-      }
-
-      if (variantId && !location.state?.preserveMatrix) {
-        navigate(`/admin/products/create-variant/${id}`, {
-          replace: true,
-          state: { ...location.state, preserveMatrix: true },
-        });
-      }
-    }
-  }, [
-    matchedVariant,
-    parentProductImage,
-    productMedia,
-    id,
-    variantId,
-    navigate,
-    location.state,
-    availableAttributes,
-    units,
-    matrixType,
-    variantName,
-  ]);
-
   const handleLocalImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -556,11 +473,8 @@ export default function AdminCreateVariant() {
         formData,
         { headers: { "Content-Type": "multipart/form-data" } },
       );
-
       if (response.data && response.data.url) {
         setVariantImageUrl(response.data.url);
-      } else {
-        alert("Upload thất bại, vui lòng thử lại!");
       }
     } catch (err) {
       alert("Gặp sự cố khi upload ảnh lên Cloudinary!");
@@ -600,7 +514,6 @@ export default function AdminCreateVariant() {
       keys.forEach((k, idx) => {
         comboObj[k] = combo[idx];
       });
-
       const existsInDB = existingVariants.some((variant) => {
         if (!variant.thuoc_tinh) return false;
         return keys.every((k) => variant.thuoc_tinh[k] === comboObj[k]);
@@ -618,12 +531,7 @@ export default function AdminCreateVariant() {
         selected: missingCombo[attr.name] || attr.selected,
       }));
       setAvailableAttributes(updated);
-      updateVariantNameSuggestion(productName, updated);
-
-      navigate(`/admin/products/create-variant/${id}`, {
-        replace: true,
-        state: { ...location.state, preserveMatrix: true },
-      });
+      setActiveVariantId(null); // Switch to create mode
     } else {
       alert(
         "✨ Tuyệt vời! Bạn đã bao phủ ĐẦY ĐỦ tất cả các tổ hợp biến thể của sản phẩm này.",
@@ -631,13 +539,45 @@ export default function AdminCreateVariant() {
     }
   };
 
-  // 🌟 FIX LOGIC CHUYỂN ĐỔI CHẾ ĐỘ: Giải quyết tận gốc bài toán Kẹt UI khi có biến thể rác
+  const openSimpleModal = () => {
+    const lastSku =
+      existingVariants.length > 0 ? existingVariants[0].sku : `SKU-${id}-001`;
+    const nextSku = getNextSku(existingVariants, lastSku);
+    setSimpleForm({
+      ten_bien_the: "",
+      sku: nextSku,
+      gia_ban_le: 0,
+      ten_don_vi: units[0]?.ten_don_vi || "Chai",
+    });
+    setShowSimpleModal(true);
+  };
+
+  const handleResetToCreateNew = () => {
+    setActiveVariantId(null);
+
+    const lastSku =
+      existingVariants.length > 0
+        ? existingVariants[0].sku
+        : sku || `SKU-${id}-001`;
+    const nextSku = getNextSku(existingVariants, lastSku);
+
+    setEditSku(nextSku);
+    setEditPrice(0);
+    setEditStock(0);
+    setVariantImageUrl(parentProductImage);
+    setEditVariantName("");
+
+    const clearedAttrs = availableAttributes.map((attr) => ({
+      ...attr,
+      selected: "",
+    }));
+    setAvailableAttributes(clearedAttrs);
+  };
+
   const handleToggleMode = async (isSwitchingToGroup) => {
     if (isSwitchingToGroup === isVariantMode) return;
 
     if (isSwitchingToGroup === false) {
-      // 1. TỪ NHÓM -> ĐƠN
-      // Kiểm tra xem có ma trận hoặc có nhiều hơn 1 biến thể (kể cả đã bị ẩn) hay không
       if (availableAttributes.length > 0 || existingVariants.length > 0) {
         if (
           confirm(
@@ -648,8 +588,6 @@ export default function AdminCreateVariant() {
             const apiUrl =
               import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
             await axios.delete(`${apiUrl}/api/products/${id}/variants-all`);
-
-            // Xóa rỗng toàn bộ UI để bắt đầu lại
             setAvailableAttributes([]);
             setExistingVariants([]);
             setIsVariantMode(false);
@@ -662,7 +600,6 @@ export default function AdminCreateVariant() {
         setIsVariantMode(false);
       }
     } else {
-      // 2. TỪ ĐƠN -> NHÓM
       if (sku || price > 0) {
         if (
           confirm(
@@ -670,48 +607,17 @@ export default function AdminCreateVariant() {
           )
         ) {
           setIsVariantMode(true);
+          handleResetToCreateNew();
         }
       } else {
         setIsVariantMode(true);
+        handleResetToCreateNew();
       }
     }
   };
 
-  // 🌟 NÚT TẠO MỚI: Xóa form, giúp Admin bổ sung biến thể liên tục
-  const handleResetToCreateNew = () => {
-    const lastSku =
-      existingVariants.length > 0
-        ? existingVariants[0].sku
-        : sku || `SKU-${id}-001`;
-
-    const nextSku = getNextSku(existingVariants, lastSku);
-
-    setEditSku(nextSku);
-    setEditPrice(0);
-    setEditStock(0);
-    setVariantImageUrl(parentProductImage);
-    setEditVariantName("");
-
-    // Reset attributes...
-    const clearedAttrs = availableAttributes.map((attr) => ({
-      ...attr,
-      selected: "",
-    }));
-    setAvailableAttributes(clearedAttrs);
-
-    // Điều hướng
-    navigate(`/admin/products/create-variant/${id}`, {
-      replace: true,
-      state: location.state,
-    });
-  };
-
-  // 🌟 HÀM XỬ LÝ LƯU ĐƠN VỊ TỪ POPUP
   const handleAddNewUnitSubmit = async () => {
-    if (!newUnitName.trim()) {
-      alert("Vui lòng nhập tên đơn vị!");
-      return;
-    }
+    if (!newUnitName.trim()) return alert("Vui lòng nhập tên đơn vị!");
     setIsSubmittingUnit(true);
     try {
       const apiUrl =
@@ -723,7 +629,6 @@ export default function AdminCreateVariant() {
       if (res.data) {
         setUnits([...units, res.data]);
         setEditUnit(res.data.ten_don_vi);
-        // Đóng popup và reset ô nhập
         setIsAddUnitModalOpen(false);
         setNewUnitName("");
         setNewUnitDesc("");
@@ -741,9 +646,12 @@ export default function AdminCreateVariant() {
     if (price < 0) return alert("Giá niêm yết không hợp lệ!");
 
     if (isVariantMode) {
-      if (availableAttributes.length === 0) {
+      if (
+        availableAttributes.length === 0 ||
+        !availableAttributes.some((a) => a.selected)
+      ) {
         return alert(
-          "Vui lòng tạo ít nhất 1 nhóm thuộc tính cho sản phẩm biến thể!",
+          "🛑 LỖI MA TRẬN: Vui lòng tạo ít nhất 1 nhóm thuộc tính (Ví dụ: Màu Sắc - Đỏ) trước khi bấm Lưu phiên bản!",
         );
       }
       const missingSelections = availableAttributes.filter(
@@ -752,7 +660,7 @@ export default function AdminCreateVariant() {
       if (missingSelections.length > 0) {
         const missingNames = missingSelections.map((a) => a.name).join(", ");
         return alert(
-          `🛑 Lỗi Ma Trận: Bạn chưa chọn giá trị cho thuộc tính [${missingNames}]. Vui lòng chọn hoặc điền mới!`,
+          `🛑 LỖI MA TRẬN: Bạn chưa chọn giá trị cho thuộc tính [${missingNames}]. Vui lòng chọn!`,
         );
       }
     }
@@ -762,14 +670,19 @@ export default function AdminCreateVariant() {
       const apiUrl =
         import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-      const filterAttributesPayload = isVariantMode
-        ? availableAttributes.reduce((acc, attr) => {
-            if (attr.selected && attr.selected.trim() !== "") {
-              acc[attr.name] = attr.selected;
-            }
-            return acc;
-          }, {})
-        : {};
+      const filterAttributesPayload =
+        isVariantMode && availableAttributes.length > 0
+          ? availableAttributes.reduce((acc, attr) => {
+              if (
+                attr.name !== "ten_bien_the" &&
+                attr.selected &&
+                attr.selected.trim() !== ""
+              ) {
+                acc[attr.name] = attr.selected;
+              }
+              return acc;
+            }, {})
+          : {};
 
       const payload = {
         ma_san_pham: id,
@@ -788,18 +701,27 @@ export default function AdminCreateVariant() {
           payload,
         );
         alert(`💾 Đã cập nhật thành công biến thể [${matchedVariant.sku}]`);
+
+        // Cập nhật lại list ở Local
+        setExistingVariants((prev) =>
+          prev.map((v) =>
+            v.ma_bien_the === matchedVariant.ma_bien_the
+              ? { ...v, ...payload }
+              : v,
+          ),
+        );
       } else {
         const res = await axios.post(
           `${apiUrl}/api/products/${id}/variants`,
           payload,
         );
         alert("🎉 Đã khởi tạo biến thể mới thành công vào Database!");
-
         const newVariantData = {
           ...res.data.data,
           thuoc_tinh: filterAttributesPayload,
         };
         setExistingVariants([newVariantData, ...existingVariants]);
+        setActiveVariantId(newVariantData.ma_bien_the); // Auto select new variant
       }
     } catch (err) {
       console.error("Lỗi xử lý lưu dữ liệu biến thể:", err);
@@ -807,30 +729,6 @@ export default function AdminCreateVariant() {
     } finally {
       setSaving(false);
     }
-  };
-
-  // 🌟 NÂNG CẤP BẢO MẬT: Xử lý chuyển đổi chế độ ma trận kèm theo ràng buộc bắt buộc xóa sạch dữ liệu
-  const handleMatrixTypeChange = (e) => {
-    const nextType = e.target.value;
-
-    // Nếu chuyển sang Đơn khi đang có các Group thuộc tính hiện hành
-    if (matrixType === "group" && availableAttributes.length > 0) {
-      alert(
-        "🛑 Ràng buộc cấu hình: Bạn đang chạy ma trận 'Nhóm thuộc tính'. Hãy xóa tất cả các nhóm thuộc tính hiện tại bên dưới trước khi đổi sang chế độ 'Thuộc tính đơn'!",
-      );
-      return;
-    }
-
-    // Nếu chuyển sang Nhóm khi đang tồn tại dữ liệu thuộc tính Đơn lẻ (variantName có chữ)
-    if (matrixType === "single" && variantName.trim() !== "") {
-      alert(
-        "🛑 Ràng buộc cấu hình: Bạn đang lưu dữ liệu 'Thuộc tính đơn'. Vui lòng xóa sạch chuỗi định danh (Tên hiển thị biến thể) ở cột bên phải trước khi chuyển đổi sang 'Nhóm thuộc tính'!",
-      );
-      return;
-    }
-
-    setMatrixType(nextType);
-    setAvailableAttributes([]);
   };
 
   if (loading) {
@@ -870,27 +768,40 @@ export default function AdminCreateVariant() {
             </p>
           </div>
         </div>
+
+        {/* Nút Hủy Edit / Trở về chế độ tạo mới */}
+        {matchedVariant && (
+          <button
+            type="button"
+            onClick={handleResetToCreateNew}
+            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition"
+          >
+            + Chuyển sang Tạo Mới
+          </button>
+        )}
       </div>
 
       <form
         onSubmit={handleSaveVariant}
         className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-6xl"
       >
-        {/* CỘT TRÁI: QUẢN LÝ CHẾ ĐỘ & MA TRẬN */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                 <Tag size={16} className="text-amber-500" /> Bước 1: Phân loại
               </h3>
-              {/* Nút Tạo nhanh */}
-              <button
-                type="button"
-                onClick={() => setShowSimpleModal(true)}
-                className="text-[10px] bg-sky-50 text-sky-700 font-black px-3 py-1.5 rounded-lg hover:bg-sky-100 transition"
-              >
-                + Thêm biến thể đơn
-              </button>
+
+              {!isVariantMode && (
+                <button
+                  type="button"
+                  onClick={openSimpleModal}
+                  className="text-[10px] bg-sky-50 text-sky-700 font-black px-3 py-1.5 rounded-lg hover:bg-sky-100 transition"
+                >
+                  + Thêm biến thể đơn
+                </button>
+              )}
+
               <select
                 value={isVariantMode ? "GROUP" : "SINGLE"}
                 onChange={(e) => handleToggleMode(e.target.value === "GROUP")}
@@ -903,14 +814,34 @@ export default function AdminCreateVariant() {
 
             {!isVariantMode ? (
               <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="bg-[#006c49] text-white px-4 py-2.5 rounded-lg text-xs font-black w-fit shadow-md">
-                  {variantName || productName}
-                </div>
-
-                {!sku && (
+                {existingVariants.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {existingVariants.map((v) => {
+                      const isSelected = activeVariantId === v.ma_bien_the;
+                      return (
+                        <div
+                          key={v.ma_bien_the}
+                          onClick={() => handleSelectExistingVariant(v)}
+                          className={`px-4 py-2 rounded-lg text-xs font-black cursor-pointer transition-all border ${
+                            isSelected
+                              ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
+                              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          {v.ten_bien_the} {isSelected && "📍"}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-[#006c49] text-white px-4 py-2.5 rounded-lg text-xs font-black w-fit shadow-md">
+                    {variantName || productName}
+                  </div>
+                )}
+                {!sku && existingVariants.length === 0 && (
                   <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-[11px] font-bold">
-                    Sản phẩm đơn (Không biến thể). <br /> Chỉ cần nhập SKU & Giá
-                    ở cột bên phải.
+                    Đang ở chế độ Biến thể Đơn. <br /> Nhấn nút{" "}
+                    <b>+ Thêm biến thể đơn</b> ở trên để tạo.
                   </div>
                 )}
               </div>
@@ -933,26 +864,18 @@ export default function AdminCreateVariant() {
                         <Trash2 size={13} />
                       </button>
                     </div>
-
                     <div className="flex flex-wrap gap-1.5">
                       {attr.values?.map((val) => {
                         const isSelected = attr.selected === val;
                         const isGloballyUsed =
                           usedAttributesMap[attr.name]?.has(val);
                         const isComboValid = checkComboExists(attr.name, val);
-
                         return (
                           <button
                             type="button"
                             key={val}
                             onClick={() => handleSelectAttribute(attr.id, val)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${
-                              isSelected
-                                ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
-                                : isComboValid
-                                  ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm"
-                                  : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"
-                            }`}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${isSelected ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105" : isComboValid ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm" : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"}`}
                           >
                             {val}
                             {!isGloballyUsed && !isSelected && (
@@ -965,7 +888,6 @@ export default function AdminCreateVariant() {
                         );
                       })}
                     </div>
-
                     <div className="flex gap-2 pt-1">
                       <input
                         type="text"
@@ -995,7 +917,6 @@ export default function AdminCreateVariant() {
                     </div>
                   </div>
                 ))}
-
                 {availableAttributes.length > 0 && (
                   <button
                     type="button"
@@ -1005,7 +926,6 @@ export default function AdminCreateVariant() {
                     <Layers size={16} /> Gợi ý cấu hình còn thiếu
                   </button>
                 )}
-
                 <div className="pt-4 border-t border-gray-100 space-y-2 relative">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
                     Khởi tạo nhóm thuộc tính (Ví dụ: Màu sắc)
@@ -1071,7 +991,6 @@ export default function AdminCreateVariant() {
           </div>
         </div>
 
-        {/* CỘT PHẢI: THÔNG SỐ */}
         <div className="lg:col-span-7 space-y-6">
           {matchedVariant && (
             <motion.div
@@ -1099,7 +1018,7 @@ export default function AdminCreateVariant() {
               <Layers
                 size={16}
                 className={matchedVariant ? "text-blue-600" : "text-[#006c49]"}
-              />
+              />{" "}
               Bước 2: Thông số thương mại của phiên bản
             </h3>
             <div className="space-y-4">
@@ -1154,7 +1073,6 @@ export default function AdminCreateVariant() {
                     className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] font-mono font-black text-slate-900 outline-none p-3 rounded-xl text-xs transition"
                   />
                 </div>
-
                 <div className="space-y-1.5 relative" ref={unitRef}>
                   <label className="text-[11px] font-black text-gray-400 uppercase">
                     Đơn vị
@@ -1170,7 +1088,6 @@ export default function AdminCreateVariant() {
                       ▼
                     </span>
                   </div>
-
                   {isUnitOpen && (
                     <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
                       <div className="max-h-[160px] overflow-y-auto custom-scrollbar p-1">
@@ -1199,10 +1116,8 @@ export default function AdminCreateVariant() {
                           </div>
                         )}
                       </div>
-
                       <div className="border-t border-gray-100 p-1">
                         <div
-                          // 🌟 MỞ POPUP THÊM ĐƠN VỊ THAY VÌ DÙNG WINDOW.PROMPT
                           onClick={() => {
                             setIsUnitOpen(false);
                             setIsAddUnitModalOpen(true);
@@ -1307,7 +1222,7 @@ export default function AdminCreateVariant() {
 
           <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-black text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
-              📊 Bảng đối chiếu ma trận hiện hành của sản phẩm
+              📊 Bảng đối chiếu các phiên bản hiện hành của sản phẩm
             </h3>
             <div className="overflow-x-auto rounded-xl border border-gray-100 max-h-[280px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left border-collapse relative">
@@ -1323,17 +1238,11 @@ export default function AdminCreateVariant() {
                 <tbody className="divide-y divide-gray-50 text-xs font-bold text-slate-700">
                   {existingVariants.length > 0 ? (
                     existingVariants.map((v, index) => {
-                      const isHighlighted =
-                        matchedVariant?.ma_bien_the === v.ma_bien_the;
+                      const isHighlighted = activeVariantId === v.ma_bien_the;
                       return (
                         <tr
                           key={index}
-                          onClick={() =>
-                            navigate(
-                              `/admin/products/create-variant/${id}/${v.ma_bien_the}`,
-                              { state: location.state },
-                            )
-                          }
+                          onClick={() => handleSelectExistingVariant(v)}
                           className={`cursor-pointer transition duration-150 ${isHighlighted ? "bg-blue-50/70" : "hover:bg-slate-50"}`}
                         >
                           <td
@@ -1374,7 +1283,7 @@ export default function AdminCreateVariant() {
         </div>
       </form>
 
-      {/* 🌟 POPUP THÊM ĐƠN VỊ MỚI NẰM ĐÈ LÊN MÀN HÌNH */}
+      {/* POPUP THÊM ĐƠN VỊ MỚI */}
       {isAddUnitModalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <motion.div
@@ -1382,7 +1291,6 @@ export default function AdminCreateVariant() {
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
           >
-            {/* Header */}
             <div className="flex items-center gap-4 p-6 border-b border-gray-100">
               <button
                 onClick={() => setIsAddUnitModalOpen(false)}
@@ -1394,13 +1302,8 @@ export default function AdminCreateVariant() {
                 <h2 className="text-xl font-black text-slate-900 tracking-tight">
                   Thêm Đơn Vị Mới
                 </h2>
-                <p className="text-xs font-bold text-slate-400 mt-0.5">
-                  Thiết lập quy chuẩn đóng gói cho hệ thống
-                </p>
               </div>
             </div>
-
-            {/* Body */}
             <div className="p-6 space-y-6 bg-slate-50/50">
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
@@ -1410,25 +1313,11 @@ export default function AdminCreateVariant() {
                   value={newUnitName}
                   onChange={(e) => setNewUnitName(e.target.value)}
                   type="text"
-                  placeholder="VD: Thùng, Lốc, Lon, Túi..."
-                  className="w-full bg-white border border-gray-200 focus:border-[#006c49] p-3.5 rounded-xl text-sm font-bold outline-none transition shadow-sm"
+                  placeholder="VD: Thùng, Lốc..."
+                  className="w-full bg-white border border-gray-200 focus:border-[#006c49] p-3.5 rounded-xl text-sm font-bold outline-none"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                  MÔ TẢ CHI TIẾT
-                </label>
-                <textarea
-                  value={newUnitDesc}
-                  onChange={(e) => setNewUnitDesc(e.target.value)}
-                  rows="4"
-                  placeholder="Mô tả mục đích sử dụng (VD: Đơn vị tính cho bia lon)..."
-                  className="w-full bg-white border border-gray-200 focus:border-[#006c49] p-3.5 rounded-xl text-sm font-medium outline-none transition resize-none shadow-sm"
-                ></textarea>
-              </div>
             </div>
-
-            {/* Footer */}
             <div className="p-5 border-t border-gray-100 flex items-center justify-end gap-3 bg-white">
               <button
                 onClick={() => setIsAddUnitModalOpen(false)}
@@ -1439,15 +1328,16 @@ export default function AdminCreateVariant() {
               <button
                 onClick={handleAddNewUnitSubmit}
                 disabled={isSubmittingUnit}
-                className="px-6 py-2.5 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-black rounded-xl shadow-md transition flex items-center gap-2 disabled:opacity-50"
+                className="px-6 py-2.5 bg-[#006c49] text-white text-sm font-black rounded-xl shadow-md transition"
               >
-                <Save size={16} />{" "}
-                {isSubmittingUnit ? "Đang lưu..." : "Hoàn Tất Tạo Mới"}
+                Lưu
               </button>
             </div>
           </motion.div>
         </div>
       )}
+
+      {/* POPUP THÊM BIẾN THỂ ĐƠN CHUẨN */}
       {showSimpleModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div
@@ -1462,9 +1352,7 @@ export default function AdminCreateVariant() {
             <h3 className="font-black text-slate-800 mb-5 flex items-center gap-2">
               <Plus size={18} className="text-[#006c49]" /> Thêm biến thể đơn
             </h3>
-
             <div className="space-y-4">
-              {/* Chỉ 2 dòng như bạn yêu cầu */}
               <input
                 placeholder="Tên biến thể"
                 className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
@@ -1482,7 +1370,6 @@ export default function AdminCreateVariant() {
                 }
               />
             </div>
-
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowSimpleModal(false)}

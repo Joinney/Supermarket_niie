@@ -23,6 +23,7 @@ import {
     updateVariant,              
     deleteVariant,    
     deleteAllVariants,  
+    hardDeleteVariant,
     restoreVariant,             
     createAttribute,            
     uploadImage,
@@ -77,6 +78,7 @@ router.post('/', createProduct);
 router.put('/:id', updateProduct);
 router.put('/:id/toggle-status', toggleProductStatus);
 router.delete('/:id', deleteProduct);
+router.delete('/variants/:variantId/hard', hardDeleteVariant);
 
 // Xử lý lưu Transaction khởi tạo biến thể mới đấu nối ma trận EAV
 router.post('/:id/variants', createVariant);

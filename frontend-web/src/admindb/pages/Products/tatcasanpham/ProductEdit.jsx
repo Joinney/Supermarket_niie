@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import { Loader2, Save, ChevronLeft } from "lucide-react";
+import {
+  Loader2,
+  Save,
+  ChevronLeft,
+  Package,
+  Layers,
+  CheckCircle2,
+} from "lucide-react";
 
 export default function ProductEdit() {
   const { id } = useParams();
@@ -29,36 +36,34 @@ export default function ProductEdit() {
     gia_ban: 0,
   });
 
+  // 🌟 STATE MỚI: Quản lý loại biến thể nếu đổi từ Đơn sang Nhóm
+  const [variantType, setVariantType] = useState("GROUP");
+
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-  // ... (các import giữ nguyên)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        // Sử dụng Promise.all để lấy dữ liệu song song cho nhanh
         const [resProduct, resCat, resParents, resNations] = await Promise.all([
           axios.get(`${apiUrl}/api/products/${id}`),
           axios.get(`${apiUrl}/api/categories/children?country=ALL`),
           axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
-          axios.get(`${apiUrl}/api/nations`), // API mới
+          axios.get(`${apiUrl}/api/nations`),
         ]);
 
         const product = resProduct.data;
         const allChildren = resCat.data.data || [];
         const allParents = resParents.data.data || [];
-        const nations = resNations.data.data || []; // Lấy đúng mảng dữ liệu
+        const nations = resNations.data.data || [];
 
-        // Tìm danh mục cha dựa trên mã danh mục con của sản phẩm
         const currentChild = allChildren.find(
           (c) => c.ma_dm_con === product.ma_dm_con,
         );
         const parentId = currentChild ? currentChild.ma_dm_cha : "";
 
-        // Gán dữ liệu vào state
         setFormData({
           ma_san_pham: product.ma_san_pham,
           ten_san_pham: product.ten_san_pham,
@@ -92,6 +97,7 @@ export default function ProductEdit() {
     setFormData((prev) => ({ ...prev, ma_dm_con: "" }));
   }, [filter.ma_quoc_gia]);
 
+  // 🌟 ĐÃ SỬA HÀM LƯU: XỬ LÝ ĐIỀU HƯỚNG THÔNG MINH
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitLoading(true);
@@ -100,8 +106,18 @@ export default function ProductEdit() {
         ...formData,
         ma_quoc_gia: filter.ma_quoc_gia,
       });
-      alert("✅ Cập nhật sản phẩm thành công!");
-      navigate("/admin/products/Danhsachsanpham");
+
+      if (formData.co_bien_the) {
+        // Nếu là sản phẩm nhóm -> Chuyển thẳng sang trang quản lý biến thể kèm tín hiệu SINGLE/GROUP
+        alert("✅ Đã cập nhật! Chuyển sang giao diện quản lý biến thể.");
+        navigate(`/admin/products/create-variant/${id}`, {
+          state: { targetVariantType: variantType }, // Bắn cờ sang trang kia
+        });
+      } else {
+        // Nếu là sản phẩm đơn -> Về danh sách
+        alert("✅ Cập nhật sản phẩm thành công!");
+        navigate("/admin/products/Danhsachsanpham");
+      }
     } catch (err) {
       alert("❌ Lỗi: " + (err.response?.data?.message || "Có lỗi xảy ra"));
     } finally {
@@ -118,11 +134,10 @@ export default function ProductEdit() {
 
   return (
     <div className="p-6 w-full flex-1 font-sans">
-      {/* Container căn giữa với giới hạn chiều rộng */}
       <div className="max-w-4xl mx-auto">
-        {/* HEADER: Nút Quay lại + Tiêu đề */}
         <div className="flex items-center gap-4 mb-8">
           <button
+            type="button"
             onClick={() => navigate(-1)}
             className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm"
             title="Quay lại"
@@ -139,10 +154,8 @@ export default function ProductEdit() {
           </div>
         </div>
 
-        {/* BẢNG FORM */}
         <div className="bg-white p-8 rounded-[24px] shadow-sm border border-slate-200/80">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* SKU - BỊ KHÓA */}
             <div>
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                 Mã sản phẩm (SKU) <span className="text-red-500">*</span>
@@ -154,7 +167,6 @@ export default function ProductEdit() {
               />
             </div>
 
-            {/* Tên */}
             <div>
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                 Tên sản phẩm <span className="text-red-500">*</span>
@@ -169,9 +181,7 @@ export default function ProductEdit() {
               />
             </div>
 
-            {/* CASCADING DROPDOWNS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Chọn Quốc gia */}
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                   Thị trường Quốc gia
@@ -190,51 +200,145 @@ export default function ProductEdit() {
                   ))}
                 </select>
               </div>
-              {/* 🌟 CẤU TRÚC BÁN HÀNG */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, co_bien_the: false })
-                  }
-                  className={`p-4 rounded-2xl border-2 text-left transition-all ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200"}`}
-                >
-                  <h3 className="font-black text-slate-700">Sản Phẩm Đơn</h3>
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, co_bien_the: true })
-                  }
-                  className={`p-4 rounded-2xl border-2 text-left transition-all ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200"}`}
-                >
-                  <h3 className="font-black text-slate-700">
-                    Có Nhiều Phân Loại
-                  </h3>
-                </button>
-              </div>
 
-              {/* Giá bán (chỉ hiện khi là sản phẩm đơn) */}
-              {!formData.co_bien_the && (
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                    Giá bán
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.gia_ban}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        gia_ban: Number(e.target.value),
-                      })
+              {/* 🌟 GIAO DIỆN CẤU TRÚC BÁN HÀNG */}
+              <div className="md:col-span-2 space-y-4 border-b border-slate-100 pb-6">
+                <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                  Cấu trúc bán hàng
+                </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData({ ...formData, co_bien_the: false })
                     }
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl font-bold"
-                  />
-                </div>
-              )}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200"}`}
+                  >
+                    <div
+                      className={`p-2 rounded-lg ${!formData.co_bien_the ? "bg-[#006c49] text-white" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      <Package size={16} />
+                    </div>
+                    <div>
+                      <h3
+                        className={`font-black text-sm ${!formData.co_bien_the ? "text-[#006c49]" : "text-slate-700"}`}
+                      >
+                        Sản Phẩm Đơn
+                      </h3>
+                    </div>
+                  </button>
 
-              {/* Chọn Danh mục cha */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData({ ...formData, co_bien_the: true })
+                    }
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200"}`}
+                  >
+                    <div
+                      className={`p-2 rounded-lg ${formData.co_bien_the ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      <Layers size={16} />
+                    </div>
+                    <div>
+                      <h3
+                        className={`font-black text-sm ${formData.co_bien_the ? "text-indigo-600" : "text-slate-700"}`}
+                      >
+                        Có Nhiều Phân Loại
+                      </h3>
+                    </div>
+                  </button>
+                </div>
+
+                {/* 🌟 NẾU CHỌN BIẾN THỂ -> HIỆN DROPDOWN SINGLE/GROUP NHƯ LÚC TẠO MỚI */}
+                {formData.co_bien_the && (
+                  <div className="mt-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                    <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wide mb-4">
+                      👉 Bạn muốn quản lý phân loại theo cách nào?
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div
+                        onClick={() => setVariantType("SINGLE")}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${variantType === "SINGLE" ? "bg-white border-indigo-500 shadow-sm" : "bg-transparent border-transparent hover:bg-slate-100"}`}
+                      >
+                        <div
+                          className={`mt-0.5 shrink-0 ${variantType === "SINGLE" ? "text-indigo-600" : "text-slate-300"}`}
+                        >
+                          {variantType === "SINGLE" ? (
+                            <CheckCircle2
+                              size={18}
+                              className="fill-indigo-100"
+                            />
+                          ) : (
+                            <div className="w-[18px] h-[18px] rounded-full border-2 border-slate-300"></div>
+                          )}
+                        </div>
+                        <div>
+                          <h4
+                            className={`text-sm font-bold ${variantType === "SINGLE" ? "text-indigo-700" : "text-slate-600"}`}
+                          >
+                            Biến Thể Đơn Lập
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1">
+                            VD: "Bản tiêu chuẩn", "Bản cao cấp"
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        onClick={() => setVariantType("GROUP")}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${variantType === "GROUP" ? "bg-white border-indigo-500 shadow-sm" : "bg-transparent border-transparent hover:bg-slate-100"}`}
+                      >
+                        <div
+                          className={`mt-0.5 shrink-0 ${variantType === "GROUP" ? "text-indigo-600" : "text-slate-300"}`}
+                        >
+                          {variantType === "GROUP" ? (
+                            <CheckCircle2
+                              size={18}
+                              className="fill-indigo-100"
+                            />
+                          ) : (
+                            <div className="w-[18px] h-[18px] rounded-full border-2 border-slate-300"></div>
+                          )}
+                        </div>
+                        <div>
+                          <h4
+                            className={`text-sm font-bold ${variantType === "GROUP" ? "text-indigo-700" : "text-slate-600"}`}
+                          >
+                            Ma Trận Thuộc Tính
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1">
+                            VD: Áo Size M - Màu Đỏ
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {!formData.co_bien_the && (
+              <div>
+                <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
+                  Giá bán hiện tại (đ)
+                </label>
+                <input
+                  type="number"
+                  value={formData.gia_ban}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      gia_ban: Number(e.target.value),
+                    })
+                  }
+                  className="w-full md:w-1/3 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-black text-[#006c49] outline-none focus:border-[#006c49]"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                   Thuộc Danh mục Cha
@@ -257,7 +361,6 @@ export default function ProductEdit() {
                 </select>
               </div>
 
-              {/* Chọn Danh mục con (Lưu vào DB) */}
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                   Danh mục con <span className="text-red-500">*</span>
@@ -282,7 +385,6 @@ export default function ProductEdit() {
               </div>
             </div>
 
-            {/* Mô tả */}
             <div>
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                 Mô tả chi tiết
@@ -298,7 +400,6 @@ export default function ProductEdit() {
               />
             </div>
 
-            {/* FOOTER ACTION BUTTONS */}
             <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-end gap-3">
               <button
                 type="button"
@@ -317,7 +418,9 @@ export default function ProductEdit() {
                 ) : (
                   <Save size={18} />
                 )}
-                Lưu Thay Đổi
+                {formData.co_bien_the
+                  ? "Lưu & Quản lý Phân Loại"
+                  : "Lưu Thay Đổi"}
               </button>
             </div>
           </form>

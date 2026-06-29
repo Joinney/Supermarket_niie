@@ -24,12 +24,12 @@ export default function ProductList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
 
-  // 🌟 4. STATE BỘ LỌC (FILTERS) MỚI NÂNG CẤP
+  // 🌟 4. STATE BỘ LỌC ĐÃ ĐƯỢC CẬP NHẬT (THAY ORIGIN THÀNH TYPE)
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     sort: "newest", // newest, oldest, price_desc, price_asc
     market: "all", // all, VN, US, CN
-    origin: "all", // all, vn, nhap-khau
+    type: "all", // 🌟 all, single (Đơn), group (Nhóm)
   });
 
   // Bộ đếm Debounce: Ngừng gõ 500ms mới bắn request lên server
@@ -48,13 +48,13 @@ export default function ProductList() {
     try {
       let response;
 
-      // Đóng gói toàn bộ params (Phân trang + Bộ lọc)
+      // 🌟 Đã cập nhật queryParams để gửi filter "type" xuống Backend
       const queryParams = {
         page,
         limit,
         sort: filters.sort,
         market: filters.market !== "all" ? filters.market : undefined,
-        origin: filters.origin !== "all" ? filters.origin : undefined,
+        type: filters.type !== "all" ? filters.type : undefined,
       };
 
       if (debouncedTerm.trim() !== "") {
@@ -68,8 +68,6 @@ export default function ProductList() {
           setTotalPages(1);
         }
       } else {
-        // 🌟 CHỈNH SỬA CỰC KỲ QUAN TRỌNG Ở ĐÂY:
-        // Phải gọi thẳng vào /api/products thì backend mới nhận diện được bộ lọc mới!
         response = await axios.get(`${apiUrl}/api/products`, {
           params: queryParams,
         });
@@ -88,7 +86,6 @@ export default function ProductList() {
     }
   };
 
-  // 🌟 Kích hoạt fetch khi trang, limit, từ khóa, HOẶC BỘ LỌC thay đổi
   useEffect(() => {
     fetchProducts();
   }, [page, limit, debouncedTerm, filters]);
@@ -100,13 +97,12 @@ export default function ProductList() {
     setSearchTerm("");
     setPage(1);
     // Reset toàn bộ bộ lọc về mặc định
-    setFilters({ sort: "newest", market: "all", origin: "all" });
-    // fetchProducts() sẽ tự động được gọi nhờ useEffect lắng nghe filters thay đổi
+    setFilters({ sort: "newest", market: "all", type: "all" });
   };
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1); // Trở về trang 1 mỗi khi đổi bộ lọc để không bị lỗi trang trống
+    setPage(1); // Trở về trang 1 mỗi khi đổi bộ lọc
   };
 
   const handleDelete = async (id, name) => {
@@ -116,13 +112,9 @@ export default function ProductList() {
       )
     ) {
       try {
-        // 1. Gọi API Delete xuống Backend để chém bay dữ liệu trong DB
         await axios.delete(`${apiUrl}/api/products/${id}`);
-
-        // 2. Xóa DB thành công thì mới cho bay màu trên giao diện UI
         setProducts(products.filter((p) => p.ma_san_pham !== id));
         setTotalItems((prev) => prev - 1);
-
         alert(`✅ Đã xóa vĩnh viễn sản phẩm: ${name}`);
       } catch (err) {
         const errorMsg =
@@ -132,12 +124,9 @@ export default function ProductList() {
     }
   };
 
-  // HÀM BẬT / TẮT TRẠNG THÁI SẢN PHẨM
   const handleToggleStatus = async (id, currentStatus) => {
     try {
       await axios.put(`${apiUrl}/api/products/${id}/toggle-status`);
-
-      // Cập nhật lại UI ngay lập tức mà không cần F5
       setProducts(
         products.map((p) =>
           p.ma_san_pham === id ? { ...p, trang_thai: !currentStatus } : p,
@@ -158,7 +147,6 @@ export default function ProductList() {
   useEffect(() => {
     const fetchNations = async () => {
       try {
-        // Sử dụng apiUrl toàn cục
         const res = await axios.get(`${apiUrl}/api/nations`);
         setCountries(res.data.data || []);
       } catch (err) {
@@ -323,7 +311,6 @@ export default function ProductList() {
                     className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49]"
                   >
                     <option value="all">Tất cả thị trường</option>
-                    {/* MAP TỪ DATABASE */}
                     {countries.map((c) => (
                       <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>
                         {c.bieu_tuong_co} {c.ten_quoc_gia}
@@ -332,25 +319,21 @@ export default function ProductList() {
                   </select>
                 </div>
 
-                {/* Lọc: Xuất xứ (xuat_xu) */}
+                {/* 🌟 Lọc: Cấu trúc bán hàng (THAY CHO NGUỒN GỐC CŨ) */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
-                    Nguồn gốc xuất xứ
+                    Phân loại sản phẩm
                   </label>
                   <select
-                    value={filters.origin}
-                    onChange={(e) =>
-                      handleFilterChange("origin", e.target.value)
-                    }
+                    value={filters.type}
+                    onChange={(e) => handleFilterChange("type", e.target.value)}
                     className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49]"
                   >
-                    <option value="all">Tất cả nguồn gốc</option>
-                    <option value="vn">Việt Nam (vn)</option>
-                    <option value="nhap-khau">
-                      Hàng nhập khẩu (nhap-khau)
+                    <option value="all">Tất cả cấu trúc</option>
+                    <option value="single">Chỉ Sản phẩm Đơn</option>
+                    <option value="group">
+                      Chỉ Sản phẩm Nhóm (Có biến thể)
                     </option>
-                    <option value="Nhật Bản">(jp)</option>
-                    <option value="Hàn Quốc">(kr)</option>
                   </select>
                 </div>
               </div>
@@ -363,17 +346,12 @@ export default function ProductList() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gray-100 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider bg-white">
-                <th className="py-3 px-4 w-12 text-center">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300 text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5 cursor-pointer"
-                  />
-                </th>
+                {/* 🌟 ĐÃ XÓA CỘT CHECKBOX Ở ĐÂY */}
                 <th className="py-3 px-4">Sản phẩm</th>
                 <th className="py-3 px-4">Danh mục con</th>
-                <th className="py-3 px-4">Thị trường / Xuất xứ</th>
-                <th className="py-3 px-4">Giá bán thấp nhất</th>
-                <th className="py-3 px-4">Mở/khóa sản phẩm</th>
+                <th className="py-3 px-4 text-center">Phân loại</th>
+                <th className="py-3 px-4 font-mono">Giá bán</th>
+                <th className="py-3 px-4 text-center">Trạng thái</th>
                 <th className="py-3 px-4 text-right pr-6">Thao tác</th>
               </tr>
             </thead>
@@ -383,14 +361,9 @@ export default function ProductList() {
                   key={item.ma_san_pham || index}
                   className="group hover:bg-emerald-50/30 transition"
                 >
-                  <td className="py-4 px-4 text-center">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300 text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5 cursor-pointer"
-                    />
-                  </td>
+                  {/* 🌟 ĐÃ XÓA CỘT CHECKBOX Ở ĐÂY */}
 
-                  <td className="py-4 px-4 max-w-[240px]">
+                  <td className="py-4 px-4 max-w-[280px]">
                     <div className="flex items-center gap-3">
                       <img
                         src={
@@ -401,7 +374,6 @@ export default function ProductList() {
                         className="w-12 h-12 rounded-xl object-cover border border-gray-100 shadow-sm shrink-0 bg-gray-50"
                       />
                       <div className="flex flex-col justify-center min-w-0">
-                        {/* Bọc tên sản phẩm và nhãn vào 1 dòng flex */}
                         <div className="flex items-center gap-2">
                           <p
                             className="text-xs font-black text-slate-900 truncate hover:text-[#006c49] cursor-pointer"
@@ -415,7 +387,6 @@ export default function ProductList() {
                             {item.ten_san_pham}
                           </p>
 
-                          {/*  ĐÂY LÀ NHÃN CẢNH BÁO "ĐÃ XÓA"  */}
                           {item.trang_thai === false && (
                             <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[9px] font-black uppercase whitespace-nowrap">
                               Tạm khóa
@@ -434,27 +405,28 @@ export default function ProductList() {
                     {item.ten_danh_muc_con || "Chưa phân loại"}
                   </td>
 
-                  {/* Cột hiển thị nhanh Thị trường & Xuất xứ */}
-                  <td className="py-4 px-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] w-max uppercase border border-blue-100">
+                  {/* 🌟 CỘT PHÂN LOẠI MỚI (Hiện Quốc gia + Loại Sản Phẩm) */}
+                  <td className="py-4 px-4 text-center">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className="inline-block px-2.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase border border-blue-100">
                         {item.ma_quoc_gia || "N/A"}
                       </span>
-                      <span className="text-[10px] text-slate-400 italic">
-                        {item.xuat_xu === "vn"
-                          ? "Nội địa"
-                          : item.xuat_xu === "nhap-khau"
-                            ? "Nhập khẩu"
-                            : "Chưa rõ"}
+                      <span
+                        className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                          item.co_bien_the
+                            ? "bg-indigo-50 text-indigo-600 border border-indigo-100"
+                            : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                        }`}
+                      >
+                        {item.co_bien_the ? "SP Nhóm" : "SP Đơn"}
                       </span>
                     </div>
                   </td>
 
                   <td className="py-4 px-4 text-slate-900 font-black font-mono">
-                    {formatPrice(item.gia_ban_thap_nhat)}
+                    {formatPrice(item.gia_ban_thap_nhat || item.gia_ban)}
                   </td>
 
-                  {/* CỘT CÔNG TẮC BẬT/TẮT TRẠNG THÁI SẢN PHẨM  */}
                   <td className="py-4 px-4 text-center">
                     <button
                       onClick={() =>
@@ -486,7 +458,7 @@ export default function ProductList() {
                           navigate(`/admin/products/detail/${item.ma_san_pham}`)
                         }
                         className="p-1.5 hover:text-slate-800 hover:bg-white rounded-lg shadow-sm transition"
-                        title="Xem"
+                        title="Xem chi tiết"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -508,13 +480,12 @@ export default function ProductList() {
                           />
                         </svg>
                       </button>
-                      {/* NÚT BÚT CHÌ: Nhảy thẳng vào trang Edit sản phẩm */}
                       <button
                         onClick={() =>
                           navigate(`/admin/products/edit/${item.ma_san_pham}`)
                         }
                         className="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg shadow-sm transition"
-                        title="Chỉnh sửa thông tin sản phẩm"
+                        title="Chỉnh sửa thông tin"
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"

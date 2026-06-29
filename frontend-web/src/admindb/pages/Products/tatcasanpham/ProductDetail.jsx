@@ -189,6 +189,41 @@ export default function AdminProductDetail() {
     }
   };
 
+  const handleHardDeleteVariant = async (variantId, variantName) => {
+    if (
+      window.confirm(
+        `🧨 NGUY HIỂM: Bạn có CHẮC CHẮN muốn XÓA VĨNH VIỄN biến thể "${variantName}" khỏi Database không?\n\nHành động này KHÔNG THỂ HOÀN TÁC và sẽ xóa mọi dữ liệu liên quan!`,
+      )
+    ) {
+      try {
+        const apiUrl =
+          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+        // Gọi API xóa cứng (đã thiết lập ở backend)
+        await axios.delete(`${apiUrl}/api/products/variants/${variantId}/hard`);
+
+        alert("✅ Đã xóa vĩnh viễn biến thể khỏi hệ thống!");
+        fetchDetail(false); // Cập nhật lại UI không giật
+      } catch (err) {
+        alert(
+          "❌ Xóa vĩnh viễn thất bại: " +
+            (err.response?.data?.message || err.message),
+        );
+      }
+    }
+  };
+
+  const activeVariantsForSummary = variants.filter(
+    (v) => v.trang_thai !== false,
+  );
+  const totalActiveVariants = activeVariantsForSummary.length;
+  const prices = activeVariantsForSummary.map((v) => Number(v.gia_ban_le || 0));
+  const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+  const totalStock = activeVariantsForSummary.reduce(
+    (sum, v) => sum + Number(v.ton_kho || v.so_luong_ton || 0),
+    0,
+  );
+
   if (loading) {
     return (
       <div className="flex-1 bg-[#f8f9fa] min-h-screen flex items-center justify-center font-sans">
@@ -461,30 +496,98 @@ export default function AdminProductDetail() {
                   </div>
                 </div>
                 {!product.co_bien_the && (
-                  <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-black rounded uppercase">
+                  <div className="p-6 bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden shadow-sm">
+                    {/* Họa tiết trang trí Background */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500 opacity-5 rounded-bl-full pointer-events-none"></div>
+
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-md uppercase tracking-wider shadow-sm">
                           Sản phẩm đơn
                         </span>
-                        <span className="text-xs font-bold text-emerald-700">
+                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
                           Đang bán trực tiếp
                         </span>
                       </div>
-                      <h4 className="text-2xl font-black text-slate-900 mt-2">
-                        {formatPrice(product.gia_ban)}
-                      </h4>
+
+                      <div className="mt-3">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                          Giá Niêm Yết
+                        </p>
+                        <h4 className="text-3xl font-black text-[#006c49]">
+                          {formatPrice(product.gia_ban)}
+                        </h4>
+
+                        {/* 🌟 BỔ SUNG: Dòng hiển thị tổng tồn kho */}
+                        <div className="flex items-center gap-4 mt-2">
+                          <p className="text-xs text-slate-500 font-medium">
+                            Tổng tồn kho:{" "}
+                            <span className="font-black text-slate-800">
+                              {totalStock}
+                            </span>{" "}
+                            sản phẩm
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     <Link
-                      // Chuyển hướng sang trang edit sản phẩm chung để sửa giá/tên
                       to={`/admin/products/edit/${product.ma_san_pham}`}
-                      className="bg-white border border-emerald-200 text-[#006c49] hover:bg-[#006c49] hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-colors shadow-sm flex items-center gap-2"
+                      className="relative z-10 bg-white border-2 border-emerald-200 text-[#006c49] hover:bg-[#006c49] hover:text-white px-5 py-3 rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-2 shrink-0 active:scale-95"
                     >
-                      <Edit size={14} /> Chỉnh sửa giá & thông tin
+                      <Edit size={15} /> Chỉnh sửa giá & thông tin
                     </Link>
                   </div>
                 )}
+
+                {/* HIỂN THỊ KHI LÀ SẢN PHẨM ĐƠN */}
+                {!product.co_bien_the && (
+                  <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex items-center justify-between">
+                    {/* ... (Code cũ của sản phẩm đơn giữ nguyên) ... */}
+                  </div>
+                )}
+
+                {/* 🌟 THÊM MỚI: HIỂN THỊ KHI LÀ SẢN PHẨM NHÓM (CÓ BIẾN THỂ) */}
+                {product.co_bien_the && (
+                  <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-black rounded uppercase">
+                          Sản phẩm đa phân loại
+                        </span>
+                        <span className="text-xs font-bold text-indigo-700">
+                          {totalActiveVariants} phiên bản đang kinh doanh
+                        </span>
+                      </div>
+                      <h4 className="text-2xl font-black text-slate-900 mt-2">
+                        {minPrice === maxPrice
+                          ? formatPrice(minPrice)
+                          : `${formatPrice(minPrice)} - ${formatPrice(maxPrice)}`}
+                      </h4>
+                      <div className="flex items-center gap-4 mt-2">
+                        <p className="text-xs text-slate-500 font-medium">
+                          Tổng tồn kho:{" "}
+                          <span className="font-black text-slate-800">
+                            {totalStock}
+                          </span>{" "}
+                          sản phẩm
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveTab("variants")}
+                      className="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      <Layers size={14} /> Quản lý phân loại
+                    </button>
+                  </div>
+                )}
+
                 {/* MÔ TẢ SẢN PHẨM */}
                 <div>
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
@@ -672,6 +775,19 @@ export default function AdminProductDetail() {
                                       <RotateCcw size={16} />
                                     </button>
                                   )}
+                                  {/* NÚT XÓA VĨNH VIỄN */}
+                                  <button
+                                    onClick={() =>
+                                      handleHardDeleteVariant(
+                                        bt.ma_bien_the,
+                                        bt.ten_bien_the,
+                                      )
+                                    }
+                                    className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-100 rounded-lg transition shadow-sm border border-transparent hover:border-red-300 ml-1"
+                                    title="Xóa vĩnh viễn khỏi Database"
+                                  >
+                                    <X size={16} strokeWidth={3} />
+                                  </button>
                                 </div>
                               </td>
                             </tr>

@@ -11,6 +11,8 @@ import {
   Package,
   Layers,
   Image as ImageIcon,
+  CheckCircle2,
+  ListTree,
 } from "lucide-react";
 
 export default function ProductCreate() {
@@ -26,8 +28,11 @@ export default function ProductCreate() {
     mo_ta: "",
     co_bien_the: false, // Mặc định là Sản phẩm đơn
     gia_ban: 0,
-    hinh_anh_chinh: "", // Thêm link ảnh chính
+    hinh_anh_chinh: "",
   });
+
+  // 🌟 THÊM MỚI: State xác định chính xác loại biến thể nếu co_bien_the = true
+  const [variantType, setVariantType] = useState("GROUP"); // 'SINGLE' (Biến thể đơn) hoặc 'GROUP' (Biến thể nhóm/ma trận)
 
   const [parents, setParents] = useState([]);
   const [children, setChildren] = useState([]);
@@ -103,7 +108,6 @@ export default function ProductCreate() {
     setFormData((prev) => ({ ...prev, ma_dm_con: "" }));
   }, [formData.ma_quoc_gia]);
 
-  // --- XỬ LÝ UPLOAD ẢNH SẢN PHẨM CHÍNH TRỰC TIẾP LÊN CLOUDINARY ---
   const handleProductImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -133,7 +137,6 @@ export default function ProductCreate() {
     }
   };
 
-  // --- XỬ LÝ ẢNH DANH MỤC (BASE64) ---
   const handleFileChange = (e, setImgState) => {
     const file = e.target.files[0];
     if (file) {
@@ -143,7 +146,6 @@ export default function ProductCreate() {
     }
   };
 
-  // --- SUBMIT TẠO DANH MỤC CHA ---
   const handleCreateParent = async (e) => {
     e.preventDefault();
     if (!newParentName.trim()) return;
@@ -175,7 +177,6 @@ export default function ProductCreate() {
     }
   };
 
-  // --- SUBMIT TẠO DANH MỤC CON ---
   const handleCreateChild = async (e) => {
     e.preventDefault();
     if (!newChildName.trim() || !filter.ma_dm_cha) return;
@@ -211,7 +212,6 @@ export default function ProductCreate() {
     }
   };
 
-  // --- SUBMIT TẠO SẢN PHẨM CHÍNH ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.ma_dm_con) return setError("Vui lòng chọn danh mục con!");
@@ -221,22 +221,23 @@ export default function ProductCreate() {
     setSubmitting(true);
     setError("");
     try {
-      // Gửi Payload cực sạch: co_bien_the = false thì không có mảng variants nào cả
       const response = await axios.post(`${apiUrl}/api/products`, formData);
 
       if (response.data?.success) {
         const newProductId = response.data.data?.ma_san_pham;
 
         if (formData.co_bien_the) {
-          // 🌟 TRƯỜNG HỢP 1: SẢN PHẨM NHÓM (CÓ BIẾN THỂ)
           alert(
             "🎉 Khởi tạo sản phẩm thành công! Chuyển sang bước cấu hình chi tiết phân loại.",
           );
+          // 🌟 NÂNG CẤP: Truyền cờ variantType sang trang cấu hình
           navigate(`/admin/products/create-variant/${newProductId}`, {
-            state: { initMode: true },
+            state: {
+              initMode: true,
+              targetVariantType: variantType, // Bắn tín hiệu sang trang kia
+            },
           });
         } else {
-          // 🌟 TRƯỜNG HỢP 2: SẢN PHẨM ĐƠN (BÁN TRỰC TIẾP)
           alert("🎉 Tạo sản phẩm đơn thành công! Đã có thể bán ngay.");
           navigate(`/admin/products/detail/${newProductId}`);
         }
@@ -285,7 +286,7 @@ export default function ProductCreate() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-8">
-            {/* 1. TÊN VÀ QUỐC GIA (Đã chuyển Quốc gia thành Select Dropdown) */}
+            {/* 1. TÊN VÀ QUỐC GIA */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-b border-slate-100 pb-8">
               <div className="md:col-span-2">
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide">
@@ -324,11 +325,12 @@ export default function ProductCreate() {
               </div>
             </div>
 
-            {/* 2. CẤU TRÚC BÁN HÀNG (ĐƠN / BIẾN THỂ) + GIÁ TIỀN */}
+            {/* 2. CẤU TRÚC BÁN HÀNG */}
             <div className="space-y-6 border-b border-slate-100 pb-8">
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
                 Cấu trúc bán hàng <span className="text-red-500">*</span>
               </label>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Nút: Sản phẩm đơn */}
                 <button
@@ -415,14 +417,73 @@ export default function ProductCreate() {
                   />
                 </motion.div>
               )}
+
+              {/* 🌟 GIAO DIỆN MỚI: YÊU CẦU CHỌN LOẠI BIẾN THỂ KHI CO_BIEN_THE = TRUE */}
               {formData.co_bien_the && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="mt-4 p-3 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-bold flex items-center gap-2"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl"
                 >
-                  ✨ Bạn sẽ thiết lập giá chi tiết cho từng phân loại ở bước
-                  tiếp theo.
+                  <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wide mb-4">
+                    👉 Xác định loại phân loại cho sản phẩm này:
+                  </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Lựa chọn 1: Biến thể đơn */}
+                    <div
+                      onClick={() => setVariantType("SINGLE")}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${variantType === "SINGLE" ? "bg-white border-indigo-500 shadow-sm" : "bg-transparent border-transparent hover:bg-slate-100"}`}
+                    >
+                      <div
+                        className={`mt-0.5 shrink-0 ${variantType === "SINGLE" ? "text-indigo-600" : "text-slate-300"}`}
+                      >
+                        {variantType === "SINGLE" ? (
+                          <CheckCircle2 size={18} className="fill-indigo-100" />
+                        ) : (
+                          <div className="w-[18px] h-[18px] rounded-full border-2 border-slate-300"></div>
+                        )}
+                      </div>
+                      <div>
+                        <h4
+                          className={`text-sm font-bold ${variantType === "SINGLE" ? "text-indigo-700" : "text-slate-600"}`}
+                        >
+                          Biến Thể Đơn Lập
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Phù hợp sản phẩm có các tên gọi tách rời, không theo
+                          ma trận. (VD: "Bản tiêu chuẩn", "Bản cao cấp").
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Lựa chọn 2: Biến thể nhóm (Ma trận) */}
+                    <div
+                      onClick={() => setVariantType("GROUP")}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${variantType === "GROUP" ? "bg-white border-indigo-500 shadow-sm" : "bg-transparent border-transparent hover:bg-slate-100"}`}
+                    >
+                      <div
+                        className={`mt-0.5 shrink-0 ${variantType === "GROUP" ? "text-indigo-600" : "text-slate-300"}`}
+                      >
+                        {variantType === "GROUP" ? (
+                          <CheckCircle2 size={18} className="fill-indigo-100" />
+                        ) : (
+                          <div className="w-[18px] h-[18px] rounded-full border-2 border-slate-300"></div>
+                        )}
+                      </div>
+                      <div>
+                        <h4
+                          className={`text-sm font-bold ${variantType === "GROUP" ? "text-indigo-700" : "text-slate-600"}`}
+                        >
+                          Ma Trận Thuộc Tính
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Phù hợp sản phẩm cấu hình chéo nhiều lớp thuộc tính.
+                          (VD: Áo thun Size M - Màu Đỏ).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </div>

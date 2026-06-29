@@ -73,8 +73,8 @@ export const getAllProducts = async (req, res) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         
-        // 🌟 XÓA BỎ 'origin' (xuat_xu) vì cột này không còn trong CSDL
-        const { sort, market, role } = req.query;
+        // 🌟 BỔ SUNG 'type' VÀO ĐÂY
+        const { sort, market, role, type } = req.query; 
 
         let whereClause = `WHERE 1=1`; 
         let values = [];
@@ -90,7 +90,14 @@ export const getAllProducts = async (req, res) => {
             valueIndex++;
         }
 
-        // Đếm tổng số lượng
+        // 🌟 LOGIC LỌC MỚI: Dựa vào cột 'co_bien_the' trong bảng san_pham
+        if (type === 'single') {
+            whereClause += ` AND sp.co_bien_the = false`;
+        } else if (type === 'group') {
+            whereClause += ` AND sp.co_bien_the = true`;
+        }
+
+        // Đếm tổng số lượng (Phải đếm dựa trên WHERE giống câu query chính)
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM public.san_pham sp
@@ -102,24 +109,21 @@ export const getAllProducts = async (req, res) => {
         const totalPages = Math.ceil(totalItems / limit);
 
         // Xử lý sắp xếp
-        let orderByClause = `ORDER BY sp.ngay_tao DESC`; // Mặc định: Mới nhất
+        let orderByClause = `ORDER BY sp.ngay_tao DESC`;
         if (sort === 'oldest') orderByClause = `ORDER BY sp.ngay_tao ASC`;
         if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
         if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
 
-        // 🌟 CÂU LỆNH TRUY VẤN CHÍNH (Đã cập nhật logic lấy giá tiền)
+        // CÂU LỆNH TRUY VẤN CHÍNH
         const query = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                sp.ma_quoc_gia, sp.co_bien_the, sp.gia_ban, -- Lấy thêm co_bien_the và gia_ban từ DB
+                sp.ma_quoc_gia, sp.co_bien_the, sp.gia_ban, 
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
-                
-                -- LOGIC TÍNH GIÁ: Nếu sản phẩm đơn thì lấy thẳng giá bán, nếu có biến thể thì tìm MIN giá bán lẻ
                 CASE 
                     WHEN sp.co_bien_the = false THEN sp.gia_ban
                     ELSE COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0)
                 END AS gia_ban_thap_nhat,
-                
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -128,7 +132,6 @@ export const getAllProducts = async (req, res) => {
             LIMIT $${valueIndex} OFFSET $${valueIndex + 1};
         `;
 
-        // Đưa limit và offset vào cuối mảng values
         values.push(limit, offset);
 
         const { rows: products } = await pool.query(query, values);
@@ -144,7 +147,6 @@ export const getAllProducts = async (req, res) => {
         res.status(500).json({ error: "Không thể lấy danh sách sản phẩm." });
     }
 };
-
 
 // =========================================================================
 // 2. LẤY CHI TIẾT 1 SẢN PHẨM (PHÂN LUỒNG QUYỀN ADMIN / CLIENT)
@@ -979,7 +981,6 @@ export const createVariant = async (req, res) => {
     const client = await pool.connect(); 
     try {
         const { id } = req.params; 
-        // 🌟 Đã lấy thêm ten_don_vi từ req.body
         const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
 
         if (!sku || !gia_ban_le) {
@@ -988,12 +989,18 @@ export const createVariant = async (req, res) => {
 
         await client.query('BEGIN');
 
+        // 1. Lấy mã quốc gia từ bảng san_pham
         const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [id]);
         const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
 
-        const ma_bien_the_moi = generateUniqueId(`MBT_${countryCode}`);
+        // 🌟 2. ĐẾM SỐ LƯỢNG BIẾN THỂ ĐỂ TẠO STT (Ví dụ: MBT_VN_MSP001_1)
+        const countRes = await client.query('SELECT COUNT(*) as count FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
+        const nextIndex = parseInt(countRes.rows[0].count) + 1;
+        
+        // 🌟 3. TẠO MÃ BIẾN THỂ THEO CẤU TRÚC MỚI
+        const ma_bien_the_moi = `MBT_${countryCode}_${id}_${nextIndex}`;
 
-        // 🌟 BƯỚC MỚI: TÌM ID ĐƠN VỊ TỪ TÊN ĐƠN VỊ FRONTEND GỬI LÊN
+        // Tìm ID đơn vị
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
@@ -1002,7 +1009,7 @@ export const createVariant = async (req, res) => {
             }
         }
 
-        // 🌟 Đã bổ sung don_vi_id vào câu lệnh INSERT
+        // INSERT vào bảng bien_the_san_pham
         const insertVariantQuery = `
             INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
             VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW()) RETURNING *;
@@ -1011,6 +1018,7 @@ export const createVariant = async (req, res) => {
             ma_bien_the_moi, id, don_vi_id, ten_bien_the || `Phiên bản mới ${sku}`, sku, gia_ban_le
         ]);
 
+        // Xử lý Media
         if (hinh_anh_url && hinh_anh_url.trim() !== '') {
             const ma_media_moi = generateUniqueId('MED');
             await client.query(`
@@ -1019,7 +1027,7 @@ export const createVariant = async (req, res) => {
             `, [ma_media_moi, id, ma_bien_the_moi, hinh_anh_url]);
         }
 
-        // Đồng bộ hóa ma trận logic thuộc tính EAV
+        // Đồng bộ hóa ma trận logic thuộc tính EAV (giữ nguyên logic cũ của bạn)
         if (thuoc_tinh && typeof thuoc_tinh === 'object') {
             for (const [ten_thuoc_tinh, gia_tri] of Object.entries(thuoc_tinh)) {
                 if (!gia_tri) continue;
@@ -1082,25 +1090,33 @@ export const createSimpleVariant = async (req, res) => {
     try {
         const { ma_san_pham, ten_bien_the, sku, gia_ban_le, ten_don_vi } = req.body;
 
-        if (!ma_san_pham || !sku || !gia_ban_le) {
-            return res.status(400).json({ success: false, message: "Mã sản phẩm, SKU và Giá không được để trống." });
+        // Giữ nguyên điều kiện kiểm tra
+        if (!ma_san_pham || !sku || gia_ban_le === undefined || gia_ban_le === null) {
+            return res.status(400).json({ success: false, message: "Lỗi: Mã sản phẩm, SKU và Giá không được để trống." });
         }
 
         await client.query('BEGIN');
 
-        // Lấy mã quốc gia để tạo ID cho biến thể
+        // 1. Lấy mã quốc gia
         const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [ma_san_pham]);
         const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
-        const ma_bien_the_moi = generateUniqueId(`MBT_${countryCode}`);
 
-        // Tìm ID đơn vị
+        // 🌟 2. BỔ SUNG LOGIC TẠO ID MỚI: Đếm số lượng hiện có để tăng STT
+        const countRes = await client.query(
+            'SELECT COUNT(*) as count FROM public.bien_the_san_pham WHERE ma_san_pham = $1', 
+            [ma_san_pham]
+        );
+        const nextIndex = parseInt(countRes.rows[0].count) + 1;
+        const ma_bien_the_moi = `MBT_${countryCode}_${ma_san_pham}_${nextIndex}`;
+
+        // 3. Tìm ID đơn vị (giữ nguyên)
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
             if (unitRes.rows.length > 0) don_vi_id = unitRes.rows[0].id;
         }
 
-        // INSERT duy nhất vào bảng bien_the_san_pham
+        // 4. INSERT với mã mới (giữ nguyên cấu trúc)
         const query = `
             INSERT INTO public.bien_the_san_pham 
             (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
@@ -1312,6 +1328,41 @@ export const restoreVariant = async (req, res) => {
     } catch (error) {
         console.error('❌ Lỗi API restoreVariant:', error.message);
         return res.status(500).json({ success: false, message: 'Sự cố máy chủ khi khôi phục biến thể.' });
+    }
+};
+
+// =========================================================================
+// 15.8 XÓA CỨNG BIẾN THỂ (HARD DELETE - DỌN SẠCH DATABASE)
+// =========================================================================
+export const hardDeleteVariant = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { variantId } = req.params;
+        await client.query('BEGIN');
+
+        // 1. Xóa ảnh liên kết
+        await client.query(`DELETE FROM public.media_san_pham WHERE ma_bien_the = $1`, [variantId]);
+        
+        // 2. Xóa ma trận thuộc tính EAV
+        await client.query(`DELETE FROM public.chi_tiet_bien_the_thuoc_tinh WHERE ma_bien_the = $1`, [variantId]);
+        
+        // 3. Xóa biến thể gốc
+        const result = await client.query(`DELETE FROM public.bien_the_san_pham WHERE ma_bien_the = $1 RETURNING *`, [variantId]);
+
+        if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: 'Không tìm thấy biến thể để xóa.' });
+        }
+
+        await client.query('COMMIT');
+        return res.status(200).json({ success: true, message: 'Đã xóa cứng biến thể vĩnh viễn!' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi hardDeleteVariant:', error.message);
+        // Lỗi thường xảy ra nếu biến thể đã có đơn hàng tham chiếu đến nó (Foreign Key constraint)
+        return res.status(500).json({ success: false, message: 'Không thể xóa cứng do biến thể này đã phát sinh đơn hàng!' });
+    } finally {
+        client.release();
     }
 };
 
