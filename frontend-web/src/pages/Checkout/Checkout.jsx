@@ -73,20 +73,19 @@ export default function Checkout() {
 
   const [shippingMethods, setShippingMethods] = useState([]);
   const [selectedShipping, setSelectedShipping] = useState(null);
-  const [isLoadingShipping, setIsLoadingShipping] = useState(false);
   const [isShippingModalOpen, setIsShippingModalOpen] = useState(false);
 
   // 🎯 QUẢN LÝ TRẠNG THÁI POPUP THANH TOÁN
   const [selectedPayment, setSelectedPayment] = useState('COD');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  const [shippingInfo, setShippingInfo] = useState({
-    fee: 0, timeText: '', storeName: '', loading: false
-  });
+  const [shippingInfo, setShippingInfo] = useState({ 
+  fee: 0, timeText: '', storeName: '', distanceKm: 0, estimatedMinutes: 0, loading: false 
+});
 
+  // 🚀 LUỒNG DUY NHẤT: TÍNH PHÍ VẬN CHUYỂN QUA GPS VÀ ĐỒNG BỘ 2 BÊN GIAO DIỆN
   useEffect(() => {
     const fetchDistanceShipping = async () => {
-      // Kiểm tra xem địa chỉ người dùng chọn đã được nạp tọa độ GPS từ bản đồ chưa
       if (!address || !address.latitude || !address.longitude) return;
 
       setShippingInfo(prev => ({ ...prev, loading: true }));
@@ -98,12 +97,31 @@ export default function Checkout() {
 
         if (response.data && response.data.success) {
           const { shippingFee, estimatedMinutes, distanceKm, nearestStore } = response.data.data;
+          
+          const timeStr = `${estimatedMinutes} phút (${distanceKm}km)`;
+          const storeNameStr = nearestStore?.name || "Siêu thị DemiMart";
+
+          // 1. Cập nhật state tổng tiền bên cột phải
           setShippingInfo({
             fee: shippingFee,
-            timeText: `${estimatedMinutes} phút (${distanceKm}km)`,
-            storeName: nearestStore.name,
+            timeText: timeStr,
+            storeName: storeNameStr,
+            distanceKm: Number(distanceKm || 0),         
+            estimatedMinutes: Number(estimatedMinutes || 0),
             loading: false
           });
+
+          // 2. Tạo object gói cước để đồng bộ vào Section giữa trang
+          const demiExpressOption = {
+            id: 'demi-store-express',
+            name: `🚀 Giao từ: ${storeNameStr}`,
+            cost: shippingFee,
+            days: `Dự kiến nhận sau ${timeStr}`,
+            logo: ''
+          };
+
+          setShippingMethods([demiExpressOption]);
+          setSelectedShipping(demiExpressOption);
         }
       } catch (error) {
         console.error("Lỗi API tính cước vận chuyển:", error);
@@ -112,7 +130,7 @@ export default function Checkout() {
     };
 
     fetchDistanceShipping();
-  }, [address]); // Hàm tự chạy lại khi người dùng thay đổi địa chỉ nhận hàng
+  }, [address]);
 
   const fetchAddresses = async () => {
     try {
@@ -131,55 +149,6 @@ export default function Checkout() {
   useEffect(() => {
     fetchAddresses();
   }, []);
-
-  useEffect(() => {
-    const fetchShippingFees = async () => {
-      if (!address) return;
-
-      const targetDistrictId = address.district_id || address.to_district_id || address.districtId;
-      const targetWardCode = address.ward_code || address.to_ward_code || address.wardCode;
-
-      if (!targetDistrictId || !targetWardCode) {
-        console.warn("⚠️ Địa chỉ thiếu mã định danh GHN:", address);
-        return;
-      }
-      
-      setIsLoadingShipping(true);
-      try {
-        const res = await orderApi.post('/orders/shipping-fee', {
-          to_district_id: Number(targetDistrictId), 
-          to_ward_code: String(targetWardCode),     
-          weight: 1000 
-        });
-
-        const methods = res.data.data || res.data;
-        setShippingMethods(methods);
-        
-        if (methods && methods.length > 0) {
-          setSelectedShipping(methods[0]); 
-        } else {
-          setSelectedShipping(null);
-        }
-      } catch (err) {
-        console.error("Lỗi cước phí GHN, dùng fallback:", err);
-        const fallback = [
-          { 
-            id: 'ghn-standard', 
-            name: 'Giao Hàng Nhanh (Chuẩn)', 
-            cost: 35000, 
-            days: 'Nhận sau 2 - 3 ngày (Dự kiến)',
-            logo: ''
-          }
-        ];
-        setShippingMethods(fallback);
-        setSelectedShipping(fallback[0]);
-      } finally {
-        setIsLoadingShipping(false);
-      }
-    };
-
-    fetchShippingFees();
-  }, [address]);
   
   const itemTotal = checkoutCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const shippingFee = shippingInfo.fee; 
@@ -208,8 +177,8 @@ export default function Checkout() {
         so_dien_thoai: address.receiver_phone || address.receiverPhone || "0123456789",
         dia_chi_day_du: `${address.detail_address || address.detailAddress || ""}, ${address.ward_name || address.wardName || ""}, ${address.district_name || address.districtName || ""}, ${address.province_name || address.provinceName || ""}`
       },
-      to_district_id: Number(targetDistrictId),
-      to_ward_code: String(targetWardCode),
+      to_district_id: Number(targetDistrictId || 1454),
+      to_ward_code: String(targetWardCode || "21211"),
       weight: 1000,
       
       danh_sach_san_pham: checkoutCart.map(item => ({
@@ -218,7 +187,7 @@ export default function Checkout() {
         price: Number(item.price)
       })),
       
-      don_vi_van_chuyen: shippingInfo.storeName || 'Giao hàng siêu thị',
+      don_vi_van_chuyen: shippingInfo.storeName ? `Siêu thị ${shippingInfo.storeName}` : 'Siêu thị DemiMart Express',
       to_lat: address.latitude,
       to_lng: address.longitude,
       tong_khoang_cach_km: shippingInfo.distanceKm || 0,
@@ -271,7 +240,7 @@ export default function Checkout() {
 
   const handlePlaceOrder = async () => {
     if (!address) return alert("Vui lòng chọn địa chỉ giao hàng!");
-    if (!selectedShipping) return alert("Vui lòng chọn phương thức vận chuyển!");
+    if (!selectedShipping) return alert("Vui lòng đợi hệ thống tính toán phí vận chuyển!");
     if (checkoutCart.length === 0) return alert("Giỏ hàng thanh toán đang trống!");
 
     setIsPlacing(true);
@@ -327,7 +296,6 @@ export default function Checkout() {
 
   const isGlobalLoading = orderContextLoading || isPlacing;
 
-  // Hàm hiển thị text chuẩn hóa cho phương thức thanh toán
   const getPaymentName = (id) => {
     if (id === 'COD') return 'Thanh toán khi nhận hàng (COD)';
     if (id === 'PayPal') return 'PayPal System';
@@ -470,12 +438,12 @@ export default function Checkout() {
           <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center font-black text-sm uppercase text-[#006c49] border-b pb-3">
               <div className="flex gap-2"><Truck size={18} /> Gói cước vận chuyển</div>
-              <button disabled={isLoadingShipping || !address} onClick={() => setIsShippingModalOpen(true)} className="text-xs hover:underline disabled:opacity-30 disabled:no-underline">Thay đổi</button>
+              <button disabled={shippingInfo.loading || !address} onClick={() => setIsShippingModalOpen(true)} className="text-xs hover:underline disabled:opacity-30 disabled:no-underline">Thay đổi</button>
             </div>
 
-            {isLoadingShipping ? (
-              <div className="flex items-center gap-2 text-sm text-amber-600 font-bold py-2">
-                <Loader2 className="animate-spin" size={16} /> Đang kết nối định tuyến cước phí GHN...
+            {shippingInfo.loading ? (
+              <div className="flex items-center gap-2 text-sm text-[#006c49] font-bold py-2">
+                <Loader2 className="animate-spin" size={16} /> Đang định tuyến kho hàng gần nhất...
               </div>
             ) : selectedShipping ? (
               <div className="flex items-center justify-between">
@@ -491,7 +459,7 @@ export default function Checkout() {
                 <span className="font-black text-slate-900 text-sm">{selectedShipping.cost.toLocaleString()}đ</span>
               </div>
             ) : (
-              <p className="text-xs text-gray-400 font-bold py-2">Vui lòng chọn địa chỉ hợp lệ để bốc báo giá từ đối tác.</p>
+              <p className="text-xs text-gray-400 font-bold py-2">Vui lòng chọn địa chỉ hợp lệ để hệ thống tính toán lộ trình.</p>
             )}
 
             <div className="border-t pt-4 flex justify-between items-center font-bold">
@@ -500,13 +468,12 @@ export default function Checkout() {
             </div>
           </section>
 
-          {/* 4. PHƯƠNG THỨC THANH TOÁN (ĐÃ SỬA SANG CƠ CHẾ POPUP ĐỒNG BỘ 100%) */}
+          {/* 4. PHƯƠNG THỨC THANH TOÁN */}
           <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <h2 className="text-[#006c49] flex items-center gap-2 font-black text-sm uppercase tracking-wider">
                 <CreditCard size={18} /> Phương thức thanh toán
               </h2>
-              {/* BẤM NÚT NÀY SẼ BẬT POPUP CHỨ KHÔNG HIỆN CO GIÃN TẠI CHỖ */}
               <button 
                 onClick={() => setIsPaymentModalOpen(true)} 
                 className="text-[#006c49] font-black text-xs uppercase hover:underline"
@@ -515,7 +482,6 @@ export default function Checkout() {
               </button>
             </div>
             
-            {/* HIỂN THỊ PHƯƠNG THỨC ĐANG CHỌN GỌN GÀNG TẠI KHỐI SECTION */}
             <div className="px-5 py-2.5 rounded-xl border-2 border-[#006c49] bg-emerald-50/50 text-[#006c49] text-xs font-black uppercase tracking-wider inline-block">
               {getPaymentName(selectedPayment)}
             </div>
@@ -528,7 +494,7 @@ export default function Checkout() {
             <h2 className="font-black italic text-slate-900 border-b pb-2 tracking-tight">TỔNG THANH TOÁN</h2>
             <div className="space-y-3 font-bold text-sm text-slate-600">
               <div className="flex justify-between"><span>Tổng tiền hàng</span> <span className="text-slate-900 font-semibold">{itemTotal.toLocaleString()}đ</span></div>
-              {/* PHÍ VẬN CHUYỂN ĐỘNG THEO KM VÀ TRỤ SỞ GẦN NHẤT */}
+              
               <div className="flex flex-col gap-1 border-b border-slate-100 pb-2">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-600 font-bold">Phí vận chuyển</span> 
@@ -552,7 +518,6 @@ export default function Checkout() {
             <p className="text-[10px] text-gray-400 text-center leading-relaxed">Nhấn "Đặt hàng" đồng nghĩa với việc bạn đồng ý tuân thủ theo các chính sách bảo mật và Điều khoản mua sắm của Demi Mart.</p>
             
             <div className="w-full pt-2">
-              {/* 1. NÚT PAYPAL CHUẨN SDK HÃNG */}
               {selectedPayment === 'PayPal' && (
                 <PayPalButton 
                   amount={finalTotal} 
@@ -561,39 +526,35 @@ export default function Checkout() {
                 />
               )}
 
-              {/* 2. NÚT VNPAY IDENTITY MÀU XANH HOÀNG GIA */}
               {selectedPayment === 'VNPay' && (
                 <VNPAYButton 
                   amount={finalTotal} 
                   onClick={handlePlaceOrder}
-                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0} 
+                  disabled={isGlobalLoading || shippingInfo.loading || !address || checkoutCart.length === 0} 
                 />
               )}
 
-              {/* 3. NÚT MOMO CHUẨN LOGO WIKIMEDIA TRÊN NỀN HỒNG KHÍT KHÁO */}
               {selectedPayment === 'MoMo' && (
                 <MoMoButton 
                   amount={finalTotal} 
                   onClick={() => alert("Chức năng thanh toán qua MoMo đang cấu hình SIT thử nghiệm!")}
-                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0} 
+                  disabled={isGlobalLoading || shippingInfo.loading || !address || checkoutCart.length === 0} 
                 />
               )}
 
-              {/* 4. NÚT VIETQR MÀU GRADIENT SẶC SỠ */}
               {selectedPayment === 'Banking' && (
                 <VietQRButton 
                   amount={finalTotal}
                   onClick={() => alert("Hệ thống đang tạo cổng quét mã VietQR động theo Đơn hàng!")}
-                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0}
+                  disabled={isGlobalLoading || shippingInfo.loading || !address || checkoutCart.length === 0}
                 />
               )}
 
-              {/* 5. NÚT COD GIAO HÀNG TIN CẬY MÀU XANH EMERALD DEMI MART */}
               {selectedPayment === 'COD' && (
                 <CODButton 
                   amount={finalTotal}
                   onClick={handlePlaceOrder}
-                  disabled={isGlobalLoading || isLoadingShipping || !address || checkoutCart.length === 0}
+                  disabled={isGlobalLoading || shippingInfo.loading || !address || checkoutCart.length === 0}
                 />
               )}
             </div>
@@ -602,11 +563,9 @@ export default function Checkout() {
         </div>
       </div>
 
-      {/* GỌI ĐỒNG BỘ 3 MODAL QUẢN LÝ DƯỚI FOOTER TRANG CHECKOUT */}
       <AddressModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSelect={(addr) => setAddress(addr)} currentAddresses={addresses} selectedAddressId={address?.address_id || address?.id} onRefresh={fetchAddresses} />
       <ShippingModal isOpen={isShippingModalOpen} onClose={() => setIsShippingModalOpen(false)} onSelect={(method) => setSelectedShipping(method)} shippingMethods={shippingMethods} selectedMethodId={selectedShipping?.id} />
       
-      {/* POPUP CHỌN PHƯƠNG THỨC THANH TOÁN */}
       <PaymentModal 
         isOpen={isPaymentModalOpen} 
         onClose={() => setIsPaymentModalOpen(false)} 

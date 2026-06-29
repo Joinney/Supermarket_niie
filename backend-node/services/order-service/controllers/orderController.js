@@ -3,7 +3,7 @@ import axios from 'axios';
 import db from '../configs/database.js';
 
 // ========================================================
-// 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN
+// 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN (Giữ lại làm tham khảo cho API getShippingFee cũ)
 // ========================================================
 const calculateGhnShippingCost = async (toDistrictId, toWardCode, weightGrams = 1000) => {
   try {
@@ -50,7 +50,7 @@ const calculateGhnShippingCost = async (toDistrictId, toWardCode, weightGrams = 
     return { success: false, message: 'GHN không phản hồi cước phí hợp lệ' };
   } catch (error) {
     console.error("🔥 Lỗi GHN:", error.message);
-    return { success: true, cost: 35000, name: 'Giao Hàng Nhanh (Dự phòng)' };
+    return { success: false, cost: 0, message: 'Không kết nối được GHN' };
   }
 };
 
@@ -58,7 +58,7 @@ const calculateGhnShippingCost = async (toDistrictId, toWardCode, weightGrams = 
 // 🛃 CONTROLLER INTERFACE
 // ========================================================
 
-// 1. Tính cước phí giao nhận vận chuyển phục vụ Frontend Checkout
+// 1. Tính cước phí giao nhận vận chuyển dự phòng
 const getShippingFee = async (req, res) => {
   try {
     const { to_district_id, to_ward_code, weight } = req.body;
@@ -108,12 +108,14 @@ const placeOrder = async (req, res) => {
       console.warn("⚠️ Cảnh báo API kết nối Product-Service thất bại, kích hoạt cơ chế Fallback dữ liệu dự phòng:", apiError.message);
     }
 
-    // 🚀 BƯỚC B: TÍNH TOÁN CHI PHÍ GIAO HÀNG VÀ TỔNG TIỀN ĐƠN HÀNG
-    const shippingCheck = await calculateGhnShippingCost(to_district_id, to_ward_code, req.body.weight);
-    req.body.phi_van_chuyen = shippingCheck.cost;
-    req.body.don_vi_van_chuyen = shippingCheck.name;
+    // 🚀 BƯỚC B: CHỐT CHI PHÍ GIAO HÀNG NỘI BỘ TỪ FRONTEND (ĐÃ XÓA SỔ GHN CẢN ĐƯỜNG)
+    const clientShippingFee = Number(req.body.phi_van_chuyen);
+    const validShippingCost = (!isNaN(clientShippingFee) && clientShippingFee >= 0) ? clientShippingFee : 25000;
+
+    req.body.phi_van_chuyen = validShippingCost;
+    req.body.don_vi_van_chuyen = req.body.don_vi_van_chuyen || 'Siêu thị DemiMart Express';
     
-    let finalTotal = Number(tong_tien_hang) + shippingCheck.cost - Number(req.body.so_tien_giam_gia || 0);
+    let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(req.body.so_tien_giam_gia || 0);
     if (isNaN(finalTotal) || finalTotal < 5000) {
       finalTotal = 50000; 
     }
@@ -145,7 +147,6 @@ const placeOrder = async (req, res) => {
         to_lng: req.body.to_lng || null,
         tong_khoang_cach_km: req.body.tong_khoang_cach_km || 0,
         thoi_gian_du_kien_phut: req.body.thoi_gian_du_kien_phut || 0
-        
     };
 
     // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE

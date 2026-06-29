@@ -36,74 +36,58 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     const renderRouteMap = async () => {
       setRouteInfo(prev => ({ ...prev, loading: true }));
 
-      // 1. Tọa độ Khách hàng
       const userLat = parseFloat(order.to_lat || order.latitude || order.user_lat || 10.762622);
       const userLng = parseFloat(order.to_lng || order.longitude || order.user_lng || 106.660172);
 
+      let storeLat = 10.792622;
+      let storeLng = 106.680172;
+      let storeName = order.don_vi_van_chuyen || "Siêu thị DemiMart Express"; 
+      
+      // 🚀 Biến hứng số liệu chuẩn từ API giống hệt lúc Checkout
+      let apiCalcDistance = 0;
+      let apiCalcDuration = 0;
+
       try {
-        let storeLat = 10.792622;
-        let storeLng = 106.680172;
-        let storeName = "Kho Tổng Demi"; 
-
-        // 2. Gọi API lấy dữ liệu MongoDB
         try {
-          // 🌟 SỬA 1: Thêm đúng tiền tố '/orders' khớp với Checkout.jsx
           const res = await orderApi.post('/orders/shipping/calc', { userLat, userLng }); 
-          
-          const nearestStore = res.data?.data?.nearestStore;
-          if (nearestStore) {
-            // 🌟 SỬA 2: Bóc tách tọa độ chuẩn GeoJSON của MongoDB (index 1 là Lat, index 0 là Lng)
-            const mongoLat = nearestStore.location?.coordinates?.[1];
-            const mongoLng = nearestStore.location?.coordinates?.[0];
+          const responseData = res.data?.data;
 
-            storeLat = parseFloat(nearestStore.lat ?? mongoLat ?? storeLat);
-            storeLng = parseFloat(nearestStore.lng ?? mongoLng ?? storeLng);
-            storeName = nearestStore.name || storeName;
+          if (responseData) {
+            apiCalcDistance = Number(responseData.distanceKm || 0);
+            apiCalcDuration = Number(responseData.estimatedMinutes || 0);
+
+            const nearestStore = responseData.nearestStore;
+            if (nearestStore) {
+              const mongoLat = nearestStore.location?.coordinates?.[1];
+              const mongoLng = nearestStore.location?.coordinates?.[0];
+              storeLat = parseFloat(nearestStore.lat ?? mongoLat ?? storeLat);
+              storeLng = parseFloat(nearestStore.lng ?? mongoLng ?? storeLng);
+              storeName = nearestStore.name ? `Siêu thị ${nearestStore.name}` : storeName;
+            }
           }
         } catch (apiErr) {
-          console.warn("⚠️ API lấy kho bị lỗi, dùng kho mặc định:", apiErr.message);
+          console.warn("⚠️ API định tuyến lỗi, dùng tọa độ mặc định:", apiErr.message);
         }
 
         if (!isMounted) return;
 
-        // 3. Khởi tạo bản đồ Leaflet
         if (!leafletMapInstance.current) {
           leafletMapInstance.current = L.map(mapRef.current).setView([userLat, userLng], 13);
-          
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
+            attribution: '© OpenStreetMap contributors', maxZoom: 19
           }).addTo(leafletMapInstance.current);
         }
 
-        if (routingLayer.current) {
-          leafletMapInstance.current.removeLayer(routingLayer.current);
-        }
+        if (routingLayer.current) leafletMapInstance.current.removeLayer(routingLayer.current);
         routingLayer.current = L.featureGroup().addTo(leafletMapInstance.current);
 
-        // Đánh dấu điểm xuất phát (Kho)
-        const storeIcon = L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png',
-          iconSize: [32, 32],
-          iconAnchor: [16, 32]
-        });
-        L.marker([storeLat, storeLng], { icon: storeIcon })
-          .bindPopup(`<b>${storeName}</b><br/>Nơi xuất hàng`)
-          .addTo(routingLayer.current);
+        const storeIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+        L.marker([storeLat, storeLng], { icon: storeIcon }).bindPopup(`<b>${storeName}</b><br/>Nơi xuất hàng`).addTo(routingLayer.current);
 
-        // Đánh dấu điểm đến (Khách)
-        const userIcon = L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png',
-          iconSize: [32, 32],
-          iconAnchor: [16, 32]
-        });
-        L.marker([userLat, userLng], { icon: userIcon })
-          .bindPopup(`<b>Điểm giao hàng</b><br/>Đơn: ${order.ma_don_hang || ''}`)
-          .addTo(routingLayer.current);
+        const userIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png', iconSize: [32, 32], iconAnchor: [16, 32] });
+        L.marker([userLat, userLng], { icon: userIcon }).bindPopup(`<b>Điểm giao hàng</b>`).addTo(routingLayer.current);
 
-        // 4. Gọi API OSRM vẽ đường đi
         const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${storeLng},${storeLat};${userLng},${userLat}?overview=full&geometries=geojson`;
-        
         const routeRes = await fetch(osrmUrl);
         const routeData = await routeRes.json();
 
@@ -111,38 +95,30 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           const route = routeData.routes[0];
           const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
           
-          L.polyline(coordinates, { 
-            color: '#006c49', 
-            weight: 5, 
-            opacity: 0.8,
-            lineJoin: 'round'
-          }).addTo(routingLayer.current);
+          L.polyline(coordinates, { color: '#006c49', weight: 5, opacity: 0.8, lineJoin: 'round' }).addTo(routingLayer.current);
 
-          // 🌟 FIX: Ép kiểu sang số và ép phải lớn hơn 0 mới dùng, nếu không thì lấy khoảng cách thực từ API bản đồ
-          const dbDistance = Number(order.tong_khoang_cach_km);
-          const dbDuration = Number(order.thoi_gian_du_kien_phut);
+          // 🚀 THỨ TỰ ƯU TIÊN CHUẨN XÁC 100%:
+          // 1. Lấy số trong DB (đối với đơn mới đặt sau khi sửa Bước 1)
+          // 2. Lấy số từ API /orders/shipping/calc (cứu các đơn cũ lỡ lưu 0km)
+          // 3. Cuối cùng đường cùng mới xài OSRM tự đo
+          const dbDist = Number(order.tong_khoang_cach_km);
+          const dbDur = Number(order.thoi_gian_du_kien_phut);
 
-          const finalDistance = dbDistance > 0 ? dbDistance.toFixed(1) : (route.distance / 1000).toFixed(1);
-          const finalDuration = dbDuration > 0 ? dbDuration : Math.ceil(route.duration / 60);
+          const bestDistance = dbDist > 0 ? dbDist : (apiCalcDistance > 0 ? apiCalcDistance : (route.distance / 1000).toFixed(1));
+          const bestDuration = dbDur > 0 ? dbDur : (apiCalcDuration > 0 ? apiCalcDuration : Math.ceil(route.duration / 60));
 
-          // Cập nhật thông tin lên UI
           setRouteInfo({
-            distanceKm: finalDistance,
-            durationMin: finalDuration,
+            distanceKm: bestDistance,
+            durationMin: bestDuration,
             storeName: storeName, 
             loading: false
           });
 
           leafletMapInstance.current.fitBounds(routingLayer.current.getBounds(), { padding: [50, 50] });
-        } else {
-          throw new Error("Không tìm thấy đường đi khả dụng");
         }
-
       } catch (error) {
-        console.error("🔥 Lỗi xử lý lộ trình:", error);
-        if (isMounted) {
-          setRouteInfo(prev => ({ ...prev, loading: false, storeName: "Lỗi kết nối vệ tinh" }));
-        }
+        console.error("🔥 Lỗi vẽ bản đồ lộ trình:", error);
+        if (isMounted) setRouteInfo(prev => ({ ...prev, loading: false, storeName: "Lỗi định vị tuyến" }));
       }
     };
 
