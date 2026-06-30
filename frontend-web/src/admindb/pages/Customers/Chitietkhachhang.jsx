@@ -26,7 +26,7 @@ const Chitietkhachhang = () => {
 
   const userApiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
 
-  useEffect(() => {
+useEffect(() => {
     const fetchCustomerDetail = async () => {
       if (!userId) {
         setLoading(false);
@@ -34,44 +34,38 @@ const Chitietkhachhang = () => {
       }
       setLoading(true);
       try {
-        const response = await axios.get(`${userApiUrl}/api/auth/internal/users/${userId}`);
+        const response = await axios.get(`${userApiUrl}/api/auth/internal/users/${userId}`); // 
         if (response.data) {
           const dataData = {
             ...response.data,
-            code: response.data.code || `#CUS-${String(userId).substring(0,4).toUpperCase() || "7829"}`,
-            total_orders: "12 đơn",
-            total_spending: "15.8M VND",
-            note: "Khách hàng thân thiết từ năm 2020. Ưa thích các sản phẩm phân hữu cơ vi sinh. Thường xuyên đặt hàng vào cuối tháng. Cần tư vấn thêm về hệ thống tưới tự động cho farm mới tại Ba Vì.",
+            code: response.data.code || `#CUS-${String(userId).substring(0,4).toUpperCase() || "7829"}`, // [cite: 132, 133]
+            
+            // 🌟 Đọc số lượng đơn và chi tiêu động dựa trên mảng dữ liệu thật từ API trả về
+            total_orders: response.data.orders ? `${response.data.orders.length} đơn` : "0 đơn",
+            total_spending: response.data.orders && response.data.orders.length > 0
+              ? `${(response.data.orders.reduce((sum, o) => sum + (parseInt(String(o.amount).replace(/[^0-9]/g, '')) || 0), 0) / 1000000).toFixed(1)}M VND`
+              : "0M VND",
+            
+            note: response.data.note || "Khách hàng thân thiết từ năm 2020. Ưa thích các sản phẩm phân hữu cơ vi sinh. Thường xuyên đặt hàng vào cuối tháng. Cần tư vấn thêm về hệ thống tưới tự động cho farm mới tại Ba Vì.", // [cite: 133, 134]
+            
             addresses: response.data.addresses || [
-              { name: "Đạt Vũ", phone: "(+84) 789 758 766", tag: "Mặc định", detail: "123 Lê Lợi, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh." },
-              { name: "Nguyễn Vũ", phone: "(+84) 789 758 766", detail: "456 Cách Mạng Tháng Tám, Quận 3, TP. Hồ Chí Minh." },
-              { name: "Mai Vũ", phone: "(+84) 789 758 766", detail: "789 Trần Hưng Đạo, Quận 5, TP. Hồ Chí Minh." }
+              { name: "Đạt Vũ", phone: "(+84) 789 758 766", tag: "Mặc định", detail: "123 Lê Lợi, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh." } // [cite: 134]
             ],
-            orders: [
-              { id: "#ORD-5521", date: "28/03/24", status: "COMPLETED", amount: "2,450,000 VND" },
-              { id: "#ORD-5498", date: "24/03/24", status: "PROCESSING", amount: "1,120,000 VND" },
-              { id: "#ORD-5321", date: "15/03/24", status: "COMPLETED", amount: "4,500,000 VND" },
-              { id: "#ORD-5288", date: "02/03/24", status: "CANCELLED", amount: "850,000 VND" },
-              { id: "#ORD-5182", date: "28/02/24", status: "COMPLETED", amount: "3,200,000 VND" }
-            ],
-            payments: [
-              { id: "TX-5521", date: "28/03/24", method: "Thẻ ATM", status: "THÀNH CÔNG", amount: "2,450,000 VND" },
-              { id: "TX-5498", date: "24/03/24", method: "Tiền mặt", status: "THANH TOÁN LỖI", amount: "1,120,000 VND" },
-              { id: "TX-5321", date: "15/03/24", method: "Ví điện tử", status: "THÀNH CÔNG", amount: "4,500,000 VND" },
-              { id: "TX-5288", date: "02/03/24", method: "Tiền mặt", status: "THẤT BẠI", amount: "850,000 VND" },
-              { id: "TX-5182", date: "28/02/24", method: "Thẻ ATM", status: "THÀNH CÔNG", amount: "3,200,000 VND" }
-            ]
+
+            // 🌟 Hứng dữ liệu thật từ API, nếu không có thì mặc định là mảng rỗng []
+            orders: response.data.orders || [],
+            payments: response.data.payments || []
           };
-          setCustomer(dataData);
-          // Gắn địa chỉ đầu tiên làm địa chỉ hiển thị map mặc định
+
+          setCustomer(dataData); // [cite: 140]
           if (dataData.addresses && dataData.addresses.length > 0) {
-            setSelectedAddress(dataData.addresses[0]);
+            setSelectedAddress(dataData.addresses[0]); // [cite: 140]
           }
         }
       } catch (err) {
-        console.error("❌ Lỗi nạp chi tiết khách hàng:", err);
+        console.error("❌ Lỗi nạp chi tiết khách hàng:", err); // [cite: 141]
       } finally {
-        setLoading(false);
+        setLoading(false); // [cite: 142]
       }
     };
 

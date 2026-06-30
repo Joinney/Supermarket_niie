@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import pool from '../configs/database.js';
+import pool, { orderPool, paymentPool } from '../configs/database.js';
 
 // --- HÀM TẠO TOKEN ---
 const generateTokens = (user) => {
@@ -286,16 +286,84 @@ export const getAllBuyers = async (req, res) => {
     }
 };
 
-// --- 6. LẤY CHI TIẾT 1 NHÂN SỰ ---
+// --- 6. LẤY CHI TIẾT 1 KHÁCH HÀNG (KẾT NỐI ĐA DATABASE THỰC TẾ) ---
 export const getUserDetail = async (req, res) => {
     const { id } = req.params;
     try {
+        // 1. Lấy thông tin khách hàng từ demi_auth_db
         const query = `SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url FROM public.users WHERE user_id = $1;`;
         const { rows } = await pool.query(query, [id]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy user" });
-        res.status(200).json(rows[0]);
+        
+        const userData = rows[0];
+
+        let orders = [];
+        let payments = [];
+
+        // 2. 🌟 TRUY VẤN ĐƠN HÀNG từ orderPool (demi_order_db)
+        try {
+            const ordersResult = await orderPool.query(`
+                SELECT ma_don_hang, ngay_tao, trang_thai_thanh_toan, tong_thanh_toan 
+                FROM public.orders 
+                WHERE user_id = $1 
+                ORDER BY ngay_tao DESC
+            `, [id]);
+
+            orders = ordersResult.rows.map(order => ({
+                id: order.ma_don_hang,
+                date: order.ngay_tao ? new Date(order.ngay_tao).toLocaleDateString('vi-VN') : "",
+                status: order.trang_thai_thanh_toan || "PROCESSING", 
+                amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.tong_thanh_toan || 0).replace(/\s?₫/, ' VND')
+            }));
+        } catch (orderError) {
+            console.error("❌ Lỗi kết nối demi_order_db:", orderError.message);
+        }
+
+        // 3. 🌟 TRUY VẤN THANH TOÁN từ paymentPool (demi_payment_db)
+        try {
+            // Lấy danh sách mã đơn hàng thực tế đã gom được ở Bước 2
+            const danhSachMaDonHang = orders.map(o => o.id);
+
+            if (danhSachMaDonHang.length > 0) {
+                // Truy vấn trực tiếp bằng mảng mã đơn hàng, không dùng subquery chéo DB nữa
+                const paymentsResult = await paymentPool.query(`
+                    SELECT id, phuong_thuc, ma_don_hang, so_tien, trang_thai, gateway_transaction_id, created_at
+                    FROM public.payment_transactions 
+                    WHERE ma_don_hang = ANY($1)
+                    ORDER BY created_at DESC
+                `, [danhSachMaDonHang]);
+
+                payments = paymentsResult.rows.map(pay => {
+                    // Chuẩn hóa trạng thái thanh toán để khớp với màu sắc/logic hiển thị của Frontend
+                    let statusFormatted = "THANH TOÁN LỖI";
+                    const rawStatus = String(pay.trang_thai).toUpperCase();
+                    if (rawStatus === 'SUCCESS' || rawStatus === 'THÀNH CÔNG' || rawStatus === 'COMPLETED') {
+                        statusFormatted = "THÀNH CÔNG";
+                    }
+
+                    return {
+                        id: pay.gateway_transaction_id || `TX-${pay.ma_don_hang || pay.id}`,
+                        date: pay.created_at ? new Date(pay.created_at).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN'),
+                        method: pay.phuong_thuc || "Tiền mặt",
+                        status: statusFormatted,
+                        amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pay.so_tien || 0).replace(/\s?₫/, ' VND')
+                    };
+                });
+            }
+        } catch (paymentError) {
+            console.error("❌ Lỗi kết nối hoặc truy vấn demi_payment_db:", paymentError.message);
+        }
+
+        // 4. Trả kết quả tổng hợp về cho React Frontend
+        res.status(200).json({
+            ...userData,
+            orders: orders,
+            payments: payments
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: "Lỗi lấy chi tiết nhân sự" });
+        console.error("❌ Lỗi hệ thống tại getUserDetail:", error.message);
+        res.status(500).json({ success: false, error: "Lỗi đồng bộ dữ liệu lịch sử khách hàng" });
     }
 };
 

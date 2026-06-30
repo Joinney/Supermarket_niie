@@ -5,36 +5,41 @@ dotenv.config();
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  // 1. LUÔN ƯU TIÊN DÒNG NÀY (Trên Render hãy dán Connection String vào biến DATABASE_URL)
-  connectionString: process.env.DATABASE_URL,
-
-  // 2. Thông số dự phòng (Nếu DATABASE_URL trống)
+const baseConfig = {
   user: process.env.DB_USER || 'postgres.aiesurvlmtrrgdiwxtma',
   host: process.env.DB_HOST || 'aws-1-ap-southeast-1.pooler.supabase.com', 
-  database: process.env.DB_NAME || 'demi_auth_db',
   password: process.env.DB_PASSWORD || 'demimart@2026',
   port: parseInt(process.env.DB_PORT || '5432'),
+  ssl: { rejectUnauthorized: false },
+  max: 5, // Mỗi pool phụ chỉ cần tối đa 5 connection để tiết kiệm cổng Supabase
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000
+};
 
-  // 3. SSL là bắt buộc khi kết nối tới Supabase / Render từ bên ngoài
-  ssl: {
-    rejectUnauthorized: false
-  },
-
-  // 🔴 THÊM CÁC THÔNG SỐ CỐT LÕI ĐỂ CHẠY VỚI SUPABASE POOLER TRÊN RENDER:
-  max: 10,                        // Giới hạn tối đa 10 connection để tránh làm tràn cổng Supabase Free Tier
-  idleTimeoutMillis: 10000,       // Đóng kết nối rỗi sau 10 giây (Rất quan trọng với Supabase Pooler để giải phóng cổng)
-  connectionTimeoutMillis: 5000,  // Timeout sau 5 giây nếu mạng lag không kết nối được tới AWS Singapore
-  keepAlive: true,                // 🌟 BẮT BUỘC: Giữ kết nối liên tục, tránh bị Supabase ngắt kết nối đột ngột khi đang nhận buffer ảnh
-  keepAliveInitialDelayMillis: 10000 // Gửi gói tin ping sau mỗi 10 giây rỗi để duy trì tính thông suốt
+// 1. Connection Pool mặc định cho Auth (demi_auth_db)
+const pool = new Pool({
+  ...baseConfig,
+  connectionString: process.env.DATABASE_URL, // Luôn ưu tiên chuỗi kết nối từ Render nếu có
+  database: process.env.DB_NAME || 'demi_auth_db',
+  max: 10
 });
 
-pool.on('connect', () => {
-  console.log('✅ [Database]: Đã kết nối thành công tới Supabase PostgreSQL!');
+// 2. 🌟 Connection Pool phụ kết nối sang demi_order_db để lấy đơn hàng
+export const orderPool = new Pool({
+  ...baseConfig,
+  database: 'demi_order_db'
 });
 
-pool.on('error', (err) => {
-  console.error('❌ [Database]: Lỗi kết nối PostgreSQL bất ngờ với Supabase:', err.message);
+// 3. 🌟 Connection Pool phụ kết nối sang demi_payment_db để lấy thanh toán
+export const paymentPool = new Pool({
+  ...baseConfig,
+  database: 'demi_payment_db'
 });
+
+pool.on('connect', () => console.log('✅ [Database Auth]: Kết nối thành công tới demi_auth_db!'));
+orderPool.on('connect', () => console.log('📦 [Database Order]: Kết nối thành công tới demi_order_db!'));
+paymentPool.on('connect', () => console.log('💳 [Database Payment]: Kết nối thành công tới demi_payment_db!'));
 
 export default pool;
