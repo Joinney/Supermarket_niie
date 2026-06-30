@@ -184,7 +184,9 @@ export default function Checkout() {
       danh_sach_san_pham: checkoutCart.map(item => ({
         variant_id: String(item.variantId || item.variant_id), 
         quantity: Number(item.quantity),
-        price: Number(item.price)
+        price: Number(item.price),
+        name: String(item.name || item.productName || "Sản phẩm cấp lập Demi Mart"),
+        image: String(item.image || item.imageUrl || item.image_url || "")
       })),
       
       don_vi_van_chuyen: shippingInfo.storeName ? `Siêu thị ${shippingInfo.storeName}` : 'Siêu thị DemiMart Express',
