@@ -73,7 +73,7 @@ class VnpayController
 
       if response_code == '00'
         if record
-          # 🎯 ĐÃ SỬA CHÍ MẠNG: Chỉ update đúng 2 cột vật lý có thật của bảng mẹ!
+          # 🎯 Cập nhật database nội bộ của Payment Service
           record.update(
             trang_thai: 'COMPLETED',
             gateway_transaction_id: vnp_transaction_no
@@ -95,7 +95,30 @@ class VnpayController
           event_name = 'DIRECT_RETURN_FALLBACK_SUCCESS'
         end
 
-        # Ném toàn bộ chuỗi JSON đối soát vào bảng Hộp Đen (nơi thực sự có cột response_payload)
+        # ============================================================================
+        # 🚀 BỔ SUNG: BẮN ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE (CỔNG 5005)
+        # ============================================================================
+        begin
+          require 'net/http'
+          order_service_url = URI.parse('http://demi_order_service:5005/api/orders/internal/update-status')
+          
+          http = Net::HTTP.new(order_service_url.host, order_service_url.port)
+          request = Net::HTTP::Post.new(order_service_url.path, { 'Content-Type' => 'application/json' })
+          
+          # Payload gửi đi khớp hoàn toàn với hàm updateInternalOrderStatus bên Node.js
+          request.body = {
+            ma_don_hang: ma_don_hang.to_s,
+            trang_thai_thanh_toan: 'completed' # Trùng với chữ thường/hoa trong DB xử lý của bạn
+          }.to_json
+
+          response = http.request(request)
+          puts "🔒 [VNPAY MICROSERVICE SYNC]: Đã đồng bộ sang Order-Service. Kết quả: #{response.code} - #{response.body}"
+        rescue => sync_err
+          puts "⚠️ [VNPAY SYNC WARNING]: Không thể kết nối để đồng bộ trạng thái sang Order-Service: #{sync_err.message}"
+        end
+        # ============================================================================
+
+        # Ghi vào bảng Hộp Đen log hệ thống
         PaymentTransaction.db[
           "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
            VALUES (?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?)",
