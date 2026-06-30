@@ -87,11 +87,12 @@ const OrderDetail = () => {
   }
 
   // --- MAPPING CÁC THÔNG TIN KHÁC ---
-  const customerName = orderData.full_name || orderData.username || "Khách mua hàng";
-  const customerPhone = orderData.phone_number || "Không có SĐT";
-  const customerAddress = orderData.address || "Nhận tại siêu thị Demi Mart";
+  const customerName = orderData.user_info?.full_name || "Khách mua hàng";
+  const customerPhone = orderData.user_info?.phone_number || "Chưa cập nhật SĐT";
+  const customerEmail = orderData.user_info?.email || "Chưa cập nhật Email";
+  const customerAddress = orderData.address || "Nhận tại siêu thị Demi Mart"; // Địa chỉ giao hàng giữ nguyên từ bảng orders
+  const customerAvatar = orderData.user_info?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop";
   const paymentMethod = orderData.phuong_thuc_thanh_toan || "Thanh toán khi nhận hàng (COD)";
-  const customerAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop";
 
   const rawPaymentStatus = orderData.trang_thai_thanh_toan ? String(orderData.trang_thai_thanh_toan).toUpperCase() : "PENDING";
   const isPaid = rawPaymentStatus === 'COMPLETED' || rawPaymentStatus === 'DA_THANH_TOAN' || rawPaymentStatus === 'SUCCESS';
@@ -233,6 +234,30 @@ const OrderDetail = () => {
                   <div className="text-slate-800">{customerPhone}</div>
                 </div>
               </div>
+              {/* 🚀 HIỂN THỊ THÊM EMAIL */}
+  <div className="flex gap-3 items-start">
+    <span className="text-gray-400 mt-0.5 shrink-0">✉️</span>
+    <div>
+      <div className="text-gray-400 font-medium mb-0.5">Email liên hệ</div>
+      <div className="text-slate-800">{customerEmail}</div>
+    </div>
+  </div>
+
+  {/* 🚀 HIỂN THỊ THÊM NGÀY SINH & GIỚI TÍNH NẾU CÓ */}
+  {orderData.user_info?.birthday && (
+    <div className="flex gap-3 items-start">
+      <span className="text-gray-400 mt-0.5 shrink-0">🎂</span>
+      <div>
+        <div className="text-gray-400 font-medium mb-0.5">Ngày sinh / Giới tính</div>
+        <div className="text-slate-800">
+          {new Date(orderData.user_info.birthday).toLocaleDateString('vi-VN')} 
+          {orderData.user_info.gender && ` (${orderData.user_info.gender})`}
+        </div>
+      </div>
+    </div>
+  )}
+
+  
               <div className="flex gap-3 items-start">
                 <MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" />
                 <div>

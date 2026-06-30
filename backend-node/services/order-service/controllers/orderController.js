@@ -376,27 +376,23 @@ const getMyOrders = async (req, res) => {
 const getOrderDetailAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // 1. Kiểm tra xem tham số truyền lên là ID (số) hay Mã đơn hàng (chuỗi)
     const isNumber = /^\d+$/.test(id); 
     
     let orderSql = "";
     let queryParam = id;
 
     if (isNumber) {
-      // Nếu là số, truy vấn theo cột id
       orderSql = `
-        SELECT id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+        SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
                trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
         FROM public.orders 
         WHERE id = $1
         LIMIT 1;
       `;
-      queryParam = Number(id); // Ép kiểu về số nguyên chuẩn chỉnh
+      queryParam = Number(id);
     } else {
-      // Nếu là chuỗi, truy vấn theo mã đơn hàng DMxxx
       orderSql = `
-        SELECT id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+        SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
                trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
         FROM public.orders 
         WHERE ma_don_hang = $1
@@ -411,7 +407,7 @@ const getOrderDetailAdmin = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
     }
 
-    // 2. Lấy danh sách sản phẩm thuộc đơn hàng này từ bảng order_items dựa theo order.id vừa tìm được
+    // 2. Lấy danh sách sản phẩm thuộc đơn hàng này từ bảng order_items
     const itemsSql = `
       SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku
       FROM public.order_items
@@ -419,9 +415,31 @@ const getOrderDetailAdmin = async (req, res) => {
     `;
     const itemsResult = db.query ? await db.query(itemsSql, [order.id]) : await db.execute(itemsSql, [order.id]);
     const items = itemsResult.rows ? itemsResult.rows : itemsResult;
-
-    // 3. Ghép danh sách sản phẩm vào object đơn hàng
     order.danh_sach_san_pham = items;
+
+    // ============================================================================
+    // 🚀 NEW: GỌI SANG AUTH-SERVICE ĐỂ LẤY THÔNG TIN USER THỰC TẾ QUA DOCKER
+    // ============================================================================
+    order.user_info = {
+      full_name: "Khách mua hàng (Ẩn danh)",
+      phone_number: "Chưa cập nhật SĐT",
+      email: "Chưa cập nhật Email"
+    };
+
+    if (order.user_id) {
+      try {
+        const authResponse = await axios.get(`http://demi_auth_service:5001/api/auth/internal/users/${order.user_id}`);
+        
+        // Sửa ở đây: Vì Auth-Service trả về trực tiếp Object User chứ không qua bọc .success hay .data
+        if (authResponse.data && (authResponse.data.user_id || authResponse.data.email)) {
+          order.user_info = authResponse.data; 
+          console.log(`✅ [AUTH SYNC SUCCESS]: Đã đồng bộ thành công user ${order.user_id} vào hóa đơn!`);
+        }
+      } catch (authErr) {
+        console.warn(`⚠️ [AUTH SYNC WARNING]: Không thể lấy thông tin khách hàng từ Auth-Service cho user_id ${order.user_id}:`, authErr.message);
+      }
+    }
+    // ============================================================================
 
     return res.status(200).json({
       success: true,
