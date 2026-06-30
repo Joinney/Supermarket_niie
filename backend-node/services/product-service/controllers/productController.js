@@ -1688,3 +1688,74 @@ export const addProductMedia = async (req, res) => {
         client.release();
     }
 };
+
+// =========================================================================
+// API NỘI BỘ: ĐỒNG BỘ VÀ CỘNG DỒN TỒN KHO TỪ PHIẾU NHẬP CỦA WAREHOUSE-SERVICE
+// =========================================================================
+export const updateInternalStock = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { items } = req.body; // Mảng chứa các object: { sku, quantity }
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'Dữ liệu danh sách đồng bộ trống.' });
+        }
+
+        await client.query('BEGIN');
+
+        for (const item of items) {
+            const targetId = item.sku;
+            const addedQty = parseInt(item.quantity) || 0;
+
+            // Kiểm tra xem ID này thuộc bảng bien_the_san_pham (SKU con) hay san_pham gốc (Mặt hàng đơn)
+            const checkVariant = await client.query(
+                `SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1 OR ma_bien_the = $1`, 
+                [targetId]
+            );
+
+            if (checkVariant.rows.length > 0) {
+                // Nếu tìm thấy biến thể, thực hiện cộng dồn cột số lượng tồn kho của SKU (Nếu Schema của bạn có trường này)
+                // Hoặc ghi nhận nhật ký tồn kho tùy theo thiết kế cột lưu số lượng tại bien_the_san_pham của bạn
+                await client.query(
+                    `UPDATE public.bien_the_san_pham 
+                     SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
+                     WHERE sku = $2 OR ma_bien_the = $2`,
+                    [addedQty, targetId]
+                );
+            } else {
+                // Trường hợp là sản phẩm đơn độc lập (Không biến thể)
+                await client.query(
+                    `UPDATE public.san_pham 
+                     SET gia_ban = gia_ban, -- Giữ nguyên hoặc cập nhật trường số lượng tồn kho tương ứng của bảng cha
+                     ngay_cap_nhat = NOW() 
+                     WHERE ma_san_pham = $1`,
+                    [targetId]
+                );
+                
+                // Đồng thời tìm xem có Simple Variant nào ăn theo mã này không để đồng bộ lượng tồn kho
+                await client.query(
+                    `UPDATE public.bien_the_san_pham 
+                     SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
+                     WHERE ma_san_pham = $2`,
+                    [addedQty, targetId]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        
+        // 📡 Bắn Socket thông báo real-time lên giao diện nếu cần làm mới số lượng
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('stock_quantity_updated', { updated: true });
+        }
+
+        return res.status(200).json({ success: true, message: 'Cập nhật số lượng tồn kho thành công.' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi API updateInternalStock:', error.message);
+        return res.status(500).json({ success: false, message: 'Lỗi xử lý đồng bộ cơ sở dữ liệu.' });
+    } finally {
+        client.release();
+    }
+};

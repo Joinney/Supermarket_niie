@@ -30,7 +30,8 @@ import {
     uploadVariantImage,
     migrateLegacyAttributes,
     setMainProductImage,
-    addProductMedia
+    addProductMedia,
+    updateInternalStock // 🌟 ĐÃ BỔ SUNG: Import hàm xử lý đồng bộ tồn kho từ controller
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -39,6 +40,10 @@ const router = express.Router();
 // 🌐 0. ROUTE NỘI BỘ (INTERNAL INTER-SERVICE ROUTE)
 // =========================================================================
 router.post('/internal/variants', getInternalVariants);
+
+// 🌟 ĐÃ CẬP NHẬT: Tiếp nhận tín hiệu đồng bộ lượng 'TỒN KHO ĐỔI RA' từ Warehouse-Service gửi sang
+// Đường dẫn này khớp chuẩn với cấu trúc định tuyến tổng thể của Demi Mart
+router.patch('/internal/update-stock', updateInternalStock);
 
 // =========================================================================
 // 🏢 1. NHÓM ROUTE TĨNH (STATIC ROUTES)
