@@ -370,4 +370,67 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders };
+// ========================================================
+// 🎯 API: LẤY CHI TIẾT 1 ĐƠN HÀNG KÈM DANH SÁCH SẢN PHẨM THỰC TẾ
+// ========================================================
+const getOrderDetailAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Kiểm tra xem tham số truyền lên là ID (số) hay Mã đơn hàng (chuỗi)
+    const isNumber = /^\d+$/.test(id); 
+    
+    let orderSql = "";
+    let queryParam = id;
+
+    if (isNumber) {
+      // Nếu là số, truy vấn theo cột id
+      orderSql = `
+        SELECT id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+               trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
+        FROM public.orders 
+        WHERE id = $1
+        LIMIT 1;
+      `;
+      queryParam = Number(id); // Ép kiểu về số nguyên chuẩn chỉnh
+    } else {
+      // Nếu là chuỗi, truy vấn theo mã đơn hàng DMxxx
+      orderSql = `
+        SELECT id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+               trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
+        FROM public.orders 
+        WHERE ma_don_hang = $1
+        LIMIT 1;
+      `;
+    }
+
+    const orderResult = db.query ? await db.query(orderSql, [queryParam]) : await db.execute(orderSql, [queryParam]);
+    const order = orderResult.rows ? orderResult.rows[0] : orderResult[0];
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
+    }
+
+    // 2. Lấy danh sách sản phẩm thuộc đơn hàng này từ bảng order_items dựa theo order.id vừa tìm được
+    const itemsSql = `
+      SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku
+      FROM public.order_items
+      WHERE order_id = $1;
+    `;
+    const itemsResult = db.query ? await db.query(itemsSql, [order.id]) : await db.execute(itemsSql, [order.id]);
+    const items = itemsResult.rows ? itemsResult.rows : itemsResult;
+
+    // 3. Ghép danh sách sản phẩm vào object đơn hàng
+    order.danh_sach_san_pham = items;
+
+    return res.status(200).json({
+      success: true,
+      data: order
+    });
+
+  } catch (err) {
+    console.error("🔥 Lỗi API getOrderDetailAdmin:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải chi tiết mặt hàng." });
+  }
+};
+export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders, getOrderDetailAdmin };

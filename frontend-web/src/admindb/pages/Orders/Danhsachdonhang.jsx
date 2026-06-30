@@ -71,7 +71,8 @@ export default function Danhsachdonhang() {
     navigate("/admin/Donhang/Chitietdonhang", {
       state: { 
         orderId: order.id || order.ma_don_hang,
-        maDonHang: order.ma_don_hang 
+        maDonHang: order.ma_don_hang,
+        fullOrderData: order
       }
     });
   };
@@ -318,7 +319,7 @@ export default function Danhsachdonhang() {
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                ❯
+                ❯navigate
               </button>
             </div>
           </div>
