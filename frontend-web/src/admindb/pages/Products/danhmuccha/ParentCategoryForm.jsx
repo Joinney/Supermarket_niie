@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import { UploadCloud, Loader2, ChevronLeft, Save } from "lucide-react";
+import { UploadCloud, Loader2, ChevronLeft, Save, Smile } from "lucide-react";
 
 export default function ParentCategoryForm() {
   const { id } = useParams();
@@ -11,6 +11,7 @@ export default function ParentCategoryForm() {
   const [countries, setCountries] = useState([]);
   const [loading, setLoading] = useState(isEditMode);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false); // 🌟 Thêm state loading cho ảnh
   const fileInputRef = useRef(null);
   const [codeSuffix, setCodeSuffix] = useState("");
 
@@ -19,7 +20,7 @@ export default function ParentCategoryForm() {
     ten_danh_muc_cha: "",
     ma_quoc_gia: "VN",
     hinh_anh: "",
-    bieu_tuong: "",
+    bieu_tuong: "", // Đã có sẵn state bieu_tuong
   });
 
   const apiUrl =
@@ -63,13 +64,35 @@ export default function ParentCategoryForm() {
     fetchInitData();
   }, [id, apiUrl, navigate, isEditMode]);
 
-  const handleFileChange = (e) => {
+  // 🌟 ĐÃ NÂNG CẤP LÊN CLOUDINARY UPLOAD TỪ LOCAL
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () =>
-        setFormData({ ...formData, hinh_anh: reader.result });
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      return alert("Vui lòng chọn tệp tin hình ảnh hợp lệ!");
+    }
+
+    setUploadingImage(true);
+    const uploadData = new FormData();
+    uploadData.append("image", file); // Tên field có thể là 'image' hoặc 'file' tùy backend của bạn
+
+    try {
+      // Gọi chung API upload ảnh mà bạn đã dùng ở trang Sản phẩm
+      const response = await axios.post(
+        `${apiUrl}/api/products/upload`,
+        uploadData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+
+      if (response.data && response.data.url) {
+        setFormData({ ...formData, hinh_anh: response.data.url });
+      }
+    } catch (err) {
+      alert("Gặp sự cố khi upload ảnh lên Cloudinary!");
+      console.error(err);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -84,7 +107,6 @@ export default function ParentCategoryForm() {
     setSubmitLoading(true);
 
     try {
-      // Logic: Nếu không phải edit và có nhập suffix, thì tạo mã theo prefix
       const finalPayload = { ...formData };
       if (!isEditMode && codeSuffix.trim() !== "") {
         finalPayload.ma_dm_cha = generatedCode;
@@ -181,7 +203,6 @@ export default function ParentCategoryForm() {
                     ma_quoc_gia: e.target.value,
                   })
                 }
-                // appearance-none giúp khung select trông giống input hơn, không bị trình duyệt làm lệch
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer appearance-none"
               >
                 {countries.map((c) => (
@@ -198,7 +219,6 @@ export default function ParentCategoryForm() {
                 Mã danh mục (Tùy chọn)
               </label>
 
-              {/* Nếu Edit thì vẫn hiện input bình thường, nếu Create thì hiện input suffix */}
               {isEditMode ? (
                 <input
                   type="text"
@@ -225,14 +245,30 @@ export default function ParentCategoryForm() {
               )}
             </div>
 
+            {/* 🌟 Biểu tượng Danh Mục (Emoji) */}
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 flex items-center gap-1.5">
+                <Smile size={14} className="text-amber-500" /> Biểu tượng
+                (Emoji)
+              </label>
+              <input
+                type="text"
+                placeholder="Ví dụ: 🍬, 🥤, 🌶️..."
+                value={formData.bieu_tuong}
+                onChange={(e) =>
+                  setFormData({ ...formData, bieu_tuong: e.target.value })
+                }
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
+              />
+            </div>
+
             {/* Hình ảnh */}
             <div className="md:col-span-2">
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                 Hình ảnh Danh mục
               </label>
               <div className="flex gap-4 items-start">
-                {/* Image Preview (Nếu có ảnh) */}
-                <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
+                <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center relative">
                   {formData.hinh_anh ? (
                     <img
                       src={formData.hinh_anh}
@@ -244,15 +280,28 @@ export default function ParentCategoryForm() {
                       No Image
                     </span>
                   )}
+                  {/* Overlay loading khi đang upload ảnh */}
+                  {uploadingImage && (
+                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-sm">
+                      <Loader2
+                        size={20}
+                        className="animate-spin text-[#006c49]"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-1 space-y-3">
                   <button
                     type="button"
+                    disabled={uploadingImage}
                     onClick={() => fileInputRef.current.click()}
-                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-[#006c49]/5 transition font-bold"
+                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-[#006c49]/5 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <UploadCloud size={18} /> Chọn ảnh từ máy tính
+                    <UploadCloud size={18} />{" "}
+                    {uploadingImage
+                      ? "Đang tải ảnh..."
+                      : "Chọn ảnh từ máy tính"}
                   </button>
                   <input
                     type="file"
@@ -296,8 +345,8 @@ export default function ParentCategoryForm() {
             </button>
             <button
               type="submit"
-              disabled={submitLoading}
-              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2"
+              disabled={submitLoading || uploadingImage}
+              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitLoading ? (
                 <Loader2 size={18} className="animate-spin" />

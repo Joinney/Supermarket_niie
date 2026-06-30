@@ -12,6 +12,7 @@ export default function ChildCategoryForm() {
   const [parentCategories, setParentCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false); // 🌟 Thêm state loading cho ảnh
   const fileInputRef = useRef(null);
   const [codeSuffix, setCodeSuffix] = useState("");
 
@@ -31,9 +32,8 @@ export default function ChildCategoryForm() {
     const fetchInitData = async () => {
       try {
         setLoading(true);
-        // 1. Lấy danh sách quốc gia (SỬA ĐOẠN NÀY)
+        // 1. Lấy danh sách quốc gia
         const resNations = await axios.get(`${apiUrl}/api/nations`);
-        // Kiểm tra đúng cấu trúc { success: true, data: [...] }
         setCountries(resNations.data.data || []);
 
         // 2. Lấy danh sách danh mục cha
@@ -47,7 +47,7 @@ export default function ChildCategoryForm() {
           const resChildren = await axios.get(
             `${apiUrl}/api/categories/children?country=ALL`,
           );
-          // ... (giữ nguyên logic tìm targetCategory của bạn)
+
           const targetCategory = resChildren.data.data.find(
             (c) => c.ma_dm_con === id,
           );
@@ -60,6 +60,9 @@ export default function ChildCategoryForm() {
               ma_quoc_gia: targetCategory.ma_quoc_gia,
               hinh_anh: targetCategory.hinh_anh || "",
             });
+          } else {
+            alert("Không tìm thấy dữ liệu danh mục con này!");
+            navigate(-1);
           }
         }
       } catch (error) {
@@ -78,14 +81,34 @@ export default function ChildCategoryForm() {
       ? `MDM_${formData.ma_quoc_gia}_${codeSuffix.toUpperCase().replace(/\s+/g, "_")}`
       : "";
 
-  // Xử lý khi user đổi ảnh từ máy
-  const handleFileChange = (e) => {
+  // 🌟 NÂNG CẤP LÊN CLOUDINARY UPLOAD TỪ LOCAL
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () =>
-        setFormData({ ...formData, hinh_anh: reader.result });
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      return alert("Vui lòng chọn tệp tin hình ảnh hợp lệ!");
+    }
+
+    setUploadingImage(true);
+    const uploadData = new FormData();
+    uploadData.append("image", file);
+
+    try {
+      const response = await axios.post(
+        `${apiUrl}/api/products/upload`,
+        uploadData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+
+      if (response.data && response.data.url) {
+        setFormData({ ...formData, hinh_anh: response.data.url });
+      }
+    } catch (err) {
+      alert("Gặp sự cố khi upload ảnh lên Cloudinary!");
+      console.error(err);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -258,7 +281,8 @@ export default function ChildCategoryForm() {
                 Hình ảnh Danh mục Con
               </label>
               <div className="flex gap-4 items-start">
-                <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
+                {/* 🌟 THÊM class relative VÀO ĐÂY ĐỂ HIỂN THỊ SPINNER */}
+                <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center relative">
                   {formData.hinh_anh ? (
                     <img
                       src={formData.hinh_anh}
@@ -270,15 +294,28 @@ export default function ChildCategoryForm() {
                       No Image
                     </span>
                   )}
+                  {/* Overlay loading khi đang upload ảnh */}
+                  {uploadingImage && (
+                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-sm">
+                      <Loader2
+                        size={20}
+                        className="animate-spin text-[#006c49]"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-1 space-y-3">
                   <button
                     type="button"
+                    disabled={uploadingImage}
                     onClick={() => fileInputRef.current.click()}
-                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-[#006c49]/5 transition font-bold"
+                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-[#006c49]/5 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <UploadCloud size={18} /> Chọn ảnh từ máy tính
+                    <UploadCloud size={18} />{" "}
+                    {uploadingImage
+                      ? "Đang tải ảnh..."
+                      : "Chọn ảnh từ máy tính"}
                   </button>
                   <input
                     type="file"
@@ -322,8 +359,8 @@ export default function ChildCategoryForm() {
             </button>
             <button
               type="submit"
-              disabled={submitLoading}
-              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2"
+              disabled={submitLoading || uploadingImage}
+              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitLoading ? (
                 <Loader2 size={18} className="animate-spin" />

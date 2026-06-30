@@ -81,6 +81,7 @@ export default function ProductDetail() {
     return () => socket.disconnect();
   }, [id]);
 
+  // CHỈ GỌI API 1 LẦN KHI VÀO TRANG (Chỉ phụ thuộc vào 'id' và 'country')
   useEffect(() => {
     if (!id || id === "undefined") {
       setLoading(false);
@@ -98,11 +99,10 @@ export default function ProductDetail() {
         const productData = Array.isArray(data) ? data[0] : data;
 
         if (productData && productData.ma_san_pham) {
-          // 🛑 LỚP BẢO VỆ 2 (CHỐNG F5): KIỂM TRA TRẠNG THÁI SẢN PHẨM TRƯỚC KHI RENDER
           if (productData.trang_thai === false) {
             console.warn("🚫 Sản phẩm này đã bị Admin khóa. Ép văng về Home.");
             window.location.href = "/";
-            return; // Dừng luôn việc xử lý UI phía dưới
+            return;
           }
 
           const bienTheList =
@@ -124,27 +124,26 @@ export default function ProductDetail() {
 
           setProduct(productData);
 
-          let targetVariant = null;
+          let initialVariant = null;
           if (variantId) {
-            targetVariant = productData.bien_the.find(
-              (v) => String(v.ma_bien_the) === String(variantId), // Ép chuỗi cho chắc ăn
+            initialVariant = productData.bien_the.find(
+              (v) => String(v.ma_bien_the) === String(variantId),
             );
           }
-
-          if (!targetVariant) {
-            targetVariant =
+          if (!initialVariant) {
+            initialVariant =
               productData.bien_the.find((v) => v.la_ban_chay) ||
               productData.bien_the[0];
           }
 
-          if (targetVariant) {
-            setSelectedVariant(targetVariant);
+          if (initialVariant) {
+            setSelectedVariant(initialVariant);
             setQuantity(1);
-            setSelectedAttributes(targetVariant.thuoc_tinh || {});
+            setSelectedAttributes(initialVariant.thuoc_tinh || {});
 
             const variantMedia = productData.media?.find(
               (m) =>
-                String(m.ma_bien_the) === String(targetVariant.ma_bien_the),
+                String(m.ma_bien_the) === String(initialVariant.ma_bien_the),
             );
             setMainMedia(
               variantMedia ||
@@ -152,13 +151,14 @@ export default function ProductDetail() {
                 productData.media?.[0],
             );
 
+            // Cập nhật lại URL lần đầu nếu chưa có variantId trên URL
             if (
               !variantId ||
-              String(variantId) !== String(targetVariant.ma_bien_the)
+              String(variantId) !== String(initialVariant.ma_bien_the)
             ) {
               const cSlug = category_slug || productData.slug_danh_muc || "all";
               navigate(
-                `/${currentCountry}/product/${cSlug}/${id}/${targetVariant.ma_bien_the}`,
+                `/${currentCountry}/product/${cSlug}/${id}/${initialVariant.ma_bien_the}`,
                 { replace: true },
               );
             }
@@ -172,7 +172,32 @@ export default function ProductDetail() {
         console.error("Error fetching product:", error);
         setLoading(false);
       });
-  }, [id, country, variantId]);
+  }, [id, country]);
+
+  // CHUYÊN XỬ LÝ ĐỔI BIẾN THỂ MƯỢT MÀ (Lật ảnh, đổi giá ngay lập tức)
+  useEffect(() => {
+    if (!product || !variantId) return;
+
+    const targetVariant = product.bien_the?.find(
+      (v) => String(v.ma_bien_the) === String(variantId),
+    );
+
+    if (
+      targetVariant &&
+      targetVariant.ma_bien_the !== selectedVariant?.ma_bien_the
+    ) {
+      setSelectedVariant(targetVariant);
+      setQuantity(1);
+      setSelectedAttributes(targetVariant.thuoc_tinh || {});
+
+      const variantMedia = product.media?.find(
+        (m) => String(m.ma_bien_the) === String(targetVariant.ma_bien_the),
+      );
+      if (variantMedia) {
+        setMainMedia(variantMedia);
+      }
+    }
+  }, [variantId, product]);
 
   const nhomPhanLoai = useMemo(() => {
     if (!product?.bien_the) return {};
@@ -474,11 +499,13 @@ export default function ProductDetail() {
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>
-              {selectedVariant && selectedVariant.ten_bien_the && (
-                <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
-                  Phân loại: {selectedVariant.ten_bien_the}
-                </h2>
-              )}
+              {isMultiTier &&
+                selectedVariant &&
+                selectedVariant.ten_bien_the && (
+                  <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
+                    Phân loại: {selectedVariant.ten_bien_the}
+                  </h2>
+                )}
             </div>
 
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
@@ -555,7 +582,7 @@ export default function ProductDetail() {
                       </div>
                     ),
                   )
-                ) : (
+                ) : product.bien_the?.length > 1 ? (
                   <div className="flex flex-wrap gap-1.5 lg:gap-2">
                     {product.bien_the?.map((v, i) => (
                       <button
@@ -583,7 +610,7 @@ export default function ProductDetail() {
                       </button>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 

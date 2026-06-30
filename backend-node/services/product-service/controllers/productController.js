@@ -993,20 +993,41 @@ export const createVariant = async (req, res) => {
         const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [id]);
         const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
 
-        // 🌟 2. ĐẾM SỐ LƯỢNG BIẾN THỂ ĐỂ TẠO STT (Ví dụ: MBT_VN_MSP001_1)
-        const countRes = await client.query('SELECT COUNT(*) as count FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
-        const nextIndex = parseInt(countRes.rows[0].count) + 1;
+        // 🌟 2. TẠO MÃ SẢN PHẨM RÚT GỌN (LẤY 9 KÝ TỰ CUỐI ĐỂ ĐẢM BẢO AN TOÀN VƯỢT THỜI GIAN)
+        const shortProdId = id.length > 9 ? id.slice(-9) : id;
+
+        // 3. TÌM SỐ THỨ TỰ BIẾN THỂ LỚN NHẤT
+        const existingMbts = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
+        let maxIndex = 0;
         
-        // 🌟 3. TẠO MÃ BIẾN THỂ THEO CẤU TRÚC MỚI
-        const ma_bien_the_moi = `MBT_${countryCode}_${id}_${nextIndex}`;
+        existingMbts.rows.forEach(row => {
+            const parts = row.ma_bien_the.split('_');
+            const lastPart = parts[parts.length - 1];
+            const num = parseInt(lastPart);
+            if (!isNaN(num) && num > maxIndex) {
+                maxIndex = num;
+            }
+        });
+        const nextIndex = maxIndex + 1;
+        
+        // 4. TẠO MÃ BIẾN THỂ CUỐI CÙNG
+        const ma_bien_the_moi = `MBT_${countryCode}_${shortProdId}_${nextIndex}`;
+
+        // 5. Kiểm tra trùng SKU
+        let finalSku = sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}`;
+        let skuCounter = 1;
+        while (true) {
+            const skuCheck = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1', [finalSku]);
+            if (skuCheck.rows.length === 0) break;
+            finalSku = `${sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}`}-${skuCounter}`;
+            skuCounter++;
+        }
 
         // Tìm ID đơn vị
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
-            if (unitRes.rows.length > 0) {
-                don_vi_id = unitRes.rows[0].id;
-            }
+            if (unitRes.rows.length > 0) don_vi_id = unitRes.rows[0].id;
         }
 
         // INSERT vào bảng bien_the_san_pham
@@ -1015,10 +1036,10 @@ export const createVariant = async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW()) RETURNING *;
         `;
         const variantResult = await client.query(insertVariantQuery, [
-            ma_bien_the_moi, id, don_vi_id, ten_bien_the || `Phiên bản mới ${sku}`, sku, gia_ban_le
+            ma_bien_the_moi, id, don_vi_id, ten_bien_the || `Phiên bản mới ${finalSku}`, finalSku, gia_ban_le
         ]);
 
-        // Xử lý Media
+        // ... [Giữ nguyên toàn bộ logic xử lý HÌNH ẢNH và THUỘC TÍNH EAV bên dưới của bạn] ...
         if (hinh_anh_url && hinh_anh_url.trim() !== '') {
             const ma_media_moi = generateUniqueId('MED');
             await client.query(`
@@ -1027,47 +1048,26 @@ export const createVariant = async (req, res) => {
             `, [ma_media_moi, id, ma_bien_the_moi, hinh_anh_url]);
         }
 
-        // Đồng bộ hóa ma trận logic thuộc tính EAV (giữ nguyên logic cũ của bạn)
         if (thuoc_tinh && typeof thuoc_tinh === 'object') {
             for (const [ten_thuoc_tinh, gia_tri] of Object.entries(thuoc_tinh)) {
                 if (!gia_tri) continue;
-
-                let attrRes = await client.query(
-                    `SELECT ma_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE LOWER(ten_thuoc_tinh) = LOWER($1)`,
-                    [ten_thuoc_tinh.trim()]
-                );
-
+                let attrRes = await client.query(`SELECT ma_thuoc_tinh FROM public.danh_muc_thuoc_tinh WHERE LOWER(ten_thuoc_tinh) = LOWER($1)`, [ten_thuoc_tinh.trim()]);
                 let ma_thuoc_tinh;
                 if (attrRes.rows.length === 0) {
                     ma_thuoc_tinh = generateUniqueId('ATT');
-                    await client.query(
-                        `INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh) VALUES ($1, $2)`,
-                        [ma_thuoc_tinh, ten_thuoc_tinh.trim()]
-                    );
+                    await client.query(`INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh) VALUES ($1, $2)`, [ma_thuoc_tinh, ten_thuoc_tinh.trim()]);
                 } else {
                     ma_thuoc_tinh = attrRes.rows[0].ma_thuoc_tinh;
                 }
-
-                let valueRes = await client.query(
-                    `SELECT ma_gia_tri FROM public.gia_tri_thuoc_tinh WHERE ma_thuoc_tinh = $1 AND LOWER(gia_tri) = LOWER($2)`,
-                    [ma_thuoc_tinh, gia_tri.trim()]
-                );
-
+                let valueRes = await client.query(`SELECT ma_gia_tri FROM public.gia_tri_thuoc_tinh WHERE ma_thuoc_tinh = $1 AND LOWER(gia_tri) = LOWER($2)`, [ma_thuoc_tinh, gia_tri.trim()]);
                 let ma_gia_tri;
                 if (valueRes.rows.length === 0) {
                     ma_gia_tri = generateUniqueId('VAL');
-                    await client.query(
-                        `INSERT INTO public.gia_tri_thuoc_tinh (ma_gia_tri, ma_thuoc_tinh, gia_tri) VALUES ($1, $2, $3)`,
-                        [ma_gia_tri, ma_thuoc_tinh, gia_tri.trim()]
-                    );
+                    await client.query(`INSERT INTO public.gia_tri_thuoc_tinh (ma_gia_tri, ma_thuoc_tinh, gia_tri) VALUES ($1, $2, $3)`, [ma_gia_tri, ma_thuoc_tinh, gia_tri.trim()]);
                 } else {
                     ma_gia_tri = valueRes.rows[0].ma_gia_tri;
                 }
-
-                await client.query(
-                    `INSERT INTO public.chi_tiet_bien_the_thuoc_tinh (ma_bien_the, ma_gia_tri) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-                    [ma_bien_the_moi, ma_gia_tri]
-                );
+                await client.query(`INSERT INTO public.chi_tiet_bien_the_thuoc_tinh (ma_bien_the, ma_gia_tri) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ma_bien_the_moi, ma_gia_tri]);
             }
         }
 
@@ -1090,7 +1090,6 @@ export const createSimpleVariant = async (req, res) => {
     try {
         const { ma_san_pham, ten_bien_the, sku, gia_ban_le, ten_don_vi } = req.body;
 
-        // Giữ nguyên điều kiện kiểm tra
         if (!ma_san_pham || !sku || gia_ban_le === undefined || gia_ban_le === null) {
             return res.status(400).json({ success: false, message: "Lỗi: Mã sản phẩm, SKU và Giá không được để trống." });
         }
@@ -1101,22 +1100,43 @@ export const createSimpleVariant = async (req, res) => {
         const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [ma_san_pham]);
         const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
 
-        // 🌟 2. BỔ SUNG LOGIC TẠO ID MỚI: Đếm số lượng hiện có để tăng STT
-        const countRes = await client.query(
-            'SELECT COUNT(*) as count FROM public.bien_the_san_pham WHERE ma_san_pham = $1', 
-            [ma_san_pham]
-        );
-        const nextIndex = parseInt(countRes.rows[0].count) + 1;
-        const ma_bien_the_moi = `MBT_${countryCode}_${ma_san_pham}_${nextIndex}`;
+        // 🌟 2. TẠO MÃ SẢN PHẨM RÚT GỌN (LẤY 9 KÝ TỰ CUỐI)
+        const shortProdId = ma_san_pham.length > 9 ? ma_san_pham.slice(-9) : ma_san_pham;
 
-        // 3. Tìm ID đơn vị (giữ nguyên)
+        // 3. TÌM SỐ THỨ TỰ BIẾN THỂ LỚN NHẤT
+        const existingMbts = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [ma_san_pham]);
+        let maxIndex = 0;
+        
+        existingMbts.rows.forEach(row => {
+            const parts = row.ma_bien_the.split('_');
+            const num = parseInt(parts[parts.length - 1]);
+            if (!isNaN(num) && num > maxIndex) {
+                maxIndex = num;
+            }
+        });
+        const nextIndex = maxIndex + 1;
+
+        // 4. TẠO MÃ BIẾN THỂ CUỐI CÙNG
+        const ma_bien_the_moi = `MBT_${countryCode}_${shortProdId}_${nextIndex}`;
+
+        // 5. Kiểm tra trùng SKU
+        let finalSku = sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}-001`;
+        let skuCounter = 1;
+        while (true) {
+            const skuCheck = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1', [finalSku]);
+            if (skuCheck.rows.length === 0) break;
+            finalSku = `${sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}`}-${String(skuCounter).padStart(3, '0')}`;
+            skuCounter++;
+        }
+
+        // Tìm ID đơn vị
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
             if (unitRes.rows.length > 0) don_vi_id = unitRes.rows[0].id;
         }
 
-        // 4. INSERT với mã mới (giữ nguyên cấu trúc)
+        // INSERT
         const query = `
             INSERT INTO public.bien_the_san_pham 
             (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
@@ -1124,7 +1144,7 @@ export const createSimpleVariant = async (req, res) => {
             RETURNING *;
         `;
         const result = await client.query(query, [
-            ma_bien_the_moi, ma_san_pham, don_vi_id, ten_bien_the || sku, sku, gia_ban_le
+            ma_bien_the_moi, ma_san_pham, don_vi_id, ten_bien_the || finalSku, finalSku, gia_ban_le
         ]);
 
         await client.query('COMMIT');

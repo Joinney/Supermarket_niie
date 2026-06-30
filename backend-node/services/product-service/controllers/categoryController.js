@@ -137,11 +137,46 @@ export const getParentCategories = async (req, res) => {
 };
 
 // =========================================================================
-// 4. THÊM MỚI DANH MỤC CHA (ĐÃ SỬA TÊN HÀM Ở ĐÂY)
+// 4. THÊM MỚI DANH MỤC CHA
 // =========================================================================
 export const createParentCategory = async (req, res) => {
     try {
         const { ma_dm_cha, ten_danh_muc_cha, ma_quoc_gia, hinh_anh, bieu_tuong, duong_dan_seo } = req.body;
+
+        let finalMaDmCha = "";
+
+        if (ma_dm_cha && ma_dm_cha.trim() !== "") {
+            // Nếu Frontend gửi lên, giữ nguyên định dạng và in hoa
+            finalMaDmCha = ma_dm_cha.trim().toUpperCase();
+        } else {
+            const autoSuffix = ten_danh_muc_cha
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') 
+                .replace(/[^a-zA-Z0-9\s]/g, '')  
+                .trim()
+                .replace(/\s+/g, '_')            
+                .toUpperCase()
+                .substring(0, 15);               
+            
+            finalMaDmCha = `MDC_${ma_quoc_gia.toUpperCase()}_${autoSuffix}`;
+        }
+
+        let currentCode = finalMaDmCha;
+        let counter = 1;
+        while (true) {
+            const checkRes = await pool.query('SELECT ma_dm_cha FROM public.danh_muc_cha WHERE ma_dm_cha = $1', [currentCode]);
+            if (checkRes.rows.length === 0) break; // Mã an toàn
+            currentCode = `${finalMaDmCha}_${counter}`;
+            counter++;
+        }
+        finalMaDmCha = currentCode;
+
+        const finalSeo = duong_dan_seo || ten_danh_muc_cha
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-');
 
         const query = `
             INSERT INTO public.danh_muc_cha 
@@ -151,22 +186,19 @@ export const createParentCategory = async (req, res) => {
         `;
         
         const values = [
-            ma_dm_cha && ma_dm_cha !== "" ? ma_dm_cha : null, 
-            ten_danh_muc_cha, 
+            finalMaDmCha, 
+            ten_danh_muc_cha.trim(), 
             ma_quoc_gia, 
-            hinh_anh, 
-            bieu_tuong, 
-            duong_dan_seo
+            hinh_anh || null, 
+            bieu_tuong || null, 
+            finalSeo
         ];
 
         const { rows } = await pool.query(query, values);
         
         res.status(201).json({ success: true, data: rows[0] });
     } catch (error) {
-        console.error("Lỗi tạo danh mục cha:", error);
-        if (error.code === '23505') {
-            return res.status(400).json({ success: false, message: "Mã danh mục đã tồn tại!" });
-        }
+        console.error("❌ Lỗi tạo danh mục cha:", error);
         res.status(500).json({ success: false, message: "Lỗi máy chủ khi tạo danh mục." });
     }
 };
@@ -246,8 +278,12 @@ export const updateParentCategory = async (req, res) => {
         const { id } = req.params; // ma_dm_cha
         const { ten_danh_muc_cha, ma_quoc_gia, hinh_anh, bieu_tuong } = req.body;
         
-        // Tạo slug tự động
-        const duong_dan_seo = ten_danh_muc_cha.toLowerCase().replace(/ /g, '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const duong_dan_seo = ten_danh_muc_cha
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') 
+            .replace(/[^a-z0-9\s-]/g, '')    
+            .replace(/\s+/g, '-');           
 
         const query = `
             UPDATE public.danh_muc_cha 
@@ -255,7 +291,14 @@ export const updateParentCategory = async (req, res) => {
             WHERE ma_dm_cha = $6 
             RETURNING *;
         `;
-        const { rows } = await pool.query(query, [ten_danh_muc_cha, ma_quoc_gia, hinh_anh, bieu_tuong, duong_dan_seo, id]);
+        const { rows } = await pool.query(query, [
+            ten_danh_muc_cha.trim(), 
+            ma_quoc_gia, 
+            hinh_anh || null, 
+            bieu_tuong || null, 
+            duong_dan_seo, 
+            id
+        ]);
 
         if (rows.length === 0) {
             return res.status(404).json({ success: false, message: "Không tìm thấy danh mục cha." });
@@ -263,8 +306,8 @@ export const updateParentCategory = async (req, res) => {
 
         res.status(200).json({ success: true, data: rows[0] });
     } catch (error) {
-        console.error("Lỗi cập nhật danh mục cha:", error);
-        res.status(500).json({ success: false, message: "Lỗi server." });
+        console.error("❌ Lỗi cập nhật danh mục cha:", error);
+        res.status(500).json({ success: false, message: "Lỗi server khi cập nhật." });
     }
 };
 
@@ -323,16 +366,61 @@ export const createChildCategory = async (req, res) => {
     try {
         const { ma_dm_con, ma_dm_cha, ten_danh_muc_con, ma_quoc_gia, hinh_anh } = req.body;
         
-        const duong_dan_seo = ten_danh_muc_con.toLowerCase().replace(/ /g, '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const countryCode = (ma_quoc_gia || 'VN').toUpperCase();
+
+        let finalMaDmCon = "";
+
+        if (ma_dm_con && ma_dm_con.trim() !== "") {
+            // Nếu Frontend gửi lên mã, giữ nguyên và in hoa
+            finalMaDmCon = ma_dm_con.trim().toUpperCase();
+        } else {
+            const autoSuffix = ten_danh_muc_con
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9\s]/g, '')  
+                .trim()
+                .replace(/\s+/g, '_')            
+                .toUpperCase()
+                .substring(0, 15);               
+            
+            finalMaDmCon = `MDM_${countryCode}_${autoSuffix}`;
+        }
+
+        let currentCode = finalMaDmCon;
+        let counter = 1;
+        while (true) {
+            const checkRes = await pool.query('SELECT ma_dm_con FROM public.danh_muc_con WHERE ma_dm_con = $1', [currentCode]);
+            if (checkRes.rows.length === 0) break; 
+            currentCode = `${finalMaDmCon}_${counter}`;
+            counter++;
+        }
+        finalMaDmCon = currentCode;
+
+        const duong_dan_seo = ten_danh_muc_con
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .trim()
+            .replace(/\s+/g, '-');
 
         const query = `
-            INSERT INTO public.danh_muc_con (ma_dm_con, ma_dm_cha, ten_danh_muc_con, duong_dan_seo, ma_quoc_gia, hinh_anh, trang_thai)
+            INSERT INTO public.danh_muc_con 
+            (ma_dm_con, ma_dm_cha, ten_danh_muc_con, duong_dan_seo, ma_quoc_gia, hinh_anh, trang_thai)
             VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *;
         `;
-        const { rows } = await pool.query(query, [ma_dm_con, ma_dm_cha, ten_danh_muc_con, duong_dan_seo, ma_quoc_gia || 'VN', hinh_anh]);
+        const { rows } = await pool.query(query, [
+            finalMaDmCon, 
+            ma_dm_cha, 
+            ten_danh_muc_con.trim(), 
+            duong_dan_seo, 
+            countryCode, 
+            hinh_anh || null
+        ]);
         
         res.status(201).json({ success: true, data: rows[0] });
     } catch (error) {
+        console.error("❌ Lỗi tạo danh mục con:", error);
         res.status(500).json({ success: false, message: 'Lỗi tạo danh mục con: ' + error.message });
     }
 };
@@ -402,7 +490,14 @@ export const updateChildCategory = async (req, res) => {
         const { id } = req.params; // ma_dm_con
         const { ma_dm_cha, ten_danh_muc_con, ma_quoc_gia, hinh_anh } = req.body;
         
-        const duong_dan_seo = ten_danh_muc_con.toLowerCase().replace(/ /g, '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // 🌟 TỐI ƯU SEO URL CHUẨN
+        const duong_dan_seo = ten_danh_muc_con
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .trim()
+            .replace(/\s+/g, '-');
 
         const query = `
             UPDATE public.danh_muc_con 
@@ -410,13 +505,20 @@ export const updateChildCategory = async (req, res) => {
             WHERE ma_dm_con = $6 
             RETURNING *;
         `;
-        const { rows } = await pool.query(query, [ma_dm_cha, ten_danh_muc_con, duong_dan_seo, ma_quoc_gia, hinh_anh, id]);
+        const { rows } = await pool.query(query, [
+            ma_dm_cha, 
+            ten_danh_muc_con.trim(), 
+            duong_dan_seo, 
+            ma_quoc_gia, 
+            hinh_anh || null, 
+            id
+        ]);
         
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục con.' });
         
         res.status(200).json({ success: true, data: rows[0] });
     } catch (error) {
-        console.error('Lỗi Sửa danh mục con:', error);
+        console.error('❌ Lỗi Sửa danh mục con:', error);
         res.status(500).json({ success: false, message: 'Lỗi máy chủ khi cập nhật.' });
     }
 };
