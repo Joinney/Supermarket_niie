@@ -24,7 +24,7 @@ export default function ProductList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
 
-  // 🌟 4. STATE BỘ LỌC ĐÃ ĐƯỢC CẬP NHẬT (THAY ORIGIN THÀNH TYPE)
+  // 🌟 4. STATE BỘ LỌC ĐÃ ĐƯỢC CẬP NHẬT
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     sort: "newest", // newest, oldest, price_desc, price_asc
@@ -48,7 +48,6 @@ export default function ProductList() {
     try {
       let response;
 
-      // 🌟 Đã cập nhật queryParams để gửi filter "type" xuống Backend
       const queryParams = {
         page,
         limit,
@@ -96,13 +95,12 @@ export default function ProductList() {
   const handleRefresh = () => {
     setSearchTerm("");
     setPage(1);
-    // Reset toàn bộ bộ lọc về mặc định
     setFilters({ sort: "newest", market: "all", type: "all" });
   };
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1); // Trở về trang 1 mỗi khi đổi bộ lọc
+    setPage(1);
   };
 
   const handleDelete = async (id, name) => {
@@ -281,7 +279,6 @@ export default function ProductList() {
               className="overflow-hidden mb-6"
             >
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Lọc: Sắp xếp */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
                     Sắp xếp theo
@@ -298,7 +295,6 @@ export default function ProductList() {
                   </select>
                 </div>
 
-                {/* Lọc: Thị trường (ma_quoc_gia) */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
                     Thị trường quốc gia
@@ -319,7 +315,6 @@ export default function ProductList() {
                   </select>
                 </div>
 
-                {/* 🌟 Lọc: Cấu trúc bán hàng (THAY CHO NGUỒN GỐC CŨ) */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
                     Phân loại sản phẩm
@@ -346,11 +341,12 @@ export default function ProductList() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gray-100 text-[10px] font-extrabold text-gray-400 uppercase tracking-wider bg-white">
-                {/* 🌟 ĐÃ XÓA CỘT CHECKBOX Ở ĐÂY */}
                 <th className="py-3 px-4">Sản phẩm</th>
                 <th className="py-3 px-4">Danh mục con</th>
                 <th className="py-3 px-4 text-center">Phân loại</th>
-                <th className="py-3 px-4 font-mono">Giá bán</th>
+                <th className="py-3 px-4 font-mono text-right">Giá bán</th>
+                {/* 🌟 1. THÊM TIÊU ĐỀ KHO */}
+                <th className="py-3 px-4 text-center">Kho</th>
                 <th className="py-3 px-4 text-center">Trạng thái</th>
                 <th className="py-3 px-4 text-right pr-6">Thao tác</th>
               </tr>
@@ -361,8 +357,6 @@ export default function ProductList() {
                   key={item.ma_san_pham || index}
                   className="group hover:bg-emerald-50/30 transition"
                 >
-                  {/* 🌟 ĐÃ XÓA CỘT CHECKBOX Ở ĐÂY */}
-
                   <td className="py-4 px-4 max-w-[280px]">
                     <div className="flex items-center gap-3">
                       <img
@@ -405,7 +399,6 @@ export default function ProductList() {
                     {item.ten_danh_muc_con || "Chưa phân loại"}
                   </td>
 
-                  {/* 🌟 CỘT PHÂN LOẠI MỚI (Hiện Quốc gia + Loại Sản Phẩm) */}
                   <td className="py-4 px-4 text-center">
                     <div className="flex flex-col items-center gap-1.5">
                       <span className="inline-block px-2.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase border border-blue-100">
@@ -423,8 +416,21 @@ export default function ProductList() {
                     </div>
                   </td>
 
-                  <td className="py-4 px-4 text-slate-900 font-black font-mono">
+                  <td className="py-4 px-4 text-slate-900 font-black font-mono text-right">
                     {formatPrice(item.gia_ban_thap_nhat || item.gia_ban)}
+                  </td>
+
+                  {/* 🌟 2. HIỂN THỊ TỒN KHO TỪ DATA GỬI LÊN HOẶC FALLBACK */}
+                  <td className="py-4 px-4 text-center">
+                    <span
+                      className={`px-2 py-1 rounded text-[10px] font-bold ${
+                        item.tong_ton_kho && Number(item.tong_ton_kho) > 0
+                          ? "bg-green-50 text-green-700"
+                          : "bg-red-50 text-red-600"
+                      }`}
+                    >
+                      {item.tong_ton_kho ? Number(item.tong_ton_kho) : 0}
+                    </span>
                   </td>
 
                   <td className="py-4 px-4 text-center">
@@ -532,7 +538,7 @@ export default function ProductList() {
               {products.length === 0 && !loading && (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="py-12 text-center text-gray-400 font-medium"
                   >
                     Không tìm thấy sản phẩm nào khớp với bộ lọc.

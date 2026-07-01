@@ -1,15 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
 
-// 🟢 1. Bổ sung nhận props categoryName và categorySlug
 const ProductCard = ({ p, categoryName, categorySlug }) => {
-  // 1. GỌI CONTEXT STORE ĐỂ LẤY QUỐC GIA VÀ HÀM ĐỔI TIỀN TỰ ĐỘNG
   const { currentStore, formatPrice } = useStore();
-
-  // Lấy hàm addToCart từ CartContext
   const { addToCart } = useCart();
 
   const defaultImage =
@@ -17,24 +13,32 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
   const mainImage = p.hinh_anh_chinh || defaultImage;
   const currentPrice = Number(p.gia_ban_thap_nhat) || 0;
 
-  // 2. Ưu tiên đường dẫn link chạy theo store người dùng đang chọn
   const rawCountryCode = currentStore?.code || p.country_code || "vn";
   const country = String(rawCountryCode).toLowerCase();
 
-  // 🟢 2. Cập nhật ưu tiên lấy categorySlug từ props
   const category = categorySlug || p.slug_danh_muc || "san-pham";
-  const stockCount = p.tong_ton_kho || 0;
 
-  // 3. Hàm xử lý thêm nhanh vào giỏ hàng và tạo hiệu ứng Animation
+  // 🌟 Lấy số lượng tồn từ backend (Dữ liệu trả về từ getAllProducts ở Backend cần có tổng số lượng)
+  // Nếu BE chưa nhóm tổng tồn kho (ví dụ: SUM(so_luong_ton) as tong_ton_kho), thì fallback về 0
+  const stockCount = p.tong_ton_kho ? Number(p.tong_ton_kho) : 0;
+  const isOutOfStock = stockCount <= 0;
+
   const handleQuickAddCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // 🌟 KHÓA CHẶN TRONG HÀM: Không cho thêm hàng nếu tồn kho <= 0
+    if (isOutOfStock) {
+      alert("Sản phẩm này hiện đang tạm hết hàng!");
+      return;
+    }
 
     const itemToCart = {
       variantId: p.ma_san_pham,
       name: p.ten_san_pham,
       price: currentPrice,
       quantity: 1,
+      stock: stockCount, // 🌟 TRUYỀN SỐ LƯỢNG TỒN VÀO GIỎ HÀNG
       image: mainImage,
       id: p.ma_san_pham,
       categorySlug: category,
@@ -45,7 +49,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     addToCart(itemToCart);
 
     // ==========================================
-    // HIỆU ỨNG 1: VỆT SÁNG BAY VÀO GIỎ HÀNG
+    // HIỆU ỨNG VỆT SÁNG BAY VÀO GIỎ HÀNG
     // ==========================================
     const startX = e.clientX;
     const startY = e.clientY;
@@ -77,7 +81,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     }, 800);
 
     // ==========================================
-    // HIỆU ỨNG 2: THÔNG BÁO XUẤT HIỆN Ở GIỮA MÀN HÌNH
+    // HIỆU ỨNG THÔNG BÁO THÀNH CÔNG
     // ==========================================
     const toast = document.createElement("div");
     toast.className = "custom-toast";
@@ -98,14 +102,15 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
   return (
     <Link
       to={`/${country}/product/${category}/${p.ma_san_pham}`}
-      // 🟢 3. Thêm state vào Link để truyền dữ liệu đi 🟢
       state={{
         categoryName: categoryName,
         categorySlug: categorySlug,
       }}
-      className="flex-shrink-0"
+      className="flex-shrink-0 relative block"
     >
-      <div className="w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] hover:shadow-2xl hover:shadow-slate-100 transition-all duration-500 border border-transparent hover:border-slate-50">
+      <div
+        className={`w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] transition-all duration-500 border border-transparent ${isOutOfStock ? "opacity-60 grayscale-[50%]" : "hover:shadow-2xl hover:shadow-slate-100 hover:border-slate-50"}`}
+      >
         <div className="relative aspect-square bg-[#f8fafc] rounded-[24px] overflow-hidden mb-3 border border-slate-50 group-hover:border-[#e6f0ed] transition-all">
           <img
             src={mainImage}
@@ -116,17 +121,29 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition duration-500 p-4"
             alt={p.ten_san_pham}
           />
-          <button
-            className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
-            onClick={handleQuickAddCart}
-          >
-            <Plus size={20} strokeWidth={3} />
-          </button>
+
+          {/* 🌟 TEM HẾT HÀNG / NÚT THÊM VÀO GIỎ */}
+          {isOutOfStock ? (
+            <div className="absolute inset-0 bg-white/40 flex items-center justify-center backdrop-blur-[2px]">
+              <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1">
+                <X size={12} strokeWidth={3} /> Tạm hết
+              </span>
+            </div>
+          ) : (
+            <button
+              className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
+              onClick={handleQuickAddCart}
+            >
+              <Plus size={20} strokeWidth={3} />
+            </button>
+          )}
         </div>
+
         <div className="space-y-1 px-1">
           <div className="flex items-baseline gap-2">
-            {/* Bọc hàm biến đổi giá động tự động tính toán theo tỉ giá quốc gia */}
-            <span className="text-[#ff4d4f] font-black text-lg leading-none">
+            <span
+              className={`font-black text-lg leading-none ${isOutOfStock ? "text-slate-400" : "text-[#ff4d4f]"}`}
+            >
               {formatPrice
                 ? formatPrice(currentPrice)
                 : `${currentPrice.toLocaleString()}đ`}
@@ -137,7 +154,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
           </p>
           <div className="flex gap-1 items-center pt-0.5">
             <span className="bg-[#e6f0ed] text-[#006c49] text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
-              {/* 🟢 4. Cập nhật nhãn để hiện đúng tên danh mục 🟢 */}
               {categoryName ||
                 p.ten_danh_muc_con ||
                 p.ten_danh_muc ||

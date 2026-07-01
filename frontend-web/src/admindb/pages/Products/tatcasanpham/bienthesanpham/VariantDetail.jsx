@@ -14,9 +14,9 @@ import {
   FileText,
   ShieldAlert,
   Archive,
-  Image as ImageIcon, // Thêm Icon Image
-  Edit3, // Thêm Icon Edit3
-  Plus, // Thêm Icon Plus
+  Image as ImageIcon,
+  Edit3,
+  Plus,
 } from "lucide-react";
 import axios from "axios";
 
@@ -72,7 +72,11 @@ export default function AdminVariantDetail() {
     try {
       const apiUrl =
         import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+
+      // 🌟 FIX BẢO MẬT DỮ LIỆU: Bổ sung ten_bien_the và ten_don_vi để BE không overwrite thành NULL
       await axios.put(`${apiUrl}/api/products/variants/${variantId}`, {
+        ten_bien_the: variant.ten_bien_the,
+        ten_don_vi: variant.ten_don_vi,
         gia_ban_le: editPrice,
         sku: editSku,
         so_luong_ton: editStock,
@@ -392,8 +396,8 @@ export default function AdminVariantDetail() {
               </div>
             ) : (
               <div className="p-4 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-bold flex items-center gap-2">
-                <ShieldAlert size={16} /> Phiên bản này chưa được đấu nối ma
-                trận nhãn thuộc tính chéo trong DB!
+                <ShieldAlert size={16} /> Phiên bản này (Sản phẩm Đơn) không có
+                đấu nối ma trận nhãn thuộc tính chéo.
               </div>
             )}
           </div>

@@ -27,7 +27,7 @@ export default function CategoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSort = searchParams.get("sort") || "noi-bat";
   const selectedPrice = searchParams.get("price") || "tat-ca";
-  const selectedOrigin = searchParams.get("origin") || "tat-ca";
+  // Đã xóa selectedOrigin
   const freshShipping = searchParams.get("fresh") === "true";
   const globalShipping = searchParams.get("global") === "true";
   const currentPage = parseInt(searchParams.get("page")) || 1;
@@ -41,8 +41,6 @@ export default function CategoryPage() {
   const [activeSubCategory, setActiveSubCategory] = useState(null);
 
   const sliderRef = useRef(null);
-
-  // 🌟 REF LƯU TRỮ CHÍNH XÁC ID ĐỂ SOCKET ĐỐI CHIẾU
   const viewedCategoryIds = useRef([]);
 
   const formatSlugName = (s) =>
@@ -101,7 +99,6 @@ export default function CategoryPage() {
     }
   };
 
-  // 🌟 KHỞI TẠO LẮNG NGHE SOCKET REAL-TIME
   useEffect(() => {
     const apiUrl =
       import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
@@ -110,17 +107,13 @@ export default function CategoryPage() {
     socket.on("category_status_changed", (data) => {
       if (data.trang_thai === false) {
         const incomingId = String(data.ma_danh_muc);
-
-        // 1. Nếu Danh mục ĐANG XEM bị tắt -> Văng về trang chủ
         const isMatch = viewedCategoryIds.current.includes(incomingId);
         if (isMatch) {
           console.log(
             "⚡ [Real-time] Danh mục đang xem bị Admin khóa. Văng trang!",
           );
           window.location.href = "/";
-        }
-        // 2. Nếu một danh mục con (chưa click vào) bị tắt -> Âm thầm xóa nó khỏi thanh trượt ngang
-        else {
+        } else {
           setSubCategories((prev) =>
             prev.filter(
               (c) =>
@@ -146,7 +139,6 @@ export default function CategoryPage() {
     return () => socket.disconnect();
   }, []);
 
-  // 🌟 FETCH CÂY DANH MỤC VÀ KIỂM TRA BẢO MẬT (CHẶN F5)
   useEffect(() => {
     const fetchSubCategories = async () => {
       try {
@@ -167,22 +159,18 @@ export default function CategoryPage() {
           (c) => c.slug === targetParentSlug,
         );
 
-        // 🛑 LỚP BẢO VỆ 1: NẾU DANH MỤC CHA KHÔNG TỒN TẠI HOẶC BỊ TẮT (trang_thai = false) -> VĂNG
         if (!currentCategory || currentCategory.trang_thai === false) {
           window.location.href = "/";
           return;
         }
 
         let activeIds = [];
-
-        // Gắn mọi loại ID có thể có của Backend vào mảng để Socket quét không bị trượt
         ["id", "ma_dm_cha", "ma_danh_muc", "_id"].forEach((key) => {
           if (currentCategory[key])
             activeIds.push(String(currentCategory[key]));
         });
 
         if (currentCategory.children) {
-          // Chỉ hiển thị các danh mục con đang mở (trang_thai !== false)
           const activeChildren = currentCategory.children.filter(
             (c) => c.trang_thai !== false,
           );
@@ -193,7 +181,6 @@ export default function CategoryPage() {
               (c) => c.slug === slug,
             );
 
-            // 🛑 LỚP BẢO VỆ 2: NẾU DANH MỤC CON KHÔNG TỒN TẠI HOẶC BỊ TẮT -> VĂNG
             if (!activeSub || activeSub.trang_thai === false) {
               window.location.href = "/";
               return;
@@ -207,7 +194,6 @@ export default function CategoryPage() {
           setSubCategories([]);
         }
 
-        // Lưu vào Ref để Socket theo dõi
         viewedCategoryIds.current = activeIds;
       } catch (err) {
         console.error("Lỗi lấy danh mục:", err);
@@ -241,7 +227,6 @@ export default function CategoryPage() {
               role: "client",
               sort: selectedSort,
               price: selectedPrice,
-              origin: selectedOrigin,
               fresh: freshShipping,
               global: globalShipping,
               page: currentPage,
@@ -277,7 +262,6 @@ export default function CategoryPage() {
     currentStore?.code,
     selectedSort,
     selectedPrice,
-    selectedOrigin,
     freshShipping,
     globalShipping,
     currentPage,
@@ -559,34 +543,6 @@ export default function CategoryPage() {
                     value={item.value}
                     checked={selectedPrice === item.value}
                     onChange={() => updateFilter("price", item.value)}
-                    className="text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
-                  />{" "}
-                  {item.label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-bold text-slate-700 mb-2">Xuất Xứ</h4>
-            <div className="space-y-2">
-              {[
-                { label: "Tất cả", value: "tat-ca" },
-                { label: "Việt Nam", value: "vn" },
-                { label: "Nhập Khẩu", value: "nhap-khau" },
-                { label: "Nhật Bản", value: "jp" },
-                { label: "Hàn Quốc", value: "kr" },
-              ].map((item) => (
-                <label
-                  key={item.value}
-                  className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="origin-filter"
-                    value={item.value}
-                    checked={selectedOrigin === item.value}
-                    onChange={() => updateFilter("origin", item.value)}
                     className="text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
                   />{" "}
                   {item.label}

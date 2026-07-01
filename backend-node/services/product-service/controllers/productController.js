@@ -66,14 +66,13 @@ export const getInternalVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) - Đã cập nhật Database mới
+// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) 
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const { limit, offset } = sanitizePagination(req.query.page, req.query.limit);
         
-        // 🌟 BỔ SUNG 'type' VÀO ĐÂY
         const { sort, market, role, type } = req.query; 
 
         let whereClause = `WHERE 1=1`; 
@@ -90,14 +89,12 @@ export const getAllProducts = async (req, res) => {
             valueIndex++;
         }
 
-        // 🌟 LOGIC LỌC MỚI: Dựa vào cột 'co_bien_the' trong bảng san_pham
         if (type === 'single') {
             whereClause += ` AND sp.co_bien_the = false`;
         } else if (type === 'group') {
             whereClause += ` AND sp.co_bien_the = true`;
         }
 
-        // Đếm tổng số lượng (Phải đếm dựa trên WHERE giống câu query chính)
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM public.san_pham sp
@@ -108,7 +105,6 @@ export const getAllProducts = async (req, res) => {
         const totalItems = parseInt(countResult[0]?.total || 0);
         const totalPages = Math.ceil(totalItems / limit);
 
-        // Xử lý sắp xếp
         let orderByClause = `ORDER BY sp.ngay_tao DESC`;
         if (sort === 'oldest') orderByClause = `ORDER BY sp.ngay_tao ASC`;
         if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
@@ -120,6 +116,9 @@ export const getAllProducts = async (req, res) => {
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
                 sp.ma_quoc_gia, sp.co_bien_the, sp.gia_ban, 
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
+                
+                COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
+                
                 CASE 
                     WHEN sp.co_bien_the = false THEN sp.gia_ban
                     ELSE COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0)
@@ -153,13 +152,13 @@ export const getAllProducts = async (req, res) => {
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
-    const { role } = req.query; // 🌟 Nhận thêm cờ role từ Frontend gửi lên
+    const { role } = req.query;
 
     try {
         const productQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, 
-                sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the, sp.gia_ban,  -- 🌟 THÊM 2 CỘT NÀY VÀO
+                sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the, sp.gia_ban,  
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -173,14 +172,14 @@ export const getProductById = async (req, res) => {
 
         const product = productResult.rows[0];
 
-        // 🛑 LỚP BẢO VỆ THÉP: Khách hàng tuyệt đối không được xem sản phẩm bị khóa
         if (role === 'client' && product.trang_thai === false) {
             return res.status(404).json({ message: "Sản phẩm này đã ngừng kinh doanh hoặc đang tạm khóa." });
         }
 
+        // 🌟 BỔ SUNG: Thêm bt.so_luong_ton vào câu SELECT
         const variantsQuery = `
             SELECT 
-                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai,
+                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai, bt.so_luong_ton,
                 dm.ten_thuoc_tinh, gt.gia_tri,
                 dv.ten_don_vi AS ten_don_vi
             FROM public.bien_the_san_pham bt
@@ -196,7 +195,6 @@ export const getProductById = async (req, res) => {
         const attributesRaw = {};
 
         variantsResult.rows.forEach(row => {
-            // 🛑 BẢO VỆ BIẾN THỂ: Khách hàng không được thấy các SKU đã bị khóa/xóa mềm
             if (role === 'client' && row.trang_thai === false) return;
 
             if (!variantsMap[row.ma_bien_the]) {
@@ -205,6 +203,7 @@ export const getProductById = async (req, res) => {
                     ten_bien_the: row.ten_bien_the,
                     sku: row.sku,
                     gia_ban_le: Number(row.gia_ban_le),
+                    so_luong_ton: row.so_luong_ton || 0, // 🌟 BỔ SUNG: Trả về số lượng tồn kho
                     trang_thai: row.trang_thai, 
                     thuoc_tinh: {},
                     ten_don_vi: row.ten_don_vi || "Gói"
@@ -235,7 +234,6 @@ export const getProductById = async (req, res) => {
         `;
         const mediaResult = await pool.query(mediaQuery, [id]);
 
-        // 🛑 BẢO VỆ HÌNH ẢNH: Lọc bỏ hình ảnh đã bị tắt nếu là khách hàng
         const finalMedia = role === 'client' 
             ? mediaResult.rows.filter(m => m.trang_thai === true) 
             : mediaResult.rows;
@@ -254,7 +252,7 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC (Đã xóa cột xuất xứ)
+// 3. LẤY SẢN PHẨM THEO DANH MỤC
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
@@ -293,7 +291,6 @@ export const getProductsByCategorySlug = async (req, res) => {
             paramIndex++;
         }
 
-        // 🌟 XÓA BỎ Logic lọc theo 'origin' ở đây vì cột đã bị xóa trong DB
         
         let finalQuery = `WITH ProductList AS (${baseQuery}) SELECT * FROM ProductList WHERE 1=1`;
 
@@ -910,6 +907,7 @@ export const getVariantById = async (req, res) => {
                 bt.ten_bien_the, 
                 bt.sku, 
                 bt.gia_ban_le, 
+                bt.so_luong_ton,
                 bt.trang_thai,
                 bt.ngay_tao,
                 bt.ngay_cap_nhat,
@@ -928,6 +926,9 @@ export const getVariantById = async (req, res) => {
         const variantData = rows[0];
         variantData.thuoc_tinh_hop_nhat = [];
         variantData.duong_dan_url = "";
+        
+        // 🌟 Chuyển null thành 0 để bảo vệ dữ liệu nếu cột chưa có số
+        variantData.so_luong_ton = variantData.so_luong_ton || 0; 
 
         // Tải thông tin hình ảnh thực tế từ bảng media_san_pham
         try {
@@ -958,8 +959,7 @@ export const getVariantById = async (req, res) => {
             console.warn("⚠️ Cảnh báo: Lỗi cấu trúc bảng EAV liên kết thuộc tính.");
         }
 
-        // Tải metadata hỗ trợ quản lý kho & đóng gói (Fallback an toàn nếu schema chưa thiết lập cột)
-        variantData.so_luong_ton = 150; 
+        // Vẫn giữ lại đơn vị mặc định nếu bạn cần thiết lập này
         variantData.ten_don_vi = "Gói"; 
 
         return res.status(200).json(variantData);
@@ -981,7 +981,8 @@ export const createVariant = async (req, res) => {
     const client = await pool.connect(); 
     try {
         const { id } = req.params; 
-        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
+        // 🌟 FIX 3: Nhận so_luong_ton từ req.body
+        const { ten_bien_the, sku, gia_ban_le, so_luong_ton, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
 
         if (!sku || !gia_ban_le) {
             return res.status(400).json({ success: false, message: "Mã SKU và Giá bán lẻ không được để trống." });
@@ -993,10 +994,8 @@ export const createVariant = async (req, res) => {
         const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [id]);
         const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
 
-        // 🌟 2. TẠO MÃ SẢN PHẨM RÚT GỌN (LẤY 9 KÝ TỰ CUỐI ĐỂ ĐẢM BẢO AN TOÀN VƯỢT THỜI GIAN)
         const shortProdId = id.length > 9 ? id.slice(-9) : id;
 
-        // 3. TÌM SỐ THỨ TỰ BIẾN THỂ LỚN NHẤT
         const existingMbts = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
         let maxIndex = 0;
         
@@ -1010,10 +1009,8 @@ export const createVariant = async (req, res) => {
         });
         const nextIndex = maxIndex + 1;
         
-        // 4. TẠO MÃ BIẾN THỂ CUỐI CÙNG
         const ma_bien_the_moi = `MBT_${countryCode}_${shortProdId}_${nextIndex}`;
 
-        // 5. Kiểm tra trùng SKU
         let finalSku = sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}`;
         let skuCounter = 1;
         while (true) {
@@ -1023,23 +1020,20 @@ export const createVariant = async (req, res) => {
             skuCounter++;
         }
 
-        // Tìm ID đơn vị
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
             if (unitRes.rows.length > 0) don_vi_id = unitRes.rows[0].id;
         }
 
-        // INSERT vào bảng bien_the_san_pham
         const insertVariantQuery = `
-            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
-            VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW()) RETURNING *;
+            INSERT INTO public.bien_the_san_pham (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, so_luong_ton, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW()) RETURNING *;
         `;
         const variantResult = await client.query(insertVariantQuery, [
-            ma_bien_the_moi, id, don_vi_id, ten_bien_the || `Phiên bản mới ${finalSku}`, finalSku, gia_ban_le
+            ma_bien_the_moi, id, don_vi_id, ten_bien_the || `Phiên bản mới ${finalSku}`, finalSku, gia_ban_le, so_luong_ton || 0
         ]);
 
-        // ... [Giữ nguyên toàn bộ logic xử lý HÌNH ẢNH và THUỘC TÍNH EAV bên dưới của bạn] ...
         if (hinh_anh_url && hinh_anh_url.trim() !== '') {
             const ma_media_moi = generateUniqueId('MED');
             await client.query(`
@@ -1088,7 +1082,8 @@ export const createVariant = async (req, res) => {
 export const createSimpleVariant = async (req, res) => {
     const client = await pool.connect();
     try {
-        const { ma_san_pham, ten_bien_the, sku, gia_ban_le, ten_don_vi } = req.body;
+        // 🌟 FIX 5: Nhận so_luong_ton từ req.body
+        const { ma_san_pham, ten_bien_the, sku, gia_ban_le, so_luong_ton, ten_don_vi } = req.body;
 
         if (!ma_san_pham || !sku || gia_ban_le === undefined || gia_ban_le === null) {
             return res.status(400).json({ success: false, message: "Lỗi: Mã sản phẩm, SKU và Giá không được để trống." });
@@ -1096,14 +1091,11 @@ export const createSimpleVariant = async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Lấy mã quốc gia
         const prodInfo = await client.query('SELECT ma_quoc_gia FROM public.san_pham WHERE ma_san_pham = $1', [ma_san_pham]);
         const countryCode = prodInfo.rows.length > 0 ? (prodInfo.rows[0].ma_quoc_gia || 'VN').toUpperCase() : 'VN';
 
-        // 🌟 2. TẠO MÃ SẢN PHẨM RÚT GỌN (LẤY 9 KÝ TỰ CUỐI)
         const shortProdId = ma_san_pham.length > 9 ? ma_san_pham.slice(-9) : ma_san_pham;
 
-        // 3. TÌM SỐ THỨ TỰ BIẾN THỂ LỚN NHẤT
         const existingMbts = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [ma_san_pham]);
         let maxIndex = 0;
         
@@ -1116,10 +1108,8 @@ export const createSimpleVariant = async (req, res) => {
         });
         const nextIndex = maxIndex + 1;
 
-        // 4. TẠO MÃ BIẾN THỂ CUỐI CÙNG
         const ma_bien_the_moi = `MBT_${countryCode}_${shortProdId}_${nextIndex}`;
 
-        // 5. Kiểm tra trùng SKU
         let finalSku = sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}-001`;
         let skuCounter = 1;
         while (true) {
@@ -1129,22 +1119,21 @@ export const createSimpleVariant = async (req, res) => {
             skuCounter++;
         }
 
-        // Tìm ID đơn vị
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
             if (unitRes.rows.length > 0) don_vi_id = unitRes.rows[0].id;
         }
 
-        // INSERT
+        // 🌟 FIX 6: Thêm so_luong_ton vào lệnh INSERT
         const query = `
             INSERT INTO public.bien_the_san_pham 
-            (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, trang_thai, ngay_tao, ngay_cap_nhat)
-            VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW()) 
+            (ma_bien_the, ma_san_pham, don_vi_id, ten_bien_the, sku, gia_ban_le, so_luong_ton, trang_thai, ngay_tao, ngay_cap_nhat)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW()) 
             RETURNING *;
         `;
         const result = await client.query(query, [
-            ma_bien_the_moi, ma_san_pham, don_vi_id, ten_bien_the || finalSku, finalSku, gia_ban_le
+            ma_bien_the_moi, ma_san_pham, don_vi_id, ten_bien_the || finalSku, finalSku, gia_ban_le, so_luong_ton || 0
         ]);
 
         await client.query('COMMIT');
@@ -1165,14 +1154,13 @@ export const updateVariant = async (req, res) => {
     const client = await pool.connect();
     try {
         const { variantId } = req.params;
-        // 🌟 Đã lấy thêm ten_don_vi từ req.body
-        const { ten_bien_the, sku, gia_ban_le, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
+        // 🌟 FIX 7: Nhận so_luong_ton từ req.body
+        const { ten_bien_the, sku, gia_ban_le, so_luong_ton, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
 
         if (!sku || !gia_ban_le) return res.status(400).json({ success: false, message: "Mã SKU và Giá bán không được trống." });
 
         await client.query('BEGIN');
 
-        // 🌟 BƯỚC MỚI: TÌM ID ĐƠN VỊ TỪ TÊN ĐƠN VỊ FRONTEND GỬI LÊN
         let don_vi_id = null;
         if (ten_don_vi) {
             const unitRes = await client.query('SELECT id FROM public.don_vi_san_pham WHERE ten_don_vi = $1 LIMIT 1', [ten_don_vi.trim()]);
@@ -1181,13 +1169,13 @@ export const updateVariant = async (req, res) => {
             }
         }
 
-        // 🌟 Đã bổ sung don_vi_id vào lệnh UPDATE
+        // 🌟 FIX 8: Thêm so_luong_ton vào lệnh UPDATE
         const updateVariantQuery = `
             UPDATE public.bien_the_san_pham 
-            SET ten_bien_the = $1, sku = $2, gia_ban_le = $3, don_vi_id = $4, ngay_cap_nhat = NOW() 
-            WHERE ma_bien_the = $5 RETURNING *;
+            SET ten_bien_the = $1, sku = $2, gia_ban_le = $3, don_vi_id = $4, so_luong_ton = $5, ngay_cap_nhat = NOW() 
+            WHERE ma_bien_the = $6 RETURNING *;
         `;
-        const variantResult = await client.query(updateVariantQuery, [ten_bien_the, sku, gia_ban_le, don_vi_id, variantId]);
+        const variantResult = await client.query(updateVariantQuery, [ten_bien_the, sku, gia_ban_le, don_vi_id, so_luong_ton || 0, variantId]);
 
         if (variantResult.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -1458,7 +1446,6 @@ export const createAttribute = async (req, res) => {
         const nextIdNum = maxIdNum + 1;
         const ma_thuoc_tinh_moi = `ATT${String(nextIdNum).padStart(3, '0')}`;
 
-        // 3. Tiến hành Insert vào DB
         const insertQuery = `
             INSERT INTO public.danh_muc_thuoc_tinh (ma_thuoc_tinh, ten_thuoc_tinh)
             VALUES ($1, $2)

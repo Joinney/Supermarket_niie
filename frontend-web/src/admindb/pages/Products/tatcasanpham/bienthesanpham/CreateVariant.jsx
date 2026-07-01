@@ -41,21 +41,19 @@ const generateSafeSku = (
   let proposedSku = "";
 
   if (!isGroupMode) {
-    // 💡 Biến thể đơn: VN-XXXXXXXXX-001, US-XXXXXXXXX-002...
     let counter = 1;
     do {
       proposedSku = `${countryCode}-${baseSuffix}-${String(counter).padStart(3, "0")}`;
       counter++;
     } while (existingVariants.some((v) => v.sku === proposedSku));
   } else {
-    // 💡 Biến thể nhóm: VN-XXXXXXXXX-MÀU-SIZE
     const attrParts = attributes
       .map((a) =>
         a.selected
           ? a.selected
               .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "") // Bỏ dấu tiếng Việt
-              .replace(/[^a-zA-Z0-9]/g, "") // Bỏ khoảng trắng & ký tự đặc biệt
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-zA-Z0-9]/g, "")
               .substring(0, 3)
               .toUpperCase()
           : "",
@@ -66,7 +64,6 @@ const generateSafeSku = (
     const baseGroupSku = `${countryCode}-${baseSuffix}${attrParts ? "-" + attrParts : ""}`;
     proposedSku = baseGroupSku;
 
-    // Chống trùng lặp
     let counter = 1;
     while (existingVariants.some((v) => v.sku === proposedSku)) {
       proposedSku = `${baseGroupSku}-${counter}`;
@@ -86,11 +83,9 @@ export default function AdminCreateVariant() {
   const [productMedia, setProductMedia] = useState([]);
   const [units, setUnits] = useState([]);
   const [productName, setProductName] = useState("");
-  // 🌟 BỔ SUNG STATE: Lưu mã quốc gia của sản phẩm
   const [productCountry, setProductCountry] = useState("VN");
   const [loading, setLoading] = useState(true);
 
-  // STATE CỐT LÕI
   const [activeVariantId, setActiveVariantId] = useState(variantId || null);
   const [isVariantMode, setIsVariantMode] = useState(
     location.state?.targetVariantType === "GROUP",
@@ -118,6 +113,7 @@ export default function AdminCreateVariant() {
     ten_bien_the: "",
     sku: "",
     gia_ban_le: 0,
+    so_luong_ton: 0, // 🌟 Khai báo cho chuẩn Data Model
     ten_don_vi: "Chai",
   });
 
@@ -127,9 +123,6 @@ export default function AdminCreateVariant() {
   const [newAttrName, setNewAttrName] = useState("");
   const [newValInputs, setNewValInputs] = useState({});
 
-  // =====================================================================
-  // HÀM XỬ LÝ CHỌN BIẾN THỂ TỪ BẢNG HOẶC NÚT
-  // =====================================================================
   const handleSelectExistingVariant = (v) => {
     setActiveVariantId(v.ma_bien_the);
     const hasAttributes = v.thuoc_tinh && Object.keys(v.thuoc_tinh).length > 0;
@@ -165,9 +158,6 @@ export default function AdminCreateVariant() {
     );
   }, [activeVariantId, existingVariants]);
 
-  // =====================================================================
-  // API LOAD DỮ LIỆU BAN ĐẦU
-  // =====================================================================
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -193,7 +183,6 @@ export default function AdminCreateVariant() {
             : productResponse.data;
 
           setProductName(data.ten_san_pham || "Sản phẩm gốc");
-          // 🌟 BỔ SUNG: Lưu lại mã quốc gia từ API
           setProductCountry(data.ma_quoc_gia || "VN");
 
           const mainImg =
@@ -262,11 +251,8 @@ export default function AdminCreateVariant() {
     fetchAllData();
   }, [id]);
 
-  // =====================================================================
-  // 🌟 CẬP NHẬT SKU VÀ TÊN GỢI Ý KHI THAY ĐỔI
-  // =====================================================================
   useEffect(() => {
-    if (activeVariantId) return; // Đang edit thì ko tự động đổi
+    if (activeVariantId) return;
 
     if (isVariantMode && availableAttributes.length > 0) {
       const comboText = availableAttributes
@@ -275,7 +261,6 @@ export default function AdminCreateVariant() {
         .join(" - ");
       setEditVariantName(`${productName} ${comboText ? `- ${comboText}` : ""}`);
 
-      // 🌟 TRUYỀN THÊM productCountry
       const safeSku = generateSafeSku(
         id,
         true,
@@ -285,7 +270,6 @@ export default function AdminCreateVariant() {
       );
       setEditSku(safeSku);
     } else if (!isVariantMode && !activeVariantId) {
-      // 🌟 TRUYỀN THÊM productCountry
       const safeSku = generateSafeSku(
         id,
         false,
@@ -302,7 +286,7 @@ export default function AdminCreateVariant() {
     id,
     activeVariantId,
     existingVariants,
-    productCountry, // Bổ sung dependency
+    productCountry,
   ]);
 
   useEffect(() => {
@@ -325,7 +309,8 @@ export default function AdminCreateVariant() {
       const res = await axios.post(`${apiUrl}/api/products/variants/simple`, {
         ma_san_pham: id,
         ...simpleForm,
-        gia_ban_le: simpleForm.gia_ban_le || 0,
+        gia_ban_le: 0, // Luôn set mặc định là 0 để qua cửa Backend
+        so_luong_ton: 0, // Luôn set mặc định là 0 để qua cửa Backend
       });
 
       const newVariant = res.data.data;
@@ -338,9 +323,12 @@ export default function AdminCreateVariant() {
         ten_bien_the: "",
         sku: "",
         gia_ban_le: 0,
+        so_luong_ton: 0,
         ten_don_vi: "Chai",
       });
-      alert("✅ Tạo biến thể đơn thành công!");
+      alert(
+        "✅ Khởi tạo vỏ biến thể thành công! Bạn có thể cập nhật chi tiết giá và số lượng ngay bây giờ.",
+      );
     } catch (err) {
       alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
     }
@@ -581,9 +569,7 @@ export default function AdminCreateVariant() {
     }
   };
 
-  // 🌟 HÀM MỞ POPUP BIẾN THỂ ĐƠN AN TOÀN
   const openSimpleModal = () => {
-    // 🌟 TRUYỀN THÊM productCountry
     const safeSku = generateSafeSku(
       id,
       false,
@@ -595,15 +581,14 @@ export default function AdminCreateVariant() {
       ten_bien_the: "",
       sku: safeSku,
       gia_ban_le: 0,
+      so_luong_ton: 0,
       ten_don_vi: units[0]?.ten_don_vi || "Chai",
     });
     setShowSimpleModal(true);
   };
 
-  // 🌟 HÀM RESET FORM TẠO MỚI AN TOÀN
   const handleResetToCreateNew = () => {
     setActiveVariantId(null);
-    // 🌟 TRUYỀN THÊM productCountry
     const safeSku = generateSafeSku(
       id,
       isVariantMode,
@@ -643,7 +628,6 @@ export default function AdminCreateVariant() {
             setExistingVariants([]);
             setIsVariantMode(false);
 
-            // 🌟 Generate SKU ngay sau khi chuyển chế độ (KÈM productCountry)
             const safeSku = generateSafeSku(id, false, [], [], productCountry);
             setEditSku(safeSku);
             setEditPrice(0);
@@ -855,7 +839,7 @@ export default function AdminCreateVariant() {
                   onClick={openSimpleModal}
                   className="text-[10px] bg-sky-50 text-sky-700 font-black px-3 py-1.5 rounded-lg hover:bg-sky-100 transition"
                 >
-                  + Thêm biến thể đơn
+                  + Thêm vỏ biến thể đơn
                 </button>
               )}
 
@@ -898,7 +882,7 @@ export default function AdminCreateVariant() {
                 {!sku && existingVariants.length === 0 && (
                   <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-[11px] font-bold">
                     Đang ở chế độ Biến thể Đơn. <br /> Nhấn nút{" "}
-                    <b>+ Thêm biến thể đơn</b> ở trên để tạo.
+                    <b>+ Thêm vỏ biến thể đơn</b> ở trên để tạo.
                   </div>
                 )}
               </div>
@@ -1394,7 +1378,7 @@ export default function AdminCreateVariant() {
         </div>
       )}
 
-      {/* POPUP THÊM BIẾN THỂ ĐƠN CHUẨN */}
+      {/* POPUP THÊM VỎ BIẾN THỂ ĐƠN */}
       {showSimpleModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div
@@ -1407,7 +1391,7 @@ export default function AdminCreateVariant() {
             className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10"
           >
             <h3 className="font-black text-slate-800 mb-5 flex items-center gap-2">
-              <Plus size={18} className="text-[#006c49]" /> Thêm biến thể đơn
+              <Plus size={18} className="text-[#006c49]" /> Thêm vỏ biến thể đơn
             </h3>
             <div className="space-y-4">
               <input
@@ -1438,7 +1422,7 @@ export default function AdminCreateVariant() {
                 onClick={handleSaveSimpleVariant}
                 className="flex-1 py-3 bg-[#006c49] text-white rounded-xl text-xs font-black shadow-lg hover:bg-[#005137] transition"
               >
-                Lưu biến thể
+                Tạo vỏ
               </button>
             </div>
           </motion.div>
