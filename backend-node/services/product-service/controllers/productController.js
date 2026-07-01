@@ -1736,44 +1736,77 @@ export const updateInternalStock = async (req, res) => {
             const targetId = item.sku;
             const addedQty = parseInt(item.quantity) || 0;
 
-            // Kiểm tra xem ID này thuộc bảng bien_the_san_pham (SKU con) hay san_pham gốc (Mặt hàng đơn)
-            const checkVariant = await client.query(
-                `SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1 OR ma_bien_the = $1`, 
-                [targetId]
-            );
+            // Kiểm tra xem targetId có phải là một số nguyên hay không để tránh lỗi ép kiểu của Postgres
+            const isNumeric = /^\d+$/.test(targetId);
 
-            if (checkVariant.rows.length > 0) {
-                // Nếu tìm thấy biến thể, thực hiện cộng dồn cột số lượng tồn kho của SKU (Nếu Schema của bạn có trường này)
-                // Hoặc ghi nhận nhật ký tồn kho tùy theo thiết kế cột lưu số lượng tại bien_the_san_pham của bạn
-                await client.query(
-                    `UPDATE public.bien_the_san_pham 
-                     SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
-                     WHERE sku = $2 OR ma_bien_the = $2`,
-                    [addedQty, targetId]
+            // Sửa logic câu lệnh SQL bằng cách ép kiểu an toàn hoặc chỉ check theo SKU
+            let checkVariant;
+            if (isNumeric) {
+                checkVariant = await client.query(
+                    `SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1 OR ma_bien_the = $2`, 
+                    [targetId, parseInt(targetId)]
                 );
             } else {
-                // Trường hợp là sản phẩm đơn độc lập (Không biến thể)
-                await client.query(
-                    `UPDATE public.san_pham 
-                     SET gia_ban = gia_ban, -- Giữ nguyên hoặc cập nhật trường số lượng tồn kho tương ứng của bảng cha
-                     ngay_cap_nhat = NOW() 
-                     WHERE ma_san_pham = $1`,
+                checkVariant = await client.query(
+                    `SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1`, 
                     [targetId]
                 );
-                
-                // Đồng thời tìm xem có Simple Variant nào ăn theo mã này không để đồng bộ lượng tồn kho
-                await client.query(
-                    `UPDATE public.bien_the_san_pham 
-                     SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
-                     WHERE ma_san_pham = $2`,
-                    [addedQty, targetId]
-                );
+            }
+
+            if (checkVariant.rows.length > 0) {
+                // Nếu tìm thấy biến thể, thực hiện cộng dồn số lượng tồn kho
+                if (isNumeric) {
+                    await client.query(
+                        `UPDATE public.bien_the_san_pham 
+                         SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
+                         WHERE sku = $2 OR ma_bien_the = $3`,
+                        [addedQty, targetId, parseInt(targetId)]
+                    );
+                } else {
+                    await client.query(
+                        `UPDATE public.bien_the_san_pham 
+                         SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
+                         WHERE sku = $2`,
+                        [addedQty, targetId]
+                    );
+                }
+            } else {
+                // Trường hợp là sản phẩm đơn độc lập (Không biến thể)
+                // Cột ma_san_pham của public.san_pham có thể là dạng Số hoặc dạng Chuỗi, áp dụng check tương tự
+                if (isNumeric) {
+                    await client.query(
+                        `UPDATE public.san_pham 
+                         SET ngay_cap_nhat = NOW() 
+                         WHERE ma_san_pham::text = $1 OR ma_san_pham = $2`,
+                        [targetId, parseInt(targetId)]
+                    );
+
+                    await client.query(
+                        `UPDATE public.bien_the_san_pham 
+                         SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
+                         WHERE ma_san_pham::text = $2 OR ma_san_pham = $3`,
+                        [addedQty, targetId, parseInt(targetId)]
+                    );
+                } else {
+                    await client.query(
+                        `UPDATE public.san_pham 
+                         SET ngay_cap_nhat = NOW() 
+                         WHERE ma_san_pham::text = $1`,
+                        [targetId]
+                    );
+
+                    await client.query(
+                        `UPDATE public.bien_the_san_pham 
+                         SET so_luong_ton = COALESCE(so_luong_ton, 0) + $1, ngay_cap_nhat = NOW() 
+                         WHERE ma_san_pham::text = $2`,
+                        [addedQty, targetId]
+                    );
+                }
             }
         }
 
         await client.query('COMMIT');
         
-        // 📡 Bắn Socket thông báo real-time lên giao diện nếu cần làm mới số lượng
         const io = req.app.get('io');
         if (io) {
             io.emit('stock_quantity_updated', { updated: true });
@@ -1783,7 +1816,7 @@ export const updateInternalStock = async (req, res) => {
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Lỗi API updateInternalStock:', error.message);
-        return res.status(500).json({ success: false, message: 'Lỗi xử lý đồng bộ cơ sở dữ liệu.' });
+        return res.status(500).json({ success: false, message: `Lỗi xử lý đồng bộ cơ sở dữ liệu: ${error.message}` });
     } finally {
         client.release();
     }

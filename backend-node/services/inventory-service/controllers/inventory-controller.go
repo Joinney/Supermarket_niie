@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
+	"os"
 	"time"
 
 	"supermarket/warehouse-service/config"
@@ -120,12 +120,11 @@ func CreateInventoryImport(c *gin.Context) {
 
 	for _, p := range input.Products {
 		var exists int64
-		config.DB.Table("items").Where("id = ? OR sku = ?", p.Sku, p.Sku).Count(&exists)
-
-		if exists == 0 {
-			_ = config.DB.Exec("INSERT INTO items (sku, name, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING", p.Sku, p.Name, time.Now(), time.Now())
-			_ = config.DB.Exec("INSERT INTO items (id, name, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING", p.Sku, p.Name, time.Now(), time.Now())
-		}
+		config.DB.Table("items").Where("sku = ?", p.Sku).Count(&exists)
+if exists == 0 {
+    // Chỉ chèn vào cột sku và name, để cột id tự động tăng theo cấu hình bigint của DB
+    _ = config.DB.Exec("INSERT INTO items (sku, name, created_at, updated_at) VALUES (?, ?, ?, ?)", p.Sku, p.Name, time.Now(), time.Now())
+}
 	}
 
 	tx := config.DB.Begin()
@@ -204,15 +203,10 @@ func CreateInventoryImport(c *gin.Context) {
 
 		var syncList []SyncItem
 		for _, p := range products {
-			cleanSku := p.Sku
-			if strings.HasPrefix(cleanSku, "SKU-") {
-				cleanSku = strings.Replace(cleanSku, "SKU-", "", 1)
-			}
-
 			syncList = append(syncList, SyncItem{
-				Sku:      cleanSku,
-				Quantity: p.StandardQuantity,
-			})
+    Sku:      p.Sku,
+    Quantity: p.StandardQuantity,
+})
 
 			var existStock int64
 			config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
@@ -235,7 +229,11 @@ func CreateInventoryImport(c *gin.Context) {
 			return
 		}
 
-		productServiceURL := "http://localhost:5002/api/products/internal/update-stock"
+		productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
+if productServiceHost == "" {
+    productServiceHost = "http://localhost:5002" // fallback nếu chạy local không docker
+}
+productServiceURL := productServiceHost + "/api/products/internal/update-stock"
 
 		req, err := http.NewRequest("PATCH", productServiceURL, bytes.NewBuffer(jsonData))
 		if err != nil {
