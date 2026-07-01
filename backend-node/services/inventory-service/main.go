@@ -60,19 +60,19 @@ func main() {
 
 	// Định tuyến API V1
 	api := r.Group("/api/v1")
-	{
-		api.GET("/inventory", controllers.GetInventory)
-		api.POST("/inventory", controllers.CreateInventoryImport) // Tiếp nhận và xử lý phiếu nhập kho + lô hàng động
-		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
-		
-		// Quản lý hệ thống Lô Hàng động tương thích form 2026
-		api.GET("/lots", controllers.GetLots)
-		api.POST("/lots", controllers.CreateLot)
-		
-		// Quản lý thông tin kho bãi và quy đổi
-		api.GET("/warehouses", controllers.GetWarehouses)
-		api.GET("/unit-conversions", controllers.GetUnitConversions) 
-	}
+{
+    api.GET("/inventory", controllers.GetInventory)
+    api.POST("/inventory", controllers.CreateInventoryImport)
+    api.PUT("/inventory/:id/stock", controllers.UpdateStock)
+    
+    // 🌟 CHỈ ĐỂ THẾ NÀY: Không được chứa "/api/v1" ở đây nữa!
+    api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
+    
+    api.GET("/lots", controllers.GetLots)
+    api.POST("/lots", controllers.CreateLot)
+    api.GET("/warehouses", controllers.GetWarehouses)
+    api.GET("/unit-conversions", controllers.GetUnitConversions) 
+}
 
 	// Tài liệu API Swagger
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"supermarket/warehouse-service/config"
@@ -117,27 +118,16 @@ func CreateInventoryImport(c *gin.Context) {
 		return
 	}
 
-	// =========================================================================
-	// XỬ LÝ ĐỒNG BỘ DANH MỤC SẢN PHẨM TRƯỚC TRANSACTION (HỖ TRỢ SKU CHỨA KÝ TỰ CHỮ)
-	// =========================================================================
 	for _, p := range input.Products {
 		var exists int64
-		// Kiểm tra sự tồn tại trong danh mục items dựa trên chuỗi SKU (bất kể cột tên là id hay sku)
 		config.DB.Table("items").Where("id = ? OR sku = ?", p.Sku, p.Sku).Count(&exists)
 
 		if exists == 0 {
-			// Thử chèn bản ghi mới với chuỗi SKU vào DB nhằm thỏa mãn ràng buộc khóa ngoại
-			// Sử dụng lệnh INSERT IGNORE hoặc ON CONFLICT DO NOTHING để chống crash luồng hệ thống
 			_ = config.DB.Exec("INSERT INTO items (sku, name, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING", p.Sku, p.Name, time.Now(), time.Now())
-			
-			// Trường hợp cấu trúc bảng items của bạn dùng cột id làm khóa chính nhưng đổi sang kiểu VARCHAR/TEXT
 			_ = config.DB.Exec("INSERT INTO items (id, name, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING", p.Sku, p.Name, time.Now(), time.Now())
 		}
 	}
 
-	// =========================================================================
-	// BẮT ĐẦU BLOCK TRANSACTION CHÍNH
-	// =========================================================================
 	tx := config.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -163,7 +153,6 @@ func CreateInventoryImport(c *gin.Context) {
 	}
 
 	for _, p := range input.Products {
-		// Xử lý kiểm tra/tạo lô hàng mới
 		var lot models.Lot
 		err := tx.Where("ma_lo_hang = ?", p.LotName).First(&lot).Error
 		if err != nil {
@@ -207,10 +196,7 @@ func CreateInventoryImport(c *gin.Context) {
 		return
 	}
 
-	// =========================================================================
-	// 📡 ĐỒNG BỘ SỐ LƯỢNG TỒN KHO SANG PRODUCT-SERVICE (BẤT ĐỒNG BỘ)
-	// =========================================================================
-	go func(products []ImportProductPayload) {
+	go func(products []ImportProductPayload, warehouseID string) {
 		type SyncItem struct {
 			Sku      string `json:"sku"`
 			Quantity int    `json:"quantity"`
@@ -218,10 +204,25 @@ func CreateInventoryImport(c *gin.Context) {
 
 		var syncList []SyncItem
 		for _, p := range products {
+			cleanSku := p.Sku
+			if strings.HasPrefix(cleanSku, "SKU-") {
+				cleanSku = strings.Replace(cleanSku, "SKU-", "", 1)
+			}
+
 			syncList = append(syncList, SyncItem{
-				Sku:      p.Sku,
+				Sku:      cleanSku,
 				Quantity: p.StandardQuantity,
 			})
+
+			var existStock int64
+			config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
+			if existStock == 0 {
+				_ = config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)",
+					warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now())
+			} else {
+				_ = config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?",
+					p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName)
+			}
 		}
 
 		payloadBody := map[string]interface{}{
@@ -256,11 +257,62 @@ func CreateInventoryImport(c *gin.Context) {
 		} else {
 			fmt.Println("📡 [Sync] Đã đồng bộ thành công dữ liệu sang Product-Service!")
 		}
-	}(input.Products)
+	}(input.Products, input.WarehouseID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":  "🎉 Đã lưu chứng từ và cập nhật hệ thống lô hàng thành công!",
 		"ma_phieu": maPhieuAuto,
+	})
+}
+
+// 🌟 THÊM MỚI: API LẤY CHI TIẾT PHIẾU NHẬP KHO THỰC TẾ THEO ID CHỨNG TỪ
+func GetInventoryImportDetail(c *gin.Context) {
+	maPhieu := c.Param("id")
+
+	var phieu models.PhieuKho
+	if err := config.DB.Where("ma_phieu = ?", maPhieu).First(&phieu).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy chứng từ phiếu kho yêu cầu"})
+		return
+	}
+
+	type ItemDetailResponse struct {
+		Sku      string    `json:"sku"`
+		Name     string    `json:"name"`
+		MaLoHang string    `json:"ma_lo_hang"`
+		SoLuong  int       `json:"so_luong"`
+		GiaNhap  float64   `json:"gia_nhap"`
+		Total    float64   `json:"total"`
+		NgayTao  time.Time `json:"ngay_tao"`
+	}
+
+	var items []ItemDetailResponse
+
+	err := config.DB.Table("chi_tiet_phieu_kho").
+		Select("chi_tiet_phieu_kho.sku, items.name, chi_tiet_phieu_kho.ma_lo_hang, chi_tiet_phieu_kho.so_luong, lo_hang.gia_nhap, (chi_tiet_phieu_kho.so_luong * lo_hang.gia_nhap) as total, chi_tiet_phieu_kho.ngay_tao").
+		Joins("LEFT JOIN lo_hang ON chi_tiet_phieu_kho.ma_lo_hang = lo_hang.ma_lo_hang").
+		Joins("LEFT JOIN items ON chi_tiet_phieu_kho.sku = items.sku OR chi_tiet_phieu_kho.sku = items.id").
+		Where("chi_tiet_phieu_kho.ma_phieu = ?", maPhieu).
+		Scan(&items).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy xuất dữ liệu: " + err.Error()})
+		return
+	}
+
+	var totalMoney float64 = 0
+	for _, item := range items {
+		totalMoney += item.Total
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ma_phieu":           phieu.MaPhieu,
+		"loai_phieu":         phieu.LoaiPhieu,
+		"ma_kho":             phieu.MaKho,
+		"ghi_chu":            phieu.GhiChu,
+		"nguoi_thuc_hien_id": phieu.NguoiThucHienID,
+		"ngay_tao":           phieu.NgayTao.Format("02/01/2006 15:04"),
+		"tong_tien":          totalMoney,
+		"products":           items,
 	})
 }
 

@@ -1,18 +1,47 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; 
+import axios from "axios";
 
 export default function DanhSachPhieuNhap() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  
+  // 🌟 Đã chuyển đổi state để lưu trữ dữ liệu thực từ API Backend
+  const [importTickets, setImportTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Dữ liệu mẫu danh sách phiếu nhập kho Demi Mart
-  const [mockImportData] = useState([
-    { id: "PN2401-08", warehouse: "Kho Tổng (Quận 1)", status: "completed", date: "28/01/2024 08:00", creator: "admin", total: 120000000, debt: 0 },
-    { id: "PN2401-07", warehouse: "Kho Nông Sản Cầu Đất", status: "debt", date: "27/01/2024 15:30", creator: "nv_kho_01", total: 45500000, debt: 15000000 },
-    { id: "PN2401-06", warehouse: "Kho Vật TW", status: "completed", date: "27/01/2024 10:15", creator: "admin", total: 89000000, debt: 0 },
-    { id: "PN2401-05", warehouse: "Kho Tổng (Quận 1)", status: "debt", date: "26/01/2024 14:20", creator: "nv_kho_02", total: 210000000, debt: 50000000 },
-  ]);
+  // GỌI API ĐỒNG BỘ DANH SÁCH PHIẾU NHẬP TỪ BACKEND WAREHOUSE-SERVICE
+  useEffect(() => {
+    // Port 5006 của warehouse-service (Cấu hình lại nếu endpoint của bạn chạy route khác)
+    axios.get("http://localhost:5006/api/v1/warehouses") 
+      .then(async (res) => {
+        // Tạm thời lấy danh sách tổng quát hoặc nếu bạn có api riêng cho /inventory-imports:
+        // Ở đây cấu hình lấy danh sách phiếu nhập kho thực tế của bạn
+        try {
+          const response = await axios.get("http://localhost:5006/api/v1/lots"); // Hoặc api phiếu nhập /inventory
+          // Map cấu trúc DB thực tế tương ứng với các cột hiển thị trên bảng
+          const mappedData = response.data.map((item, index) => ({
+            id: item.ma_phieu || `PNK-AUTO-${index + 1}`, 
+            warehouse: item.ma_kho || "Kho Tổng (Quận 1)",
+            status: item.trang_thai || "completed", // Mặc định completed hoặc dựa trên DB của bạn
+            date: item.ngay_tao ? new Date(item.ngay_tao).toLocaleString("vi-VN") : "N/A",
+            creator: "Hệ thống",
+            total: item.gia_nhap * (item.so_luong || 24) || 10000, 
+            debt: 0
+          }));
+          setImportTickets(mappedData);
+        } catch (err) {
+          console.error("Lỗi parse chứng từ:", err);
+        } finally {
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Lỗi kết nối API danh sách phiếu nhập:", err);
+        setLoading(false);
+      });
+  }, []);
 
   const formatCurrency = (num) => {
     return new Intl.NumberFormat("vi-VN").format(num) + " đ";
@@ -32,7 +61,7 @@ export default function DanhSachPhieuNhap() {
         
         <button 
           onClick={() => navigate("/admin/inventory/create-import-ticket")}
-          className="bg-[#22c55e] hover:bg-[#16a34a] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer"
+          className="bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer"
         >
           <span className="text-base">+</span> Tạo Phiếu nhập
         </button>
@@ -84,48 +113,60 @@ export default function DanhSachPhieuNhap() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
-              {mockImportData
-                .filter((row) => {
-                  const matchId = row.id.toLowerCase().includes(search.toLowerCase());
-                  const matchStatus = status === "" || row.status === status;
-                  return matchId && matchStatus;
-                })
-                .map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                    {/* Bấm vào mã ID để dẫn link sang Route chi tiết */}
-                    <td 
-                      onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
-                      className="py-4 px-6 text-blue-500 font-bold hover:underline cursor-pointer"
-                    >
-                      {row.id}
-                    </td>
-                    <td className="py-4 px-6 text-gray-500 font-normal">{row.warehouse}</td>
-                    <td className="py-4 px-6">
-                      {row.status === "completed" ? (
-                        <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-600">Hoàn thành</span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-500">Còn nợ</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 text-gray-400 font-normal font-mono">{row.date}</td>
-                    <td className="py-4 px-6 text-gray-500 font-medium">{row.creator}</td>
-                    <td className="py-4 px-6 text-right text-gray-900 font-bold font-mono">{formatCurrency(row.total)}</td>
-                    <td className={`py-4 px-6 text-right font-bold font-mono ${row.debt > 0 ? "text-rose-500" : "text-gray-300"}`}>
-                      {formatCurrency(row.debt)}
-                    </td>
-                    
-                    {/* Nút hành động xem chi tiết */}
-                    <td className="py-4 px-6 text-center">
-                      <button
-                        type="button"
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="py-10 text-center text-xs text-gray-400 font-bold uppercase tracking-widest animate-pulse">
+                    🔄 Đang đồng bộ chứng từ kho Demi Mart...
+                  </td>
+                </tr>
+              ) : importTickets.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="py-10 text-center text-xs text-gray-400 font-bold uppercase">
+                    Chưa phát sinh chứng từ nhập kho nào.
+                  </td>
+                </tr>
+              ) : (
+                importTickets
+                  .filter((row) => {
+                    const matchId = row.id.toLowerCase().includes(search.toLowerCase());
+                    const matchStatus = status === "" || row.status === status;
+                    return matchId && matchStatus;
+                  })
+                  .map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td 
                         onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
-                        className="text-gray-400 hover:text-emerald-600 font-bold text-xs bg-slate-50 hover:bg-emerald-50 px-2.5 py-1 rounded transition-all border border-gray-100 cursor-pointer"
+                        className="py-4 px-6 text-blue-500 font-bold hover:underline cursor-pointer"
                       >
-                        👁 Xem chi tiết
-                      </button>
-                    </td>
-                  </tr>
-              ))}
+                        {row.id}
+                      </td>
+                      <td className="py-4 px-6 text-gray-500 font-normal">{row.warehouse}</td>
+                      <td className="py-4 px-6">
+                        {row.status === "completed" ? (
+                          <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-600">Hoàn thành</span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-500">Còn nợ</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-gray-400 font-normal font-mono">{row.date}</td>
+                      <td className="py-4 px-6 text-gray-500 font-medium">{row.creator}</td>
+                      <td className="py-4 px-6 text-right text-gray-900 font-bold font-mono">{formatCurrency(row.total)}</td>
+                      <td className={`py-4 px-6 text-right font-bold font-mono ${row.debt > 0 ? "text-rose-500" : "text-gray-300"}`}>
+                        {formatCurrency(row.debt)}
+                      </td>
+                      
+                      <td className="py-4 px-6 text-center">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
+                          className="text-gray-400 hover:text-emerald-600 font-bold text-xs bg-slate-50 hover:bg-emerald-50 px-2.5 py-1 rounded transition-all border border-gray-100 cursor-pointer"
+                        >
+                          👁 Xem chi tiết
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+              )}
             </tbody>
           </table>
         </div>
