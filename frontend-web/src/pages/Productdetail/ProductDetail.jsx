@@ -269,9 +269,9 @@ export default function ProductDetail() {
     ? selectedVariant?.gia_ban_le
     : null;
 
-  // KIỂM TRA HẾT HÀNG
-  const isOutOfStock =
-    !selectedVariant || (selectedVariant.so_luong_ton || 0) <= 0;
+  // KIỂM TRA HẾT HÀNG AN TOÀN
+  const stockCount = selectedVariant?.so_luong_ton || 0;
+  const isOutOfStock = !selectedVariant || stockCount <= 0;
 
   const handleBuyNow = () => {
     if (!product || !selectedVariant || isOutOfStock) return;
@@ -312,7 +312,7 @@ export default function ProductDetail() {
       name: product.ten_san_pham,
       price: currentPrice,
       quantity: quantity,
-      stock: selectedVariant.so_luong_ton || 0, // 🌟 BỔ SUNG STOCK ĐỂ BÊN CART BIẾT
+      stock: stockCount,
       image:
         selectedVariant.hinh_anh_url ||
         selectedVariant.duong_dan_url ||
@@ -624,9 +624,8 @@ export default function ProductDetail() {
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                       Số lượng
                     </p>
-                    {/* 🌟 FIX 1: Lấy chuẩn số lượng từ Database */}
                     <span className="text-[9px] text-[#006c49] font-bold">
-                      (Kho: {selectedVariant?.so_luong_ton || 0})
+                      (Kho: {stockCount})
                     </span>
                   </div>
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 lg:p-1 shadow-sm">
@@ -642,18 +641,13 @@ export default function ProductDetail() {
                     </span>
                     <button
                       onClick={() => {
-                        const maxStock = selectedVariant?.so_luong_ton || 0;
-                        if (quantity < maxStock) setQuantity(quantity + 1);
+                        if (quantity < stockCount) setQuantity(quantity + 1);
                         else
                           alert(
-                            `Kho tại khu vực này chỉ còn tối đa ${maxStock} sản phẩm!`,
+                            `Kho tại khu vực này chỉ còn tối đa ${stockCount} sản phẩm!`,
                           );
                       }}
-                      // 🌟 FIX 2: Vô hiệu hóa nút "+" nếu hết hàng hoặc đạt tối đa
-                      disabled={
-                        isOutOfStock ||
-                        quantity >= (selectedVariant?.so_luong_ton || 0)
-                      }
+                      disabled={isOutOfStock || quantity >= stockCount}
                       className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Plus size={14} />
@@ -680,7 +674,6 @@ export default function ProductDetail() {
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <button
                   onClick={handleAddToCart}
-                  // 🌟 FIX 3: Khóa Mua Hàng nếu hết hàng
                   disabled={isOutOfStock}
                   className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -688,7 +681,6 @@ export default function ProductDetail() {
                 </button>
                 <button
                   onClick={handleBuyNow}
-                  // 🌟 FIX 3: Khóa Mua Ngay nếu hết hàng
                   disabled={isOutOfStock}
                   className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] active:scale-95 shadow-lg transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
                 >

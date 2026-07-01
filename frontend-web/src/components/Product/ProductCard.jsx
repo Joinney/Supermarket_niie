@@ -18,8 +18,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
 
   const category = categorySlug || p.slug_danh_muc || "san-pham";
 
-  // 🌟 Lấy số lượng tồn từ backend (Dữ liệu trả về từ getAllProducts ở Backend cần có tổng số lượng)
-  // Nếu BE chưa nhóm tổng tồn kho (ví dụ: SUM(so_luong_ton) as tong_ton_kho), thì fallback về 0
   const stockCount = p.tong_ton_kho ? Number(p.tong_ton_kho) : 0;
   const isOutOfStock = stockCount <= 0;
 
@@ -27,20 +25,22 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // 🌟 KHÓA CHẶN TRONG HÀM: Không cho thêm hàng nếu tồn kho <= 0
     if (isOutOfStock) {
       alert("Sản phẩm này hiện đang tạm hết hàng!");
       return;
     }
 
+    // 🌟 FIX QUAN TRỌNG: Truyền đúng ma_bien_the vào variantId
+    const targetVariantId = p.ma_bien_the_mac_dinh || p.ma_san_pham;
+
     const itemToCart = {
-      variantId: p.ma_san_pham,
+      variantId: targetVariantId, // Đã sửa
       name: p.ten_san_pham,
       price: currentPrice,
       quantity: 1,
-      stock: stockCount, // 🌟 TRUYỀN SỐ LƯỢNG TỒN VÀO GIỎ HÀNG
+      stock: stockCount,
       image: mainImage,
-      id: p.ma_san_pham,
+      productId: p.ma_san_pham, // Nên truyền riêng id gốc của sp
       categorySlug: category,
       countryCode: country,
       variantName: "Mặc định",
@@ -122,7 +122,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             alt={p.ten_san_pham}
           />
 
-          {/* 🌟 TEM HẾT HÀNG / NÚT THÊM VÀO GIỎ */}
           {isOutOfStock ? (
             <div className="absolute inset-0 bg-white/40 flex items-center justify-center backdrop-blur-[2px]">
               <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1">

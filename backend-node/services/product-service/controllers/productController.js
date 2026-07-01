@@ -110,20 +110,21 @@ export const getAllProducts = async (req, res) => {
         if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
         if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
 
-        // CÂU LỆNH TRUY VẤN CHÍNH
         const query = `
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                sp.ma_quoc_gia, sp.co_bien_the, sp.gia_ban, 
+                sp.ma_quoc_gia, sp.co_bien_the, 
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
                 
                 COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
                 
-                CASE 
-                    WHEN sp.co_bien_the = false THEN sp.gia_ban
-                    ELSE COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0)
-                END AS gia_ban_thap_nhat,
-                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh
+                -- Lấy giá thấp nhất từ bảng biến thể cho cả Sản phẩm Đơn và Nhóm
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh,
+
+                (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh
+                
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
             ${whereClause}
@@ -155,11 +156,16 @@ export const getProductById = async (req, res) => {
     const { role } = req.query;
 
     try {
+        // 🌟 FIX: Lấy tổng tồn kho và giá bán từ bảng bien_the_san_pham thay vì bảng san_pham
         const productQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, 
-                sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the, sp.gia_ban,  
-                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code
+                sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the,
+                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
+                
+                COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat
+
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
             WHERE sp.ma_san_pham = $1;
@@ -176,7 +182,6 @@ export const getProductById = async (req, res) => {
             return res.status(404).json({ message: "Sản phẩm này đã ngừng kinh doanh hoặc đang tạm khóa." });
         }
 
-        // 🌟 BỔ SUNG: Thêm bt.so_luong_ton vào câu SELECT
         const variantsQuery = `
             SELECT 
                 bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai, bt.so_luong_ton,
@@ -203,7 +208,7 @@ export const getProductById = async (req, res) => {
                     ten_bien_the: row.ten_bien_the,
                     sku: row.sku,
                     gia_ban_le: Number(row.gia_ban_le),
-                    so_luong_ton: row.so_luong_ton || 0, // 🌟 BỔ SUNG: Trả về số lượng tồn kho
+                    so_luong_ton: row.so_luong_ton || 0,
                     trang_thai: row.trang_thai, 
                     thuoc_tinh: {},
                     ten_don_vi: row.ten_don_vi || "Gói"
@@ -252,7 +257,7 @@ export const getProductById = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY SẢN PHẨM THEO DANH MỤC
+// 3. LẤY SẢN PHẨM THEO DANH MỤC (Đã cập nhật để tương thích SKU Ẩn)
 // =========================================================================
 export const getProductsByCategorySlug = async (req, res) => {
     const { slug } = req.params;
@@ -260,7 +265,6 @@ export const getProductsByCategorySlug = async (req, res) => {
     
     const sort = req.query.sort || 'noi-bat';
     const price = req.query.price || 'tat-ca';
-    // 🌟 XÓA BỎ 'origin' ở đây
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const offset = (page - 1) * limit;
@@ -270,10 +274,13 @@ export const getProductsByCategorySlug = async (req, res) => {
             SELECT 
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                CASE 
-                    WHEN sp.co_bien_the = false THEN sp.gia_ban
-                    ELSE COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0)
-                END AS gia_ban_thap_nhat,
+                
+                COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
+                
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                
+                (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh,
+
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -291,7 +298,6 @@ export const getProductsByCategorySlug = async (req, res) => {
             paramIndex++;
         }
 
-        
         let finalQuery = `WITH ProductList AS (${baseQuery}) SELECT * FROM ProductList WHERE 1=1`;
 
         if (price !== 'tat-ca') {
@@ -501,7 +507,14 @@ export const createProduct = async (req, res) => {
     try {
         await client.query('BEGIN');
         
-        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia = 'VN', co_bien_the = false, gia_ban = 0, hinh_anh_chinh } = req.body;
+        // 🌟 FIX: Bỏ gia_ban khỏi việc lưu vào bảng san_pham, nhưng vẫn nhận nó để lưu cho SKU ẩn
+        // Bổ sung thêm nhận sku và so_luong_ton từ FE
+        const { 
+            ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia = 'VN', 
+            co_bien_the = false, hinh_anh_chinh,
+            sku = '', gia_ban = 0, so_luong_ton = 0 // Dành cho SKU ẩn
+        } = req.body;
+        
         const countryCode = ma_quoc_gia.toUpperCase();
 
         if (!ten_san_pham || !ma_dm_con) {
@@ -528,7 +541,6 @@ export const createProduct = async (req, res) => {
         let nextSequence = 1;
         if (maxIdRes.rows.length > 0) {
             const lastId = maxIdRes.rows[0].ma_san_pham;
-            // Cắt 3 số cuối ra và cộng thêm 1
             const lastSeqStr = lastId.slice(-3); 
             nextSequence = parseInt(lastSeqStr) + 1;
         }
@@ -536,16 +548,49 @@ export const createProduct = async (req, res) => {
         // Tạo mã hoàn chỉnh: VD: MSP893290626001
         const ma_san_pham = `${prefix}${String(nextSequence).padStart(3, '0')}`;
 
-        // 4. Lưu sản phẩm
+        // 4. Lưu sản phẩm gốc (🌟 Đã bỏ cột gia_ban khỏi bảng san_pham)
         const insertQuery = `
-            INSERT INTO public.san_pham (ma_san_pham, ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, co_bien_the, gia_ban, trang_thai, ngay_tao)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW()) RETURNING *;
+            INSERT INTO public.san_pham (ma_san_pham, ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, co_bien_the, trang_thai, ngay_tao)
+            VALUES ($1, $2, $3, $4, $5, $6, true, NOW()) RETURNING *;
         `;
-        const productRes = await client.query(insertQuery, [ma_san_pham, ten_san_pham.trim(), ma_dm_con, mo_ta || null, countryCode, co_bien_the, gia_ban]);
+        const productRes = await client.query(insertQuery, [ma_san_pham, ten_san_pham.trim(), ma_dm_con, mo_ta || null, countryCode, co_bien_the]);
         
+        // ==============================================================
+        // 🌟 BƯỚC MỚI: TỰ ĐỘNG TẠO "SKU ẨN" NẾU LÀ SẢN PHẨM ĐƠN
+        // ==============================================================
+        if (co_bien_the === false) {
+            const shortProdId = ma_san_pham.length > 9 ? ma_san_pham.slice(-9) : ma_san_pham;
+            const ma_bien_the_moi = `MBT_${countryCode}_${shortProdId}_1`; // 1 vì là biến thể đầu tiên và duy nhất
+
+            // Tính toán mã SKU tự động nếu FE không gửi lên
+            let finalSku = sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}-001`;
+            let skuCounter = 1;
+            while (true) {
+                const skuCheck = await client.query('SELECT ma_bien_the FROM public.bien_the_san_pham WHERE sku = $1', [finalSku]);
+                if (skuCheck.rows.length === 0) break;
+                finalSku = `${sku ? sku.trim().toUpperCase() : `${countryCode}-${shortProdId}`}-${String(skuCounter).padStart(3, '0')}`;
+                skuCounter++;
+            }
+
+            const insertVariantQuery = `
+                INSERT INTO public.bien_the_san_pham 
+                (ma_bien_the, ma_san_pham, ten_bien_the, sku, gia_ban_le, so_luong_ton, trang_thai, ngay_tao, ngay_cap_nhat)
+                VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW());
+            `;
+            await client.query(insertVariantQuery, [
+                ma_bien_the_moi, 
+                ma_san_pham, 
+                "Mặc định", // Tên hiển thị chuẩn cho sản phẩm đơn
+                finalSku, 
+                gia_ban || 0, 
+                so_luong_ton || 0
+            ]);
+        }
+        // ==============================================================
+
         // Lưu ảnh chính (nếu có)
         if (hinh_anh_chinh) {
-            const ma_media = generateUniqueId('MED'); // Vẫn dùng generateUniqueId cho ảnh
+            const ma_media = generateUniqueId('MED'); 
             await client.query(`
                 INSERT INTO public.media_san_pham (ma_media, ma_san_pham, duong_dan_url, la_anh_chinh, loai_media)
                 VALUES ($1, $2, $3, true, 'image')
@@ -554,7 +599,7 @@ export const createProduct = async (req, res) => {
 
         await client.query('COMMIT');
 
-        // 5. Chạy ngầm AI tạo mô tả (Đã sửa lỗi truyền ID thành Tên danh mục)
+        // 5. Chạy ngầm AI tạo mô tả
         if (!mo_ta || mo_ta.trim() === '') {
             const categoryRes = await pool.query(
                 'SELECT ten_danh_muc_con FROM public.danh_muc_con WHERE ma_dm_con = $1', 
@@ -581,15 +626,15 @@ export const createProduct = async (req, res) => {
 };
 
 // =========================================================================
-// 8.1 CẬP NHẬT THÔNG TIN CƠ BẢN SẢN PHẨM (Kèm Logic dọn rác Biến thể)
+// 8.1 CẬP NHẬT THÔNG TIN CƠ BẢN SẢN PHẨM (Đã xóa cột gia_ban)
 // =========================================================================
 export const updateProduct = async (req, res) => {
-    const client = await pool.connect(); // 🌟 Chuyển sang dùng client để dùng Transaction
+    const client = await pool.connect(); 
     try {
-        await client.query('BEGIN'); // Bắt đầu Transaction
+        await client.query('BEGIN'); 
 
         const { id } = req.params; 
-        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, co_bien_the, gia_ban } = req.body; 
+        const { ten_san_pham, ma_dm_con, mo_ta, ma_quoc_gia, co_bien_the } = req.body; 
 
         if (!ten_san_pham || !ma_dm_con || !ma_quoc_gia) {
             await client.query('ROLLBACK');
@@ -605,6 +650,7 @@ export const updateProduct = async (req, res) => {
         }
         const oldCoBienThe = oldProductRes.rows[0].co_bien_the;
 
+        // 🌟 FIX: Đã xóa gia_ban = $6 khỏi câu lệnh UPDATE
         const updateQuery = `
             UPDATE public.san_pham 
             SET ten_san_pham = $1, 
@@ -612,9 +658,8 @@ export const updateProduct = async (req, res) => {
                 mo_ta = $3, 
                 ma_quoc_gia = $4,
                 co_bien_the = $5,
-                gia_ban = $6,
                 ngay_cap_nhat = NOW() 
-            WHERE ma_san_pham = $7 
+            WHERE ma_san_pham = $6 
             RETURNING *;
         `;
         
@@ -624,13 +669,10 @@ export const updateProduct = async (req, res) => {
             mo_ta || null, 
             ma_quoc_gia.toUpperCase(), 
             newCoBienThe,
-            gia_ban || 0,
             id
         ]);
 
         if (oldCoBienThe === true && newCoBienThe === false) {
-            
-            // a. Xóa mềm (Tắt trạng thái) toàn bộ biến thể cũ để không rác UI, nhưng vẫn bảo toàn lịch sử đơn hàng
             await client.query(`
                 UPDATE public.bien_the_san_pham 
                 SET trang_thai = false, ngay_cap_nhat = NOW() 

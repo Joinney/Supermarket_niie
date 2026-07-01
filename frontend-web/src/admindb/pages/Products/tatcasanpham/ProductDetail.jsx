@@ -47,14 +47,15 @@ export default function AdminProductDetail() {
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
-  // 🌟 Đã tách hàm fetchDetail ra ngoài để có thể tái sử dụng sau khi xóa SKU
   const fetchDetail = useCallback(
     async (showLoading = true) => {
       if (showLoading) setLoading(true);
       try {
         const apiUrl =
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        const response = await axios.get(`${apiUrl}/api/products/${id}`);
+        const response = await axios.get(
+          `${apiUrl}/api/products/${id}?role=admin`,
+        );
 
         if (response.data) {
           const data = Array.isArray(response.data)
@@ -74,7 +75,7 @@ export default function AdminProductDetail() {
       } catch (err) {
         setError("Không tìm thấy thông tin sản phẩm hoặc ID không tồn tại!");
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
     },
     [id, activeMediaObj],
@@ -137,7 +138,7 @@ export default function AdminProductDetail() {
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
         await axios.delete(`${apiUrl}/api/products/variants/${variantId}`);
         alert("✅ Đã lưu trữ biến thể thành công!");
-        fetchDetail(false); // Load lại dữ liệu ngầm không bị chớp màn hình
+        fetchDetail(false);
       } catch (err) {
         alert(
           "❌ Xóa thất bại: " + (err.response?.data?.message || err.message),
@@ -179,7 +180,7 @@ export default function AdminProductDetail() {
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
         await axios.put(`${apiUrl}/api/products/variants/${variantId}/restore`);
         alert("✅ Đã khôi phục biến thể thành công!");
-        fetchDetail(false); // Load lại danh sách ngầm
+        fetchDetail(false);
       } catch (err) {
         alert(
           "❌ Khôi phục thất bại: " +
@@ -198,11 +199,9 @@ export default function AdminProductDetail() {
       try {
         const apiUrl =
           import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        // Gọi API xóa cứng (đã thiết lập ở backend)
         await axios.delete(`${apiUrl}/api/products/variants/${variantId}/hard`);
-
         alert("✅ Đã xóa vĩnh viễn biến thể khỏi hệ thống!");
-        fetchDetail(false); // Cập nhật lại UI không giật
+        fetchDetail(false);
       } catch (err) {
         alert(
           "❌ Xóa vĩnh viễn thất bại: " +
@@ -339,7 +338,6 @@ export default function AdminProductDetail() {
                   className="w-full h-full object-cover rounded-2xl"
                 />
 
-                {/* 🌟 SỬA Ở ĐÂY: Thêm product.co_bien_the để chặn tag rác trên sản phẩm đơn */}
                 {product.co_bien_the && activeMediaObj.ma_bien_the && (
                   <span className="absolute bottom-5 right-5 bg-slate-900/85 backdrop-blur-md text-amber-300 border border-amber-400/40 px-3 py-1.5 rounded-xl text-xs font-black shadow-lg">
                     🏷️ Biến thể:{" "}
@@ -356,7 +354,7 @@ export default function AdminProductDetail() {
               </div>
             )}
 
-            {/* NÚT ĐẶT LÀM ẢNH CHÍNH (Đặt trong div relative của ảnh lớn) */}
+            {/* NÚT ĐẶT LÀM ẢNH CHÍNH */}
             {activeMediaObj && (
               <div className="absolute top-6 left-6">
                 {activeMediaObj.la_anh_chinh ? (
@@ -394,7 +392,6 @@ export default function AdminProductDetail() {
 
           {/* DANH SÁCH ẢNH (THUMBNAILS) & NÚT THÊM ẢNH MỚI */}
           <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar items-center mt-4">
-            {/* 🌟 NÚT GỌI POPUP THÊM ẢNH MỚI */}
             <button
               onClick={() => setShowMediaModal(true)}
               className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:text-[#006c49] hover:border-[#006c49] hover:bg-emerald-50 transition-all shrink-0 bg-white"
@@ -403,7 +400,6 @@ export default function AdminProductDetail() {
               <Plus size={20} />
             </button>
 
-            {/* Render các ảnh hiện có */}
             {product?.media?.map((imgObj) => (
               <button
                 key={imgObj.ma_media}
@@ -420,7 +416,6 @@ export default function AdminProductDetail() {
                   className="w-full h-full object-cover"
                 />
 
-                {/* 🌟 SỬA Ở ĐÂY: Thêm product.co_bien_the để chặn dấu chấm vàng trên sản phẩm đơn */}
                 {product.co_bien_the && imgObj.ma_bien_the && (
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-black"></span>
                 )}
@@ -439,7 +434,6 @@ export default function AdminProductDetail() {
                 <button
                   key={t.id}
                   onClick={() => {
-                    // Chỉ cho phép đổi tab nếu không bị khóa
                     if (!isDisabled) setActiveTab(t.id);
                   }}
                   disabled={isDisabled}
@@ -448,7 +442,7 @@ export default function AdminProductDetail() {
                   }
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl font-extrabold text-xs transition-all shrink-0 ${
                     isDisabled
-                      ? "opacity-40 cursor-not-allowed text-slate-500 grayscale" // ⬅️ LÀM MỜ TẠI ĐÂY
+                      ? "opacity-40 cursor-not-allowed text-slate-500 grayscale"
                       : activeTab === t.id
                         ? "bg-[#006c49] text-white shadow-md"
                         : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
@@ -456,8 +450,6 @@ export default function AdminProductDetail() {
                 >
                   <Icon size={15} />
                   <span>{t.label}</span>
-
-                  {/* (Tùy chọn) Hiện cái ổ khóa nhỏ kế bên tab bị mờ cho trực quan */}
                   {isDisabled && <span className="ml-1 text-[10px]">🔒</span>}
                 </button>
               );
@@ -472,7 +464,6 @@ export default function AdminProductDetail() {
                 animate={{ opacity: 1 }}
                 className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-6"
               >
-                {/* THÔNG TIN HỆ THỐNG */}
                 <div className="grid grid-cols-2 gap-4 pb-4 border-b border-gray-100 text-xs">
                   <div>
                     <span className="font-bold text-gray-400 uppercase block">
@@ -497,7 +488,6 @@ export default function AdminProductDetail() {
                 </div>
                 {!product.co_bien_the && (
                   <div className="p-6 bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden shadow-sm">
-                    {/* Họa tiết trang trí Background */}
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500 opacity-5 rounded-bl-full pointer-events-none"></div>
 
                     <div className="relative z-10">
@@ -518,11 +508,11 @@ export default function AdminProductDetail() {
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
                           Giá Niêm Yết
                         </p>
+                        {/* 🌟 FIX: Lấy giá từ biến thể ẩn thay vì product.gia_ban */}
                         <h4 className="text-3xl font-black text-[#006c49]">
-                          {formatPrice(product.gia_ban)}
+                          {formatPrice(product.bien_the?.[0]?.gia_ban_le || 0)}
                         </h4>
 
-                        {/* 🌟 BỔ SUNG: Dòng hiển thị tổng tồn kho */}
                         <div className="flex items-center gap-4 mt-2">
                           <p className="text-xs text-slate-500 font-medium">
                             Tổng tồn kho:{" "}
@@ -535,6 +525,7 @@ export default function AdminProductDetail() {
                       </div>
                     </div>
 
+                    {/* Nút Chỉnh sửa của sản phẩm đơn -> Vẫn đưa về trang ProductEdit */}
                     <Link
                       to={`/admin/products/edit/${product.ma_san_pham}`}
                       className="relative z-10 bg-white border-2 border-emerald-200 text-[#006c49] hover:bg-[#006c49] hover:text-white px-5 py-3 rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-2 shrink-0 active:scale-95"
@@ -544,14 +535,6 @@ export default function AdminProductDetail() {
                   </div>
                 )}
 
-                {/* HIỂN THỊ KHI LÀ SẢN PHẨM ĐƠN */}
-                {!product.co_bien_the && (
-                  <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex items-center justify-between">
-                    {/* ... (Code cũ của sản phẩm đơn giữ nguyên) ... */}
-                  </div>
-                )}
-
-                {/* 🌟 THÊM MỚI: HIỂN THỊ KHI LÀ SẢN PHẨM NHÓM (CÓ BIẾN THỂ) */}
                 {product.co_bien_the && (
                   <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-center justify-between">
                     <div>
@@ -588,7 +571,6 @@ export default function AdminProductDetail() {
                   </div>
                 )}
 
-                {/* MÔ TẢ SẢN PHẨM */}
                 <div>
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
                     Bài viết mô tả sản phẩm (`mo_ta`)
@@ -614,7 +596,6 @@ export default function AdminProductDetail() {
                     các phiên bản ({totalVariants})
                   </h3>
 
-                  {/* 🌟 NÚT XÓA TẤT CẢ VÀ THÊM MỚI */}
                   <div className="flex items-center gap-2">
                     {totalVariants > 0 && (
                       <button
@@ -684,7 +665,6 @@ export default function AdminProductDetail() {
                                   >
                                     {bt.ten_bien_the || "Mặc định"}
                                   </Link>
-                                  {/* 🌟 NHÃN "ĐÃ XÓA" */}
                                   {bt.trang_thai === false && (
                                     <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[9px] font-black uppercase whitespace-nowrap">
                                       Đã xóa
@@ -709,7 +689,6 @@ export default function AdminProductDetail() {
 
                               <td className="py-3.5 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1.5">
-                                  {/* 1. Nút Xem chi tiết (Luôn hiện để Admin xem lại data cũ) */}
                                   <Link
                                     to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
                                     className="p-1.5 text-slate-400 hover:text-[#006c49] hover:bg-emerald-50 rounded-lg transition shadow-sm border border-transparent hover:border-emerald-200"
@@ -718,10 +697,8 @@ export default function AdminProductDetail() {
                                     <Eye size={16} />
                                   </Link>
 
-                                  {/* Logic hiển thị: Nếu ĐANG MỞ BÁN thì hiện Sửa/Xóa. Nếu ĐÃ XÓA thì hiện Khôi phục */}
                                   {bt.trang_thai !== false ? (
                                     <>
-                                      {/* Nút Sửa */}
                                       <button
                                         onClick={() => {
                                           const isGroupMode =
@@ -746,7 +723,6 @@ export default function AdminProductDetail() {
                                         <Edit size={16} />
                                       </button>
 
-                                      {/* Nút Xóa (Lưu trữ) */}
                                       <button
                                         onClick={() =>
                                           handleDeleteVariant(
@@ -761,7 +737,6 @@ export default function AdminProductDetail() {
                                       </button>
                                     </>
                                   ) : (
-                                    /*  NÚT KHÔI PHỤC */
                                     <button
                                       onClick={() =>
                                         handleRestoreVariant(
@@ -775,7 +750,6 @@ export default function AdminProductDetail() {
                                       <RotateCcw size={16} />
                                     </button>
                                   )}
-                                  {/* NÚT XÓA VĨNH VIỄN */}
                                   <button
                                     onClick={() =>
                                       handleHardDeleteVariant(
@@ -807,7 +781,6 @@ export default function AdminProductDetail() {
                   </table>
                 </div>
 
-                {/* PHÂN TRANG */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                     <span className="text-xs font-bold text-gray-500">
@@ -923,7 +896,7 @@ export default function AdminProductDetail() {
                   accept="image/*"
                   onChange={(e) => {
                     setNewMediaFile(e.target.files[0]);
-                    setNewMediaUrl(""); // Clear URL nếu chọn file
+                    setNewMediaUrl("");
                   }}
                   className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-[#006c49] hover:file:bg-emerald-100 border border-gray-200 rounded-xl p-1 bg-white cursor-pointer"
                 />
@@ -946,7 +919,7 @@ export default function AdminProductDetail() {
                   value={newMediaUrl}
                   onChange={(e) => {
                     setNewMediaUrl(e.target.value);
-                    setNewMediaFile(null); // Clear file nếu nhập URL
+                    setNewMediaFile(null);
                   }}
                   className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-[#006c49] transition"
                 />

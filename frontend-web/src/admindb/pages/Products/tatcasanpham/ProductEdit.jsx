@@ -33,10 +33,15 @@ export default function ProductEdit() {
     ma_quoc_gia: "",
     mo_ta: "",
     co_bien_the: false,
+
+    // 🌟 THÔNG SỐ CỦA SẢN PHẨM ĐƠN (Lấy từ biến thể ẩn)
+    sku: "",
     gia_ban: 0,
+    so_luong_ton: 0,
+    ma_bien_the_an: "", // Giữ lại cái ID biến thể ẩn để gọi lệnh UPDATE
   });
 
-  // 🌟 STATE MỚI: Quản lý loại biến thể nếu đổi từ Đơn sang Nhóm
+  const [oldCoBienThe, setOldCoBienThe] = useState(false);
   const [variantType, setVariantType] = useState("GROUP");
 
   const apiUrl =
@@ -47,8 +52,10 @@ export default function ProductEdit() {
       try {
         setLoading(true);
 
+        // 🌟 FIX: Đổi từ route GET /products/:id sang route lấy chi tiết phân quyền Admin
+        // để lấy được mảng `bien_the` (chứa thông tin của SKU ẩn).
         const [resProduct, resCat, resParents, resNations] = await Promise.all([
-          axios.get(`${apiUrl}/api/products/${id}`),
+          axios.get(`${apiUrl}/api/products/${id}?role=admin`),
           axios.get(`${apiUrl}/api/categories/children?country=ALL`),
           axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
           axios.get(`${apiUrl}/api/nations`),
@@ -64,6 +71,16 @@ export default function ProductEdit() {
         );
         const parentId = currentChild ? currentChild.ma_dm_cha : "";
 
+        // Tự động tìm thông số của SKU ẩn (Nếu là Sản phẩm Đơn)
+        let hiddenVariant = null;
+        if (
+          !product.co_bien_the &&
+          product.bien_the &&
+          product.bien_the.length > 0
+        ) {
+          hiddenVariant = product.bien_the[0]; // Sản phẩm đơn chỉ có 1 biến thể ẩn
+        }
+
         setFormData({
           ma_san_pham: product.ma_san_pham,
           ten_san_pham: product.ten_san_pham,
@@ -71,8 +88,15 @@ export default function ProductEdit() {
           ma_quoc_gia: product.ma_quoc_gia || "VN",
           mo_ta: product.mo_ta || "",
           co_bien_the: product.co_bien_the,
-          gia_ban: product.gia_ban || 0,
+
+          // Gán thông số từ SKU ẩn vào Form
+          sku: hiddenVariant ? hiddenVariant.sku : "",
+          gia_ban: hiddenVariant ? Number(hiddenVariant.gia_ban_le) : 0,
+          so_luong_ton: hiddenVariant ? Number(hiddenVariant.so_luong_ton) : 0,
+          ma_bien_the_an: hiddenVariant ? hiddenVariant.ma_bien_the : "",
         });
+
+        setOldCoBienThe(product.co_bien_the);
 
         setFilter({
           ma_quoc_gia: product.ma_quoc_gia || "VN",
@@ -97,25 +121,46 @@ export default function ProductEdit() {
     setFormData((prev) => ({ ...prev, ma_dm_con: "" }));
   }, [filter.ma_quoc_gia]);
 
-  // 🌟 ĐÃ SỬA HÀM LƯU: XỬ LÝ ĐIỀU HƯỚNG THÔNG MINH
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitLoading(true);
     try {
+      // 1. Cập nhật "Vỏ Sản Phẩm"
       await axios.put(`${apiUrl}/api/products/${id}`, {
-        ...formData,
+        ten_san_pham: formData.ten_san_pham,
+        ma_dm_con: formData.ma_dm_con,
+        mo_ta: formData.mo_ta,
         ma_quoc_gia: filter.ma_quoc_gia,
+        co_bien_the: formData.co_bien_the,
       });
 
+      // 2. Chuyển hướng hoặc xử lý tiếp theo logic Sản phẩm Đơn / Nhóm
       if (formData.co_bien_the) {
-        // Nếu là sản phẩm nhóm -> Chuyển thẳng sang trang quản lý biến thể kèm tín hiệu SINGLE/GROUP
         alert("✅ Đã cập nhật! Chuyển sang giao diện quản lý biến thể.");
         navigate(`/admin/products/create-variant/${id}`, {
-          state: { targetVariantType: variantType }, // Bắn cờ sang trang kia
+          state: { targetVariantType: variantType },
         });
+      } else if (oldCoBienThe === true && formData.co_bien_the === false) {
+        // NẾU HẠ CẤP XUỐNG SẢN PHẨM ĐƠN -> Vẫn phải qua màn hình Create Variant để nó đẻ ra SKU ẩn mới.
+        alert(
+          "✅ Đã hạ cấp về Sản phẩm Đơn. Vui lòng lưu thông số Giá và Kho!",
+        );
+        navigate(`/admin/products/create-variant/${id}`);
       } else {
-        // Nếu là sản phẩm đơn -> Về danh sách
-        alert("✅ Cập nhật sản phẩm thành công!");
+        // 🌟 NẾU LÀ SẢN PHẨM ĐƠN VÀ KHÔNG ĐỔI CẤU TRÚC -> Cập nhật luôn thông số cho SKU ẩn
+        if (formData.ma_bien_the_an) {
+          await axios.put(
+            `${apiUrl}/api/products/variants/${formData.ma_bien_the_an}`,
+            {
+              ma_san_pham: id,
+              ten_bien_the: "Mặc định",
+              sku: formData.sku.trim().toUpperCase(),
+              gia_ban_le: formData.gia_ban,
+              so_luong_ton: formData.so_luong_ton,
+            },
+          );
+        }
+        alert("✅ Cập nhật sản phẩm đơn thành công!");
         navigate("/admin/products/Danhsachsanpham");
       }
     } catch (err) {
@@ -149,7 +194,7 @@ export default function ProductEdit() {
               Chỉnh Sửa Sản Phẩm
             </h1>
             <p className="text-xs font-bold text-slate-400 mt-1">
-              Cập nhật thông tin chi tiết cho mã SKU: {formData.ma_san_pham}
+              Cập nhật thông tin chi tiết cho mã: {formData.ma_san_pham}
             </p>
           </div>
         </div>
@@ -158,7 +203,8 @@ export default function ProductEdit() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                Mã sản phẩm (SKU) <span className="text-red-500">*</span>
+                Mã hệ thống (Không thể sửa){" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 disabled
@@ -251,7 +297,7 @@ export default function ProductEdit() {
                   </button>
                 </div>
 
-                {/* 🌟 NẾU CHỌN BIẾN THỂ -> HIỆN DROPDOWN SINGLE/GROUP NHƯ LÚC TẠO MỚI */}
+                {/* 🌟 NẾU LÀ SẢN PHẨM NHÓM -> CHỌN CÁCH PHÂN LOẠI */}
                 {formData.co_bien_the && (
                   <div className="mt-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-in fade-in slide-in-from-top-2">
                     <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wide mb-4">
@@ -280,9 +326,6 @@ export default function ProductEdit() {
                           >
                             Biến Thể Đơn Lập
                           </h4>
-                          <p className="text-xs text-slate-500 mt-1">
-                            VD: "Bản tiêu chuẩn", "Bản cao cấp"
-                          </p>
                         </div>
                       </div>
 
@@ -308,9 +351,6 @@ export default function ProductEdit() {
                           >
                             Ma Trận Thuộc Tính
                           </h4>
-                          <p className="text-xs text-slate-500 mt-1">
-                            VD: Áo Size M - Màu Đỏ
-                          </p>
                         </div>
                       </div>
                     </div>
@@ -319,26 +359,69 @@ export default function ProductEdit() {
               </div>
             </div>
 
+            {/* 🌟 NẾU LÀ SẢN PHẨM ĐƠN -> HIỆN Ô CHỈNH SỬA THÔNG SỐ (SKU, Giá, Tồn) */}
             {!formData.co_bien_the && (
-              <div>
-                <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                  Giá bán hiện tại (đ)
-                </label>
-                <input
-                  type="number"
-                  value={formData.gia_ban}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      gia_ban: Number(e.target.value),
-                    })
-                  }
-                  className="w-full md:w-1/3 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-black text-[#006c49] outline-none focus:border-[#006c49]"
-                />
+              <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                <h4 className="text-[11px] font-black text-[#006c49] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+                  Thông số bán hàng trực tiếp (Sản phẩm đơn)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                      Mã SKU Thương mại
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.sku}
+                      onChange={(e) =>
+                        setFormData({ ...formData, sku: e.target.value })
+                      }
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition uppercase"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                      Giá Bán Niêm Yết (VND){" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={formData.gia_ban}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          gia_ban: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-[#006c49] outline-none focus:border-[#006c49] transition"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                      Số lượng trong kho <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      value={formData.so_luong_ton}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          so_luong_ton: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
                   Thuộc Danh mục Cha

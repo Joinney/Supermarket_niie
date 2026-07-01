@@ -8,39 +8,31 @@ export default function ProductList() {
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-  // 1. State lưu trữ dữ liệu từ Backend
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [countries, setCountries] = useState([]);
 
-  // 2. State Phân trang (Pagination)
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // 3. State Tìm kiếm (Debounced Search)
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
 
-  // 🌟 4. STATE BỘ LỌC ĐÃ ĐƯỢC CẬP NHẬT
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    sort: "newest", // newest, oldest, price_desc, price_asc
-    market: "all", // all, VN, US, CN
-    type: "all", // 🌟 all, single (Đơn), group (Nhóm)
+    sort: "newest",
+    market: "all",
+    type: "all",
   });
 
-  // Bộ đếm Debounce: Ngừng gõ 500ms mới bắn request lên server
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedTerm(searchTerm), 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // =========================================================================
-  // 🚀 HÀM GỌI API LẤY DANH SÁCH & TÌM KIẾM
-  // =========================================================================
   const fetchProducts = async () => {
     setLoading(true);
     setError("");
@@ -89,9 +81,6 @@ export default function ProductList() {
     fetchProducts();
   }, [page, limit, debouncedTerm, filters]);
 
-  // =========================================================================
-  // 🛠️ HÀM THAO TÁC (ACTIONS)
-  // =========================================================================
   const handleRefresh = () => {
     setSearchTerm("");
     setPage(1);
@@ -345,7 +334,6 @@ export default function ProductList() {
                 <th className="py-3 px-4">Danh mục con</th>
                 <th className="py-3 px-4 text-center">Phân loại</th>
                 <th className="py-3 px-4 font-mono text-right">Giá bán</th>
-                {/* 🌟 1. THÊM TIÊU ĐỀ KHO */}
                 <th className="py-3 px-4 text-center">Kho</th>
                 <th className="py-3 px-4 text-center">Trạng thái</th>
                 <th className="py-3 px-4 text-right pr-6">Thao tác</th>
@@ -416,11 +404,11 @@ export default function ProductList() {
                     </div>
                   </td>
 
+                  {/* 🌟 ĐÃ FIX: Chỉ lấy gia_ban_thap_nhat, xóa bỏ rác item.gia_ban */}
                   <td className="py-4 px-4 text-slate-900 font-black font-mono text-right">
-                    {formatPrice(item.gia_ban_thap_nhat || item.gia_ban)}
+                    {formatPrice(item.gia_ban_thap_nhat)}
                   </td>
 
-                  {/* 🌟 2. HIỂN THỊ TỒN KHO TỪ DATA GỬI LÊN HOẶC FALLBACK */}
                   <td className="py-4 px-4 text-center">
                     <span
                       className={`px-2 py-1 rounded text-[10px] font-bold ${

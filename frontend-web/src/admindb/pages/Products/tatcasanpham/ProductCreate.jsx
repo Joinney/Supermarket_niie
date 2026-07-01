@@ -12,7 +12,6 @@ import {
   Layers,
   Image as ImageIcon,
   CheckCircle2,
-  ListTree,
 } from "lucide-react";
 
 export default function ProductCreate() {
@@ -27,12 +26,14 @@ export default function ProductCreate() {
     ma_quoc_gia: "VN",
     mo_ta: "",
     co_bien_the: false, // Mặc định là Sản phẩm đơn
+    // 🌟 ĐÃ BỔ SUNG: Thông số bán hàng cho biến thể ẩn
+    sku: "",
     gia_ban: 0,
+    so_luong_ton: 0,
     hinh_anh_chinh: "",
   });
 
-  // 🌟 THÊM MỚI: State xác định chính xác loại biến thể nếu co_bien_the = true
-  const [variantType, setVariantType] = useState("GROUP"); // 'SINGLE' (Biến thể đơn) hoặc 'GROUP' (Biến thể nhóm/ma trận)
+  const [variantType, setVariantType] = useState("GROUP");
 
   const [parents, setParents] = useState([]);
   const [children, setChildren] = useState([]);
@@ -78,7 +79,6 @@ export default function ProductCreate() {
   const apiUrl =
     import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
-  // Nạp danh mục và Quốc gia khởi tạo
   useEffect(() => {
     const fetchInitData = async () => {
       try {
@@ -102,7 +102,6 @@ export default function ProductCreate() {
     fetchInitData();
   }, [apiUrl]);
 
-  // Reset filter & danh mục con khi đổi quốc gia
   useEffect(() => {
     setFilter({ ma_dm_cha: "" });
     setFormData((prev) => ({ ...prev, ma_dm_con: "" }));
@@ -215,7 +214,7 @@ export default function ProductCreate() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.ma_dm_con) return setError("Vui lòng chọn danh mục con!");
-    if (!formData.co_bien_the && formData.gia_ban <= 0)
+    if (!formData.co_bien_the && formData.gia_ban < 0)
       return setError("Sản phẩm đơn yêu cầu phải có giá bán hợp lệ!");
 
     setSubmitting(true);
@@ -230,15 +229,17 @@ export default function ProductCreate() {
           alert(
             "🎉 Khởi tạo sản phẩm thành công! Chuyển sang bước cấu hình chi tiết phân loại.",
           );
-          // 🌟 NÂNG CẤP: Truyền cờ variantType sang trang cấu hình
           navigate(`/admin/products/create-variant/${newProductId}`, {
             state: {
               initMode: true,
-              targetVariantType: variantType, // Bắn tín hiệu sang trang kia
+              targetVariantType: variantType,
             },
           });
         } else {
-          alert("🎉 Tạo sản phẩm đơn thành công! Đã có thể bán ngay.");
+          // Sản phẩm đơn tạo xong là có luôn giá và kho từ form này rồi!
+          alert(
+            "🎉 Tạo sản phẩm đơn thành công! Đã lưu thông số kho và giá bán.",
+          );
           navigate(`/admin/products/detail/${newProductId}`);
         }
       }
@@ -365,7 +366,13 @@ export default function ProductCreate() {
                 <button
                   type="button"
                   onClick={() =>
-                    setFormData({ ...formData, co_bien_the: true, gia_ban: 0 })
+                    setFormData({
+                      ...formData,
+                      co_bien_the: true,
+                      gia_ban: 0,
+                      so_luong_ton: 0,
+                      sku: "",
+                    })
                   }
                   className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200 hover:border-indigo-200"}`}
                 >
@@ -391,34 +398,74 @@ export default function ProductCreate() {
                 </button>
               </div>
 
-              {/* Ô nhập giá chỉ hiện khi là Sản phẩm đơn */}
+              {/* 🌟 FORM THÔNG SỐ: CHỈ HIỆN KHI LÀ SẢN PHẨM ĐƠN */}
               {!formData.co_bien_the && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
+                  className="mt-6 p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl"
                 >
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2 tracking-wide mt-4">
-                    Giá Bán Niêm Yết (VND){" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    placeholder="Nhập giá bán..."
-                    value={formData.gia_ban}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        gia_ban: Number(e.target.value),
-                      })
-                    }
-                    className="w-full md:w-1/2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-black text-[#006c49] outline-none focus:border-[#006c49] transition"
-                  />
+                  <h4 className="text-[11px] font-black text-[#006c49] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+                    Thông số bán hàng trực tiếp (Sản phẩm đơn)
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                        Mã SKU (Tùy chọn)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Hệ thống tự tạo nếu bỏ trống"
+                        value={formData.sku}
+                        onChange={(e) =>
+                          setFormData({ ...formData, sku: e.target.value })
+                        }
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                        Giá Bán Niêm Yết (VND){" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formData.gia_ban}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            gia_ban: Number(e.target.value),
+                          })
+                        }
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-black text-[#006c49] outline-none focus:border-[#006c49] transition"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
+                        Số lượng trong kho{" "}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formData.so_luong_ton}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            so_luong_ton: Number(e.target.value),
+                          })
+                        }
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                      />
+                    </div>
+                  </div>
                 </motion.div>
               )}
 
-              {/* 🌟 GIAO DIỆN MỚI: YÊU CẦU CHỌN LOẠI BIẾN THỂ KHI CO_BIEN_THE = TRUE */}
+              {/* GIAO DIỆN CHỌN LOẠI BIẾN THỂ KHI CO_BIEN_THE = TRUE */}
               {formData.co_bien_the && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
