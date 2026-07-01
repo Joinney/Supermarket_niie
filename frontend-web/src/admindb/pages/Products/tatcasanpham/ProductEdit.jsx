@@ -38,7 +38,7 @@ export default function ProductEdit() {
     sku: "",
     gia_ban: 0,
     so_luong_ton: 0,
-    ma_bien_the_an: "", // Giữ lại cái ID biến thể ẩn để gọi lệnh UPDATE
+    ma_bien_the_an: "",
   });
 
   const [oldCoBienThe, setOldCoBienThe] = useState(false);
@@ -52,8 +52,6 @@ export default function ProductEdit() {
       try {
         setLoading(true);
 
-        // 🌟 FIX: Đổi từ route GET /products/:id sang route lấy chi tiết phân quyền Admin
-        // để lấy được mảng `bien_the` (chứa thông tin của SKU ẩn).
         const [resProduct, resCat, resParents, resNations] = await Promise.all([
           axios.get(`${apiUrl}/api/products/${id}?role=admin`),
           axios.get(`${apiUrl}/api/categories/children?country=ALL`),
@@ -71,14 +69,13 @@ export default function ProductEdit() {
         );
         const parentId = currentChild ? currentChild.ma_dm_cha : "";
 
-        // Tự động tìm thông số của SKU ẩn (Nếu là Sản phẩm Đơn)
         let hiddenVariant = null;
         if (
           !product.co_bien_the &&
           product.bien_the &&
           product.bien_the.length > 0
         ) {
-          hiddenVariant = product.bien_the[0]; // Sản phẩm đơn chỉ có 1 biến thể ẩn
+          hiddenVariant = product.bien_the[0];
         }
 
         setFormData({
@@ -89,7 +86,6 @@ export default function ProductEdit() {
           mo_ta: product.mo_ta || "",
           co_bien_the: product.co_bien_the,
 
-          // Gán thông số từ SKU ẩn vào Form
           sku: hiddenVariant ? hiddenVariant.sku : "",
           gia_ban: hiddenVariant ? Number(hiddenVariant.gia_ban_le) : 0,
           so_luong_ton: hiddenVariant ? Number(hiddenVariant.so_luong_ton) : 0,
@@ -125,7 +121,6 @@ export default function ProductEdit() {
     e.preventDefault();
     setSubmitLoading(true);
     try {
-      // 1. Cập nhật "Vỏ Sản Phẩm"
       await axios.put(`${apiUrl}/api/products/${id}`, {
         ten_san_pham: formData.ten_san_pham,
         ma_dm_con: formData.ma_dm_con,
@@ -134,20 +129,17 @@ export default function ProductEdit() {
         co_bien_the: formData.co_bien_the,
       });
 
-      // 2. Chuyển hướng hoặc xử lý tiếp theo logic Sản phẩm Đơn / Nhóm
       if (formData.co_bien_the) {
         alert("✅ Đã cập nhật! Chuyển sang giao diện quản lý biến thể.");
         navigate(`/admin/products/create-variant/${id}`, {
           state: { targetVariantType: variantType },
         });
       } else if (oldCoBienThe === true && formData.co_bien_the === false) {
-        // NẾU HẠ CẤP XUỐNG SẢN PHẨM ĐƠN -> Vẫn phải qua màn hình Create Variant để nó đẻ ra SKU ẩn mới.
         alert(
           "✅ Đã hạ cấp về Sản phẩm Đơn. Vui lòng lưu thông số Giá và Kho!",
         );
         navigate(`/admin/products/create-variant/${id}`);
       } else {
-        // 🌟 NẾU LÀ SẢN PHẨM ĐƠN VÀ KHÔNG ĐỔI CẤU TRÚC -> Cập nhật luôn thông số cho SKU ẩn
         if (formData.ma_bien_the_an) {
           await axios.put(
             `${apiUrl}/api/products/variants/${formData.ma_bien_the_an}`,
@@ -247,7 +239,6 @@ export default function ProductEdit() {
                 </select>
               </div>
 
-              {/* 🌟 GIAO DIỆN CẤU TRÚC BÁN HÀNG */}
               <div className="md:col-span-2 space-y-4 border-b border-slate-100 pb-6">
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
                   Cấu trúc bán hàng
@@ -297,7 +288,6 @@ export default function ProductEdit() {
                   </button>
                 </div>
 
-                {/* 🌟 NẾU LÀ SẢN PHẨM NHÓM -> CHỌN CÁCH PHÂN LOẠI */}
                 {formData.co_bien_the && (
                   <div className="mt-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-in fade-in slide-in-from-top-2">
                     <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wide mb-4">
@@ -359,25 +349,24 @@ export default function ProductEdit() {
               </div>
             </div>
 
-            {/* 🌟 NẾU LÀ SẢN PHẨM ĐƠN -> HIỆN Ô CHỈNH SỬA THÔNG SỐ (SKU, Giá, Tồn) */}
+            {/* 🌟 FORM THÔNG SỐ: CHỈ HIỆN KHI LÀ SẢN PHẨM ĐƠN */}
             {!formData.co_bien_the && (
               <div className="p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
                 <h4 className="text-[11px] font-black text-[#006c49] mb-4 uppercase tracking-wider flex items-center gap-1.5">
                   Thông số bán hàng trực tiếp (Sản phẩm đơn)
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {/* 🌟 ĐÃ KHÓA Ô SKU THEO YÊU CẦU */}
                   <div className="space-y-1.5">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
-                      Mã SKU Thương mại
+                      Mã SKU (Tự động)
                     </label>
                     <input
                       type="text"
-                      required
-                      value={formData.sku}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sku: e.target.value })
-                      }
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition uppercase"
+                      disabled
+                      value={formData.sku || "Hệ thống tự động sinh"}
+                      className="w-full px-4 py-3 bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 outline-none cursor-not-allowed transition uppercase"
+                      title="Mã SKU được hệ thống tạo tự động và không thể chỉnh sửa"
                     />
                   </div>
                   <div className="space-y-1.5">

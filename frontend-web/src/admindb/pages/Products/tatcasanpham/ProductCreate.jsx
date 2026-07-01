@@ -26,8 +26,7 @@ export default function ProductCreate() {
     ma_quoc_gia: "VN",
     mo_ta: "",
     co_bien_the: false, // Mặc định là Sản phẩm đơn
-    // 🌟 ĐÃ BỔ SUNG: Thông số bán hàng cho biến thể ẩn
-    sku: "",
+    sku: "", // Sẽ luôn để trống để Backend tự động sinh mã
     gia_ban: 0,
     so_luong_ton: 0,
     hinh_anh_chinh: "",
@@ -214,7 +213,7 @@ export default function ProductCreate() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.ma_dm_con) return setError("Vui lòng chọn danh mục con!");
-    if (!formData.co_bien_the && formData.gia_ban < 0)
+    if (!formData.co_bien_the && formData.gia_ban <= 0)
       return setError("Sản phẩm đơn yêu cầu phải có giá bán hợp lệ!");
 
     setSubmitting(true);
@@ -236,7 +235,6 @@ export default function ProductCreate() {
             },
           });
         } else {
-          // Sản phẩm đơn tạo xong là có luôn giá và kho từ form này rồi!
           alert(
             "🎉 Tạo sản phẩm đơn thành công! Đã lưu thông số kho và giá bán.",
           );
@@ -409,18 +407,16 @@ export default function ProductCreate() {
                     Thông số bán hàng trực tiếp (Sản phẩm đơn)
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {/* 🌟 ĐÃ KHÓA Ô SKU THEO YÊU CẦU */}
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
-                        Mã SKU (Tùy chọn)
+                        Mã SKU (Tự động)
                       </label>
                       <input
                         type="text"
-                        placeholder="Hệ thống tự tạo nếu bỏ trống"
-                        value={formData.sku}
-                        onChange={(e) =>
-                          setFormData({ ...formData, sku: e.target.value })
-                        }
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                        disabled
+                        value="Hệ thống tự động tạo mã"
+                        className="w-full px-4 py-3 bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-400 outline-none cursor-not-allowed transition"
                       />
                     </div>
                     <div className="space-y-1.5">

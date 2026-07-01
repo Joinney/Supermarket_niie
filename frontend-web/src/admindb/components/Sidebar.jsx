@@ -3,6 +3,12 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { io } from "socket.io-client";
 import Logo from "../../assets/Demi Mart.png";
 import LogoMini from "../../assets/DemiMarticon.png";
+const removeDiacritics = (str) => {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+};
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -32,7 +38,6 @@ export default function Sidebar() {
 
   // 🎯 2. REAL-TIME LISTENERS: KẾT NỐI VÀ ĐỒNG BỘ NGAY KHI ADMIN LƯU
   useEffect(() => {
-    // Bọc lót bốc ID từ mọi nguồn có thể lưu trong dự án của bạn
     const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
     const currentUserId =
       adminInfo.id || adminInfo.user_id || storedUser.id || storedUser.user_id;
@@ -51,10 +56,8 @@ export default function Sidebar() {
       transports: ["websocket", "polling"],
     });
 
-    // Tham gia phòng riêng biệt của user
     socket.emit("join_user_room", currentUserId);
 
-    // Lắng nghe lệnh đổi quyền live từ Admin
     socket.on("permission_matrix_changed", (newCustomPermissions) => {
       try {
         let cleanPerms = newCustomPermissions;
@@ -63,7 +66,6 @@ export default function Sidebar() {
         }
         const latestPerms = Array.isArray(cleanPerms) ? cleanPerms : [];
 
-        // Đồng bộ dữ liệu mới vào tất cả bộ nhớ đệm có thể có
         if (localStorage.getItem("adminInfo")) {
           const info = JSON.parse(localStorage.getItem("adminInfo") || "{}");
           info.custom_permissions = latestPerms;
@@ -75,7 +77,6 @@ export default function Sidebar() {
           localStorage.setItem("user", JSON.stringify(usr));
         }
 
-        // ⚡ Cập nhật State ép Sidebar ẩn hiện menu ngay lập tức không cần F5!
         setPermissions(latestPerms);
       } catch (err) {
         console.error("Lỗi parse real-time packet:", err);
@@ -87,12 +88,9 @@ export default function Sidebar() {
     };
   }, []);
 
-  // 🎯 3. HÀM KIỂM TRA QUYỀN TRUY CẬP (XEM) ĐỘNG THEO ID HỆ THỐNG
   const hasAccess = (idKey) => {
-    // Nếu tài khoản là Admin tối cao -> Luôn luôn hiển thị đầy đủ không cần check mảng
     if (userRole === "ADMIN") return true;
 
-    // Tìm kiếm đồng bộ theo ID gốc (dashboard, products, orders, inventory, customers, settings)
     const modulePerm = permissions.find(
       (p) =>
         String(p.id || "")
@@ -100,69 +98,79 @@ export default function Sidebar() {
           .toLowerCase() === idKey.toLowerCase(),
     );
 
-    // Nếu không tìm thấy cấu hình hoặc ô Truy cập (Xem) bị tắt -> Khóa ẩn lập tức
     if (!modulePerm) return false;
 
     return modulePerm.view === true || modulePerm.view === "true";
   };
 
-  // Quản lý trạng thái đóng/mở của các mục lớn (Dropdowns)
+  // 🌟 FIX LỖI: Set mặc định state dựa trên URL hiện tại thay vì gắn cứng
+  const [activeItem, setActiveItem] = useState(location.pathname);
+
   const [openDropdowns, setOpenDropdowns] = useState({
-    dashboard: true,
-    sanPham: false,
-    donHang: false,
-    khoHang: false,
-    khachHang: false,
-    settings: false,
+    dashboard: location.pathname.includes("/admin/dashboard"),
+    sanPham: location.pathname.includes("/admin/products"),
+    donHang: location.pathname.includes("/admin/Donhang"),
+    khoHang: location.pathname.includes("/admin/inventory"),
+    khachHang: location.pathname.includes("/admin/customers"),
+    settings:
+      location.pathname.includes("/admin/settings") ||
+      location.pathname.includes("/admin/nations"),
   });
 
-  // Mặc định kích hoạt sẵn menu con "Thống kê sản phẩm" ban đầu
-  const [activeItem, setActiveItem] = useState(
-    "/admin/dashboard/thongkesanpham",
-  );
+  useEffect(() => {
+    const currentPath = location.pathname;
+    setActiveItem(currentPath);
 
-  // Xử lý khi click vào MỤC LỚN
+    setOpenDropdowns((prev) => ({
+      ...prev,
+      dashboard: currentPath.includes("/admin/dashboard")
+        ? true
+        : prev.dashboard,
+      sanPham: currentPath.includes("/admin/products") ? true : prev.sanPham,
+      donHang: currentPath.includes("/admin/Donhang") ? true : prev.donHang,
+      khoHang: currentPath.includes("/admin/inventory") ? true : prev.khoHang,
+      khachHang: currentPath.includes("/admin/customers")
+        ? true
+        : prev.khachHang,
+      settings:
+        currentPath.includes("/admin/settings") ||
+        currentPath.includes("/admin/nations")
+          ? true
+          : prev.settings,
+    }));
+  }, [location.pathname]);
+
   const handleMainMenuClick = (menuKey, identityPath) => {
     if (isCollapsed) {
       setIsCollapsed(false);
     }
 
-    toggleDropdown(menuKey);
-
-    // Tự động active mục con đầu tiên dựa trên phân quyền cấu trúc mới
-    if (menuKey === "dashboard" && hasAccess("dashboard")) {
-      setActiveItem("/admin/dashboard/thongkesanpham");
-      navigate("/admin/dashboard/thongkesanpham");
-    } else if (menuKey === "donHang" && hasAccess("orders")) {
-      setActiveItem("/admin/Donhang/Danhsachdonhang");
-      navigate("/admin/Donhang/Danhsachdonhang");
-    } else if (menuKey === "khoHang" && hasAccess("inventory")) {
-      setActiveItem("/admin/inventory/create-import");
-      navigate("/admin/inventory/create-import");
-    } else if (menuKey === "khachHang" && hasAccess("customers")) {
-      setActiveItem("/admin/customers/list");
-      navigate("/admin/customers/list");
-    } else if (menuKey === "settings" && hasAccess("settings")) {
-      setActiveItem("/admin/settings/quanlynoibo/danhsachnoibo");
-      navigate("/admin/settings/quanlynoibo/danhsachnoibo");
-    } else {
-      setActiveItem(identityPath);
-    }
-  };
-
-  // Xử lý khi click vào MỤC CON
-  const handleSubMenuClick = (path) => {
-    setActiveItem(path);
-    if (path && path.startsWith("/admin")) {
-      navigate(path);
-    }
-  };
-
-  const toggleDropdown = (menuKey) => {
+    // Toggle menu
     setOpenDropdowns((prev) => ({
       ...prev,
       [menuKey]: !prev[menuKey],
     }));
+
+    // Tự động active mục con đầu tiên dựa trên phân quyền cấu trúc mới
+    if (menuKey === "dashboard" && hasAccess("dashboard")) {
+      navigate("/admin/dashboard/thongkesanpham");
+    } else if (menuKey === "donHang" && hasAccess("orders")) {
+      navigate("/admin/Donhang/Danhsachdonhang");
+    } else if (menuKey === "khoHang" && hasAccess("inventory")) {
+      navigate("/admin/inventory/create-import");
+    } else if (menuKey === "khachHang" && hasAccess("customers")) {
+      navigate("/admin/customers/list");
+    } else if (menuKey === "settings" && hasAccess("settings")) {
+      navigate("/admin/settings/quanlynoibo/danhsachnoibo");
+    } else {
+      navigate(identityPath);
+    }
+  };
+
+  const handleSubMenuClick = (path) => {
+    if (path && path.startsWith("/admin")) {
+      navigate(path);
+    }
   };
 
   const handleLogout = () => {
@@ -170,31 +178,29 @@ export default function Sidebar() {
     navigate("/admin/login");
   };
 
-  // Hàm render class màu cho MỤC CHA
   const getMainMenuStyle = (path) => {
     if (
       activeItem === path ||
       (path === "/admin/dashboard" &&
-        activeItem.startsWith("/admin/dashboard/")) ||
-      (path === "/admin/products" &&
-        activeItem.startsWith("/admin/products/")) ||
-      (path === "/admin/Donhang" && activeItem.startsWith("/admin/Donhang/")) ||
+        activeItem.includes("/admin/dashboard")) ||
+      (path === "/admin/products" && activeItem.includes("/admin/products")) ||
+      (path === "/admin/Donhang" && activeItem.includes("/admin/Donhang")) ||
       (path === "/admin/inventory" &&
-        activeItem.startsWith("/admin/inventory/")) ||
+        activeItem.includes("/admin/inventory")) ||
       (path === "/admin/customers" &&
-        activeItem.startsWith("/admin/customers/")) ||
+        activeItem.includes("/admin/customers")) ||
       (path === "/admin/settings-auth" &&
-        (activeItem.startsWith("/admin/settings/quanlynoibo") ||
-          activeItem.startsWith("/admin/settings/quanlyvaitro")))
+        (activeItem.includes("/admin/settings/quanlynoibo") ||
+          activeItem.includes("/admin/settings/quanlyvaitro")))
     ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
     }
     return "text-gray-600 hover:text-slate-900 hover:bg-gray-50/70";
   };
 
-  // Hàm render class màu cho MỤC CON
   const getSubMenuStyle = (path) => {
-    if (activeItem === path) {
+    // Check xem URL hiện tại có chứa path của submenu không (giúp bao quát các trang con như detail, edit)
+    if (activeItem.includes(path) || activeItem === path) {
       return "bg-[#e6f0ed] font-bold text-[#006c49]";
     }
     return "text-[#5c6f75] hover:bg-gray-50/80 font-semibold";
@@ -327,7 +333,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/thongkesanpham" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Thống kê sản phẩm</span>
                     </button>
@@ -339,7 +345,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkedonhang")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/thongkedonhang" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkedonhang") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Thống kê đơn hàng</span>
                     </button>
@@ -351,7 +357,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkekhachhang")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/dashboard/thongkekhachhang" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkekhachhang") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Thống kê khách hàng</span>
                     </button>
@@ -412,7 +418,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/products/Danhsachsanpham")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/Danhsachsanpham" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/products") && !activeItem.includes("/categories") && !activeItem.includes("/units") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Tất cả sản phẩm</span>
                     </button>
@@ -425,7 +431,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/products/parent-categories")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/parent-categories" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/products/parent-categories") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Danh mục cha</span>
                     </button>
@@ -438,7 +444,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/products/child-categories")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/child-categories" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/products/child-categories") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Danh mục con</span>
                     </button>
@@ -451,7 +457,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/products/units")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/products/units" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/products/units") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Đóng gói</span>
                     </button>
@@ -462,7 +468,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/nations/list")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/nations/list" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/nations/list") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Thị trường quốc gia</span>
                     </button>
@@ -518,7 +524,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/Donhang/Danhsachdonhang")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/Donhang/Danhsachdonhang" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/Donhang/Danhsachdonhang") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Danh sách đơn hàng</span>
                     </button>
@@ -574,7 +580,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/create-import")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/create-import" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/create-import") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span> Danh sách kho hàng </span>{" "}
                     </button>
@@ -586,7 +592,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/import-list")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/import-list" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/import-list") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Danh sách phiếu nhập</span>{" "}
                     </button>
@@ -598,7 +604,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/batches")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/batches" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/batches") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Lô hàng</span>
                     </button>
@@ -610,7 +616,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/stock")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/stock" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/stock") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Tồn kho</span>
                     </button>
@@ -622,7 +628,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/transfer")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/inventory/transfer" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/transfer") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Chuyển kho</span>
                     </button>
@@ -678,7 +684,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/customers/list")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/customers/list" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/customers/list") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Danh sách khách hàng</span>
                     </button>
@@ -751,7 +757,7 @@ export default function Sidebar() {
                           className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/quanlynoibo/danhsachnoibo")}`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/settings/quanlynoibo/danhsachnoibo" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                            className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/settings/quanlynoibo") ? "bg-[#006c49]" : "bg-gray-300"}`}
                           ></span>
                           <span>Danh sách quản lý nội bộ</span>
                         </button>
@@ -765,7 +771,7 @@ export default function Sidebar() {
                           className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/quanlyvaitro/danhsachvaitro")}`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/settings/quanlyvaitro/danhsachvaitro" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                            className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/settings/quanlyvaitro") ? "bg-[#006c49]" : "bg-gray-300"}`}
                           ></span>
                           <span>Danh sách vai trò</span>
                         </button>
@@ -773,67 +779,35 @@ export default function Sidebar() {
                     )}
                   </div>
                 )}
-
-                {/* Settings tổng quát - Mặc định đi kèm nếu có quyền settings */}
-                {hasAccess("settings") && (
-                  <button
-                    onClick={() =>
-                      handleSubMenuClick("/admin/settings/general")
-                    }
-                    className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-3"} px-4 py-3 rounded-xl text-sm transition group mt-1 ${getMainMenuStyle("/admin/settings/general")}`}
-                    title={isCollapsed ? "Settings" : ""}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.8}
-                      stroke="currentColor"
-                      className="w-5 h-5 transition-colors"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.003.767c-.29.222-.434.59-.374.953.003.018.006.035.006.053v.068c0 .018-.003.035-.006.053-.06.363.084.731.374.953l1.004.767a1.125 1.125 0 01.26 1.43l-1.297 2.247a1.125 1.125 0 01-1.37.49l-1.216-.456c-.356-.133-.751-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.43l1.004-.767c.29-.222.434-.59.374-.953a.53.53 0 01-.006-.053v-.068c0-.018.003-.035.006-.053.06-.363-.084-.731-.374-.953l-1.004-.767a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.49l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    {!isCollapsed && (
-                      <span className="animate-fadeIn">Settings</span>
-                    )}
-                  </button>
-                )}
               </div>
             </div>
-          </div>
 
-          {/* Nút Log out */}
-          <div className={`${isCollapsed ? "px-1.5" : "px-3"} mt-4`}>
-            <button
-              onClick={handleLogout}
-              className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-3 px-3"} py-2.5 rounded-xl text-sm font-bold text-[#f06565] hover:bg-red-50/60 transition-all duration-150 group`}
-              title={isCollapsed ? "Log out" : ""}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/xl"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-5 h-5 text-[#f06565]"
+            {/* Nút Log out */}
+            <div className={`${isCollapsed ? "px-1.5" : "px-3"} mt-4`}>
+              <button
+                onClick={handleLogout}
+                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-3 px-3"} py-2.5 rounded-xl text-sm font-bold text-[#f06565] hover:bg-red-50/60 transition-all duration-150 group`}
+                title={isCollapsed ? "Log out" : ""}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
-                />
-              </svg>
-              {!isCollapsed && <span className="animate-fadeIn">Log out</span>}
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/xl"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-5 h-5 text-[#f06565]"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
+                  />
+                </svg>
+                {!isCollapsed && (
+                  <span className="animate-fadeIn">Log out</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
