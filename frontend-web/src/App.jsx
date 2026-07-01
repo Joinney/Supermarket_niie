@@ -62,8 +62,9 @@ import TaoPhieuNhapForm from "./admindb/pages/warehouse/dansachphieunhap/TaoPhie
 import ChiTietPhieuNhap from "./admindb/pages/warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
 import NhapKhoForm from "./admindb/pages/warehouse/danhsachkho/NhapKhoForm.jsx";
 import TaoKhoForm from "./admindb/pages/warehouse/danhsachkho/TaoKhoForm.jsx";
-import LoHang from "./admindb/pages/warehouse/LoHang.jsx";
-import TonKho from "./admindb/pages/warehouse/TonKho.jsx";
+// Sửa LoHang -> Lohang và TonKho -> Tonkho
+import LoHang from "./admindb/pages/warehouse/Lohang.jsx";
+import TonKho from "./admindb/pages/warehouse/Tonkho.jsx";
 import ChuyenKho from "./admindb/pages/warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG (ADMIN CONTROL) ---
