@@ -5,7 +5,8 @@ import {
   updateInternalOrderStatus, 
   getOrderStatistics, 
   getAllOrdersAdmin,
-  getMyOrders 
+  getMyOrders,
+  getOrderDetailAdmin
 } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { calculateShipping } from '../controllers/storeController.js';
@@ -22,5 +23,6 @@ router.post('/shipping/calc', calculateShipping);
 router.get('/admin/statistics', protect, getOrderStatistics);
 router.get('/', getAllOrdersAdmin);
 router.get('/my-orders', protect, getMyOrders); // Sử dụng thống nhất middleware 'protect'
+router.get('/:id', getOrderDetailAdmin);
 
 export default router;

@@ -370,4 +370,85 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders };
+// ========================================================
+// 🎯 API: LẤY CHI TIẾT 1 ĐƠN HÀNG KÈM DANH SÁCH SẢN PHẨM THỰC TẾ
+// ========================================================
+const getOrderDetailAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isNumber = /^\d+$/.test(id); 
+    
+    let orderSql = "";
+    let queryParam = id;
+
+    if (isNumber) {
+      orderSql = `
+        SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+               trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
+        FROM public.orders 
+        WHERE id = $1
+        LIMIT 1;
+      `;
+      queryParam = Number(id);
+    } else {
+      orderSql = `
+        SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
+               trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
+        FROM public.orders 
+        WHERE ma_don_hang = $1
+        LIMIT 1;
+      `;
+    }
+
+    const orderResult = db.query ? await db.query(orderSql, [queryParam]) : await db.execute(orderSql, [queryParam]);
+    const order = orderResult.rows ? orderResult.rows[0] : orderResult[0];
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
+    }
+
+    // 2. Lấy danh sách sản phẩm thuộc đơn hàng này từ bảng order_items
+    const itemsSql = `
+      SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku
+      FROM public.order_items
+      WHERE order_id = $1;
+    `;
+    const itemsResult = db.query ? await db.query(itemsSql, [order.id]) : await db.execute(itemsSql, [order.id]);
+    const items = itemsResult.rows ? itemsResult.rows : itemsResult;
+    order.danh_sach_san_pham = items;
+
+    // ============================================================================
+    // 🚀 NEW: GỌI SANG AUTH-SERVICE ĐỂ LẤY THÔNG TIN USER THỰC TẾ QUA DOCKER
+    // ============================================================================
+    order.user_info = {
+      full_name: "Khách mua hàng (Ẩn danh)",
+      phone_number: "Chưa cập nhật SĐT",
+      email: "Chưa cập nhật Email"
+    };
+
+    if (order.user_id) {
+      try {
+        const authResponse = await axios.get(`http://demi_auth_service:5001/api/auth/internal/users/${order.user_id}`);
+        
+        // Sửa ở đây: Vì Auth-Service trả về trực tiếp Object User chứ không qua bọc .success hay .data
+        if (authResponse.data && (authResponse.data.user_id || authResponse.data.email)) {
+          order.user_info = authResponse.data; 
+          console.log(`✅ [AUTH SYNC SUCCESS]: Đã đồng bộ thành công user ${order.user_id} vào hóa đơn!`);
+        }
+      } catch (authErr) {
+        console.warn(`⚠️ [AUTH SYNC WARNING]: Không thể lấy thông tin khách hàng từ Auth-Service cho user_id ${order.user_id}:`, authErr.message);
+      }
+    }
+    // ============================================================================
+
+    return res.status(200).json({
+      success: true,
+      data: order
+    });
+
+  } catch (err) {
+    console.error("🔥 Lỗi API getOrderDetailAdmin:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải chi tiết mặt hàng." });
+  }
+};
+export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders, getOrderDetailAdmin };

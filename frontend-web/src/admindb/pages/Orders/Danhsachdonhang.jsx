@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom"; // 🌟 Thêm useNavigate
 import axios from "axios";
 
 export default function Danhsachdonhang() {
+  const navigate = useNavigate(); // 🌟 Khởi tạo hook điều hướng
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,10 +20,8 @@ export default function Danhsachdonhang() {
     setLoading(true);
     setError(null);
     try {
-      // 🎯 SỬA ĐỒNG BỘ: Chuyển cổng mặc định sang 5005 trùng khớp với server.js bạn vừa gửi
       const orderApiUrl = import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
       
-      // Gọi chuẩn xác endpoint đăng ký của Microservice
       const response = await axios.get(`${orderApiUrl}/api/orders`, {
         params: {
           page: currentPage,
@@ -31,7 +30,6 @@ export default function Danhsachdonhang() {
         }
       });
 
-      // Bọc lót cấu trúc trả về từ API của bạn
       if (response.data && response.data.orders) {
         setOrders(response.data.orders);
         setTotalPages(response.data.totalPages || 1);
@@ -51,14 +49,13 @@ export default function Danhsachdonhang() {
     }
   };
 
-  // Tự động chạy lại khi thay đổi trang, số lượng hiển thị
   useEffect(() => {
     fetchOrders();
   }, [currentPage, limit]);
 
   const handleSearchSubmit = (e) => {
     if (e.key === "Enter") {
-      setCurrentPage(1); // Reset về trang 1 khi tìm kiếm từ khóa mới
+      setCurrentPage(1);
       fetchOrders();
     }
   };
@@ -69,7 +66,17 @@ export default function Danhsachdonhang() {
     fetchOrders();
   };
 
-  // --- HÀM HELPER STYLE BADGES TRẠNG THÁI GIAO HÀNG (CỘT TRANG_THAI_DON_HANG) ---
+  // 🌟 HÀM ĐIỀU HƯỚNG SANG TRANG CHI TIẾT ĐƠN HÀNG KÈM DỮ LIỆU
+  const handleViewOrderDetail = (order) => {
+    navigate("/admin/Donhang/Chitietdonhang", {
+      state: { 
+        orderId: order.id || order.ma_don_hang,
+        maDonHang: order.ma_don_hang,
+        fullOrderData: order
+      }
+    });
+  };
+
   const getDeliveryBadgeClass = (status) => {
     const cleanStatus = String(status || "").toLowerCase();
     switch (cleanStatus) {
@@ -90,7 +97,6 @@ export default function Danhsachdonhang() {
     }
   };
 
-  // --- HÀM HELPER STYLE BADGES TRẠNG THÁI THANH TOÁN (CỘT TRANG_THAI_THANH_TOAN) ---
   const getPaymentBadgeClass = (status) => {
     const cleanStatus = String(status || "").toLowerCase();
     if (cleanStatus === "completed" || cleanStatus === "da_thanh_toan") {
@@ -99,7 +105,6 @@ export default function Danhsachdonhang() {
     return "bg-amber-50 text-amber-600 border border-amber-200";
   };
 
-  // --- ĐỊNH DẠNG NGÀY THÁNG HIỂN THỊ (CỘT NGAY_TAO) ---
   const formatOrderDate = (dateString) => {
     if (!dateString) return "N/A";
     try {
@@ -120,7 +125,7 @@ export default function Danhsachdonhang() {
   return (
     <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left">
       
-      {/* HEADER AREA KÈM BREADCRUMB KẾT NỐI DASHBOARD */}
+      {/* HEADER AREA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-800">Danh sách đơn hàng</h1>
@@ -140,7 +145,7 @@ export default function Danhsachdonhang() {
       {/* FILTER & CONTAINER BOX */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         
-        {/* TOOLBAR (SEARCH & CONTROLS) */}
+        {/* TOOLBAR */}
         <div className="p-4 sm:p-5 flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center border-b border-gray-50">
           <div className="relative flex-1 max-w-md">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
@@ -180,7 +185,7 @@ export default function Danhsachdonhang() {
           </div>
         </div>
 
-        {/* TABLE RESPONSIVE WRAPPER */}
+        {/* TABLE WRAPPER */}
         <div className="w-full overflow-x-auto min-h-0">
           <table className="w-full border-collapse text-left">
             <thead>
@@ -199,7 +204,6 @@ export default function Danhsachdonhang() {
             </thead>
             <tbody className="divide-y divide-gray-50 text-xs font-semibold text-slate-600">
               
-              {/* TRẠNG THÁI LOADING */}
               {loading && (
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-[#006c49] font-bold animate-pulse">
@@ -208,7 +212,6 @@ export default function Danhsachdonhang() {
                 </tr>
               )}
 
-              {/* TRẠNG THÁI LỖI MÁY CHỦ */}
               {!loading && error && (
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-red-500 font-bold bg-red-50/50">
@@ -217,7 +220,6 @@ export default function Danhsachdonhang() {
                 </tr>
               )}
 
-              {/* TRẠNG THÁI RỖNG DATA */}
               {!loading && !error && orders.length === 0 && (
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-gray-400 font-medium italic">
@@ -226,7 +228,6 @@ export default function Danhsachdonhang() {
                 </tr>
               )}
 
-              {/* RENDER DỮ LIỆU ĐƠN HÀNG THỜI GIAN THỰC ĐỔ TỪ POSTGRES */}
               {!loading && !error && orders.map((order, idx) => (
                 <tr key={order.id || idx} className="hover:bg-gray-50/30 transition-colors">
                   <td className="py-4 px-5">
@@ -256,7 +257,12 @@ export default function Danhsachdonhang() {
                   </td>
                   <td className="py-4 px-5">
                     <div className="flex items-center justify-center gap-2.5">
-                      <button className="text-gray-300 hover:text-emerald-600 transition" title="Xem chi tiết">
+                      {/* 🌟 NÚT XEM CHI TIẾT: Kích hoạt hàm điều hướng */}
+                      <button 
+                        onClick={() => handleViewOrderDetail(order)}
+                        className="text-gray-300 hover:text-emerald-600 transition" 
+                        title="Xem chi tiết"
+                      >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -313,7 +319,7 @@ export default function Danhsachdonhang() {
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                ❯
+                ❯navigate
               </button>
             </div>
           </div>

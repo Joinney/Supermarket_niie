@@ -15,6 +15,7 @@ require_relative 'routes/payment_routes'
 # Thiết lập Cổng kết nối và Bind IP phục vụ môi trường Docker Container
 set :port, ENV['PORT'] || 5004
 set :bind, '0.0.0.0'
+set :protection, :origin_whitelist => ['http://demi_order_service:5005', 'http://localhost:5173', 'http://localhost:5005']
 
 # ========================================================
 # 🛡️ CẤU HÌNH PHÒNG VỆ VÀ NỚI LỎNG BẢO MẬT TẦNG GỐC APP.RB
