@@ -360,3 +360,19 @@ func CreateLot(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, newLot)
 }
+
+// GetInventoryTickets lấy danh sách tất cả phiếu nhập kho từ bảng phieu_kho
+func GetInventoryTickets(c *gin.Context) {
+    var tickets []models.PhieuKho
+
+    // Tìm tất cả các phiếu có loai_phieu là 'NHAP' hoặc tương tự trong DB của bạn
+    // Sắp xếp ngày tạo mới nhất lên đầu (Order desc)
+    err := config.DB.Order("ngay_tao desc").Find(&tickets).Error
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách phiếu nhập kho: " + err.Error()})
+        return
+    }
+
+    // Trả dữ liệu về cho Frontend
+    c.JSON(http.StatusOK, tickets)
+}

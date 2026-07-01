@@ -8,7 +8,7 @@ import (
 
 	"supermarket/warehouse-service/config"
 	"supermarket/warehouse-service/controllers"
-	"supermarket/warehouse-service/models" // 🌟 ĐÃ BỔ SUNG: Import package models để chạy AutoMigrate
+	"supermarket/warehouse-service/models" // Đồng bộ cấu trúc bảng tự động bằng AutoMigrate
 
 	_ "supermarket/warehouse-service/docs"
 
@@ -42,8 +42,7 @@ func main() {
 	// Kết nối cơ sở dữ liệu Postgres public.lo_hang / public.kho_hang
 	config.ConnectDatabase()
 
-	// 🌟 ĐÃ BỔ SUNG AUTOMIGRATE: Đồng bộ cấu trúc bảng và fix kiểu dữ liệu nguoi_thuc_hien_id tự động
-	// Đoạn này đảm bảo database sinh đủ bảng phieu_kho và chi_tiet_phieu_kho thực tế
+	// Hệ thống tự động kiểm tra và đồng bộ cấu trúc Database thực tế
 	if config.DB != nil {
 		err := config.DB.AutoMigrate(
 			&models.Warehouse{},
@@ -58,21 +57,23 @@ func main() {
 		}
 	}
 
-	// Định tuyến API V1
+	// Định tuyến nhóm API V1 chuẩn hóa (Đã loại bỏ mã trùng lặp lồng nhau gây lỗi)
 	api := r.Group("/api/v1")
-{
-    api.GET("/inventory", controllers.GetInventory)
-    api.POST("/inventory", controllers.CreateInventoryImport)
-    api.PUT("/inventory/:id/stock", controllers.UpdateStock)
-    
-    // 🌟 CHỈ ĐỂ THẾ NÀY: Không được chứa "/api/v1" ở đây nữa!
-    api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
-    
-    api.GET("/lots", controllers.GetLots)
-    api.POST("/lots", controllers.CreateLot)
-    api.GET("/warehouses", controllers.GetWarehouses)
-    api.GET("/unit-conversions", controllers.GetUnitConversions) 
-}
+	{
+		api.GET("/inventory", controllers.GetInventory)
+		api.POST("/inventory", controllers.CreateInventoryImport)
+		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
+		
+		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
+		
+		// 🌟 Tuyến endpoint đồng bộ danh sách phiếu nhập kho thực tế cho Frontend
+		api.GET("/inventory-tickets", controllers.GetInventoryTickets)
+		
+		api.GET("/lots", controllers.GetLots)
+		api.POST("/lots", controllers.CreateLot)
+		api.GET("/warehouses", controllers.GetWarehouses)
+		api.GET("/unit-conversions", controllers.GetUnitConversions) 
+	}
 
 	// Tài liệu API Swagger
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

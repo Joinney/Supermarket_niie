@@ -7,41 +7,40 @@ export default function DanhSachPhieuNhap() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   
-  // 🌟 Đã chuyển đổi state để lưu trữ dữ liệu thực từ API Backend
   const [importTickets, setImportTickets] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // GỌI API ĐỒNG BỘ DANH SÁCH PHIẾU NHẬP TỪ BACKEND WAREHOUSE-SERVICE
-  useEffect(() => {
-    // Port 5006 của warehouse-service (Cấu hình lại nếu endpoint của bạn chạy route khác)
-    axios.get("http://localhost:5006/api/v1/warehouses") 
-      .then(async (res) => {
-        // Tạm thời lấy danh sách tổng quát hoặc nếu bạn có api riêng cho /inventory-imports:
-        // Ở đây cấu hình lấy danh sách phiếu nhập kho thực tế của bạn
-        try {
-          const response = await axios.get("http://localhost:5006/api/v1/lots"); // Hoặc api phiếu nhập /inventory
-          // Map cấu trúc DB thực tế tương ứng với các cột hiển thị trên bảng
-          const mappedData = response.data.map((item, index) => ({
-            id: item.ma_phieu || `PNK-AUTO-${index + 1}`, 
-            warehouse: item.ma_kho || "Kho Tổng (Quận 1)",
-            status: item.trang_thai || "completed", // Mặc định completed hoặc dựa trên DB của bạn
-            date: item.ngay_tao ? new Date(item.ngay_tao).toLocaleString("vi-VN") : "N/A",
-            creator: "Hệ thống",
-            total: item.gia_nhap * (item.so_luong || 24) || 10000, 
-            debt: 0
-          }));
-          setImportTickets(mappedData);
-        } catch (err) {
-          console.error("Lỗi parse chứng từ:", err);
-        } finally {
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error("Lỗi kết nối API danh sách phiếu nhập:", err);
-        setLoading(false);
-      });
-  }, []);
+useEffect(() => {
+  // Thay đổi sang route mới lấy đúng dữ liệu bảng phieu_kho
+  axios.get("http://localhost:5006/api/v1/inventory-tickets") 
+    .then((res) => {
+      const rawData = Array.isArray(res.data) ? res.data : res.data.data || [];
+      
+      const mappedData = rawData.map((item) => ({
+        // Lấy chính xác các thuộc tính có trong ảnh database của bạn:
+        id: item.ma_phieu,                      // Cột ma_phieu (Ví dụ: PNK-2026...)
+        warehouse: item.ma_kho || "Kho Tổng",    // Cột ma_kho (Ví dụ: KHO-001)
+        status: "completed",                    // Hiện tại bảng phieu_kho chưa có cột trạng thái, tạm mặc định completed
+        date: item.ngay_tao && item.ngay_tao !== "0001-01-01T00:00:00Z" 
+          ? new Date(item.ngay_tao).toLocaleString("vi-VN") 
+          : "N/A",                              // Cột ngay_tao
+        creator: item.nguoi_thuc_hien_id ? `User ${item.nguoi_thuc_hien_id}` : "Hệ thống", // Cột nguoi_thuc_hien_id
+        
+        // Vì bảng phieu_kho không lưu tổng tiền (tổng tiền nằm ở bảng chi tiết phiếu/lô hàng)
+        // Bạn có thể xử lý JOIN tính tổng tiền ở backend rồi trả ra trường item.tong_tien
+        total: item.tong_tien || 0, 
+        debt: 0
+      }));
+
+      setImportTickets(mappedData);
+    })
+    .catch((err) => {
+      console.error("Lỗi kết nối API danh sách phiếu nhập:", err);
+    })
+    .finally(() => {
+      setLoading(false);
+    });
+}, []);
 
   const formatCurrency = (num) => {
     return new Intl.NumberFormat("vi-VN").format(num) + " đ";
@@ -127,12 +126,13 @@ export default function DanhSachPhieuNhap() {
                 </tr>
               ) : (
                 importTickets
-                  .filter((row) => {
-                    const matchId = row.id.toLowerCase().includes(search.toLowerCase());
-                    const matchStatus = status === "" || row.status === status;
-                    return matchId && matchStatus;
-                  })
-                  .map((row) => (
+  .filter((row) => {
+    // Kiểm tra an toàn xem row.id có tồn tại hay không trước khi gọi toLowerCase()
+    const matchId = row.id ? row.id.toLowerCase().includes(search.toLowerCase()) : false;
+    const matchStatus = status === "" || row.status === status;
+    return matchId && matchStatus;
+  })
+  .map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                       <td 
                         onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
@@ -150,9 +150,11 @@ export default function DanhSachPhieuNhap() {
                       </td>
                       <td className="py-4 px-6 text-gray-400 font-normal font-mono">{row.date}</td>
                       <td className="py-4 px-6 text-gray-500 font-medium">{row.creator}</td>
-                      <td className="py-4 px-6 text-right text-gray-900 font-bold font-mono">{formatCurrency(row.total)}</td>
+                      <td className="py-4 px-6 text-right text-gray-900 font-bold font-mono">
+                        {row.total > 0 ? formatCurrency(row.total) : "---"}
+                      </td>
                       <td className={`py-4 px-6 text-right font-bold font-mono ${row.debt > 0 ? "text-rose-500" : "text-gray-300"}`}>
-                        {formatCurrency(row.debt)}
+                        {row.debt > 0 ? formatCurrency(row.debt) : "0 đ"}
                       </td>
                       
                       <td className="py-4 px-6 text-center">
