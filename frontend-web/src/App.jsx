@@ -32,48 +32,48 @@ import ChatbotAI from "./components/chatbotai/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminProtect from "./admindb/components/AdminProtect";
-import AdminProfile from "./admindb/pages/Profile/AdminProfile";
+import AdminProfile from "./admindb/pages/profile/AdminProfile.jsx";
 import AdminLogin from "./admindb/pages/Auth/AdminLogin";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin  from "./admindb/components/Header";
-import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham";
-import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang";
-import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang";
-import Danhsachsanpham from "./admindb/pages/Products/tatcasanpham/Danhsachsanpham";
-import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang";
-import Chitietdonhang from "./admindb/pages/Orders/OrderDetail"; 
-import AdminProductDetail from "./admindb/pages/Products/tatcasanpham/ProductDetail";
-import AdminVariantDetail from "./admindb/pages/products/tatcasanpham/bienthesanpham/VariantDetail";
-import AdminCreateVariant from "./admindb/pages/Products/tatcasanpham/bienthesanpham/CreateVariant";
-import ProductCreate from "./admindb/pages/Products/tatcasanpham/ProductCreate";
-import ProductEdit from "./admindb/pages/Products/tatcasanpham/ProductEdit";
-import ParentCategories from "./admindb/pages/Products/danhmuccha/ParentCategories";
-import ParentCategoryForm from "./admindb/pages/Products/danhmuccha/ParentCategoryForm";
-import ChildCategories from "./admindb/pages/Products/danhmuccon/ChildCategories";
-import ChildCategoryForm from "./admindb/pages/Products/danhmuccon/ChildCategoryForm";
-import Units from "./admindb/pages/Products/quychuandonggoi/Units";
-import UnitForm from "./admindb/pages/Products/quychuandonggoi/UnitsForm";
-import Nation from "./admindb/pages/Products/thitruongquocgia/National";
-import NationalForm from "./admindb/pages/Products/thitruongquocgia/NationalForm";
+import Dashboard from "./admindb/pages/dashboard/ThongKeSanPham.jsx";
+import ThongKeDonHang from "./admindb/pages/dashboard/ThongKeDonHang.jsx";
+import ThongKeKhachHang from "./admindb/pages/dashboard/ThongKeKhachHang.jsx";
+import Danhsachsanpham from "./admindb/pages/products/tatcasanpham/Danhsachsanpham.jsx";
+import Danhsachdonhang from "./admindb/pages/orders/Danhsachdonhang.jsx";
+import Chitietdonhang from "./admindb/pages/orders/OrderDetail.jsx"; 
+import AdminProductDetail from "./admindb/pages/products/tatcasanpham/ProductDetail.jsx";
+import AdminVariantDetail from "./admindb/pages/products/tatcasanpham/bienthesanpham/VariantDetail.jsx";
+import AdminCreateVariant from "./admindb/pages/products/tatcasanpham/bienthesanpham/CreateVariant.jsx";
+import ProductCreate from "./admindb/pages/products/tatcasanpham/ProductCreate.jsx";
+import ProductEdit from "./admindb/pages/products/tatcasanpham/ProductEdit.jsx";
+import ParentCategories from "./admindb/pages/products/danhmuccha/ParentCategories.jsx";
+import ParentCategoryForm from "./admindb/pages/products/danhmuccha/ParentCategoryForm.jsx";
+import ChildCategories from "./admindb/pages/products/danhmuccon/ChildCategories.jsx";
+import ChildCategoryForm from "./admindb/pages/products/danhmuccon/ChildCategoryForm.jsx";
+import Units from "./admindb/pages/products/quychuandonggoi/Units.jsx";
+import UnitForm from "./admindb/pages/products/quychuandonggoi/UnitsForm.jsx";
+import Nation from "./admindb/pages/products/thitruongquocgia/National.jsx";
+import NationalForm from "./admindb/pages/products/thitruongquocgia/NationalForm.jsx";
 
 // Import các Form/Page từ Warehouse
-import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
-import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
-import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
-import NhapKhoForm from "./admindb/pages/Warehouse/danhsachkho/NhapKhoForm.jsx";
-import TaoKhoForm from "./admindb/pages/Warehouse/danhsachkho/TaoKhoForm.jsx";
-import LoHang from "./admindb/pages/Warehouse/LoHang.jsx";
-import TonKho from "./admindb/pages/Warehouse/TonKho.jsx";
-import ChuyenKho from "./admindb/pages/Warehouse/dieuchuyenkho/Chuyenkho.jsx";
+import DanhSachPhieuNhap from "./admindb/pages/warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
+import TaoPhieuNhapForm from "./admindb/pages/warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
+import ChiTietPhieuNhap from "./admindb/pages/warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
+import NhapKhoForm from "./admindb/pages/warehouse/danhsachkho/NhapKhoForm.jsx";
+import TaoKhoForm from "./admindb/pages/warehouse/danhsachkho/TaoKhoForm.jsx";
+import LoHang from "./admindb/pages/warehouse/LoHang.jsx";
+import TonKho from "./admindb/pages/warehouse/TonKho.jsx";
+import ChuyenKho from "./admindb/pages/warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG (ADMIN CONTROL) ---
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
 import Chitietkhachhang from "./admindb/pages/Customers/Chitietkhachhang"; 
 
 // Nhóm quản lý nội bộ
-import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo";
-import Chitietnoibo from "./admindb/pages/Settings/Quanlynoibo/Chitietnoibo";
-import Danhsachvaitro from "./admindb/pages/Settings/Quanlyvaitro/Danhsachvaitro";
+import Danhsachnoibo from "./admindb/pages/settings/Quanlynoibo/Danhsachnoibo.jsx";
+import Chitietnoibo from "./admindb/pages/settings/Quanlynoibo/Chitietnoibo.jsx";
+import Danhsachvaitro from "./admindb/pages/settings/Quanlyvaitro/Danhsachvaitro.jsx";
 
 /**
  * 🎯 ĐÃ THAY THẾ: Component Giao Diện Cấu hình chung (General Settings) thực tế theo hình mẫu
