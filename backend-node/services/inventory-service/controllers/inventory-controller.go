@@ -107,6 +107,8 @@ type CreateInventoryImportInput struct {
 	WarehouseID string                 `json:"warehouse_id" binding:"required"`
 	ImportType  string                 `json:"import_type" binding:"required"`
 	Note        string                 `json:"note"`
+	UserId      int                    `json:"user_id"`    // 🌟 BỔ SUNG ĐÓN NHẬN USER_ID THỰC TẾ
+	FullName    string                 `json:"full_name"`  // 🌟 BỔ SUNG ĐÓN NHẬN FULL_NAME THỰC TẾ
 	Products    []ImportProductPayload `json:"products" binding:"required"`
 }
 
@@ -121,10 +123,10 @@ func CreateInventoryImport(c *gin.Context) {
 	for _, p := range input.Products {
 		var exists int64
 		config.DB.Table("items").Where("sku = ?", p.Sku).Count(&exists)
-if exists == 0 {
-    // Chỉ chèn vào cột sku và name, để cột id tự động tăng theo cấu hình bigint của DB
-    _ = config.DB.Exec("INSERT INTO items (sku, name, created_at, updated_at) VALUES (?, ?, ?, ?)", p.Sku, p.Name, time.Now(), time.Now())
-}
+		if exists == 0 {
+			// Chỉ chèn vào cột sku và name, để cột id tự động tăng theo cấu hình bigint của DB
+			_ = config.DB.Exec("INSERT INTO items (sku, name, created_at, updated_at) VALUES (?, ?, ?, ?)", p.Sku, p.Name, time.Now(), time.Now())
+		}
 	}
 
 	tx := config.DB.Begin()
@@ -137,12 +139,32 @@ if exists == 0 {
 	todayStr := time.Now().Format("20060102")
 	maPhieuAuto := fmt.Sprintf("PNK-%s-%d", todayStr, time.Now().UnixNano()%1000)
 
+	// 🌟 TỐI ƯU GHI CHÚ: Tự động ghép chuỗi "Người lập: [Tên]" vào ghi chú để hiển thị trực tiếp lên bảng Frontend dễ dàng
+	finalNote := input.Note
+	if input.FullName != "" {
+		if finalNote != "" {
+			finalNote = fmt.Sprintf("Người lập: %s | Ghi chú: %s", input.FullName, finalNote)
+		} else {
+			finalNote = fmt.Sprintf("Người lập: %s", input.FullName)
+		}
+	} else {
+		if finalNote == "" {
+			finalNote = "Người lập: Hệ thống kho"
+		}
+	}
+
+	// Xác định ID người thực hiện an toàn
+	executorID := input.UserId
+	if executorID == 0 {
+		executorID = 1 // Mặc định nếu không truyền
+	}
+
 	phieuKho := models.PhieuKho{
 		MaPhieu:         maPhieuAuto,
 		LoaiPhieu:       input.ImportType,
 		MaKho:           input.WarehouseID,
-		GhiChu:          input.Note,
-		NguoiThucHienID: 1,
+		GhiChu:          finalNote, // Lưu vết chuỗi văn bản rõ ràng
+		NguoiThucHienID: executorID, // Lưu ID thực tế vào cột khóa ngoại quan hệ
 	}
 
 	if err := tx.Create(&phieuKho).Error; err != nil {
@@ -195,6 +217,7 @@ if exists == 0 {
 		return
 	}
 
+	// Block Goroutine đồng bộ tồn kho giữ nguyên...
 	go func(products []ImportProductPayload, warehouseID string) {
 		type SyncItem struct {
 			Sku      string `json:"sku"`
@@ -204,9 +227,9 @@ if exists == 0 {
 		var syncList []SyncItem
 		for _, p := range products {
 			syncList = append(syncList, SyncItem{
-    Sku:      p.Sku,
-    Quantity: p.StandardQuantity,
-})
+				Sku:      p.Sku,
+				Quantity: p.StandardQuantity,
+			})
 
 			var existStock int64
 			config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
@@ -230,10 +253,10 @@ if exists == 0 {
 		}
 
 		productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
-if productServiceHost == "" {
-    productServiceHost = "http://localhost:5002" // fallback nếu chạy local không docker
-}
-productServiceURL := productServiceHost + "/api/products/internal/update-stock"
+		if productServiceHost == "" {
+			productServiceHost = "http://localhost:5002"
+		}
+		productServiceURL := productServiceHost + "/api/products/internal/update-stock"
 
 		req, err := http.NewRequest("PATCH", productServiceURL, bytes.NewBuffer(jsonData))
 		if err != nil {

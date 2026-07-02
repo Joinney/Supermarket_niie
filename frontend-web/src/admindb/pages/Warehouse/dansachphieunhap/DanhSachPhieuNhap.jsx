@@ -11,36 +11,46 @@ export default function DanhSachPhieuNhap() {
   const [loading, setLoading] = useState(true);
 
 useEffect(() => {
-  // Thay đổi sang route mới lấy đúng dữ liệu bảng phieu_kho
-  axios.get("http://localhost:5006/api/v1/inventory-tickets") 
-    .then((res) => {
-      const rawData = Array.isArray(res.data) ? res.data : res.data.data || [];
-      
-      const mappedData = rawData.map((item) => ({
-        // Lấy chính xác các thuộc tính có trong ảnh database của bạn:
-        id: item.ma_phieu,                      // Cột ma_phieu (Ví dụ: PNK-2026...)
-        warehouse: item.ma_kho || "Kho Tổng",    // Cột ma_kho (Ví dụ: KHO-001)
-        status: "completed",                    // Hiện tại bảng phieu_kho chưa có cột trạng thái, tạm mặc định completed
-        date: item.ngay_tao && item.ngay_tao !== "0001-01-01T00:00:00Z" 
-          ? new Date(item.ngay_tao).toLocaleString("vi-VN") 
-          : "N/A",                              // Cột ngay_tao
-        creator: item.nguoi_thuc_hien_id ? `User ${item.nguoi_thuc_hien_id}` : "Hệ thống", // Cột nguoi_thuc_hien_id
+    axios.get("http://localhost:5006/api/v1/inventory-tickets") 
+      .then((res) => {
+        console.log("DỮ LIỆU THỰC TẾ TỪ BACKEND:", res.data);
+        const rawData = Array.isArray(res.data) ? res.data : res.data.data || [];
         
-        // Vì bảng phieu_kho không lưu tổng tiền (tổng tiền nằm ở bảng chi tiết phiếu/lô hàng)
-        // Bạn có thể xử lý JOIN tính tổng tiền ở backend rồi trả ra trường item.tong_tien
-        total: item.tong_tien || 0, 
-        debt: 0
-      }));
+        // Thay thế đoạn xử lý creatorName trong hàm useEffect của file DanhSachPhieuNhap.jsx:
+const mappedData = rawData.map((item) => {
+  let creatorName = "Hệ thống";
+  
+  if (item.ghi_chu && item.ghi_chu.includes("Người lập:")) {
+    // Tách chuỗi sau chữ "Người lập:"
+    const partAfterCreator = item.ghi_chu.split("Người lập:")[1];
+    // Lấy phần dữ liệu trước dấu gạch đứng "|" nếu có ghi chú vận hành đi kèm
+    creatorName = partAfterCreator.split("|")[0].trim();
+  } else if (item.nguoi_thuc_hien_id) {
+    creatorName = `User ID: ${item.nguoi_thuc_hien_id}`;
+  }
 
-      setImportTickets(mappedData);
-    })
-    .catch((err) => {
-      console.error("Lỗi kết nối API danh sách phiếu nhập:", err);
-    })
-    .finally(() => {
-      setLoading(false);
-    });
-}, []);
+  return {
+    id: item.ma_phieu, 
+    warehouse: item.ma_kho || "Kho Tổng",
+    status: "completed", 
+    date: item.ngay_tao && item.ngay_tao !== "0001-01-01T00:00:00Z" 
+      ? new Date(item.ngay_tao).toLocaleString("vi-VN") 
+      : "N/A",
+    creator: creatorName, // 🌟 Sẽ hiển thị chuẩn: Phan Minh Thuận (Admin)
+    total: item.tong_tien || 0, 
+    debt: 0
+  };
+});
+
+        setImportTickets(mappedData);
+      })
+      .catch((err) => {
+        console.error("Lỗi kết nối API danh sách phiếu nhập:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
 
   const formatCurrency = (num) => {
     return new Intl.NumberFormat("vi-VN").format(num) + " đ";
