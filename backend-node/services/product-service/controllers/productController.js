@@ -1821,3 +1821,144 @@ export const updateInternalStock = async (req, res) => {
         client.release();
     }
 };
+
+// =========================================================================
+// API NỘI BỘ: TRỪ KHO AN TOÀN (ANTI RACE-CONDITION) KHI CÓ ĐƠN ĐẶT HÀNG
+// ĐƯỢC GỌI TỪ ORDER-SERVICE
+// =========================================================================
+export const deductStockInternal = async (req, res) => {
+    const { items } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: "Không có sản phẩm để trừ kho." });
+    }
+
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        // 1. Gom nhóm lại để phòng trường hợp Order gửi mảng có 2 dòng cùng 1 variant_id
+        const aggregatedItems = {};
+        for (const item of items) {
+            const vId = item.variant_id;
+            if (!aggregatedItems[vId]) {
+                aggregatedItems[vId] = { ...item, quantity: Number(item.quantity) };
+            } else {
+                aggregatedItems[vId].quantity += Number(item.quantity);
+            }
+        }
+
+        // 2. Sắp xếp mã variant_id để khóa (Lock) theo đúng một chiều, triệt tiêu Deadlock (Nút thắt cổ chai)
+        const sortedVariantIds = Object.keys(aggregatedItems).sort();
+
+        // 3. Tiến hành khóa, kiểm tra và trừ kho
+        for (const vId of sortedVariantIds) {
+            const item = aggregatedItems[vId];
+            const qtyToBuy = item.quantity;
+
+            // 3.1 Khóa (Lock) dòng dữ liệu này lại. Bất cứ khách nào đang định mua SP này sẽ phải đứng chờ.
+            const lockQuery = `
+                SELECT ten_bien_the, so_luong_ton 
+                FROM public.bien_the_san_pham 
+                WHERE ma_bien_the = $1 
+                FOR UPDATE;
+            `;
+            const lockRes = await client.query(lockQuery, [vId]);
+
+            // Nếu biến thể không tồn tại
+            if (lockRes.rows.length === 0) {
+                throw new Error(`Sản phẩm mã ${vId} không còn tồn tại hoặc đã bị khóa bán.`);
+            }
+
+            const currentStock = Number(lockRes.rows[0].so_luong_ton);
+            const variantName = lockRes.rows[0].ten_bien_the || vId;
+
+            // 3.2 Kiểm tra khắt khe tồn kho thực tế (Tránh Frontend gửi láo)
+            if (currentStock < qtyToBuy) {
+                throw new Error(`Rất tiếc! "${variantName}" chỉ còn ${currentStock} sản phẩm. Bạn vui lòng giảm số lượng.`);
+            }
+
+            // 3.3 Trừ kho an toàn
+            const updateStockQuery = `
+                UPDATE public.bien_the_san_pham 
+                SET so_luong_ton = so_luong_ton - $1, ngay_cap_nhat = NOW()
+                WHERE ma_bien_the = $2;
+            `;
+            await client.query(updateStockQuery, [qtyToBuy, vId]);
+        }
+
+        // 4. Mọi thứ thành công, chốt Transaction và nhả khóa.
+        await client.query('COMMIT');
+
+        // Bắn Socket báo hiệu để Dashboard hoặc Client có thể update số lượng hiển thị (Tuỳ chọn)
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('stock_quantity_updated', { updated: true });
+        }
+
+        return res.status(200).json({ success: true, message: "Trừ kho thành công!" });
+
+    } catch (error) {
+        if (client) {
+            await client.query('ROLLBACK');
+        }
+        console.error("❌ Lỗi deductStockInternal (Product-Service):", error.message);
+        
+        // Trả lỗi 400 về để Order Service biết và thông báo cho người dùng
+        return res.status(400).json({ success: false, message: error.message });
+    } finally {
+        if (client) {
+            client.release();
+        }
+    }
+};
+
+// =========================================================================
+// API NỘI BỘ: HOÀN LẠI KHO (CỘNG DỒN) KHI KHÁCH HỦY ĐƠN HOẶC HOÀN TRẢ
+// ĐƯỢC GỌI TỪ ORDER-SERVICE
+// =========================================================================
+export const restoreStockInternal = async (req, res) => {
+    const { items } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: "Không có sản phẩm để hoàn kho." });
+    }
+
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN');
+
+        for (const item of items) {
+            const vId = item.variant_id || item.variantId;
+            const qtyToRestore = Number(item.quantity);
+
+            if (!vId || isNaN(qtyToRestore) || qtyToRestore <= 0) continue;
+
+            // Câu lệnh UPDATE này tự động an toàn (atomic) trong Postgres
+            await client.query(`
+                UPDATE public.bien_the_san_pham 
+                SET so_luong_ton = so_luong_ton + $1, ngay_cap_nhat = NOW()
+                WHERE ma_bien_the = $2;
+            `, [qtyToRestore, vId]);
+        }
+
+        await client.query('COMMIT');
+
+        // Bắn Socket cập nhật giao diện kho
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('stock_quantity_updated', { updated: true });
+        }
+
+        return res.status(200).json({ success: true, message: "Hoàn kho thành công!" });
+
+    } catch (error) {
+        if (client) await client.query('ROLLBACK');
+        console.error("❌ Lỗi restoreStockInternal (Product-Service):", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi cộng lại kho." });
+    } finally {
+        if (client) client.release();
+    }
+};

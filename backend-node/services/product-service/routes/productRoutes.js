@@ -31,7 +31,9 @@ import {
     migrateLegacyAttributes,
     setMainProductImage,
     addProductMedia,
-    updateInternalStock // 🌟 ĐÃ BỔ SUNG: Import hàm xử lý đồng bộ tồn kho từ controller
+    updateInternalStock,
+    deductStockInternal,
+    restoreStockInternal
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -95,5 +97,9 @@ router.get('/:id/related', getRelatedProducts);
 // Lấy chi tiết sản phẩm
 router.get('/:id', getProductById);
 router.post('/:id/media', addProductMedia);
+
+// xử lý tồn kho nội bộ (internal stock) cho từng biến thể sản phẩm
+router.post('/internal/deduct-stock', deductStockInternal);
+router.post('/internal/restore-stock', restoreStockInternal);
 
 export default router;

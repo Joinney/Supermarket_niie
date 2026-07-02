@@ -3,7 +3,7 @@ import axios from 'axios';
 import db from '../configs/database.js';
 
 // ========================================================
-// 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN (Giữ lại làm tham khảo cho API getShippingFee cũ)
+// 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN
 // ========================================================
 const calculateGhnShippingCost = async (toDistrictId, toWardCode, weightGrams = 1000) => {
   try {
@@ -74,7 +74,7 @@ const getShippingFee = async (req, res) => {
   }
 };
 
-// 2. Tiếp nhận đặt hàng và lưu phi chuẩn hóa thông tin sản phẩm (Snapshot)
+// 2. Tiếp nhận đặt hàng (Đã nâng cấp trừ kho Microservices chống Race Condition)
 const placeOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -93,22 +93,40 @@ const placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Dữ liệu đơn hàng không hợp lệ hoặc bị thiếu!" });
     }
 
-    // 🚀 BƯỚC A: ĐỒNG BỘ NỘI BỘ DOCKER SANG PRODUCT-SERVICE QUA PORT 5002
-    const variantIds = danh_sach_san_pham.map(item => String(item.variant_id));
-    let internalProducts = [];
+    // 🌟 URL GỌI NỘI BỘ DOCKER SANG PRODUCT SERVICE
+    const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
 
-    try {
-      const productServiceRes = await axios.post('http://localhost:5002/api/products/internal/variants', {
-        variant_ids: variantIds
-      });
-      if (productServiceRes.data && productServiceRes.data.success) {
-        internalProducts = productServiceRes.data.data;
-      }
-    } catch (apiError) {
-      console.warn("⚠️ Cảnh báo API kết nối Product-Service thất bại, kích hoạt cơ chế Fallback dữ liệu dự phòng:", apiError.message);
+    // 🚀 BƯỚC A: CHUẨN HÓA MẢNG SẢN PHẨM 
+    const normalizedItems = danh_sach_san_pham.map(item => ({
+      variant_id: String(item.variant_id || item.variantId),
+      quantity: Number(item.quantity || 1),
+      price: Number(item.price || 0), 
+      product_name: item.name || item.product_name || "Sản phẩm Demi Mart",
+      variant_name: item.variantName || item.variant_name || "Mặc định",
+      image_url: item.image || item.image_url || "",
+      ma_san_pham: item.productId || item.ma_san_pham || null,
+      sku: item.sku || null
+    })).filter(i => i.variant_id && i.quantity > 0);
+
+    if (normalizedItems.length === 0) {
+        return res.status(400).json({ success: false, message: "Giỏ hàng rỗng hoặc sản phẩm không hợp lệ!" });
     }
 
-    // 🚀 BƯỚC B: CHỐT CHI PHÍ GIAO HÀNG NỘI BỘ TỪ FRONTEND (ĐÃ XÓA SỔ GHN CẢN ĐƯỜNG)
+    // 🚀 BƯỚC B: GỌI SANG PRODUCT SERVICE ĐỂ KHÓA VÀ TRỪ KHO
+    try {
+      await axios.post(`${productServiceUrl}/api/products/internal/deduct-stock`, {
+        items: normalizedItems
+      });
+      console.log("✅ Đã gọi sang Product Service trừ kho thành công!");
+    } catch (apiError) {
+      console.error("❌ Lỗi trừ kho từ Product Service:", apiError.response?.data?.message || apiError.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: apiError.response?.data?.message || "Sản phẩm trong giỏ hàng đã hết hoặc không đủ số lượng!" 
+      });
+    }
+
+    // 🚀 BƯỚC C: CHỐT CHI PHÍ GIAO HÀNG
     const clientShippingFee = Number(req.body.phi_van_chuyen);
     const validShippingCost = (!isNaN(clientShippingFee) && clientShippingFee >= 0) ? clientShippingFee : 25000;
 
@@ -120,22 +138,6 @@ const placeOrder = async (req, res) => {
       finalTotal = 50000; 
     }
     req.body.tong_thanh_toan = finalTotal;
-
-    // 🚀 BƯỚC C: PHI CHUẨN HÓA MẢNG SẢN PHẨM AN TOÀN
-    const normalizedItems = danh_sach_san_pham.map(item => {
-      const detail = internalProducts.find(p => String(p.variant_id) === String(item.variant_id));
-      
-      return {
-        variant_id: String(item.variant_id),
-        quantity: Number(item.quantity),
-        price: detail ? Number(detail.price) : Number(item.price || 0), 
-        product_name: detail ? detail.product_name : (item.name || "Sản phẩm cấp lập Demi Mart"),
-        variant_name: detail ? detail.variant_name : "Mặc định",
-        image_url: detail ? detail.image_url : (item.image || ""),
-        ma_san_pham: detail ? detail.ma_san_pham : (item.ma_san_pham || null),
-        sku: detail ? detail.sku : (item.sku || null)
-      };
-    });
 
     const normalizedOrder = {
         ...req.body,
@@ -149,12 +151,12 @@ const placeOrder = async (req, res) => {
         thoi_gian_du_kien_phut: req.body.thoi_gian_du_kien_phut || 0
     };
 
-    // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU ĐỘC LẬP CỦA ORDER SERVICE
+    // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công tại Order-Service với ID:", order.id);
 
     // ========================================================
-    // 🌟 🚀 CƠ CHẾ SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD & CÙNG TÊN CỘT)
+    // 🌟 🚀 CƠ CHẾ SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD)
     // ========================================================
     const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
     
@@ -237,7 +239,6 @@ const getOrderStatistics = async (req, res) => {
       return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập dữ liệu thống kê!" });
     }
 
-    // 🛠️ ĐÃ FIX: Chuyển toàn bộ tên cột 'status' -> 'trang_thai_don_hang', 'created_at' -> 'ngay_tao' để khớp Database
     const queryTotal = `SELECT COUNT(*) as total FROM public.orders`;
     const queryDelivered = `SELECT COUNT(*) as delivered FROM public.orders WHERE trang_thai_don_hang = 'Đã giao' OR trang_thai_thanh_toan = 'COMPLETED'`;
     const queryPending = `SELECT COUNT(*) as pending FROM public.orders WHERE trang_thai_don_hang = 'Chờ xử lý' OR trang_thai_don_hang IS NULL`;
@@ -258,13 +259,8 @@ const getOrderStatistics = async (req, res) => {
     };
 
     const [totRes, delRes, penRes, todRes, revRes, avgRes, recRes] = await Promise.all([
-      executeSql(queryTotal),
-      executeSql(queryDelivered),
-      executeSql(queryPending),
-      executeSql(queryToday),
-      executeSql(queryRevenue),
-      executeSql(queryAvg),
-      executeSql(queryRecent)
+      executeSql(queryTotal), executeSql(queryDelivered), executeSql(queryPending),
+      executeSql(queryToday), executeSql(queryRevenue), executeSql(queryAvg), executeSql(queryRecent)
     ]);
 
     const totalOrders = Number(totRes[0]?.total || 0);
@@ -407,7 +403,6 @@ const getOrderDetailAdmin = async (req, res) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
     }
 
-    // 2. Lấy danh sách sản phẩm thuộc đơn hàng này từ bảng order_items
     const itemsSql = `
       SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku
       FROM public.order_items
@@ -417,9 +412,6 @@ const getOrderDetailAdmin = async (req, res) => {
     const items = itemsResult.rows ? itemsResult.rows : itemsResult;
     order.danh_sach_san_pham = items;
 
-    // ============================================================================
-    // 🚀 NEW: GỌI SANG AUTH-SERVICE ĐỂ LẤY THÔNG TIN USER THỰC TẾ QUA DOCKER
-    // ============================================================================
     order.user_info = {
       full_name: "Khách mua hàng (Ẩn danh)",
       phone_number: "Chưa cập nhật SĐT",
@@ -429,17 +421,13 @@ const getOrderDetailAdmin = async (req, res) => {
     if (order.user_id) {
       try {
         const authResponse = await axios.get(`http://demi_auth_service:5001/api/auth/internal/users/${order.user_id}`);
-        
-        // Sửa ở đây: Vì Auth-Service trả về trực tiếp Object User chứ không qua bọc .success hay .data
         if (authResponse.data && (authResponse.data.user_id || authResponse.data.email)) {
           order.user_info = authResponse.data; 
-          console.log(`✅ [AUTH SYNC SUCCESS]: Đã đồng bộ thành công user ${order.user_id} vào hóa đơn!`);
         }
       } catch (authErr) {
-        console.warn(`⚠️ [AUTH SYNC WARNING]: Không thể lấy thông tin khách hàng từ Auth-Service cho user_id ${order.user_id}:`, authErr.message);
+        console.warn(`⚠️ [AUTH SYNC WARNING]: Không thể lấy thông tin khách hàng từ Auth-Service cho user_id ${order.user_id}`);
       }
     }
-    // ============================================================================
 
     return res.status(200).json({
       success: true,
@@ -451,4 +439,65 @@ const getOrderDetailAdmin = async (req, res) => {
     return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải chi tiết mặt hàng." });
   }
 };
-export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders, getOrderDetailAdmin };
+
+// =========================================================================
+// 🚀 API MỚI: HỦY ĐƠN HÀNG VÀ HOÀN LẠI KHO (CỘNG KHO SẢN PHẨM)
+// =========================================================================
+const cancelOrder = async (req, res) => {
+    try {
+        const { ma_don_hang } = req.params;
+
+        if (!ma_don_hang) {
+            return res.status(400).json({ success: false, message: "Thiếu mã đơn hàng cần hủy." });
+        }
+
+        // 1. Kiểm tra đơn hàng
+        const checkOrderQuery = `SELECT id, trang_thai_don_hang, user_id FROM public.orders WHERE ma_don_hang = $1`;
+        const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
+        const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
+
+        if (!orderInfo) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
+        }
+
+        // 2. Cấm hủy nếu đơn đã đi giao
+        if (orderInfo.trang_thai_don_hang !== 'Chờ xử lý' && orderInfo.trang_thai_don_hang !== 'pending') {
+            return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang chờ xử lý." });
+        }
+
+        // 3. Lấy sản phẩm để hoàn kho
+        const itemsQuery = `SELECT variant_id, quantity FROM public.order_items WHERE order_id = $1`;
+        const itemsRes = db.query ? await db.query(itemsQuery, [orderInfo.id]) : await db.execute(itemsQuery, [orderInfo.id]);
+        const orderItems = itemsRes.rows ? itemsRes.rows : itemsRes;
+
+        if (orderItems.length > 0) {
+            // GỌI SANG PRODUCT-SERVICE ĐỂ HOÀN LẠI KHO
+            const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
+            try {
+                await axios.post(`${productServiceUrl}/api/products/internal/restore-stock`, {
+                    items: orderItems
+                });
+                console.log(`✅ Đã hoàn kho thành công cho đơn hàng ${ma_don_hang}`);
+            } catch (apiError) {
+                console.error("❌ Lỗi khi hoàn kho qua Product Service:", apiError.message);
+                return res.status(500).json({ success: false, message: "Lỗi hệ thống: Không thể kết nối để hoàn kho." });
+            }
+        }
+
+        // 4. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG THÀNH "ĐÃ HỦY"
+        const updateQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Đã hủy' WHERE ma_don_hang = $1`;
+        if (db.query) {
+            await db.query(updateQuery, [ma_don_hang]);
+        } else {
+            await db.execute(updateQuery, [ma_don_hang]);
+        }
+
+        return res.status(200).json({ success: true, message: "Hủy đơn hàng thành công, số lượng đã được hoàn lại kho." });
+
+    } catch (err) {
+        console.error("🔥 Lỗi hủy đơn hàng:", err.message);
+        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi hủy đơn hàng." });
+    }
+};
+
+export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders, getOrderDetailAdmin, cancelOrder };

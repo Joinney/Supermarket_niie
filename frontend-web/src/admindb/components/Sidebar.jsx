@@ -216,7 +216,7 @@ export default function Sidebar() {
         <div
           className={`h-20 flex items-center ${isCollapsed ? "justify-center px-2" : "justify-between px-6"} gap-3 shrink-0 relative`}
         >
-          <Link
+          <Link 
             to="/"
             className="transition-transform active:scale-95 flex-shrink-0 block"
           >
