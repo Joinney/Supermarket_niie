@@ -250,17 +250,44 @@ export default function TaoPhieuNhapForm() {
 
   const { itemsWithTotals, grandTotal } = calculateTotals();
 
-  const handleConfirmSubmit = async (e) => {
+const handleConfirmSubmit = async (e) => {
     e.preventDefault();
     if (selectedProducts.length === 0) return showNotification("Phiếu chưa có sản phẩm!", "error");
     if (selectedProducts.some(item => !item.selectedLotId)) return showNotification("Vui lòng điền đủ Số Lô & HSD!", "error");
 
     setSubmitting(true);
     try {
+      // 🌟 LẤY THÔNG TIN USER ĐĂNG NHẬP THỰC TẾ TỪ ADMININFO
+      // Tìm đoạn const savedAdminStr = localStorage.getItem("adminInfo"); bên trong handleConfirmSubmit và sửa thành:
+const savedAdminStr = localStorage.getItem("adminInfo");
+let currentUserId = 1; 
+let currentFullName = "Hệ thống kho";
+
+if (savedAdminStr) {
+  try {
+    const parsedAdmin = JSON.parse(savedAdminStr);
+    currentUserId = parsedAdmin.id || parsedAdmin.user_id || 1;
+    
+    // Lấy thông tin full_name và role (ví dụ: user.role lưu từ AdminLogin)
+    const fullName = parsedAdmin.full_name || parsedAdmin.fullName || parsedAdmin.username || "Hệ thống";
+    const role = parsedAdmin.role || localStorage.getItem("adminRole") || "Staff";
+    
+    // 🌟 ĐÓNG GÓI DẠNG: "Phan Minh Thuận (Admin)"
+    currentFullName = `${fullName} (${role})`;
+  } catch (parseErr) {
+    console.error("Lỗi parse thông tin adminInfo từ localStorage:", parseErr);
+  }
+}
+
       const payload = {
         warehouse_id: warehouse,
-        import_type: importType, // Gửi lên chuỗi viết hoa quy chuẩn ("NHAP")
+        import_type: importType, // "NHAP"
         note: note || "",
+        
+        // 🌟 BỔ SUNG: Truyền thông tin định danh động lên Server
+        user_id: parseInt(currentUserId, 10),
+        full_name: currentFullName,
+
         products: itemsWithTotals.map(item => {
           const lotObj = globalLots.find(l => l.id === item.selectedLotId);
           return {
