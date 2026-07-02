@@ -108,9 +108,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       }}
       className="flex-shrink-0 relative block"
     >
-      <div
-        className={`w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] transition-all duration-500 border border-transparent ${isOutOfStock ? "opacity-60 grayscale-[50%]" : "hover:shadow-2xl hover:shadow-slate-100 hover:border-slate-50"}`}
-      >
+      <div className="w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] transition-all duration-300 border border-transparent hover:shadow-2xl hover:shadow-slate-100 hover:border-slate-50">
         <div className="relative aspect-square bg-[#f8fafc] rounded-[24px] overflow-hidden mb-3 border border-slate-50 group-hover:border-[#e6f0ed] transition-all">
           <img
             src={mainImage}
@@ -122,13 +120,17 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             alt={p.ten_san_pham}
           />
 
-          {isOutOfStock ? (
-            <div className="absolute inset-0 bg-white/40 flex items-center justify-center backdrop-blur-[2px]">
-              <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-lg flex items-center gap-1">
-                <X size={12} strokeWidth={3} /> Tạm hết
-              </span>
+          {/* 🌟 NHÃN "TẠM HẾT HÀNG" ĐỎ NHẠT, KHÔNG LÀM MỜ CARD */}
+          {isOutOfStock && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
+              <div className="w-12 h-4 border-t border-r border-l border-slate-300 rounded-t-full mb-[-6px]"></div>
+              <div className="bg-red-50 text-red-500 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-red-200">
+                Tạm hết hàng
+              </div>
             </div>
-          ) : (
+          )}
+
+          {!isOutOfStock && (
             <button
               className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
               onClick={handleQuickAddCart}
@@ -140,13 +142,18 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
 
         <div className="space-y-1 px-1">
           <div className="flex items-baseline gap-2">
-            <span
-              className={`font-black text-lg leading-none ${isOutOfStock ? "text-slate-400" : "text-[#ff4d4f]"}`}
-            >
-              {formatPrice
-                ? formatPrice(currentPrice)
-                : `${currentPrice.toLocaleString()}đ`}
-            </span>
+            {/* 🌟 HIỂN THỊ "HẾT HÀNG" THAY VÌ GIÁ KHI KHO BẰNG 0 */}
+            {isOutOfStock ? (
+              <span className="font-bold text-[13px] text-slate-400 uppercase tracking-wide">
+                Hết hàng
+              </span>
+            ) : (
+              <span className="font-black text-lg leading-none text-[#ff4d4f]">
+                {formatPrice
+                  ? formatPrice(currentPrice)
+                  : `${currentPrice.toLocaleString()}đ`}
+              </span>
+            )}
           </div>
           <p className="text-[13px] text-[#161b22] leading-tight line-clamp-2 h-8 font-bold group-hover:text-[#006c49] transition-colors">
             {p.ten_san_pham}
@@ -160,7 +167,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             </span>
           </div>
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">
-            SỐ LƯỢNG: {stockCount}
+            TỒN KHO: {stockCount}
           </p>
         </div>
       </div>
