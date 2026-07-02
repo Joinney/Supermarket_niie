@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Plus,
@@ -14,6 +14,13 @@ import {
   Edit3,
   Image as ImageIcon,
   Upload,
+  Check,
+  AlertCircle,
+  HelpCircle,
+  Sparkles,
+  RefreshCw,
+  X,
+  Database
 } from "lucide-react";
 import axios from "axios";
 
@@ -28,12 +35,34 @@ const getBaseId = (fullId) => {
       : "NEW";
 };
 
-export default function AdminCreateVariant() {
-  const { id, variantId } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const fileInputRef = useRef(null);
+// Component Wrapper an toàn đề phòng môi trường chạy thử thiếu React Router Context
+function SafeApp() {
+  let params = {};
+  let navigate = () => {};
+  let location = { state: null };
 
+  try {
+    params = useParams();
+    navigate = useNavigate();
+    location = useLocation();
+  } catch (e) {
+    console.warn("Router context not found, running on preview safe-mode");
+  }
+
+  const id = params.id || "MSP893020726001";
+  const variantId = params.variantId || null;
+
+  const fileInputRef = useRef(null);
+  const unitRef = useRef(null);
+
+  // --- TRẠNG THÁI THÔNG BÁO CAO CẤP CHUYÊN BIỆT (TOASTS) ---
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // --- HỆ THỐNG STATE QUẢN LÝ SẢN PHẨM CHA & BIẾN THỂ ---
   const [parentProductImage, setParentProductImage] = useState("");
   const [productMedia, setProductMedia] = useState([]);
   const [units, setUnits] = useState([]);
@@ -46,13 +75,14 @@ export default function AdminCreateVariant() {
     location.state?.targetVariantType === "GROUP",
   );
 
+  // --- CÁC TRẠNG THÁI MODAL & DROPDOWN ---
   const [isUnitOpen, setIsUnitOpen] = useState(false);
-  const unitRef = useRef(null);
   const [isAddUnitModalOpen, setIsAddUnitModalOpen] = useState(false);
   const [newUnitName, setNewUnitName] = useState("");
   const [newUnitDesc, setNewUnitDesc] = useState("");
   const [isSubmittingUnit, setIsSubmittingUnit] = useState(false);
 
+  // --- TRẠNG THÁI BIÊN TẬP FORM HIỆN TẠI ---
   const [sku, setEditSku] = useState("");
   const [price, setEditPrice] = useState(0);
   const [stock, setEditStock] = useState(0);
@@ -62,6 +92,7 @@ export default function AdminCreateVariant() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // --- TRẠNG THÁI MA TRẬN THUỘC TÍNH SẢN PHẨM ---
   const [existingVariants, setExistingVariants] = useState([]);
   const [showSimpleModal, setShowSimpleModal] = useState(false);
   const [simpleForm, setSimpleForm] = useState({
@@ -145,6 +176,7 @@ export default function AdminCreateVariant() {
       }));
       setAvailableAttributes(updatedAttributes);
     }
+    showToast(`Đã chọn cấu hình phiên bản: ${v.sku}`, "info");
   };
 
   const matchedVariant = useMemo(() => {
@@ -239,7 +271,8 @@ export default function AdminCreateVariant() {
           setGlobalAttributes(names);
         }
       } catch (err) {
-        console.error("Lỗi đồng bộ dữ liệu:", err);
+        console.error("Lỗi đồng bộ dữ liệu hệ thống:", err);
+        showToast("Lỗi liên kết tới dịch vụ sản phẩm", "error");
       } finally {
         setLoading(false);
       }
@@ -269,6 +302,7 @@ export default function AdminCreateVariant() {
       } else if (!isVariantMode && !activeVariantId) {
         const safeSku = await fetchSafeSkuFromDB(false, [], productCountry);
         setEditSku(safeSku);
+        setEditVariantName(productName);
       }
     };
 
@@ -292,8 +326,9 @@ export default function AdminCreateVariant() {
   }, []);
 
   const handleSaveSimpleVariant = async () => {
-    if (!simpleForm.ten_bien_the || !simpleForm.sku)
-      return alert("Vui lòng điền tên và mã SKU!");
+    if (!simpleForm.ten_bien_the || !simpleForm.sku) {
+      return showToast("Vui lòng điền tên và mã SKU khởi tạo!", "error");
+    }
 
     try {
       const apiUrl =
@@ -318,11 +353,9 @@ export default function AdminCreateVariant() {
         so_luong_ton: 0,
         ten_don_vi: "Chai",
       });
-      alert(
-        "✅ Khởi tạo vỏ biến thể thành công! Bạn có thể cập nhật chi tiết giá và số lượng ngay bây giờ.",
-      );
+      showToast("Khởi tạo vỏ biến thể thành công! Có thể cập nhật thông số ngay.", "success");
     } catch (err) {
-      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
+      showToast(err.response?.data?.message || err.message, "error");
     }
   };
 
@@ -341,7 +374,7 @@ export default function AdminCreateVariant() {
     const updated = availableAttributes.map((attr) => {
       if (attr.id === attrId) {
         if (attr.values.includes(valueText)) {
-          alert("Giá trị này đã tồn tại trong ma trận sản phẩm!");
+          showToast("Giá trị thuộc tính này đã tồn tại trên ma trận!", "warning");
           return attr;
         }
         return {
@@ -369,9 +402,7 @@ export default function AdminCreateVariant() {
         (a) => a.name.toLowerCase() === finalName.toLowerCase(),
       )
     ) {
-      return alert(
-        "Nhóm thuộc tính này đã tồn tại trên ma trận liên kết của sản phẩm!",
-      );
+      return showToast("Nhóm thuộc tính này đã tồn tại trên sản phẩm!", "warning");
     }
 
     const isExistingGlobal = globalAttributes.some(
@@ -408,11 +439,10 @@ export default function AdminCreateVariant() {
           setGlobalAttributes((prev) => [...prev, newGroup.name]);
           setNewAttrName("");
           setShowDropdown(false);
+          showToast(`Đã thêm mới nhóm thuộc tính [${finalName}] vào DB`, "success");
         }
       } catch (err) {
-        alert(
-          "Gặp sự cố khi lưu nhóm thuộc tính mới xuống DB. Vui lòng thử lại!",
-        );
+        showToast("Gặp sự cố khi lưu nhóm thuộc tính mới xuống DB", "error");
       }
     }
   };
@@ -452,7 +482,7 @@ export default function AdminCreateVariant() {
       if (variant.thuoc_tinh) {
         Object.entries(variant.thuoc_tinh).forEach(([key, val]) => {
           if (!map[key]) map[key] = new Set();
-          map[key].add(val);
+          if (val) map[key].add(val);
         });
       }
     });
@@ -480,8 +510,9 @@ export default function AdminCreateVariant() {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/"))
-      return alert("Vui lòng chọn tệp tin hình ảnh hợp lệ!");
+    if (!file.type.startsWith("image/")) {
+      return showToast("Vui lòng chọn tệp tin hình ảnh hợp lệ!", "warning");
+    }
 
     setUploadingImage(true);
     const formData = new FormData();
@@ -497,9 +528,10 @@ export default function AdminCreateVariant() {
       );
       if (response.data && response.data.url) {
         setVariantImageUrl(response.data.url);
+        showToast("Tải ảnh biến thể lên máy chủ thành công!", "success");
       }
     } catch (err) {
-      alert("Gặp sự cố khi upload ảnh lên Cloudinary!");
+      showToast("Gặp sự cố khi upload ảnh lên Cloudinary", "error");
     } finally {
       setUploadingImage(false);
     }
@@ -510,9 +542,7 @@ export default function AdminCreateVariant() {
       availableAttributes.length === 0 ||
       availableAttributes.some((a) => a.values.length === 0)
     ) {
-      return alert(
-        "Vui lòng khởi tạo nhóm thuộc tính và giá trị trước khi tìm tổ hợp thiếu!",
-      );
+      return showToast("Hãy khởi tạo nhóm thuộc tính và nhãn giá trị trước!", "warning");
     }
 
     const keys = availableAttributes.map((a) => a.name);
@@ -554,14 +584,12 @@ export default function AdminCreateVariant() {
       }));
       setAvailableAttributes(updated);
       setActiveVariantId(null);
+      showToast("Đã đề xuất một tổ hợp biến thể trống chưa cấu hình!", "info");
     } else {
-      alert(
-        "✨ Tuyệt vời! Bạn đã bao phủ ĐẦY ĐỦ tất cả các tổ hợp biến thể của sản phẩm này.",
-      );
+      showToast("✨ Bạn đã thiết lập bao phủ đầy đủ toàn bộ ma trận biến thể!", "success");
     }
   };
 
-  // 🌟 ĐÃ THÊM ASYNC / AWAIT ĐỂ LẤY MÃ SKU TỪ DATABASE CHO POPUP ĐƠN
   const openSimpleModal = async () => {
     const safeSku = await fetchSafeSkuFromDB(false, [], productCountry);
     setSimpleForm({
@@ -593,6 +621,7 @@ export default function AdminCreateVariant() {
       selected: "",
     }));
     setAvailableAttributes(clearedAttrs);
+    showToast("Đã dọn dẹp form để sẵn sàng thêm phiên bản mới", "info");
   };
 
   const handleToggleMode = async (isSwitchingToGroup) => {
@@ -620,8 +649,9 @@ export default function AdminCreateVariant() {
             setVariantImageUrl(parentProductImage);
             setEditVariantName("");
             setActiveVariantId(null);
+            showToast("Đã dọn dẹp & hoàn trả về cấu hình Biến thể Đơn", "success");
           } catch (err) {
-            alert("Lỗi khi chuyển đổi chế độ!");
+            showToast("Lỗi khi chuyển đổi chế độ đơn", "error");
           }
         }
       } else {
@@ -645,7 +675,7 @@ export default function AdminCreateVariant() {
   };
 
   const handleAddNewUnitSubmit = async () => {
-    if (!newUnitName.trim()) return alert("Vui lòng nhập tên đơn vị!");
+    if (!newUnitName.trim()) return showToast("Vui lòng nhập tên đơn vị tính!", "warning");
     setIsSubmittingUnit(true);
     try {
       const apiUrl =
@@ -660,9 +690,10 @@ export default function AdminCreateVariant() {
         setIsAddUnitModalOpen(false);
         setNewUnitName("");
         setNewUnitDesc("");
+        showToast("Thêm đơn vị mới thành công", "success");
       }
     } catch (err) {
-      alert("Lỗi hệ thống khi thêm đơn vị!");
+      showToast("Lỗi hệ thống khi thêm đơn vị tính mới", "error");
     } finally {
       setIsSubmittingUnit(false);
     }
@@ -670,16 +701,17 @@ export default function AdminCreateVariant() {
 
   const handleSaveVariant = async (e) => {
     e.preventDefault();
-    if (!sku.trim()) return alert("Vui lòng điền mã định danh SKU!");
-    if (price < 0) return alert("Giá niêm yết không hợp lệ!");
+    if (!sku.trim()) return showToast("Vui lòng điền mã định danh SKU!", "warning");
+    if (price < 0) return showToast("Giá niêm yết không hợp lệ!", "warning");
 
     if (isVariantMode) {
       if (
         availableAttributes.length === 0 ||
         !availableAttributes.some((a) => a.selected)
       ) {
-        return alert(
-          "🛑 LỖI MA TRẬN: Vui lòng tạo ít nhất 1 nhóm thuộc tính (Ví dụ: Màu Sắc - Đỏ) trước khi bấm Lưu phiên bản!",
+        return showToast(
+          "🛑 Vui lòng tạo ít nhất 1 nhóm thuộc tính (Ví dụ: Màu Sắc - Đỏ)!",
+          "error",
         );
       }
       const missingSelections = availableAttributes.filter(
@@ -687,8 +719,9 @@ export default function AdminCreateVariant() {
       );
       if (missingSelections.length > 0) {
         const missingNames = missingSelections.map((a) => a.name).join(", ");
-        return alert(
-          `🛑 LỖI MA TRẬN: Bạn chưa chọn giá trị cho thuộc tính [${missingNames}]. Vui lòng chọn!`,
+        return showToast(
+          `🛑 Chưa chọn nhãn giá trị cho nhóm thuộc tính: [${missingNames}]`,
+          "error",
         );
       }
     }
@@ -728,7 +761,7 @@ export default function AdminCreateVariant() {
           `${apiUrl}/api/products/variants/${matchedVariant.ma_bien_the}`,
           payload,
         );
-        alert(`💾 Đã cập nhật thành công biến thể [${matchedVariant.sku}]`);
+        showToast(`💾 Đã lưu & đồng bộ thành công biến thể [${matchedVariant.sku}]`, "success");
 
         setExistingVariants((prev) =>
           prev.map((v) =>
@@ -742,7 +775,7 @@ export default function AdminCreateVariant() {
           `${apiUrl}/api/products/${id}/variants`,
           payload,
         );
-        alert("🎉 Đã khởi tạo biến thể mới thành công vào Database!");
+        showToast("🎉 Đã khởi tạo biến thể mới vào cơ sở dữ liệu!", "success");
         const newVariantData = {
           ...res.data.data,
           thuoc_tinh: filterAttributesPayload,
@@ -752,7 +785,7 @@ export default function AdminCreateVariant() {
       }
     } catch (err) {
       console.error("Lỗi xử lý lưu dữ liệu biến thể:", err);
-      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
+      showToast(err.response?.data?.message || err.message, "error");
     } finally {
       setSaving(false);
     }
@@ -761,9 +794,9 @@ export default function AdminCreateVariant() {
   if (loading) {
     return (
       <div className="flex-1 bg-[#f8f9fa] min-h-screen flex items-center justify-center font-sans">
-        <div className="flex items-center gap-2 text-[#006c49] font-bold text-sm animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang
-          tải cấu trúc dữ liệu...
+        <div className="flex items-center gap-3 text-[#006c49] font-black text-sm animate-pulse">
+          <Database size={20} className="animate-spin text-[#006c49]" />
+          <span>Đang truy xuất cấu trúc dữ liệu sản phẩm Cozy...</span>
         </div>
       </div>
     );
@@ -774,24 +807,56 @@ export default function AdminCreateVariant() {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="flex-1 bg-[#f8f9fa] min-h-screen p-6 md:p-8 font-sans text-left relative"
+      className="flex-1 bg-[#f8f9fa] min-h-screen p-4 md:p-8 font-sans text-left relative"
     >
-      <div className="flex items-center justify-between pb-6 border-b border-gray-200 mb-6">
+      
+      {/* SYSTEM TOAST NOTIFICATION */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className={`fixed top-6 right-6 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl text-white font-bold text-xs ${
+              toast.type === "error"
+                ? "bg-rose-600"
+                : toast.type === "warning"
+                  ? "bg-amber-500 text-slate-900"
+                  : toast.type === "info"
+                    ? "bg-[#006c49]"
+                    : "bg-[#006c49]"
+            }`}
+          >
+            {toast.type === "error" ? (
+              <AlertCircle size={16} />
+            ) : (
+              <Check size={16} />
+            )}
+            <span>{toast.message}</span>
+            <button onClick={() => setToast(null)} className="p-0.5 hover:bg-white/20 rounded-full transition-colors">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* HEADER SECTION */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-200 mb-6 gap-4">
         <div className="flex items-center gap-4">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-slate-600 hover:bg-[#006c49] hover:text-white transition shadow-sm shrink-0"
+            className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-slate-600 hover:bg-[#006c49] hover:text-white hover:border-[#006c49] transition shadow-sm shrink-0"
           >
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {matchedVariant ? "Cập nhật phiên bản (SKU)" : "Tạo biến thể mới"}
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
+              {matchedVariant ? "Chỉnh sửa phiên bản SKU" : "Khởi tạo tổ hợp biến thể mới"}
             </h1>
             <p className="text-xs font-bold text-gray-400 mt-0.5">
-              Sản phẩm cha:{" "}
-              <span className="text-[#006c49]">{productName}</span>
+              Sản phẩm liên kết:{" "}
+              <span className="text-[#006c49] font-black">{productName || "Sản phẩm cha"}</span>
             </p>
           </div>
         </div>
@@ -800,564 +865,610 @@ export default function AdminCreateVariant() {
           <button
             type="button"
             onClick={handleResetToCreateNew}
-            className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition"
+            className="px-4 py-2 bg-slate-100 hover:bg-[#e6f0ed] text-slate-600 hover:text-[#006c49] rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center gap-1.5 border border-transparent hover:border-[#006c49]/30"
           >
-            + Chuyển sang Tạo Mới
+            <Plus size={14} /> + Chuyển sang Tạo Mới
           </button>
         )}
       </div>
 
-      <form
-        onSubmit={handleSaveVariant}
-        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-6xl"
-      >
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Tag size={16} className="text-amber-500" /> Bước 1: Phân loại
-              </h3>
+      <form onSubmit={handleSaveVariant} className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* ==========================================================
+              CỘT TRÁI (COL-SPAN-5): GOM CHUNG BƯỚC 1 & BƯỚC 3 THÀNH KHỐI
+             ========================================================== */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden divide-y divide-gray-100">
+              
+              {/* PHẦN TRÊN: BƯỚC 1: PHÂN LOẠI */}
+              <div className="p-6 space-y-5">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Tag size={16} className="text-[#006c49]" /> Bước 1: Phân loại
+                    </h3>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Xây dựng ma trận thuộc tính</p>
+                  </div>
 
-              {!isVariantMode && (
-                <button
-                  type="button"
-                  onClick={openSimpleModal}
-                  className="text-[10px] bg-sky-50 text-sky-700 font-black px-3 py-1.5 rounded-lg hover:bg-sky-100 transition"
-                >
-                  + Thêm vỏ biến thể đơn
-                </button>
-              )}
+                  <div className="flex items-center gap-2">
+                    {!isVariantMode && (
+                      <button
+                        type="button"
+                        onClick={openSimpleModal}
+                        className="text-[10px] bg-emerald-50 text-[#006c49] border border-emerald-150 font-black px-2.5 py-1.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
+                      >
+                        + Thêm vỏ đơn
+                      </button>
+                    )}
 
-              <select
-                value={isVariantMode ? "GROUP" : "SINGLE"}
-                onChange={(e) => handleToggleMode(e.target.value === "GROUP")}
-                className="bg-slate-50 border border-gray-200 text-[#006c49] font-bold text-[11px] px-3 py-1.5 rounded-lg outline-none cursor-pointer hover:border-[#006c49] transition-colors focus:bg-white"
-              >
-                <option value="SINGLE">Sản phẩm Đơn</option>
-                <option value="GROUP">Sản phẩm Nhóm</option>
-              </select>
-            </div>
+                    <select
+                      value={isVariantMode ? "GROUP" : "SINGLE"}
+                      onChange={(e) => handleToggleMode(e.target.value === "GROUP")}
+                      className="bg-slate-50 border border-gray-200 text-[#006c49] font-bold text-[11px] px-2.5 py-1.5 rounded-lg outline-none cursor-pointer hover:border-[#006c49] transition focus:bg-white focus:border-[#006c49]"
+                    >
+                      <option value="SINGLE">Sản phẩm Đơn</option>
+                      <option value="GROUP">Sản phẩm Nhóm</option>
+                    </select>
+                  </div>
+                </div>
 
-            {!isVariantMode ? (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                {existingVariants.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {existingVariants.map((v) => {
-                      const isSelected = activeVariantId === v.ma_bien_the;
-                      return (
-                        <div
-                          key={v.ma_bien_the}
-                          onClick={() => handleSelectExistingVariant(v)}
-                          className={`px-4 py-2 rounded-lg text-xs font-black cursor-pointer transition-all border ${
-                            isSelected
-                              ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
-                              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                          }`}
-                        >
-                          {v.ten_bien_the} {isSelected && "📍"}
-                        </div>
-                      );
-                    })}
+                {!isVariantMode ? (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    {existingVariants.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {existingVariants.map((v) => {
+                          const isSelected = activeVariantId === v.ma_bien_the;
+                          return (
+                            <div
+                              key={v.ma_bien_the}
+                              onClick={() => handleSelectExistingVariant(v)}
+                              className={`px-3 py-2 rounded-xl text-xs font-black cursor-pointer transition-all border ${
+                                isSelected
+                                  ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105"
+                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:border-[#006c49]/30"
+                              }`}
+                            >
+                              {v.ten_bien_the} {isSelected && "📍"}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-[#006c49] text-white px-4 py-2.5 rounded-xl text-xs font-black w-fit shadow-md">
+                        {variantName || productName || "Chưa đặt tên"}
+                      </div>
+                    )}
+                    {!sku && existingVariants.length === 0 && (
+                      <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-[11px] font-bold">
+                        Đang ở chế độ Biến thể Đơn. <br /> Nhấn nút{" "}
+                        <b className="text-[#006c49]">+ Thêm vỏ biến thể đơn</b> ở trên để tạo.
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="bg-[#006c49] text-white px-4 py-2.5 rounded-lg text-xs font-black w-fit shadow-md">
-                    {variantName || productName}
-                  </div>
-                )}
-                {!sku && existingVariants.length === 0 && (
-                  <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-gray-200 text-gray-400 text-[11px] font-bold">
-                    Đang ở chế độ Biến thể Đơn. <br /> Nhấn nút{" "}
-                    <b>+ Thêm vỏ biến thể đơn</b> ở trên để tạo.
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-5 animate-in fade-in duration-300">
-                {availableAttributes.map((attr) => (
-                  <div
-                    key={attr.id}
-                    className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3 relative group/box"
-                  >
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-black text-slate-900 uppercase tracking-wide">
-                        👑 Nhóm: {attr.name}
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttributeGroup(attr.id)}
-                        className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover/box:opacity-100"
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    {availableAttributes.map((attr) => (
+                      <div
+                        key={attr.id}
+                        className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3 relative group/box hover:border-[#006c49]/20 transition"
                       >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {attr.values?.map((val) => {
-                        const isSelected = attr.selected === val;
-                        const isGloballyUsed =
-                          usedAttributesMap[attr.name]?.has(val);
-                        const isComboValid = checkComboExists(attr.name, val);
-                        return (
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                            <Sparkles size={12} className="text-[#006c49]" /> Nhóm: {attr.name}
+                          </label>
                           <button
                             type="button"
-                            key={val}
-                            onClick={() => handleSelectAttribute(attr.id, val)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all border relative overflow-hidden ${isSelected ? "bg-[#006c49] text-white border-[#006c49] shadow-md scale-105" : isComboValid ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 shadow-sm" : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"}`}
+                            onClick={() => handleRemoveAttributeGroup(attr.id)}
+                            className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover/box:opacity-100 p-1"
                           >
-                            {val}
-                            {!isGloballyUsed && !isSelected && (
-                              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 border border-white"></span>
-                              </span>
-                            )}
+                            <Trash2 size={13} />
                           </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <input
-                        type="text"
-                        placeholder={`Thêm giá trị ${attr.name}...`}
-                        value={newValInputs[attr.id] || ""}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddNewValueToAttribute(attr.id);
-                          }
-                        }}
-                        onChange={(e) =>
-                          setNewValInputs({
-                            ...newValInputs,
-                            [attr.id]: e.target.value,
-                          })
-                        }
-                        className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] px-2.5 py-1 rounded-lg text-[11px] font-medium outline-none"
-                      />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {attr.values?.map((val) => {
+                            const isSelected = attr.selected === val;
+                            const isGloballyUsed =
+                              usedAttributesMap[attr.name]?.has(val);
+                            const isComboValid = checkComboExists(attr.name, val);
+                            return (
+                              <button
+                                type="button"
+                                key={val}
+                                onClick={() => handleSelectAttribute(attr.id, val)}
+                                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border relative overflow-hidden ${
+                                  isSelected
+                                    ? "bg-[#006c49] text-white border-[#006c49] shadow-sm scale-105"
+                                    : isComboValid
+                                      ? "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:border-[#006c49]/30 shadow-sm"
+                                      : "bg-slate-50 text-slate-400 border-dashed border-slate-300 opacity-60"
+                                }`}
+                              >
+                                {val}
+                                {!isGloballyUsed && !isSelected && (
+                                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#006c49]"></span>
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder={`Thêm giá trị cho ${attr.name}...`}
+                            value={newValInputs[attr.id] || ""}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddNewValueToAttribute(attr.id);
+                              }
+                            }}
+                            onChange={(e) =>
+                              setNewValInputs({
+                                ...newValInputs,
+                                [attr.id]: e.target.value,
+                              })
+                            }
+                            className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 px-2.5 py-1.5 rounded-xl text-[11px] font-medium outline-none transition shadow-inner focus:shadow-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddNewValueToAttribute(attr.id)}
+                            className="bg-slate-100 hover:bg-[#006c49] p-2 rounded-xl border border-gray-200 text-slate-600 hover:text-white transition"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {availableAttributes.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => handleAddNewValueToAttribute(attr.id)}
-                        className="bg-slate-100 hover:bg-[#006c49] p-1.5 rounded-lg border border-gray-200 text-slate-600 hover:text-white transition"
+                        onClick={handleSuggestMissingCombination}
+                        className="w-full bg-[#006c49]/5 border border-[#006c49]/15 text-[#006c49] hover:bg-[#006c49]/10 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition shadow-sm active:scale-[0.98]"
                       >
-                        <Plus size={14} />
+                        <Layers size={14} /> Gợi ý cấu hình còn thiếu
                       </button>
-                    </div>
-                  </div>
-                ))}
-                {availableAttributes.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleSuggestMissingCombination}
-                    className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition"
-                  >
-                    <Layers size={16} /> Gợi ý cấu hình còn thiếu
-                  </button>
-                )}
-                <div className="pt-4 border-t border-gray-100 space-y-2 relative">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
-                    Khởi tạo nhóm thuộc tính (Ví dụ: Màu sắc)
-                  </label>
-                  <div className="flex gap-2 relative">
-                    <div className="flex-1 relative">
-                      <input
-                        type="text"
-                        placeholder="Tìm hoặc nhập mới..."
-                        value={newAttrName}
-                        onFocus={() => setShowDropdown(true)}
-                        onBlur={() =>
-                          setTimeout(() => setShowDropdown(false), 200)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddOrCreateAttributeGroup();
-                          }
-                        }}
-                        onChange={(e) => setNewAttrName(e.target.value)}
-                        className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] px-3 py-2 rounded-xl text-xs font-bold outline-none"
-                      />
-                      {showDropdown && (
-                        <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 shadow-xl rounded-xl divide-y divide-gray-50 text-left">
-                          {filteredGlobalAttributes.length > 0 ? (
-                            filteredGlobalAttributes.map((name, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onMouseDown={() =>
-                                  handleAddOrCreateAttributeGroup(name)
-                                }
-                                className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[#006c49]/10 hover:text-[#006c49] transition text-left flex items-center justify-between"
-                              >
-                                <span>📦 {name}</span>
-                                <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded">
-                                  Có sẵn
-                                </span>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="p-3 text-[11px] text-gray-400 italic">
-                              Gõ enter để tạo mới nhóm thuộc tính.
+                    )}
+
+                    <div className="pt-4 border-t border-gray-100 space-y-2 relative">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                        Khởi tạo nhóm thuộc tính (Ví dụ: Dung tích, Vị...)
+                      </label>
+                      <div className="flex gap-2 relative">
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            placeholder="Tìm kiếm hoặc thêm mới..."
+                            value={newAttrName}
+                            onFocus={() => setShowDropdown(true)}
+                            onBlur={() =>
+                              setTimeout(() => setShowDropdown(false), 200)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddOrCreateAttributeGroup();
+                              }
+                            }}
+                            onChange={(e) => setNewAttrName(e.target.value)}
+                            className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 px-3 py-2 rounded-xl text-xs font-bold outline-none transition"
+                          />
+                          {showDropdown && (
+                            <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 shadow-xl rounded-xl divide-y divide-gray-50 text-left">
+                              {filteredGlobalAttributes.length > 0 ? (
+                                filteredGlobalAttributes.map((name, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onMouseDown={() =>
+                                      handleAddOrCreateAttributeGroup(name)
+                                    }
+                                    className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[#006c49]/10 hover:text-[#006c49] transition text-left flex items-center justify-between"
+                                  >
+                                    <span>📦 {name}</span>
+                                    <span className="text-[9px] bg-emerald-50 text-[#006c49] px-1.5 py-0.5 rounded font-black">
+                                      Có sẵn
+                                    </span>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="p-3 text-[11px] text-gray-400 italic">
+                                  Gõ enter để tạo mới nhóm thuộc tính.
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
+                        <button
+                          type="button"
+                          disabled={!newAttrName.trim() || isAlreadyInProductMatrix}
+                          onClick={() => handleAddOrCreateAttributeGroup()}
+                          className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 transition shrink-0 text-white shadow-sm ${
+                            isAlreadyInProductMatrix
+                              ? "bg-gray-300 cursor-not-allowed"
+                              : isExistingInGlobal
+                                ? "bg-amber-500 hover:bg-amber-600"
+                                : "bg-[#006c49] hover:bg-[#005137]"
+                          }`}
+                        >
+                          <Plus size={14} />
+                          {isExistingInGlobal ? "Chọn" : "Tạo mới"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* PHẦN DƯỚI: BƯỚC 3: HÌNH ẢNH RIÊNG */}
+              <div className="bg-slate-50/60 p-6 space-y-4">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <ImageIcon size={16} className="text-[#006c49]" /> Bước 3: Hình ảnh riêng (Không bắt buộc)
+                  </h3>
+                  <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Đặt hình ảnh đại diện đặc thù cho phiên bản SKU này</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                  <div className="md:col-span-4 flex justify-center">
+                    <div className="w-28 h-28 rounded-2xl border border-dashed border-slate-200 hover:border-[#006c49]/50 bg-white flex flex-col items-center justify-center overflow-hidden relative group/img shadow-sm transition">
+                      {variantImageUrl ? (
+                        <>
+                          <img
+                            src={variantImageUrl}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://placehold.co/400x400?text=Lỗi+Ảnh";
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVariantImageUrl("")}
+                            className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-[10px] font-black uppercase transition-all duration-150"
+                          >
+                            Gỡ bỏ ảnh
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 text-slate-400 p-3 text-center">
+                          <ImageIcon size={18} className="stroke-1.5 text-[#006c49]/60" />
+                          <span className="text-[9px] font-bold text-gray-400">Ảnh SP cha</span>
+                        </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      disabled={!newAttrName.trim() || isAlreadyInProductMatrix}
-                      onClick={() => handleAddOrCreateAttributeGroup()}
-                      className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 transition shrink-0 text-white ${isAlreadyInProductMatrix ? "bg-gray-300 cursor-not-allowed" : isExistingInGlobal ? "bg-amber-500 hover:bg-amber-600" : "bg-[#006c49] hover:bg-[#005137]"}`}
-                    >
-                      <Plus size={14} />
-                      {isExistingInGlobal ? "Chọn" : "Tạo mới"}
-                    </button>
                   </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="lg:col-span-7 space-y-6">
-          {matchedVariant && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-start gap-3 shadow-sm"
-            >
-              <Edit3 size={20} className="text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-black text-blue-900">
-                  Phiên bản này đã tồn tại!
-                </h4>
-                <p className="text-xs font-medium text-blue-700 mt-1">
-                  Hệ thống đang ở chế độ <b>Cập nhật (Update)</b>. Các thay đổi
-                  của bạn sẽ ghi đè lên SKU hiện tại.
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          <div
-            className={`bg-white rounded-3xl border p-6 shadow-sm space-y-5 transition-colors ${matchedVariant ? "border-blue-200" : "border-gray-200/80"}`}
-          >
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <Layers
-                size={16}
-                className={matchedVariant ? "text-blue-600" : "text-[#006c49]"}
-              />{" "}
-              Bước 2: Thông số thương mại của phiên bản
-            </h3>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black text-gray-400 uppercase">
-                  Tên hiển thị (Tự động Gợi ý)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={variantName}
-                  onChange={(e) => setEditVariantName(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] font-bold text-slate-800 outline-none p-3 rounded-xl text-xs transition"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-400 uppercase flex items-center gap-1">
-                    <FileText size={12} /> Mã định danh SKU
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: SKU-NEW"
-                    value={sku}
-                    onChange={(e) => setEditSku(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-amber-500 font-mono font-black text-amber-800 uppercase outline-none p-3 rounded-xl text-xs transition"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-400 uppercase flex items-center gap-1">
-                    <DollarSign size={12} /> Giá bán lẻ định biên (đ)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={price}
-                    onChange={(e) => setEditPrice(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] font-mono font-black text-slate-900 outline-none p-3 rounded-xl text-xs transition"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-400 uppercase flex items-center gap-1">
-                    <Package size={12} /> Số lượng tồn kho
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={stock}
-                    readOnly
-                    className="w-full bg-slate-100 border border-gray-200 font-mono font-black text-slate-400 outline-none p-3 rounded-xl text-xs cursor-not-allowed"
-                    onChange={(e) => setEditStock(Number(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-1.5 relative" ref={unitRef}>
-                  <label className="text-[11px] font-black text-gray-400 uppercase">
-                    Đơn vị
-                  </label>
-                  <div
-                    onClick={() => setIsUnitOpen(!isUnitOpen)}
-                    className="w-full bg-slate-50 border border-gray-200 hover:border-[#006c49] font-bold text-slate-800 p-3 rounded-xl text-xs transition cursor-pointer flex justify-between items-center"
-                  >
-                    <span>{unit || "Chọn đơn vị"}</span>
-                    <span
-                      className={`text-slate-400 transition-transform duration-200 ${isUnitOpen ? "rotate-180" : ""}`}
-                    >
-                      ▼
-                    </span>
-                  </div>
-                  {isUnitOpen && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-                      <div className="max-h-[160px] overflow-y-auto custom-scrollbar p-1">
-                        {units.length > 0 ? (
-                          units.map((u) => (
-                            <div
-                              key={u.id || u.ma_don_vi || u.ten_don_vi}
-                              onClick={() => {
-                                setEditUnit(u.ten_don_vi);
-                                setIsUnitOpen(false);
-                              }}
-                              className={`px-3 py-2 text-xs font-bold rounded-lg cursor-pointer transition ${unit === u.ten_don_vi ? "bg-[#e6f0ed] text-[#006c49]" : "text-slate-600 hover:bg-slate-50"}`}
-                            >
-                              {u.ten_don_vi}
-                            </div>
-                          ))
-                        ) : (
-                          <div
-                            onClick={() => {
-                              setEditUnit("Chai");
-                              setIsUnitOpen(false);
-                            }}
-                            className="px-3 py-2 text-xs font-bold rounded-lg cursor-pointer text-slate-600 hover:bg-slate-50"
-                          >
-                            Chai lẻ
-                          </div>
-                        )}
-                      </div>
-                      <div className="border-t border-gray-100 p-1">
-                        <div
-                          onClick={() => {
-                            setIsUnitOpen(false);
-                            setIsAddUnitModalOpen(true);
-                          }}
-                          className="px-3 py-2 text-xs font-black text-[#006c49] bg-emerald-50 rounded-lg cursor-pointer hover:bg-emerald-100 transition flex items-center gap-1.5"
-                        >
-                          <Plus size={14} /> Bổ sung đơn vị mới...
-                        </div>
-                      </div>
+                  <div className="md:col-span-8 space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase">
+                        Đường dẫn liên kết (Image URL)
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="Nhập hoặc dán địa chỉ link ảnh..."
+                        value={variantImageUrl}
+                        onChange={(e) => setVariantImageUrl(e.target.value)}
+                        className="w-full bg-white border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 outline-none p-2.5 rounded-xl text-xs font-semibold transition shadow-sm"
+                      />
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-100 pb-3">
-              <ImageIcon size={16} className="text-[#006c49]" /> Bước 3: Hình
-              ảnh riêng (Không bắt buộc)
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-              <div className="md:col-span-4 flex justify-center">
-                <div className="w-32 h-32 rounded-2xl border border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center overflow-hidden relative group/img shadow-inner">
-                  {variantImageUrl ? (
-                    <>
-                      <img
-                        src={variantImageUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src =
-                            "https://placehold.co/400x400?text=Lỗi+Ảnh";
-                        }}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleLocalImageUpload}
+                        accept="image/*"
+                        className="hidden"
                       />
                       <button
                         type="button"
-                        onClick={() => setVariantImageUrl("")}
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-[10px] font-black uppercase transition-all duration-150"
+                        disabled={uploadingImage}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-white hover:bg-[#006c49]/5 border border-gray-200 hover:border-[#006c49]/30 text-slate-700 hover:text-[#006c49] px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm"
                       >
-                        Gỡ bỏ ảnh
+                        <Upload size={13} className="text-[#006c49]" />{" "}
+                        {uploadingImage ? "Đang tải lên..." : "Tải lên tệp ảnh"}
                       </button>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1.5 text-slate-400 p-3 text-center">
-                      <ImageIcon size={20} className="stroke-1.5" />
-                      <span className="text-[10px] font-bold">Chưa có ảnh</span>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
-              <div className="md:col-span-8 space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-gray-400 uppercase">
-                    Đường dẫn liên kết (Image URL)
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="Dán link ảnh từ hệ thống..."
-                    value={variantImageUrl}
-                    onChange={(e) => setVariantImageUrl(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] outline-none p-3 rounded-xl text-xs font-medium transition"
-                  />
+
+            </div>
+          </div>
+
+          {/* ==========================================================
+              CỘT PHẢI (COL-SPAN-7): PHÂN BỔ NGANG BƯỚC 2 & BẢNG ĐỐI CHIẾU
+             ========================================================== */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {matchedVariant && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-[#006c49]/5 border border-[#006c49]/20 p-4 rounded-2xl flex items-start gap-3 shadow-sm"
+              >
+                <Edit3 size={18} className="text-[#006c49] shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-black text-[#006c49] uppercase tracking-wide">
+                    Hệ thống đang ở chế độ Cập nhật
+                  </h4>
+                  <p className="text-[11px] font-semibold text-[#006c49]/90 mt-1">
+                    Các thay đổi của bạn sẽ cập nhật & ghi đè trực tiếp lên SKU [<b>{matchedVariant.sku}</b>] này.
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleLocalImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
+              </motion.div>
+            )}
+
+            {/* Bố cục chia đôi song song: Cấu hình chỉ số & Bảng đối soát */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+              
+              {/* PHÂN KHU 2A: THÔNG SỐ THƯƠNG MẠI */}
+              <div
+                className={`bg-white rounded-3xl border p-5 shadow-sm space-y-5 flex flex-col justify-between transition-colors ${
+                  matchedVariant ? "border-[#006c49]/40" : "border-gray-200/80"
+                }`}
+              >
+                <div className="space-y-4">
+                  <div className="border-b border-gray-100 pb-3">
+                    <h3 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-[#006c49]">
+                      <Layers size={15} /> Bước 2: Thông số thương mại
+                    </h3>
+                    <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Đặt cấu hình định lượng kho hàng</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-gray-400 uppercase">
+                        Tên hiển thị (Tự động Gợi ý)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={variantName}
+                        onChange={(e) => setEditVariantName(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 font-bold text-slate-800 outline-none p-2.5 rounded-xl text-xs transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
+                        <FileText size={11} /> Mã định danh SKU
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Mã SKU định danh..."
+                        value={sku}
+                        onChange={(e) => setEditSku(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 font-mono font-black text-amber-800 uppercase outline-none p-2.5 rounded-xl text-xs transition"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
+                        <DollarSign size={11} /> Giá bán lẻ định biên (đ)
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={price}
+                        onChange={(e) => setEditPrice(Number(e.target.value))}
+                        className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 font-mono font-black text-slate-900 outline-none p-2.5 rounded-xl text-xs transition-all"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">
+                          <Package size={11} /> Số lượng tồn
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={stock}
+                          onChange={(e) => setEditStock(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 font-mono font-bold text-slate-800 outline-none p-2.5 rounded-xl text-xs transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1 relative" ref={unitRef}>
+                        <label className="text-[10px] font-black text-slate-400 uppercase">
+                          Đơn vị tính
+                        </label>
+                        <div
+                          onClick={() => setIsUnitOpen(!isUnitOpen)}
+                          className="w-full bg-slate-50 border border-gray-200 hover:border-[#006c49] font-bold text-slate-800 p-2.5 rounded-xl text-xs transition cursor-pointer flex justify-between items-center"
+                        >
+                          <span className="truncate">{unit || "Chọn ĐV"}</span>
+                          <span className={`text-[10px] text-slate-400 transition-transform duration-200 ${
+                            isUnitOpen ? "rotate-180 text-[#006c49]" : ""
+                          }`}>
+                            ▼
+                          </span>
+                        </div>
+                        {isUnitOpen && (
+                          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+                            <div className="max-h-[120px] overflow-y-auto custom-scrollbar p-1">
+                              {units.map((u) => (
+                                <div
+                                  key={u.id || u.ma_don_vi || u.ten_don_vi}
+                                  onClick={() => {
+                                    setEditUnit(u.ten_don_vi);
+                                    setIsUnitOpen(false);
+                                  }}
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition ${
+                                    unit === u.ten_don_vi
+                                      ? "bg-[#e6f0ed] text-[#006c49]"
+                                      : "text-slate-600 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {u.ten_don_vi}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="border-t border-gray-100 p-1">
+                              <div
+                                onClick={() => {
+                                  setIsUnitOpen(false);
+                                  setIsAddUnitModalOpen(true);
+                                }}
+                                className="px-2 py-1.5 text-[10px] font-black text-[#006c49] bg-emerald-50 rounded-lg cursor-pointer hover:bg-emerald-100 transition flex items-center justify-center gap-1"
+                              >
+                                + Bổ sung đơn vị...
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100">
                   <button
-                    type="button"
-                    disabled={uploadingImage}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="bg-slate-100 hover:bg-slate-200 border border-gray-200 text-slate-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition disabled:opacity-50"
+                    type="submit"
+                    disabled={saving}
+                    className="w-full font-black py-3 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition active:scale-[0.98] disabled:opacity-50 text-white bg-[#006c49] hover:bg-[#005137]"
                   >
-                    <Upload size={13} />{" "}
-                    {uploadingImage ? "Đang tải..." : "Tải ảnh từ máy"}
+                    <Save size={14} />{" "}
+                    {saving
+                      ? "Đang lưu..."
+                      : matchedVariant
+                        ? "Cập nhật thay đổi"
+                        : "Kích hoạt phiên bản"}
                   </button>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-              <button
-                type="submit"
-                disabled={saving}
-                className={`font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md transition active:scale-95 disabled:opacity-50 text-white ${matchedVariant ? "bg-blue-600 hover:bg-blue-800" : "bg-[#006c49] hover:bg-[#004f36]"}`}
-              >
-                <Save size={15} />{" "}
-                {saving
-                  ? "Đang xử lý..."
-                  : matchedVariant
-                    ? "Cập nhật phiên bản"
-                    : "Lưu phiên bản mới"}
-              </button>
-            </div>
-          </div>
+              {/* PHÂN KHU 2B: BẢNG ĐỐI CHIẾU CÁC BIẾN THỂ HIỆN CÓ */}
+              <div className="bg-white rounded-3xl border border-gray-200/80 p-5 shadow-sm space-y-4 flex flex-col justify-between self-stretch">
+                <div className="space-y-1">
+                  <h3 className="text-xs font-black text-[#006c49] bg-emerald-50 border border-emerald-150 px-3 py-2 rounded-xl flex items-center gap-1.5">
+                    📊 Bảng đối chiếu danh mục SKU
+                  </h3>
+                  <p className="text-[10px] text-gray-400 font-semibold pl-1">
+                    Chọn nhanh bản ghi có sẵn để chỉnh sửa hàng loạt
+                  </p>
+                </div>
 
-          <div className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl flex items-center gap-1.5">
-              📊 Bảng đối chiếu các phiên bản hiện hành của sản phẩm
-            </h3>
-            <div className="overflow-x-auto rounded-xl border border-gray-100 max-h-[280px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse relative">
-                <thead className="sticky top-0 bg-white z-10 shadow-sm">
-                  <tr className="border-b border-gray-200 text-[10px] font-black text-gray-500 uppercase tracking-wider bg-slate-50/80">
-                    <th className="py-3 px-3">Mã SKU</th>
-                    <th className="py-3 px-3">Tên phiên bản</th>
-                    <th className="py-3 px-3 font-mono text-right">
-                      Giá niêm yết
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-xs font-bold text-slate-700">
-                  {existingVariants.length > 0 ? (
-                    existingVariants.map((v, index) => {
-                      const isHighlighted = activeVariantId === v.ma_bien_the;
-                      return (
-                        <tr
-                          key={index}
-                          onClick={() => handleSelectExistingVariant(v)}
-                          className={`cursor-pointer transition duration-150 ${isHighlighted ? "bg-blue-50/70" : "hover:bg-slate-50"}`}
-                        >
-                          <td
-                            className={`py-3 px-3 font-mono ${isHighlighted ? "text-blue-700 font-black" : "text-amber-700"}`}
-                          >
-                            {v.sku} {isHighlighted && "📍"}
-                          </td>
-                          <td
-                            className={`py-3 px-3 ${isHighlighted ? "text-blue-900" : "text-slate-800"}`}
-                          >
-                            {v.ten_bien_the}
-                          </td>
-                          <td
-                            className={`py-3 px-3 font-mono text-right ${isHighlighted ? "text-blue-900" : "text-slate-900"}`}
-                          >
-                            {v.gia_ban_le
-                              ? Number(v.gia_ban_le).toLocaleString("vi-VN")
-                              : 0}{" "}
-                            đ
-                          </td>
+                <div className="overflow-hidden rounded-xl border border-gray-100 flex-1 flex flex-col min-h-[200px]">
+                  <div className="overflow-y-auto max-h-[220px] custom-scrollbar flex-1">
+                    <table className="w-full text-left border-collapse relative">
+                      <thead className="sticky top-0 bg-slate-50 z-10">
+                        <tr className="border-b border-gray-150 text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                          <th className="py-2 px-3">Mã SKU</th>
+                          <th className="py-2 px-3 text-right">Giá bán</th>
                         </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan="3"
-                        className="py-8 text-center text-gray-400 italic text-[11px]"
-                      >
-                        Sản phẩm này chưa gán cấu hình biến thể nào trước đây.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 text-[11px] font-bold text-slate-700">
+                        {existingVariants.length > 0 ? (
+                          existingVariants.map((v, index) => {
+                            const isHighlighted = activeVariantId === v.ma_bien_the;
+                            return (
+                              <tr
+                                key={index}
+                                onClick={() => handleSelectExistingVariant(v)}
+                                className={`cursor-pointer transition duration-150 ${
+                                  isHighlighted ? "bg-[#006c49]/5 text-[#006c49]" : "hover:bg-slate-50"
+                                }`}
+                              >
+                                <td className={`py-2 px-3 font-mono ${
+                                  isHighlighted ? "text-[#006c49] font-black" : "text-amber-750"
+                                }`}>
+                                  {v.sku} {isHighlighted && "📍"}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right">
+                                  {v.gia_ban_le
+                                    ? Number(v.gia_ban_le).toLocaleString("vi-VN")
+                                    : 0}đ
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan="2"
+                              className="py-12 text-center text-gray-400 italic text-[11px]"
+                            >
+                              Sản phẩm cha chưa được gán bất kì biến thể SKU nào.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-2 text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#006c49]"></span>
+                  Tổng quan hệ thống: <span className="text-slate-800 font-black">{existingVariants.length} phiên bản đang kết nối.</span>
+                </div>
+              </div>
+
             </div>
+
           </div>
+
         </div>
       </form>
 
       {/* POPUP THÊM ĐƠN VỊ MỚI */}
       {isAddUnitModalOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
+            className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-slate-100"
           >
-            <div className="flex items-center gap-4 p-6 border-b border-gray-100">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-[#006c49]/5">
+              <h2 className="text-sm font-black text-[#006c49] uppercase tracking-wider">
+                Thêm Đơn Vị Đo Lường Mới
+              </h2>
               <button
                 onClick={() => setIsAddUnitModalOpen(false)}
-                className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition"
+                className="text-slate-400 hover:text-slate-700 p-1"
               >
-                <ArrowLeft size={18} />
+                <X size={16} />
               </button>
-              <div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                  Thêm Đơn Vị Mới
-                </h2>
-              </div>
             </div>
-            <div className="p-6 space-y-6 bg-slate-50/50">
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
-                  TÊN ĐƠN VỊ <span className="text-red-500">*</span>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase">
+                  Tên đơn vị <span className="text-red-500">*</span>
                 </label>
                 <input
                   value={newUnitName}
                   onChange={(e) => setNewUnitName(e.target.value)}
                   type="text"
-                  placeholder="VD: Thùng, Lốc..."
-                  className="w-full bg-white border border-gray-200 focus:border-[#006c49] p-3.5 rounded-xl text-sm font-bold outline-none"
+                  placeholder="VD: Thùng, Lốc, Khay..."
+                  className="w-full bg-slate-50 border border-gray-200 focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 p-3 rounded-xl text-xs font-bold outline-none"
                 />
               </div>
             </div>
-            <div className="p-5 border-t border-gray-100 flex items-center justify-end gap-3 bg-white">
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2 bg-slate-50/50">
               <button
+                type="button"
                 onClick={() => setIsAddUnitModalOpen(false)}
-                className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition"
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition"
               >
                 Hủy bỏ
               </button>
               <button
+                type="button"
                 onClick={handleAddNewUnitSubmit}
                 disabled={isSubmittingUnit}
-                className="px-6 py-2.5 bg-[#006c49] text-white text-sm font-black rounded-xl shadow-md transition"
+                className="px-5 py-2 bg-[#006c49] text-white text-xs font-black rounded-lg shadow-md hover:bg-[#005137] transition"
               >
-                Lưu
+                Lưu lại
               </button>
             </div>
           </motion.div>
@@ -1366,7 +1477,7 @@ export default function AdminCreateVariant() {
 
       {/* POPUP THÊM VỎ BIẾN THỂ ĐƠN */}
       {showSimpleModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowSimpleModal(false)}
@@ -1374,15 +1485,15 @@ export default function AdminCreateVariant() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10"
+            className="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl relative z-10 border border-slate-100"
           >
-            <h3 className="font-black text-slate-800 mb-5 flex items-center gap-2">
-              <Plus size={18} className="text-[#006c49]" /> Thêm vỏ biến thể đơn
+            <h3 className="font-black text-slate-900 text-xs uppercase tracking-wider mb-4 flex items-center gap-1.5">
+              <Plus size={16} className="text-[#006c49]" /> Thêm vỏ biến thể đơn
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <input
-                placeholder="Tên biến thể"
-                className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
+                placeholder="Tên biến thể hàng"
+                className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
                 value={simpleForm.ten_bien_the}
                 onChange={(e) =>
                   setSimpleForm({ ...simpleForm, ten_bien_the: e.target.value })
@@ -1390,30 +1501,38 @@ export default function AdminCreateVariant() {
               />
               <input
                 placeholder="Mã SKU"
-                className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
+                className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
                 value={simpleForm.sku}
                 onChange={(e) =>
                   setSimpleForm({ ...simpleForm, sku: e.target.value })
                 }
               />
             </div>
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-2 mt-5">
               <button
+                type="button"
                 onClick={() => setShowSimpleModal(false)}
-                className="flex-1 py-3 text-xs font-bold text-gray-500 hover:text-slate-800 transition"
+                className="flex-1 py-2 text-xs font-bold text-gray-500 hover:text-slate-800 transition"
               >
                 Hủy
               </button>
               <button
+                type="button"
                 onClick={handleSaveSimpleVariant}
-                className="flex-1 py-3 bg-[#006c49] text-white rounded-xl text-xs font-black shadow-lg hover:bg-[#005137] transition"
+                className="flex-1 py-2 bg-[#006c49] text-white rounded-lg text-xs font-black shadow-lg hover:bg-[#005137] transition"
               >
-                Tạo vỏ
+                Khởi tạo vỏ
               </button>
             </div>
           </motion.div>
         </div>
       )}
+
     </motion.div>
   );
+}
+
+// Export default chính App component để hệ thống compiler vận hành chuẩn xác
+export default function App() {
+  return <SafeApp />;
 }

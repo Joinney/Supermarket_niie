@@ -19,6 +19,7 @@ import {
   UploadCloud,
   Link as LinkIcon,
   X,
+  Loader2,
 } from "lucide-react";
 import axios from "axios";
 
@@ -223,33 +224,6 @@ export default function AdminProductDetail() {
     0,
   );
 
-  if (loading) {
-    return (
-      <div className="flex-1 bg-[#f8f9fa] min-h-screen flex items-center justify-center font-sans">
-        <div className="flex items-center gap-2 text-[#006c49] font-bold text-sm animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang
-          nạp toàn bộ dữ liệu...
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !product) {
-    return (
-      <div className="flex-1 bg-[#f8f9fa] p-8 font-sans text-left">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-black mb-6"
-        >
-          <ArrowLeft size={16} /> Quay lại danh sách
-        </button>
-        <div className="p-6 bg-red-50 text-red-600 rounded-2xl border border-red-200 text-xs font-bold">
-          {error}
-        </div>
-      </div>
-    );
-  }
-
   const handleAddMedia = async () => {
     if (!newMediaFile && !newMediaUrl.trim()) {
       return alert("Vui lòng chọn ảnh từ máy tính hoặc dán URL!");
@@ -287,6 +261,32 @@ export default function AdminProductDetail() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="w-full bg-[#fafafa] min-h-screen flex items-center justify-center font-sans">
+        <div className="flex items-center gap-2 text-[#006c49] font-bold text-sm animate-pulse">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang nạp toàn bộ dữ liệu...
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="w-full bg-[#fafafa] p-1 font-sans text-left min-h-screen antialiased text-slate-700">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-black mb-6"
+        >
+          <ArrowLeft size={16} /> Quay lại danh sách
+        </button>
+        <div className="p-6 bg-red-50 text-red-600 rounded-2xl border border-red-200 text-xs font-bold">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
   const tabNavigation = [
     { id: "info", label: "Thông tin sản phẩm", icon: Info },
     { id: "variants", label: "SKU & Biến thể", icon: Layers },
@@ -295,354 +295,228 @@ export default function AdminProductDetail() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="flex-1 bg-[#f8f9fa] min-h-screen p-6 md:p-8 font-sans text-left"
+      transition={{ duration: 0.2 }}
+      className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
-      {/* TOP BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-200 mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate("/admin/products/Danhsachsanpham")}
-            className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-slate-600 hover:bg-[#006c49] hover:text-white hover:border-[#006c49] transition shadow-sm shrink-0"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                {product.ten_san_pham}
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-black bg-emerald-100 text-[#006c49]">
-                #{product.ma_san_pham}
-              </span>
-            </div>
-            <p className="text-xs font-bold text-gray-400 mt-0.5">
-              Danh mục:{" "}
-              <span className="text-[#006c49]">{product.ten_danh_muc_con}</span>
-            </p>
+      {/* ================= HEADER BAR ================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Chi tiết sản phẩm
+          </h1>
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-1">
+            <span>Dashboard</span>
+            <span>❯</span>
+            <span>Sản phẩm</span>
+            <span>❯</span>
+            <span className="text-[#006c49] font-bold">Chi tiết sản phẩm</span>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer bg-white shadow-2xs"
+          >
+            <ArrowLeft size={14} /> Quay về
+          </button>
+          <Link
+            to={`/admin/products/edit/${product.ma_san_pham}`}
+            className="flex items-center justify-center gap-2 bg-[#006c49] hover:bg-[#005438] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition transform active:scale-98 cursor-pointer"
+          >
+            <Edit size={14} /> Chỉnh sửa
+          </Link>
         </div>
       </div>
 
-      <div className="max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* CỘT TRÁI */}
-        <div className="lg:col-span-4 space-y-4 lg:sticky lg:top-6">
-          <div className="bg-white rounded-3xl border border-gray-200/80 p-3 shadow-sm aspect-square flex items-center justify-center overflow-hidden bg-slate-50 relative">
-            {activeMediaObj?.duong_dan_url ? (
-              <>
-                <img
-                  src={activeMediaObj.duong_dan_url}
-                  alt="preview"
-                  className="w-full h-full object-cover rounded-2xl"
-                />
-
-                {product.co_bien_the && activeMediaObj.ma_bien_the && (
-                  <span className="absolute bottom-5 right-5 bg-slate-900/85 backdrop-blur-md text-amber-300 border border-amber-400/40 px-3 py-1.5 rounded-xl text-xs font-black shadow-lg">
-                    🏷️ Biến thể:{" "}
-                    {getVariantNameByCode(activeMediaObj.ma_bien_the)}
-                  </span>
-                )}
-              </>
-            ) : (
-              <div className="flex flex-col items-center text-gray-300">
-                <ImageIcon size={48} />
-                <span className="text-xs font-bold mt-1">
-                  Chưa có file media
-                </span>
-              </div>
-            )}
-
-            {/* NÚT ĐẶT LÀM ẢNH CHÍNH */}
-            {activeMediaObj && (
-              <div className="absolute top-6 left-6">
-                {activeMediaObj.la_anh_chinh ? (
-                  <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-md flex items-center gap-1.5">
-                    <Check size={14} /> ẢNH CHÍNH
-                  </span>
-                ) : (
-                  <button
-                    onClick={async () => {
-                      try {
-                        const apiUrl =
-                          import.meta.env.VITE_API_PRODUCT_URL ||
-                          "http://localhost:5002";
-                        await axios.put(
-                          `${apiUrl}/api/products/media/set-main`,
-                          {
-                            ma_san_pham: product.ma_san_pham,
-                            ma_media: activeMediaObj.ma_media,
-                          },
-                        );
-                        alert("Đã đặt làm ảnh chính thành công!");
-                        window.location.reload();
-                      } catch (err) {
-                        alert("Lỗi khi thiết lập ảnh chính.");
-                      }
-                    }}
-                    className="bg-white/90 backdrop-blur text-slate-700 hover:bg-emerald-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm transition-colors flex items-center gap-1.5 border border-slate-200"
-                  >
-                    <ImageIcon size={14} /> ĐẶT LÀM ẢNH CHÍNH
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* DANH SÁCH ẢNH (THUMBNAILS) & NÚT THÊM ẢNH MỚI */}
-          <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar items-center mt-4">
-            <button
-              onClick={() => setShowMediaModal(true)}
-              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 hover:text-[#006c49] hover:border-[#006c49] hover:bg-emerald-50 transition-all shrink-0 bg-white"
-              title="Tải thêm ảnh mới"
-            >
-              <Plus size={20} />
-            </button>
-
-            {product?.media?.map((imgObj) => (
+      {/* ================= MAIN CONTAINER (BUNG FULL WIDTH GIỐNG PRODUCT LIST) ================= */}
+      <div className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6 relative">
+        
+        {/* ================= TAB NAVIGATION ================= */}
+        <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-3 overflow-x-auto">
+          {tabNavigation.map((t) => {
+            const isDisabled = t.id === "variants" && !product.co_bien_the;
+            const isActive = activeTab === t.id;
+            return (
               <button
-                key={imgObj.ma_media}
-                onClick={() => setActiveMediaObj(imgObj)}
-                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all relative ${
-                  activeMediaObj?.ma_media === imgObj.ma_media
-                    ? "border-[#006c49] scale-105 shadow-md"
-                    : "border-gray-200 opacity-60"
+                key={t.id}
+                onClick={() => !isDisabled && setActiveTab(t.id)}
+                disabled={isDisabled}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  isDisabled
+                    ? "opacity-30 cursor-not-allowed"
+                    : isActive
+                      ? "bg-[#006c49] text-white shadow-xs"
+                      : "border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"
                 }`}
               >
-                <img
-                  src={imgObj.duong_dan_url}
-                  alt="thumb"
-                  className="w-full h-full object-cover"
-                />
-
-                {product.co_bien_the && imgObj.ma_bien_the && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-black"></span>
-                )}
+                <t.icon size={14} />
+                <span>{t.label}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {/* CỘT PHẢI */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="flex items-center gap-1.5 p-1.5 bg-slate-200/70 rounded-2xl self-start overflow-x-auto max-w-max">
-            {tabNavigation.map((t) => {
-              const Icon = t.icon;
-              const isDisabled = t.id === "variants" && !product.co_bien_the;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    if (!isDisabled) setActiveTab(t.id);
-                  }}
-                  disabled={isDisabled}
-                  title={
-                    isDisabled ? "Sản phẩm bán trực tiếp không có biến thể" : ""
-                  }
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-extrabold text-xs transition-all shrink-0 ${
-                    isDisabled
-                      ? "opacity-40 cursor-not-allowed text-slate-500 grayscale"
-                      : activeTab === t.id
-                        ? "bg-[#006c49] text-white shadow-md"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-                  }`}
-                >
-                  <Icon size={15} />
-                  <span>{t.label}</span>
-                  {isDisabled && <span className="ml-1 text-[10px]">🔒</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          <div>
-            {/* TAB 1: INFO */}
+        {/* ================= GRID 2 CỘT CHÍNH ================= */}
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* ----------------- CỘT TRÁI: THÔNG TIN CHI TIẾT (Chiếm 8 phần) ----------------- */}
+          <div className="lg:col-span-8 space-y-6 order-2 lg:order-1">
+            
+            {/* TAB 1: THÔNG TIN CHUNG CỦA SẢN PHẨM */}
             {activeTab === "info" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-6"
-              >
-                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-gray-100 text-xs">
-                  <div>
-                    <span className="font-bold text-gray-400 uppercase block">
-                      Khởi tạo DB:
-                    </span>
-                    <span className="font-black text-slate-800 mt-0.5 block">
-                      {new Date(product.ngay_tao).toLocaleDateString("vi-VN")}
-                    </span>
+              <div className="space-y-6">
+                {/* SECTION: THÔNG TIN CƠ BẢN */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#006c49]"></span> THÔNG TIN CƠ BẢN
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Tên sản phẩm</span>
+                      <span className="font-extrabold text-slate-900 text-sm block">
+                        {product.ten_san_pham || "Chưa cập nhật"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Loại danh mục con</span>
+                      <span className="inline-block px-2 py-0.5 rounded bg-slate-50 border border-slate-100 text-slate-600 font-extrabold text-[10px] mt-0.5">
+                        {product.ten_danh_muc_con || "Chưa phân loại"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Mã sản phẩm (ID)</span>
+                      <span className="font-mono font-extrabold text-slate-800 block">
+                        {product.ma_san_pham || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Mã SKU phiên bản đầu</span>
+                      <span className="font-mono font-extrabold text-slate-800 block">
+                        {product.bien_the?.[0]?.sku || "N/A"}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-bold text-gray-400 uppercase block">
-                      Cập nhật cuối:
-                    </span>
-                    <span className="font-black text-slate-800 mt-0.5 block">
-                      {product.ngay_cap_nhat
-                        ? new Date(product.ngay_cap_nhat).toLocaleDateString(
-                            "vi-VN",
-                          )
-                        : "Chưa sửa đổi"}
-                    </span>
+
+                  <div className="pt-2">
+                    <span className="text-xs font-bold text-slate-400 block mb-1.5">Mô tả sản phẩm (`mo_ta`)</span>
+                    <p className="p-4 bg-slate-50/70 border border-slate-100 rounded-2xl text-xs text-slate-600 font-semibold leading-relaxed whitespace-pre-line max-h-[300px] overflow-y-auto custom-scrollbar">
+                      {product.mo_ta || "Sản phẩm chưa có nội dung mô tả chi tiết."}
+                    </p>
                   </div>
                 </div>
-                {!product.co_bien_the && (
-                  <div className="p-6 bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden shadow-sm">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500 opacity-5 rounded-bl-full pointer-events-none"></div>
 
-                    <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="px-2.5 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-md uppercase tracking-wider shadow-sm">
-                          Sản phẩm đơn
-                        </span>
-                        <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                          </span>
-                          Đang bán trực tiếp
-                        </span>
-                      </div>
-
-                      <div className="mt-3">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
-                          Giá Niêm Yết
-                        </p>
-                        {/* 🌟 FIX: Lấy giá từ biến thể ẩn thay vì product.gia_ban */}
-                        <h4 className="text-3xl font-black text-[#006c49]">
-                          {formatPrice(product.bien_the?.[0]?.gia_ban_le || 0)}
-                        </h4>
-
-                        <div className="flex items-center gap-4 mt-2">
-                          <p className="text-xs text-slate-500 font-medium">
-                            Tổng tồn kho:{" "}
-                            <span className="font-black text-slate-800">
-                              {totalStock}
-                            </span>{" "}
-                            sản phẩm
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Nút Chỉnh sửa của sản phẩm đơn -> Vẫn đưa về trang ProductEdit */}
-                    <Link
-                      to={`/admin/products/edit/${product.ma_san_pham}`}
-                      className="relative z-10 bg-white border-2 border-emerald-200 text-[#006c49] hover:bg-[#006c49] hover:text-white px-5 py-3 rounded-xl text-xs font-black transition-all shadow-sm flex items-center justify-center gap-2 shrink-0 active:scale-95"
-                    >
-                      <Edit size={15} /> Chỉnh sửa giá & thông tin
-                    </Link>
-                  </div>
-                )}
-
-                {product.co_bien_the && (
-                  <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-black rounded uppercase">
-                          Sản phẩm đa phân loại
-                        </span>
-                        <span className="text-xs font-bold text-indigo-700">
-                          {totalActiveVariants} phiên bản đang kinh doanh
-                        </span>
-                      </div>
-                      <h4 className="text-2xl font-black text-slate-900 mt-2">
-                        {minPrice === maxPrice
-                          ? formatPrice(minPrice)
-                          : `${formatPrice(minPrice)} - ${formatPrice(maxPrice)}`}
-                      </h4>
-                      <div className="flex items-center gap-4 mt-2">
-                        <p className="text-xs text-slate-500 font-medium">
-                          Tổng tồn kho:{" "}
-                          <span className="font-black text-slate-800">
-                            {totalStock}
-                          </span>{" "}
-                          sản phẩm
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => setActiveTab("variants")}
-                      className="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-colors shadow-sm flex items-center gap-2"
-                    >
-                      <Layers size={14} /> Quản lý phân loại
-                    </button>
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
-                    Bài viết mô tả sản phẩm (`mo_ta`)
+                {/* SECTION: ĐẶC TÍNH HỆ THỐNG */}
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#006c49]"></span> ĐẶC TÍNH HỆ THỐNG
                   </h3>
-                  <p className="text-sm text-slate-700 font-medium leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-2xl border border-slate-100 max-h-[400px] overflow-y-auto custom-scrollbar">
-                    {product.mo_ta ||
-                      "Sản phẩm chưa có nội dung mô tả chi tiết."}
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Đơn vị mặc định</span>
+                      <span className="font-extrabold text-slate-800 block">
+                        {product.bien_the?.[0]?.ten_don_vi || "Chưa cấu hình"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Phân loại cấu trúc</span>
+                      <span className="font-extrabold text-slate-800 block">
+                        {product.co_bien_the ? "Sản phẩm nhiều biến thể" : "Sản phẩm đơn (Bán trực tiếp)"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Tổng số biến thể</span>
+                      <span className="font-extrabold text-slate-800 block">
+                        {totalVariants} phân loại
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Ngày tạo sản phẩm</span>
+                      <span className="font-extrabold text-slate-800 block">
+                        {product.ngay_tao ? new Date(product.ngay_tao).toLocaleDateString("vi-VN") : "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 block mb-1">Cập nhật gần nhất</span>
+                      <span className="font-extrabold text-slate-800 block">
+                        {product.ngay_cap_nhat ? new Date(product.ngay_cap_nhat).toLocaleDateString("vi-VN") : "Chưa từng chỉnh sửa"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* KHOẢNG GIÁ & TỒN KHO */}
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Báo cáo khoảng giá niêm yết</span>
+                  <h4 className="text-xl font-extrabold text-slate-900 font-mono">
+                    {!product.co_bien_the 
+                      ? formatPrice(product.bien_the?.[0]?.gia_ban_le || 0)
+                      : minPrice === maxPrice 
+                        ? formatPrice(minPrice)
+                        : `${formatPrice(minPrice)} - ${formatPrice(maxPrice)}`
+                    }
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-bold mt-1">
+                    Tổng lượng hàng tồn: <span className="text-[#006c49] font-extrabold">{totalStock}</span> sản phẩm.
                   </p>
                 </div>
-              </motion.div>
+              </div>
             )}
 
-            {/* --- TAB 2: SKU & BIẾN THỂ --- */}
+            {/* TAB 2: SKU & BIẾN THỂ */}
             {activeTab === "variants" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4"
-              >
-                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <Layers size={16} className="text-[#006c49]" /> Danh sách
-                    các phiên bản ({totalVariants})
+                    Danh sách các phiên bản ({totalVariants})
                   </h3>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {totalVariants > 0 && (
                       <button
                         onClick={handleDeleteAllVariants}
-                        className="flex items-center gap-1.5 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 border border-red-200 hover:border-red-500 px-3 py-1.5 rounded-xl text-xs font-black shadow-sm transition active:scale-95 uppercase tracking-wider"
+                        className="flex items-center gap-1 px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition cursor-pointer"
                       >
-                        <Trash2 size={14} /> Xóa tất cả
+                        <Trash2 size={13} /> Xóa tất cả
                       </button>
                     )}
-
                     <Link
                       to={`/admin/products/create-variant/${product.ma_san_pham}`}
                       state={{ existingVariants: product.bien_the }}
-                      className="flex items-center gap-1 bg-[#006c49] hover:bg-[#004d34] text-white px-3 py-1.5 rounded-xl text-xs font-black shadow-sm transition active:scale-95 uppercase tracking-wider"
+                      className="flex items-center gap-1 bg-[#006c49] text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-[#004d34] transition cursor-pointer"
                     >
-                      <Plus size={14} /> Thêm biến thể
+                      <Plus size={13} /> Thêm biến thể
                     </Link>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                <div className="w-full overflow-x-auto rounded-xl border border-slate-100">
+                  <table className="w-full text-left border-collapse table-auto">
                     <thead>
-                      <tr className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                        <th className="py-3 px-3 w-20 text-center">Hình ảnh</th>
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                        <th className="py-3 px-3 w-16 text-center">Hình ảnh</th>
                         <th className="py-3 px-3">Phiên bản</th>
                         <th className="py-3 px-3">Mã SKU</th>
-                        <th className="py-3 px-3 font-mono">Giá niêm yết</th>
+                        <th className="py-3 px-3 text-right">Giá niêm yết</th>
                         <th className="py-3 px-3">Đơn vị</th>
-                        <th className="py-3 px-3 text-center w-24">
-                          Hành động
-                        </th>
+                        <th className="py-3 px-3 text-center w-24">Hành động</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50 text-xs font-bold text-gray-700">
+                    <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
                       {currentVariants.length > 0 ? (
                         currentVariants.map((bt, idx) => {
-                          const varMediaObj = getMediaOfVariant(
-                            bt.ma_bien_the,
-                          )[0];
+                          const varMediaObj = getMediaOfVariant(bt.ma_bien_the)[0];
                           return (
                             <tr
                               key={bt.ma_bien_the || idx}
-                              className={`group transition ${bt.trang_thai === false ? "bg-slate-50" : "hover:bg-emerald-50/40"}`}
+                              className={`group transition hover:bg-slate-50/60 ${bt.trang_thai === false ? "bg-slate-50/50" : ""}`}
                             >
-                              <td className="py-3.5 px-3">
-                                <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 mx-auto">
+                              <td className="py-3 px-3">
+                                <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 mx-auto">
                                   {varMediaObj?.duong_dan_url ? (
                                     <img
                                       src={varMediaObj.duong_dan_url}
@@ -650,117 +524,80 @@ export default function AdminProductDetail() {
                                       className={`w-full h-full object-cover ${bt.trang_thai === false ? "grayscale opacity-50" : ""}`}
                                     />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                      <ImageIcon size={18} />
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                      <ImageIcon size={16} />
                                     </div>
                                   )}
                                 </div>
                               </td>
 
-                              <td className="py-3.5 px-3">
-                                <div className="flex items-center gap-2">
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-1.5">
                                   <Link
                                     to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
-                                    className={`font-extrabold hover:text-[#006c49] hover:underline transition-all ${bt.trang_thai === false ? "text-slate-400 line-through" : "text-slate-900"}`}
+                                    className={`font-bold hover:text-[#006c49] hover:underline ${bt.trang_thai === false ? "text-slate-400 line-through" : "text-slate-900"}`}
                                   >
                                     {bt.ten_bien_the || "Mặc định"}
                                   </Link>
                                   {bt.trang_thai === false && (
-                                    <span className="bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded text-[9px] font-black uppercase whitespace-nowrap">
+                                    <span className="bg-red-50 text-red-600 border border-red-100 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-wider">
                                       Đã xóa
                                     </span>
                                   )}
                                 </div>
                               </td>
 
-                              <td
-                                className={`py-3.5 px-3 font-mono font-black ${bt.trang_thai === false ? "text-slate-400" : "text-amber-700"}`}
-                              >
+                              <td className={`py-3 px-3 font-mono font-bold ${bt.trang_thai === false ? "text-slate-400" : "text-amber-700"}`}>
                                 {bt.sku || "N/A"}
                               </td>
-                              <td
-                                className={`py-3.5 px-3 font-black font-mono ${bt.trang_thai === false ? "text-slate-400" : "text-slate-900"}`}
-                              >
+                              <td className={`py-3 px-3 font-bold font-mono text-right text-slate-900 ${bt.trang_thai === false ? "text-slate-400" : ""}`}>
                                 {formatPrice(bt.gia_ban_le)}
                               </td>
-                              <td className="py-3.5 px-3 text-gray-500 font-semibold">
-                                {bt.ten_don_vi || "Hộp"}
-                              </td>
+                              <td className="py-3 px-3 text-slate-500">{bt.ten_don_vi || "Hộp"}</td>
 
-                              <td className="py-3.5 px-3 text-center">
-                                <div className="flex items-center justify-center gap-1.5">
+                              <td className="py-3 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1 text-slate-400">
                                   <Link
                                     to={`/admin/products/variant-detail/${bt.ma_bien_the}`}
-                                    className="p-1.5 text-slate-400 hover:text-[#006c49] hover:bg-emerald-50 rounded-lg transition shadow-sm border border-transparent hover:border-emerald-200"
-                                    title="Xem chi tiết biến thể"
+                                    className="p-1 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
                                   >
-                                    <Eye size={16} />
+                                    <Eye size={15} />
                                   </Link>
 
                                   {bt.trang_thai !== false ? (
                                     <>
                                       <button
                                         onClick={() => {
-                                          const isGroupMode =
-                                            bt.thuoc_tinh &&
-                                            Object.keys(bt.thuoc_tinh).length >
-                                              0;
-
+                                          const isGroupMode = bt.thuoc_tinh && Object.keys(bt.thuoc_tinh).length > 0;
                                           navigate(
                                             `/admin/products/create-variant/${product.ma_san_pham}/${bt.ma_bien_the}`,
-                                            {
-                                              state: {
-                                                existingVariants:
-                                                  product.bien_the,
-                                                initMode: isGroupMode,
-                                              },
-                                            },
+                                            { state: { existingVariants: product.bien_the, initMode: isGroupMode } }
                                           );
                                         }}
-                                        className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition shadow-sm border border-transparent hover:border-sky-200"
-                                        title="Chỉnh sửa EAV & Giá"
+                                        className="p-1 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                       >
-                                        <Edit size={16} />
+                                        <Edit size={15} />
                                       </button>
-
                                       <button
-                                        onClick={() =>
-                                          handleDeleteVariant(
-                                            bt.ma_bien_the,
-                                            bt.ten_bien_the,
-                                          )
-                                        }
-                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shadow-sm border border-transparent hover:border-red-200"
-                                        title="Xóa biến thể (Lưu trữ)"
+                                        onClick={() => handleDeleteVariant(bt.ma_bien_the, bt.ten_bien_the)}
+                                        className="p-1 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                       >
-                                        <Trash2 size={16} />
+                                        <Trash2 size={15} />
                                       </button>
                                     </>
                                   ) : (
                                     <button
-                                      onClick={() =>
-                                        handleRestoreVariant(
-                                          bt.ma_bien_the,
-                                          bt.ten_bien_the,
-                                        )
-                                      }
-                                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition shadow-sm border border-transparent hover:border-emerald-200"
-                                      title="Khôi phục biến thể này"
+                                      onClick={() => handleRestoreVariant(bt.ma_bien_the, bt.ten_bien_the)}
+                                      className="p-1 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                     >
-                                      <RotateCcw size={16} />
+                                      <RotateCcw size={15} />
                                     </button>
                                   )}
                                   <button
-                                    onClick={() =>
-                                      handleHardDeleteVariant(
-                                        bt.ma_bien_the,
-                                        bt.ten_bien_the,
-                                      )
-                                    }
-                                    className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-100 rounded-lg transition shadow-sm border border-transparent hover:border-red-300 ml-1"
-                                    title="Xóa vĩnh viễn khỏi Database"
+                                    onClick={() => handleHardDeleteVariant(bt.ma_bien_the, bt.ten_bien_the)}
+                                    className="p-1 hover:text-red-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                                   >
-                                    <X size={16} strokeWidth={3} />
+                                    <X size={15} strokeWidth={2.5} />
                                   </button>
                                 </div>
                               </td>
@@ -769,11 +606,8 @@ export default function AdminProductDetail() {
                         })
                       ) : (
                         <tr>
-                          <td
-                            colSpan="6"
-                            className="py-8 text-center text-amber-600 bg-amber-50 font-bold rounded-2xl border border-amber-200"
-                          >
-                            ⚠️ Sản phẩm này chưa có biến thể nào.
+                          <td colSpan="6" className="py-8 text-center text-slate-400 font-medium bg-slate-50/50">
+                            Sản phẩm chưa có biến thể nào được tạo.
                           </td>
                         </tr>
                       )}
@@ -782,114 +616,195 @@ export default function AdminProductDetail() {
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <span className="text-xs font-bold text-gray-500">
-                      Hiển thị{" "}
-                      <span className="text-slate-900">
-                        {startIndex + 1} -{" "}
-                        {Math.min(startIndex + variantsPerPage, totalVariants)}
-                      </span>{" "}
-                      trên tổng {totalVariants}
+                  <div className="flex items-center justify-between pt-3 text-[11px] font-bold text-slate-400">
+                    <span>
+                      Hiển thị {startIndex + 1} - {Math.min(startIndex + variantsPerPage, totalVariants)} trên {totalVariants}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={handlePrevPage}
                         disabled={currentPage === 1}
-                        className="p-1.5 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 disabled:opacity-40"
+                        onClick={handlePrevPage}
+                        className="w-6 h-6 border border-slate-200 flex items-center justify-center rounded-md hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
                       >
-                        <ChevronLeft size={16} />
+                        ❮
                       </button>
-                      <span className="text-xs font-bold text-slate-700 px-2">
-                        Trang {currentPage} / {totalPages}
-                      </span>
+                      <span className="px-1.5 text-slate-700">Trang {currentPage}/{totalPages}</span>
                       <button
-                        onClick={handleNextPage}
                         disabled={currentPage === totalPages}
-                        className="p-1.5 rounded-lg border border-gray-200 text-slate-600 hover:bg-gray-50 disabled:opacity-40"
+                        onClick={handleNextPage}
+                        className="w-6 h-6 border border-slate-200 flex items-center justify-center rounded-md hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
                       >
-                        <ChevronRight size={16} />
+                        ❯
                       </button>
                     </div>
                   </div>
                 )}
-              </motion.div>
+              </div>
             )}
 
-            {/* TAB 3: NOTES */}
+            {/* TAB 3: GHI CHÚ NỘI BỘ */}
             {activeTab === "notes" && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white rounded-3xl border border-gray-200/80 p-6 shadow-sm space-y-4"
-              >
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Bookmark size={16} className="text-[#006c49]" /> Ghi chú
-                    lưu ý kiểm hàng & nhà cung cấp
+                    Ghi chú nội bộ
                   </span>
-                  <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 uppercase tracking-wider">
                     Internal Only
                   </span>
                 </div>
                 {noteSaved && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black flex items-center gap-1.5">
-                    <Check size={16} /> Đã lưu thành công ghi chú nội bộ!
+                  <div className="p-2.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-xs font-bold">
+                    ✓ Đã lưu thành công ghi chú!
                   </div>
                 )}
-                <textarea
+                <motion.textarea
                   rows={8}
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
                   placeholder="Nhập các lưu ý nội bộ..."
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-[#006c49] outline-none transition"
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-[#006c49] outline-none transition resize-none"
                 />
                 <div className="flex items-center justify-between pt-2">
-                  <span className="text-[11px] text-gray-400 italic">
+                  <span className="text-[10px] text-slate-400 italic">
                     * Ghi chú này chỉ lưu nội bộ, khách hàng không nhìn thấy.
                   </span>
                   <button
                     onClick={handleSaveNote}
                     disabled={savingNote}
-                    className="bg-[#006c49] hover:bg-[#004d34] text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-sm flex items-center gap-1.5"
+                    className="flex items-center gap-1.5 bg-[#006c49] hover:bg-[#004d34] text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
                   >
-                    <Save size={14} />{" "}
-                    {savingNote ? "Đang ghi..." : "Lưu ghi chú"}
+                    <Save size={13} /> {savingNote ? "Đang ghi..." : "Lưu ghi chú"}
                   </button>
                 </div>
-              </motion.div>
+              </div>
             )}
+          </div>
+
+          {/* ----------------- CỘT PHẢI: HÌNH ẢNH & TRẠNG THÁI (Chiếm 4 phần) ----------------- */}
+          <div className="lg:col-span-4 space-y-4 order-1 lg:order-2 lg:sticky lg:top-4">
+            
+            {/* BOX MEDIA HÌNH ẢNH */}
+            <div className="border border-slate-100 bg-white rounded-xl p-3 shadow-2xs space-y-3">
+              <div className="aspect-square flex items-center justify-center overflow-hidden bg-slate-50 relative rounded-lg border border-slate-100/60">
+                {activeMediaObj?.duong_dan_url ? (
+                  <>
+                    <img
+                      src={activeMediaObj.duong_dan_url}
+                      alt="preview"
+                      className="w-full h-full object-cover"
+                    />
+                    {product.co_bien_the && activeMediaObj.ma_bien_the && (
+                      <span className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-xs text-amber-300 border border-slate-800 px-2 py-1 rounded-md text-[10px] font-bold shadow-xs">
+                        🏷️ {getVariantNameByCode(activeMediaObj.ma_bien_the)}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center text-slate-300">
+                    <ImageIcon size={40} />
+                    <span className="text-[11px] font-bold mt-1">Không có tệp hình ảnh</span>
+                  </div>
+                )}
+
+                {/* THIẾT LẬP ẢNH CHÍNH */}
+                {activeMediaObj && (
+                  <div className="absolute top-3 left-3">
+                    {activeMediaObj.la_anh_chinh ? (
+                      <span className="bg-[#006c49] text-white px-2 py-0.5 rounded text-[9px] font-black tracking-wider flex items-center gap-0.5 shadow-xs uppercase">
+                        Ảnh chính
+                      </span>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+                            await axios.put(`${apiUrl}/api/products/media/set-main`, {
+                              ma_san_pham: product.ma_san_pham,
+                              ma_media: activeMediaObj.ma_media,
+                            });
+                            alert("Đặt ảnh chính thành công!");
+                            window.location.reload();
+                          } catch (err) {
+                            alert("Lỗi cấu hình ảnh chính.");
+                          }
+                        }}
+                        className="bg-white text-slate-700 hover:bg-slate-900 hover:text-white px-2 py-0.5 rounded text-[9px] font-black border border-slate-200 transition cursor-pointer shadow-2xs"
+                      >
+                        ĐẶT CHÍNH
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* THUMBNAILS */}
+              <div className="flex gap-2 overflow-x-auto pb-1 items-center custom-scrollbar">
+                <button
+                  onClick={() => setShowMediaModal(true)}
+                  className="w-12 h-12 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:text-[#006c49] hover:border-[#006c49] hover:bg-emerald-50/50 transition shrink-0 bg-white cursor-pointer"
+                >
+                  <Plus size={16} />
+                </button>
+
+                {product?.media?.map((imgObj) => (
+                  <button
+                    key={imgObj.ma_media}
+                    onClick={() => setActiveMediaObj(imgObj)}
+                    className={`w-12 h-12 rounded-lg overflow-hidden border shrink-0 transition relative cursor-pointer ${
+                      activeMediaObj?.ma_media === imgObj.ma_media
+                        ? "border-[#006c49] ring-2 ring-emerald-50 scale-102"
+                        : "border-slate-200 opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={imgObj.duong_dan_url} alt="thumb" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* BOX TRẠNG THÁI ACTIVE HỆ THỐNG */}
+            <div className="border border-slate-100 bg-white rounded-xl p-4 shadow-2xs flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Trạng thái bán</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`w-2.5 h-2.5 rounded-full ${product.trang_thai !== false ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`}></span>
+                  <span className={`text-sm font-black tracking-wide uppercase ${product.trang_thai !== false ? "text-emerald-600" : "text-slate-400"}`}>
+                    {product.trang_thai !== false ? "ACTIVE" : "DISABLED"}
+                  </span>
+                </div>
+              </div>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-white ${
+                product.trang_thai !== false ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-200"
+              }`}>
+                {product.trang_thai !== false ? <Check size={16} strokeWidth={3} /> : <X size={16} />}
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
 
-      {/* ================= POPUP UPLOAD ẢNH MỚI ================= */}
+      {/* ================= MODAL UPLOAD MEDIA ================= */}
       {showMediaModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden"
-          >
-            {/* Header Modal */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-slate-50">
-              <h3 className="font-black text-slate-800 flex items-center gap-2">
-                <ImageIcon className="text-[#006c49]" size={20} />
-                Thêm hình ảnh sản phẩm
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-1.5 text-sm">
+                <ImageIcon className="text-[#006c49]" size={16} /> Thêm tệp hình ảnh sản phẩm
               </h3>
               <button
                 onClick={() => setShowMediaModal(false)}
-                className="text-gray-400 hover:text-red-500 transition-colors p-1 bg-white rounded-full border border-gray-200 shadow-sm"
+                className="text-slate-400 hover:text-red-500 p-1 bg-white rounded-full border border-slate-200 cursor-pointer"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
-            {/* Body Modal */}
-            <div className="p-6 space-y-5">
-              {/* Option 1: File máy tính */}
+            <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5">
-                  <UploadCloud size={14} /> Tải lên từ thiết bị
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                  Tải lên hình ảnh từ máy
                 </label>
                 <input
                   type="file"
@@ -898,59 +813,51 @@ export default function AdminProductDetail() {
                     setNewMediaFile(e.target.files[0]);
                     setNewMediaUrl("");
                   }}
-                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-[#006c49] hover:file:bg-emerald-100 border border-gray-200 rounded-xl p-1 bg-white cursor-pointer"
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-50 file:text-[#006c49] hover:file:bg-emerald-100 border border-slate-200 rounded-lg p-1 bg-white cursor-pointer"
                 />
               </div>
 
-              <div className="flex items-center gap-3 text-xs font-bold text-gray-300">
-                <div className="flex-1 h-px bg-gray-100"></div>
-                HOẶC
-                <div className="flex-1 h-px bg-gray-100"></div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300 justify-center">
+                <div className="flex-1 h-px bg-slate-100"></div> HOẶC <div className="flex-1 h-px bg-slate-100"></div>
               </div>
 
-              {/* Option 2: Link URL */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1.5">
-                  <LinkIcon size={14} /> Sử dụng URL ảnh
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                  Đường dẫn liên kết hình ảnh (URL)
                 </label>
                 <input
                   type="text"
-                  placeholder="https://vidu.com/hinh-anh.jpg"
+                  placeholder="https://example.com/image.jpg"
                   value={newMediaUrl}
                   onChange={(e) => {
                     setNewMediaUrl(e.target.value);
                     setNewMediaFile(null);
                   }}
-                  className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-[#006c49] transition"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-[#006c49] transition"
                 />
               </div>
             </div>
 
-            {/* Footer Modal */}
-            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+            <div className="p-4 border-t border-slate-100 bg-slate-50/70 flex justify-end gap-2">
               <button
                 onClick={() => setShowMediaModal(false)}
-                className="px-5 py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors"
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
               >
-                Hủy bỏ
+                Hủy
               </button>
               <button
                 onClick={handleAddMedia}
-                disabled={
-                  isUploadingMedia || (!newMediaFile && !newMediaUrl.trim())
-                }
-                className="bg-[#006c49] hover:bg-[#004d34] text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-md flex items-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isUploadingMedia || (!newMediaFile && !newMediaUrl.trim())}
+                className="bg-[#006c49] text-white px-5 py-2 rounded-xl text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 {isUploadingMedia ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" /> Đang lưu...
-                  </>
+                  <span className="flex items-center gap-1"><Loader2 size={14} className="animate-spin" /> Đang đồng bộ...</span>
                 ) : (
-                  "Lưu Hình Ảnh"
+                  "Lưu tệp ảnh"
                 )}
               </button>
             </div>
-          </motion.div>
+          </div>
         </div>
       )}
     </motion.div>
