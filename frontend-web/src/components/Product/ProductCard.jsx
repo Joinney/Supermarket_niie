@@ -30,20 +30,24 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       return;
     }
 
-    // 🌟 FIX QUAN TRỌNG: Truyền đúng ma_bien_the vào variantId
-    const targetVariantId = p.ma_bien_the_mac_dinh || p.ma_san_pham;
+    // 🌟 FIX QUAN TRỌNG: Ưu tiên mã biến thể/SKU cụ thể đang được truyền vào từ API Khuyến mãi/Danh sách
+    const targetVariantId =
+      p.ma_bien_the || p.ma_sku || p.ma_bien_the_mac_dinh || p.ma_san_pham;
+
+    // Ưu tiên lấy tên của phiên bản/biến thể đó nếu có
+    const targetVariantName = p.ten_bien_the || p.ten_phien_ban || "Mặc định";
 
     const itemToCart = {
-      variantId: targetVariantId, // Đã sửa
+      variantId: targetVariantId,
       name: p.ten_san_pham,
       price: currentPrice,
       quantity: 1,
       stock: stockCount,
       image: mainImage,
-      productId: p.ma_san_pham, // Nên truyền riêng id gốc của sp
+      productId: p.ma_san_pham,
       categorySlug: category,
       countryCode: country,
-      variantName: "Mặc định",
+      variantName: targetVariantName, // Đã sửa để lấy đúng tên SKU
     };
 
     addToCart(itemToCart);
@@ -128,15 +132,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
                 Tạm hết hàng
               </div>
             </div>
-          )}
-
-          {!isOutOfStock && (
-            <button
-              className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
-              onClick={handleQuickAddCart}
-            >
-              <Plus size={20} strokeWidth={3} />
-            </button>
           )}
         </div>
 
