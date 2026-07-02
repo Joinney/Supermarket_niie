@@ -15,15 +15,24 @@ const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
+useEffect(() => {
     const fetchOrderDetail = async () => {
       if (!orderId) {
         setLoading(false);
         return;
       }
       try {
-        // 🔥 Gọi API lên cổng 5005 để lấy dữ liệu đã JOIN từ 2 bảng
-        const response = await axios.get(`http://localhost:5005/api/orders/${orderId}`);
+        // 🌟 LẤY TOKEN QUẢN TRỊ TỪ LOCALSTORAGE
+        const token = localStorage.getItem("adminToken");
+
+        // 🔥 Gọi API lên cổng 5005 kèm theo Header xác thực Authorization
+        const response = await axios.get(`http://localhost:5005/api/orders/${orderId}`, {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json"
+          }
+        });
+
         if (response.data && response.data.success) {
           const order = response.data.data;
           setOrderData(order);
@@ -33,7 +42,13 @@ const OrderDetail = () => {
         }
       } catch (err) {
         console.error("Lỗi khi kết nối API:", err);
-        setErrorMsg("Lỗi kết nối đến dịch vụ đơn hàng (Cổng 5005).");
+        
+        // 🌟 HIỂN THỊ ĐÚNG BẢN CHẤT LỖI NẾU SAI/HẾT HẠN TOKEN
+        if (err.response?.status === 401) {
+          setErrorMsg("Phiên làm việc hết hạn hoặc bạn không có quyền xem chi tiết hóa đơn này (401 Unauthorized).");
+        } else {
+          setErrorMsg("Lỗi kết nối đến dịch vụ đơn hàng (Cổng 5005).");
+        }
       } finally {
         setLoading(false);
       }

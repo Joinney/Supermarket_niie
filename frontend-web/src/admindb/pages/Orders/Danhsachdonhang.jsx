@@ -15,18 +15,26 @@ export default function Danhsachdonhang() {
   const [totalItems, setTotalItems] = useState(0);
   const [limit, setLimit] = useState(10);
 
-  // 🎯 HÀM TẢI DỮ LIỆU ĐƠN HÀNG TỪ ORDER-SERVICE
+// 🎯 HÀM TẢI DỮ LIỆU ĐƠN HÀNG TỪ ORDER-SERVICE
   const fetchOrders = async () => {
     setLoading(true);
     setError(null);
     try {
       const orderApiUrl = import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
       
+      // 🌟 LẤY TOKEN QUẢN TRỊ TỪ LOCALSTORAGE
+      const token = localStorage.getItem("adminToken");
+
       const response = await axios.get(`${orderApiUrl}/api/orders`, {
         params: {
           page: currentPage,
           limit: limit,
           search: searchTerm || undefined
+        },
+        // 🌟 ĐÍNH KÈM HEADER XÁC THỰC BEARER TOKEN VÀO REQUEST
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json"
         }
       });
 
@@ -43,7 +51,13 @@ export default function Danhsachdonhang() {
       }
     } catch (err) {
       console.error("❌ Lỗi truy xuất danh sách đơn hàng:", err);
-      setError("Không thể kết nối đến phân hệ Order Service (Cổng 5005)!");
+      
+      // 🌟 TỐI ƯU CẢNH BÁO: Hiển thị đúng bản chất lỗi xác thực nếu có
+      if (err.response?.status === 401) {
+        setError("Phiên đăng nhập hết hạn hoặc không có quyền truy cập dữ liệu đơn hàng (401 Unauthorized)!");
+      } else {
+        setError("Không thể kết nối đến phân hệ Order Service (Cổng 5005)!");
+      }
     } finally {
       setLoading(false);
     }
