@@ -33,6 +33,7 @@ import {
     addProductMedia,
     updateInternalStock,
     deductStockInternal,
+    generateSafeSku,
     restoreStockInternal
 } from '../controllers/productController.js';
 
@@ -75,6 +76,8 @@ router.delete('/:id/variants-all', deleteAllVariants);
 router.post('/variants/:variantId/upload-image', upload.single('image'), uploadVariantImage);
 router.put('/variants/:variantId/restore', restoreVariant);
 router.post('/variants/simple', createSimpleVariant);
+router.post('/:id/variants', createVariant);
+router.delete('/variants/:variantId/hard', hardDeleteVariant);
 
 // =========================================================================
 // 🔄 3. NHÓM ROUTE ĐỘNG SẢN PHẨM & DANH MỤC
@@ -85,14 +88,13 @@ router.post('/', createProduct);
 router.put('/:id', updateProduct);
 router.put('/:id/toggle-status', toggleProductStatus);
 router.delete('/:id', deleteProduct);
-router.delete('/variants/:variantId/hard', hardDeleteVariant);
-
-// Xử lý lưu Transaction khởi tạo biến thể mới đấu nối ma trận EAV
-router.post('/:id/variants', createVariant);
 
 // Các thông tin liên quan cụ thể của một sản phẩm
 router.get('/:id/reviews', getReviewsByProduct); 
 router.get('/:id/related', getRelatedProducts); 
+
+//xử lý mã thông minh
+router.post('/generate-sku', generateSafeSku);
 
 // Lấy chi tiết sản phẩm
 router.get('/:id', getProductById);

@@ -17,9 +17,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 
-// =====================================================================
-// 🌟 HÀM TẠO SKU THÔNG MINH (ĐỒNG BỘ 9 SỐ CUỐI, QUỐC GIA & CHỐNG TRÙNG LẶP)
-// =====================================================================
+// Hàm lấy Base ID (VD: từ MSP893020726001 lấy ra 020726001)
 const getBaseId = (fullId) => {
   if (!fullId) return "NEW";
   const digits = fullId.replace(/\D/g, "");
@@ -28,49 +26,6 @@ const getBaseId = (fullId) => {
     : digits.length > 0
       ? digits
       : "NEW";
-};
-
-const generateSafeSku = (
-  productId,
-  isGroupMode,
-  attributes,
-  existingVariants,
-  countryCode = "VN",
-) => {
-  const baseSuffix = getBaseId(productId);
-  let proposedSku = "";
-
-  if (!isGroupMode) {
-    let counter = 1;
-    do {
-      proposedSku = `${countryCode}-${baseSuffix}-${String(counter).padStart(3, "0")}`;
-      counter++;
-    } while (existingVariants.some((v) => v.sku === proposedSku));
-  } else {
-    const attrParts = attributes
-      .map((a) =>
-        a.selected
-          ? a.selected
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/[^a-zA-Z0-9]/g, "")
-              .substring(0, 3)
-              .toUpperCase()
-          : "",
-      )
-      .filter(Boolean)
-      .join("-");
-
-    const baseGroupSku = `${countryCode}-${baseSuffix}${attrParts ? "-" + attrParts : ""}`;
-    proposedSku = baseGroupSku;
-
-    let counter = 1;
-    while (existingVariants.some((v) => v.sku === proposedSku)) {
-      proposedSku = `${baseGroupSku}-${counter}`;
-      counter++;
-    }
-  }
-  return proposedSku;
 };
 
 export default function AdminCreateVariant() {
@@ -113,7 +68,7 @@ export default function AdminCreateVariant() {
     ten_bien_the: "",
     sku: "",
     gia_ban_le: 0,
-    so_luong_ton: 0, // 🌟 Khai báo cho chuẩn Data Model
+    so_luong_ton: 0,
     ten_don_vi: "Chai",
   });
 
@@ -122,6 +77,47 @@ export default function AdminCreateVariant() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [newAttrName, setNewAttrName] = useState("");
   const [newValInputs, setNewValInputs] = useState({});
+
+  // =========================================================================
+  // 🌟 HÀM GỌI XUỐNG BACKEND ĐỂ LẤY SKU CHỐNG TRÙNG LẶP (QUÉT DB THỰC TẾ)
+  // =========================================================================
+  const fetchSafeSkuFromDB = async (isGroup, attrs, country = "VN") => {
+    try {
+      const baseSuffix = getBaseId(id);
+      let baseSku = `${country}-${baseSuffix}`;
+
+      if (isGroup) {
+        const attrParts = attrs
+          .map((a) =>
+            a.selected
+              ? a.selected
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/[^a-zA-Z0-9]/g, "")
+                  .substring(0, 3)
+                  .toUpperCase()
+              : "",
+          )
+          .filter(Boolean)
+          .join("-");
+        if (attrParts) baseSku += `-${attrParts}`;
+      }
+
+      const apiUrl =
+        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+      const res = await axios.post(`${apiUrl}/api/products/generate-sku`, {
+        baseSku,
+      });
+
+      if (res.data.success) {
+        return res.data.safeSku;
+      }
+      return `${baseSku}-001`;
+    } catch (error) {
+      console.error("Lỗi lấy SKU từ DB:", error);
+      return `${country}-${getBaseId(id)}-001`;
+    }
+  };
 
   const handleSelectExistingVariant = (v) => {
     setActiveVariantId(v.ma_bien_the);
@@ -252,40 +248,36 @@ export default function AdminCreateVariant() {
   }, [id]);
 
   useEffect(() => {
-    if (activeVariantId) return;
+    const updateSkuAsync = async () => {
+      if (activeVariantId) return;
 
-    if (isVariantMode && availableAttributes.length > 0) {
-      const comboText = availableAttributes
-        .map((attr) => attr.selected)
-        .filter(Boolean)
-        .join(" - ");
-      setEditVariantName(`${productName} ${comboText ? `- ${comboText}` : ""}`);
+      if (isVariantMode && availableAttributes.length > 0) {
+        const comboText = availableAttributes
+          .map((attr) => attr.selected)
+          .filter(Boolean)
+          .join(" - ");
+        setEditVariantName(
+          `${productName} ${comboText ? `- ${comboText}` : ""}`,
+        );
 
-      const safeSku = generateSafeSku(
-        id,
-        true,
-        availableAttributes,
-        existingVariants,
-        productCountry,
-      );
-      setEditSku(safeSku);
-    } else if (!isVariantMode && !activeVariantId) {
-      const safeSku = generateSafeSku(
-        id,
-        false,
-        [],
-        existingVariants,
-        productCountry,
-      );
-      setEditSku(safeSku);
-    }
+        const safeSku = await fetchSafeSkuFromDB(
+          true,
+          availableAttributes,
+          productCountry,
+        );
+        setEditSku(safeSku);
+      } else if (!isVariantMode && !activeVariantId) {
+        const safeSku = await fetchSafeSkuFromDB(false, [], productCountry);
+        setEditSku(safeSku);
+      }
+    };
+
+    updateSkuAsync();
   }, [
     availableAttributes,
     isVariantMode,
     productName,
-    id,
     activeVariantId,
-    existingVariants,
     productCountry,
   ]);
 
@@ -309,8 +301,8 @@ export default function AdminCreateVariant() {
       const res = await axios.post(`${apiUrl}/api/products/variants/simple`, {
         ma_san_pham: id,
         ...simpleForm,
-        gia_ban_le: 0, // Luôn set mặc định là 0 để qua cửa Backend
-        so_luong_ton: 0, // Luôn set mặc định là 0 để qua cửa Backend
+        gia_ban_le: 0,
+        so_luong_ton: 0,
       });
 
       const newVariant = res.data.data;
@@ -569,14 +561,9 @@ export default function AdminCreateVariant() {
     }
   };
 
-  const openSimpleModal = () => {
-    const safeSku = generateSafeSku(
-      id,
-      false,
-      [],
-      existingVariants,
-      productCountry,
-    );
+  // 🌟 ĐÃ THÊM ASYNC / AWAIT ĐỂ LẤY MÃ SKU TỪ DATABASE CHO POPUP ĐƠN
+  const openSimpleModal = async () => {
+    const safeSku = await fetchSafeSkuFromDB(false, [], productCountry);
     setSimpleForm({
       ten_bien_the: "",
       sku: safeSku,
@@ -587,13 +574,11 @@ export default function AdminCreateVariant() {
     setShowSimpleModal(true);
   };
 
-  const handleResetToCreateNew = () => {
+  const handleResetToCreateNew = async () => {
     setActiveVariantId(null);
-    const safeSku = generateSafeSku(
-      id,
+    const safeSku = await fetchSafeSkuFromDB(
       isVariantMode,
       availableAttributes,
-      existingVariants,
       productCountry,
     );
 
@@ -628,7 +613,7 @@ export default function AdminCreateVariant() {
             setExistingVariants([]);
             setIsVariantMode(false);
 
-            const safeSku = generateSafeSku(id, false, [], [], productCountry);
+            const safeSku = await fetchSafeSkuFromDB(false, [], productCountry);
             setEditSku(safeSku);
             setEditPrice(0);
             setEditStock(0);
@@ -767,7 +752,7 @@ export default function AdminCreateVariant() {
       }
     } catch (err) {
       console.error("Lỗi xử lý lưu dữ liệu biến thể:", err);
-      alert("Gặp sự cố khi lưu biến thể xuống DB. Mã SKU có thể đã bị trùng!");
+      alert("❌ Lỗi: " + (err.response?.data?.message || err.message));
     } finally {
       setSaving(false);
     }
@@ -1110,8 +1095,9 @@ export default function AdminCreateVariant() {
                     type="number"
                     min="0"
                     value={stock}
+                    readOnly
+                    className="w-full bg-slate-100 border border-gray-200 font-mono font-black text-slate-400 outline-none p-3 rounded-xl text-xs cursor-not-allowed"
                     onChange={(e) => setEditStock(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] font-mono font-black text-slate-900 outline-none p-3 rounded-xl text-xs transition"
                   />
                 </div>
                 <div className="space-y-1.5 relative" ref={unitRef}>

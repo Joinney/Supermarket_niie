@@ -1026,8 +1026,8 @@ export const createVariant = async (req, res) => {
         // 🌟 FIX 3: Nhận so_luong_ton từ req.body
         const { ten_bien_the, sku, gia_ban_le, so_luong_ton, thuoc_tinh, hinh_anh_url, ten_don_vi } = req.body;
 
-        if (!sku || !gia_ban_le) {
-            return res.status(400).json({ success: false, message: "Mã SKU và Giá bán lẻ không được để trống." });
+        if (!sku || gia_ban_le === undefined || gia_ban_le === null) {
+        return res.status(400).json({ success: false, message: "Mã SKU và Giá bán lẻ không được để trống." });
         }
 
         await client.query('BEGIN');
@@ -1911,6 +1911,59 @@ export const deductStockInternal = async (req, res) => {
         if (client) {
             client.release();
         }
+    }
+};
+
+// =========================================================================
+// API NỘI BỘ: KIỂM TRA VÀ TẠO MÃ SKU THÔNG MINH, KHÔNG TRÙNG LẶP
+// =========================================================================
+export const generateSafeSku = async (req, res) => {
+    try {
+        const { baseSku } = req.body;
+        
+        if (!baseSku) {
+            return res.status(400).json({ success: false, message: "Thiếu baseSku" });
+        }
+
+        const baseStr = String(baseSku).trim().toUpperCase();
+
+        // 1. Quét tìm tất cả các SKU trong hệ thống có chứa baseSku này (Dùng LIKE)
+        const checkQuery = `
+            SELECT sku 
+            FROM public.bien_the_san_pham 
+            WHERE sku LIKE $1;
+        `;
+        const { rows } = await pool.query(checkQuery, [`${baseStr}%`]);
+
+        let proposedSku = `${baseStr}-001`;
+
+        // 2. Nếu đã tồn tại các mã giống baseSku, ta sẽ tìm số đuôi lớn nhất
+        if (rows.length > 0) {
+            let maxSuffix = 0;
+            
+            rows.forEach(row => {
+                if (!row.sku) return;
+                // Cắt phần đuôi sau dấu gạch ngang cuối cùng
+                const parts = row.sku.split('-');
+                const lastPart = parts[parts.length - 1];
+                
+                // Nếu phần đuôi là số (vd: 001, 002)
+                const num = parseInt(lastPart, 10);
+                if (!isNaN(num) && num > maxSuffix) {
+                    maxSuffix = num;
+                }
+            });
+
+            // Cộng 1 vào số lớn nhất
+            const nextNum = maxSuffix + 1;
+            proposedSku = `${baseStr}-${String(nextNum).padStart(3, '0')}`;
+        }
+
+        return res.status(200).json({ success: true, safeSku: proposedSku });
+
+    } catch (error) {
+        console.error("❌ Lỗi API generateSafeSku:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi tạo SKU tự động" });
     }
 };
 

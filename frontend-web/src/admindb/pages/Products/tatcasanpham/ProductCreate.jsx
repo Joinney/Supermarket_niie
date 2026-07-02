@@ -440,22 +440,19 @@ export default function ProductCreate() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
-                        Số lượng trong kho{" "}
-                        <span className="text-red-500">*</span>
+                        Số lượng trong kho
                       </label>
                       <input
                         type="number"
                         min="0"
-                        required
+                        readOnly
                         value={formData.so_luong_ton}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            so_luong_ton: Number(e.target.value),
-                          })
-                        }
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                        className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs font-black text-slate-400 outline-none cursor-not-allowed transition"
                       />
+                      <p className="text-[10px] text-slate-400 font-bold italic">
+                        * Kho sẽ được cập nhật sau khi tạo các biến thể hoặc qua
+                        phiếu nhập kho.
+                      </p>
                     </div>
                   </div>
                 </motion.div>
