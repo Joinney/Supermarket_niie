@@ -93,20 +93,48 @@ const placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Dữ liệu đơn hàng không hợp lệ hoặc bị thiếu!" });
     }
 
-    // 🌟 URL GỌI NỘI BỘ DOCKER SANG PRODUCT SERVICE
+// 🚀 BƯỚC A: CHUẨN HÓA MẢNG SẢN PHẨM & TỰ ĐỘNG NẠP SKU XỊN TỪ PRODUCT-SERVICE
     const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
+    let databaseVariants = [];
+    
+    try {
+      // Gọi API lấy danh sách sản phẩm tổng quát (nơi chứa dữ liệu thô ổn định)
+      const prodApiRes = await axios.get(`${productServiceUrl}/api/products`);
+      databaseVariants = Array.isArray(prodApiRes.data) ? prodApiRes.data : prodApiRes.data?.products || [];
+    } catch (err) {
+      console.warn("⚠️ Không thể kết nối Product-Service để đồng bộ SKU gốc khi đặt hàng.");
+    }
 
-    // 🚀 BƯỚC A: CHUẨN HÓA MẢNG SẢN PHẨM 
-    const normalizedItems = danh_sach_san_pham.map(item => ({
-      variant_id: String(item.variant_id || item.variantId),
-      quantity: Number(item.quantity || 1),
-      price: Number(item.price || 0), 
-      product_name: item.name || item.product_name || "Sản phẩm Demi Mart",
-      variant_name: item.variantName || item.variant_name || "Mặc định",
-      image_url: item.image || item.image_url || "",
-      ma_san_pham: item.productId || item.ma_san_pham || null,
-      sku: item.sku || null
-    })).filter(i => i.variant_id && i.quantity > 0);
+    const normalizedItems = danh_sach_san_pham.map(item => {
+      const vId = String(item.variant_id || item.variantId);
+      const pName = item.name || item.product_name || "Sản phẩm Demi Mart";
+      
+      // Mặc định lấy sku từ client gửi, nếu không có, tự động dò tìm trong danh sách biến thể từ database vật lý
+      let finalSku = item.sku || null;
+      if (!finalSku && databaseVariants.length > 0) {
+        // Tìm sản phẩm khớp theo mã biến thể mặc định hoặc tên sản phẩm để bốc sku/ma_san_pham
+        const found = databaseVariants.find(p => 
+          String(p.ma_bien_the_mac_dinh) === vId || 
+          String(p.ten_san_pham || "").toLowerCase().trim() === String(pName).toLowerCase().trim()
+        );
+        
+        if (found) {
+          // Bốc cấu trúc mã số hoặc dữ liệu thay thế khớp với bảng bien_the_san_pham
+          finalSku = found.sku || found.sku_code || `VN-${String(found.ma_san_pham).replace("MSP", "")}-001`;
+        }
+      }
+
+      return {
+        variant_id: vId,
+        quantity: Number(item.quantity || 1),
+        price: Number(item.price || 0), 
+        product_name: pName,
+        variant_name: item.variantName || item.variant_name || "Mặc định",
+        image_url: item.image || item.image_url || "",
+        ma_san_pham: item.productId || item.ma_san_pham || null,
+        sku: finalSku // Gán SKU chuẩn hóa đã tìm được vào đây để lưu xuống DB
+      };
+    }).filter(i => i.variant_id && i.quantity > 0);
 
     if (normalizedItems.length === 0) {
         return res.status(400).json({ success: false, message: "Giỏ hàng rỗng hoặc sản phẩm không hợp lệ!" });
@@ -378,65 +406,40 @@ const getOrderDetailAdmin = async (req, res) => {
     let queryParam = id;
 
     if (isNumber) {
-      orderSql = `
-        SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
-               trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
-        FROM public.orders 
-        WHERE id = $1
-        LIMIT 1;
-      `;
+      orderSql = `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao FROM public.orders WHERE id = $1 LIMIT 1;`;
       queryParam = Number(id);
     } else {
-      orderSql = `
-        SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
-               trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao
-        FROM public.orders 
-        WHERE ma_don_hang = $1
-        LIMIT 1;
-      `;
+      orderSql = `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao FROM public.orders WHERE ma_don_hang = $1 LIMIT 1;`;
     }
 
     const orderResult = db.query ? await db.query(orderSql, [queryParam]) : await db.execute(orderSql, [queryParam]);
     const order = orderResult.rows ? orderResult.rows[0] : orderResult[0];
 
-    if (!order) {
-      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
-    }
+    if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
 
-    const itemsSql = `
-      SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku
-      FROM public.order_items
-      WHERE order_id = $1;
-    `;
+    // Lấy trực tiếp trường sku được lưu giữ cẩn thận trong order_items
+    const itemsSql = `SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku FROM public.order_items WHERE order_id = $1;`;
     const itemsResult = db.query ? await db.query(itemsSql, [order.id]) : await db.execute(itemsSql, [order.id]);
-    const items = itemsResult.rows ? itemsResult.rows : itemsResult;
-    order.danh_sach_san_pham = items;
+    
+    order.danh_sach_san_pham = itemsResult.rows ? itemsResult.rows : itemsResult;
 
-    order.user_info = {
-      full_name: "Khách mua hàng (Ẩn danh)",
-      phone_number: "Chưa cập nhật SĐT",
-      email: "Chưa cập nhật Email"
-    };
+    // Khởi tạo thông tin người mua mặc định
+    order.user_info = { full_name: "Khách mua hàng (Ẩn danh)", phone_number: "Chưa cập nhật SĐT", email: "Chưa cập nhật Email" };
 
     if (order.user_id) {
       try {
         const authResponse = await axios.get(`http://demi_auth_service:5001/api/auth/internal/users/${order.user_id}`);
-        if (authResponse.data && (authResponse.data.user_id || authResponse.data.email)) {
-          order.user_info = authResponse.data; 
-        }
+        if (authResponse.data) order.user_info = authResponse.data; 
       } catch (authErr) {
         console.warn(`⚠️ [AUTH SYNC WARNING]: Không thể lấy thông tin khách hàng từ Auth-Service cho user_id ${order.user_id}`);
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      data: order
-    });
+    return res.status(200).json({ success: true, data: order });
 
   } catch (err) {
     console.error("🔥 Lỗi API getOrderDetailAdmin:", err.message);
-    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải chi tiết mặt hàng." });
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống phân hệ đơn hàng khi tải dữ liệu chi tiết." });
   }
 };
 
