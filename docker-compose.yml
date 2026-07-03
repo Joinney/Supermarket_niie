@@ -187,18 +187,18 @@ services:
 # 14. PROMOTION SERVICE
   promotion-service:
     build: ./backend-node/services/promotion-service
-    container_name: promotion_service
+    container_name: demi_promotion_service
     restart: always
     ports:
       - "5007:5007"
-    networks:
-      - demi_network 
+    env_file:
+      - ./backend-node/services/promotion-service/.env
     environment:
       - PORT=5007
-      # Dùng đúng container_name của DB là vdt_supermarket_db
-      - DATABASE_URL=postgres://${DB_USER:-supermarket_db_exvs_user}:${DB_PASSWORD:-u0tGq1rZG5nb84Ek2siWlqzIDb9W8qO7}@vdt_supermarket_db:5432/demi_promotions_db
     depends_on:
       - db
+    networks:
+      - demi_network
 
 networks:
   demi_network:

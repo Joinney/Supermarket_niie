@@ -16,26 +16,29 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useStore } from "../../context/StoreContext";
-import { productApi } from "../../api/axios";
+import { productApi, promotionApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
-// Import component quảng cáo vừa tách riêng ở đây
 import QuangCao from "./quangcao";
 
 export default function Home() {
   const { t } = useLanguage();
   const { currentStore } = useStore();
-  const { country_code } = useParams(); // Lấy mã quốc gia từ URL params
+  const { country_code } = useParams();
 
+  // State cho Sản phẩm thường
   const [apiProducts, setApiProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productError, setProductError] = useState(null);
+
+  // State riêng cho Flash Sale
+  const [flashSaleProducts, setFlashSaleData] = useState([]);
+  const [loadingFlashSale, setLoadingFlashSale] = useState(true);
+
   const favRef = useRef(null);
 
-  // --- HỆ THỐNG STATE CHO THUẬT TOÁN TAB DÂN DỤNG ---
   const [activeMainTab, setActiveMainTab] = useState("recommend");
   const [activeRankTab, setActiveRankTab] = useState("best");
 
-  // --- BỘ ĐẾM NGƯỢC THỜI GIAN THỰC ĐIỆN TỬ Ô SỐ ---
   const [timeObject, setTimeObject] = useState({
     hh: "00",
     mm: "00",
@@ -71,36 +74,60 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
-  // ĐỒNG BỘ ĐỔI DATA THEO URL HOẶC STORE CONTEXT
+  // 🌟 TÁCH RỜI LUỒNG GỌI API ĐỂ TRÁNH LỖI DÂY CHUYỀN
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        // Ưu tiên lấy country từ URL parameter, nếu không có mới dùng code của Context
-        const targetCountry = country_code || currentStore?.code || "vn";
+    const targetCountry = country_code || currentStore?.code || "vn";
 
+    // 1. Luồng tải Sản Phẩm Thường (Dành cho Yêu thích, BST, BXH...)
+    const fetchGeneralProducts = async () => {
+      try {
+        setLoadingProducts(true);
         const response = await productApi.get(
           `/products?role=client&limit=12&country=${targetCountry}`,
         );
         setApiProducts(response.data);
-        setError(null);
+        setProductError(null);
       } catch (err) {
-        console.error("Lỗi API sản phẩm:", err);
-        setError(
-          err.response?.data?.message ||
-            "Không thể kết nối đến máy chủ Sản phẩm",
+        console.error("Lỗi API Sản phẩm:", err);
+        setProductError(
+          err.response?.data?.message || "Không thể đồng bộ dữ liệu trang chủ",
         );
       } finally {
-        setLoading(false);
+        setLoadingProducts(false);
       }
     };
 
-    fetchProducts();
-  }, [country_code, currentStore?.code]); // Chạy lại khi URL country_code hoặc Store thay đổi
+    // 2. Luồng tải riêng cho Flash Sale (Khuyến mãi nhanh)
+    const fetchFlashSale = async () => {
+      try {
+        setLoadingFlashSale(true);
+        // Lưu ý: Đã thêm /promotions vào đường dẫn để khớp với Backend
+        const response = await promotionApi.get(
+          "/promotions/client/flash-sale/active",
+        );
+        if (response.data && response.data.success && response.data.data) {
+          setFlashSaleData(response.data.data.products);
+        } else {
+          setFlashSaleData([]);
+        }
+      } catch (err) {
+        console.error(
+          "Lỗi API Khuyến mãi (Hoặc chưa bật Server Promotion):",
+          err,
+        );
+        setFlashSaleData([]); // Nếu lỗi, chỉ cần cho mảng rỗng để ẩn khối Flash Sale đi, không làm chết trang
+      } finally {
+        setLoadingFlashSale(false);
+      }
+    };
 
-  // LOGIC AUTO-SCROLL CAROUSEL GỐC (GIỮ NGUYÊN)
+    fetchGeneralProducts();
+    fetchFlashSale();
+  }, [country_code, currentStore?.code]);
+
+  // AUTO-SCROLL CAROUSEL
   useEffect(() => {
     const container = favRef.current;
     if (!container) return;
@@ -139,9 +166,8 @@ export default function Home() {
       clearInterval(intervalId);
       window.removeEventListener("resize", onResize);
     };
-  }, [apiProducts, loading, error]);
+  }, [flashSaleProducts]);
 
-  // 🎯 HÀM TRUNG GIAN CHUẨN HOÁ BIẾN ĐỐI TƯỢNG HOẶC MẢNG AN TOÀN TRƯỚC KHI SLICE
   const getCleanProductList = () => {
     if (!apiProducts) return [];
     if (Array.isArray(apiProducts)) return apiProducts;
@@ -156,17 +182,14 @@ export default function Home() {
 
   return (
     <div className="space-y-12 pb-20 bg-[#fafbfc] font-sans pt-[10px] selection:bg-[#006c49] selection:text-white">
-      {/* Gọi Component Quảng cáo đã được bóc tách và truyền hàm dịch t vào */}
       <QuangCao t={t} />
 
       {/* ========================================================== */}
-      {/* KHỐI 1: KHUYẾN MÃI NHANH - CẬP NHẬT THEO KHUNG VIỀN ẢNH MẪU */}
+      {/* KHỐI 1: KHUYẾN MÃI NHANH (FLASH SALE) */}
       {/* ========================================================== */}
       <section className="mx-6 md:mx-10 bg-white border-2 border-[#f05a28] rounded-[40px] p-6 sm:p-8 shadow-[0_12px_40px_rgba(240,90,40,0.05)]">
-        {/* Header Flash Sale chuẩn giao diện mẫu */}
         <div className="flex flex-row items-center justify-between gap-4 mb-6 pb-2">
           <div className="flex items-center gap-3">
-            {/* Icon đốm lửa tròn màu cam */}
             <div className="w-10 h-10 bg-[#f05a28] rounded-full flex items-center justify-center text-white shadow-sm shadow-orange-200">
               <Flame size={20} className="fill-white" />
             </div>
@@ -181,7 +204,6 @@ export default function Home() {
                 </span>
               </div>
 
-              {/* Cụm đếm ngược ô số tách rời nền trắng viền hồng nhạt */}
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold">
                 <span className="text-xs text-slate-400 font-medium">
                   Sắp kết thúc:
@@ -203,7 +225,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Nút Săn Ngay góc phải chuẩn style ảnh */}
           <Link
             to="/category/khuyen-mai"
             className="text-xs font-black text-[#f05a28] uppercase tracking-wider flex items-center gap-1.5 bg-[#fff1f0] hover:bg-[#ffe4e1] px-5 py-2.5 rounded-2xl transition-all border border-orange-50 shadow-sm"
@@ -217,46 +238,54 @@ export default function Home() {
           ref={favRef}
           className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-2"
         >
-          {loading
-            ? [...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className="min-w-[180px] md:min-w-[220px] space-y-4 p-2 bg-slate-50/50 rounded-2xl animate-pulse"
-                >
-                  <div className="aspect-square bg-slate-100 rounded-2xl"></div>
+          {loadingFlashSale ? (
+            [...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="min-w-[180px] md:min-w-[220px] space-y-4 p-2 bg-slate-50/50 rounded-2xl animate-pulse"
+              >
+                <div className="aspect-square bg-slate-100 rounded-2xl"></div>
+              </div>
+            ))
+          ) : flashSaleProducts.length > 0 ? (
+            flashSaleProducts.map((p, idx) => (
+              <div
+                key={p.ma_san_pham || idx}
+                className="min-w-[180px] md:min-w-[220px] bg-white border border-slate-100 rounded-[28px] p-3 hover:shadow-xl hover:border-slate-200/60 transition-all duration-300 relative group text-left flex flex-col justify-between"
+              >
+                <div className="absolute top-4 left-4 z-10 bg-red-500 text-white font-black text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wide shadow-sm">
+                  -HOT
                 </div>
-              ))
-            : cleanProducts.slice(0, 6).map((p, idx) => (
-                <div
-                  key={p.ma_san_pham || idx}
-                  className="min-w-[180px] md:min-w-[220px] bg-white border border-slate-100 rounded-[28px] p-3 hover:shadow-xl hover:border-slate-200/60 transition-all duration-300 relative group text-left flex flex-col justify-between"
-                >
-                  <div className="absolute top-4 left-4 z-10 bg-red-500 text-white font-black text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wide shadow-sm">
-                    -{20 + idx * 5}%
-                  </div>
-                  <ProductCard p={p} />
+                <ProductCard p={p} />
 
-                  {/* Thanh tiến trình tồn kho mô phỏng */}
-                  <div className="mt-3 space-y-1 w-full px-1">
-                    <div className="flex justify-between text-[10px] font-black uppercase text-slate-400">
-                      <span>Đã bán {14 + idx * 5}</span>
-                      <span className="text-red-500 font-extrabold">
-                        Hot 🔥
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full"
-                        style={{ width: `${85 - idx * 11}%` }}
-                      ></div>
-                    </div>
+                {/* Thanh tiến trình tồn kho Khuyến mãi */}
+                <div className="mt-3 space-y-1 w-full px-1">
+                  <div className="flex justify-between text-[10px] font-black uppercase text-slate-400">
+                    <span>Đã bán {p.thong_tin_sale?.da_ban || 0}</span>
+                    <span className="text-red-500 font-extrabold">Hot 🔥</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full"
+                      style={{
+                        width: `${p.thong_tin_sale?.phan_tram_da_ban || 0}%`,
+                      }}
+                    ></div>
                   </div>
                 </div>
-              ))}
+              </div>
+            ))
+          ) : (
+            <div className="w-full py-8 text-center text-slate-400 text-sm italic font-medium">
+              Chưa có chương trình khuyến mãi nào đang diễn ra.
+            </div>
+          )}
         </div>
       </section>
 
-      {/* 3. SẢN PHẨM THỊNH HÀNH (SÁT SCREEN) */}
+      {/* ========================================================== */}
+      {/* 3. SẢN PHẨM THỊNH HÀNH (SỬ DỤNG DỮ LIỆU SẢN PHẨM THƯỜNG) */}
+      {/* ========================================================== */}
       <section className="px-6 md:px-10">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -274,18 +303,17 @@ export default function Home() {
         </div>
 
         <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4">
-          {loading ? (
+          {loadingProducts ? (
             [...Array(6)].map((_, i) => (
               <div key={i} className="min-w-[170px] md:min-w-[210px] space-y-4">
                 <div className="aspect-square bg-slate-100 rounded-[32px] animate-pulse"></div>
                 <div className="h-4 bg-slate-100 rounded w-3/4 animate-pulse"></div>
-                <div className="h-4 bg-slate-100 rounded w-1/2 animate-pulse"></div>
               </div>
             ))
-          ) : error ? (
+          ) : productError ? (
             <div className="w-full py-10 flex flex-col items-center text-slate-400 gap-2">
               <AlertCircle size={40} />
-              <p className="font-bold">Ối! {error}</p>
+              <p className="font-bold">Ối! {productError}</p>
               <button
                 onClick={() => window.location.reload()}
                 className="text-[#006c49] underline text-sm"
@@ -304,7 +332,7 @@ export default function Home() {
             ))
           )}
 
-          {!loading && !error && (
+          {!loadingProducts && !productError && (
             <Link
               to="/category/tat-ca"
               className="min-w-[120px] flex items-center justify-center text-[#006c49] font-black text-xs cursor-pointer hover:underline uppercase tracking-widest group"
@@ -320,7 +348,7 @@ export default function Home() {
       </section>
 
       {/* ========================================================== */}
-      {/* KHỐI 2: HỆ THỐNG MENU TAB ĐA NĂNG ĐỔ BÓNG TRÀN MÀN HÌNH */}
+      {/* KHỐI 2: KHÁM PHÁ BỘ SƯU TẬP (DỮ LIỆU SẢN PHẨM THƯỜNG) */}
       {/* ========================================================== */}
       <section className="px-6 md:px-10">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-6">
@@ -333,7 +361,6 @@ export default function Home() {
             </h2>
           </div>
 
-          {/* Menu Tab tinh xảo */}
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1 bg-slate-100/70 border border-slate-200/40 p-1.5 rounded-2xl max-w-full">
             {[
               { id: "recommend", label: "Gợi ý cho bạn" },
@@ -357,9 +384,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Lưới phân bổ layout Card hiển thị tối ưu */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-6">
-          {loading
+          {loadingProducts
             ? [...Array(6)].map((_, i) => (
                 <div
                   key={i}
@@ -377,7 +403,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 4. BANNER NGANG (SÁT CẠNH MX-6 MD:MX-10 HOÀN TOÀN) */}
+      {/* 4. BANNER NGANG */}
       <div className="mx-6 md:mx-10 h-32 bg-[#006c49] rounded-[36px] flex items-center justify-between px-6 md:px-16 border border-[#006c49] group cursor-pointer shadow-xl shadow-[#006c49]/15 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-12 relative z-10 text-left">
@@ -397,10 +423,9 @@ export default function Home() {
       </div>
 
       {/* ========================================================== */}
-      {/* KHỐI 3: GLOBAL+ BẢNG XẾP HẠNG (CHIA CỘT FULL SCREEN PX-6)  */}
+      {/* KHỐI 3: GLOBAL+ BẢNG XẾP HẠNG (DỮ LIỆU SẢN PHẨM THƯỜNG) */}
       {/* ========================================================== */}
       <section className="px-6 md:px-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Menu điều khiển BXH bên trái */}
         <div className="lg:col-span-4 bg-white border border-slate-100 rounded-[36px] p-6 text-left shadow-[0_12px_40px_rgba(0,0,0,0.015)] space-y-4 lg:sticky lg:top-4">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-gradient-to-tr from-amber-500 to-yellow-400 rounded-2xl flex items-center justify-center text-white shadow-md shadow-yellow-100">
@@ -450,9 +475,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Khối hiển thị Top 3 sản phẩm Ánh Kim độc quyền bên phải */}
         <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
-          {loading
+          {loadingProducts
             ? [...Array(3)].map((_, i) => (
                 <div
                   key={i}
@@ -473,7 +497,6 @@ export default function Home() {
                     key={p.ma_san_pham || index}
                     className={`bg-gradient-to-b ${medalColors} border rounded-[36px] p-4 relative transition-all duration-300 hover:shadow-2xl hover:-translate-y-1.5 group text-left`}
                   >
-                    {/* Huy hiệu xếp hạng tinh xảo */}
                     <div
                       className={`absolute -top-3.5 -left-2.5 w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs text-white shadow-md border border-white/20 ${
                         index === 0
@@ -486,12 +509,10 @@ export default function Home() {
                       #{index + 1}
                     </div>
 
-                    {/* Huy hiệu Card Sản Phẩm Gốc */}
                     <div className="bg-white rounded-[28px] p-1 border border-slate-100 shadow-sm overflow-hidden">
                       <ProductCard p={p} />
                     </div>
 
-                    {/* Số lượng bán ra thực tế tuần này */}
                     <div className="mt-4 px-1.5 pb-0.5 text-[10px] text-slate-400 font-black uppercase tracking-wider flex items-center justify-between">
                       <span className="flex items-center gap-1">
                         <ShoppingBag size={11} /> Đã bán tuần này

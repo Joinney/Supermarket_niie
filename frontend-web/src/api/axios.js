@@ -110,9 +110,14 @@ export const paymentApi = createInstance(
     isLocal ? 'http://localhost:5004/api' : 'https://paymentservice-url.onrender.com/api'
 );
 
-// ✨ BỔ SUNG: Cổng kết nối đến cổng 5006 của Go warehouse-service kèm tiền tố nhóm v1
+// Cổng kết nối đến cổng 5006 của Go warehouse-service kèm tiền tố nhóm v1
 export const warehouseApi = createInstance(
     isLocal ? 'http://localhost:5006/api/v1' : 'https://warehouseservice-url.onrender.com/api/v1'
+);
+
+// Cổng kết nối đến cổng 5007 của Node.js promotion-service
+export const promotionApi = createInstance(
+    isLocal ? 'http://localhost:5007/api/promotions' : 'https://promotionservice-url.onrender.com/api/promotions'
 );
 
 export default authApi;
