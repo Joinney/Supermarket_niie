@@ -173,7 +173,8 @@ export default function Danhsachvaitro() {
   };
 
   return (
-    <div className="w-full bg-[#f8fafc] font-sans antialiased text-slate-800 text-left p-6 min-h-screen">
+    /* 🌟 THAY ĐỔI: p-6 chuyển thành p-1 bung sát biên hai bên rìa màn hình, bg chuyển về #fafafa */
+    <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left p-1 min-h-screen">
       
       {/* HEADER TRANG */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -276,7 +277,7 @@ export default function Danhsachvaitro() {
         </div>
 
         <div className="relative w-full sm:w-[320px]">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.604 10.604z" />
           </svg>
           <input
@@ -343,7 +344,7 @@ export default function Danhsachvaitro() {
             
             <div className="p-6 pb-4 flex items-center justify-between border-b border-gray-100">
               <div>
-                <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">Tạo vai trò mới</h3>
+                <h3 className="text-2xl font-extrabold text-slate-990 tracking-tight">Tạo vai trò mới</h3>
                 <p className="text-xs text-gray-400 font-medium mt-1">Thiết lập giới hạn truy cập trên từng module cho tài khoản này.</p>
               </div>
               <button onClick={() => setIsNewModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 transition font-bold">✕</button>

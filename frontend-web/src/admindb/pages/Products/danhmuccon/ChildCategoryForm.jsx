@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import axios from "axios";
 import { UploadCloud, Loader2, ChevronLeft, Save } from "lucide-react";
 
@@ -12,7 +13,7 @@ export default function ChildCategoryForm() {
   const [parentCategories, setParentCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false); // 🌟 Thêm state loading cho ảnh
+  const [uploadingImage, setUploadingImage] = useState(false); 
   const fileInputRef = useRef(null);
   const [codeSuffix, setCodeSuffix] = useState("");
 
@@ -24,8 +25,7 @@ export default function ChildCategoryForm() {
     hinh_anh: "",
   });
 
-  const apiUrl =
-    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
+  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
   // Khởi tạo dữ liệu
   useEffect(() => {
@@ -81,7 +81,6 @@ export default function ChildCategoryForm() {
       ? `MDM_${formData.ma_quoc_gia}_${codeSuffix.toUpperCase().replace(/\s+/g, "_")}`
       : "";
 
-  // 🌟 NÂNG CẤP LÊN CLOUDINARY UPLOAD TỪ LOCAL
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -112,7 +111,6 @@ export default function ChildCategoryForm() {
     }
   };
 
-  // Submit Form
   const handleSubmitForm = async (e) => {
     e.preventDefault();
     if (!formData.ma_dm_cha) return alert("Vui lòng chọn Danh mục cha!");
@@ -120,7 +118,6 @@ export default function ChildCategoryForm() {
     setSubmitLoading(true);
 
     try {
-      // Logic: Nếu không phải edit và người dùng có nhập suffix, lấy mã tự ghép
       const finalPayload = { ...formData };
       if (!isEditMode && codeSuffix.trim() !== "") {
         finalPayload.ma_dm_con = generatedCode;
@@ -133,7 +130,15 @@ export default function ChildCategoryForm() {
         );
         alert("✅ Cập nhật danh mục con thành công!");
       } else {
-        await axios.post(`${apiUrl}/api/categories/children`, finalPayload);
+        const payload = {
+          ...finalPayload,
+          duong_dan_seo: formData.ten_danh_muc_con
+            .toLowerCase()
+            .replace(/ /g, "-")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, ""),
+        };
+        await axios.post(`${apiUrl}/api/categories/children`, payload);
         alert("✅ Thêm danh mục con mới thành công!");
       }
       navigate("/admin/products/child-categories");
@@ -149,229 +154,229 @@ export default function ChildCategoryForm() {
 
   if (loading) {
     return (
-      <div className="p-10 flex justify-center text-[#006c49]">
-        <Loader2 className="animate-spin" size={32} />
+      <div className="p-10 flex justify-center text-emerald-700">
+        <Loader2 className="animate-spin" size={28} />
       </div>
     );
   }
 
   return (
-    <div className="p-6 w-full flex-1 font-sans max-w-4xl mx-auto">
-      {/* Header Form */}
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => navigate("/admin/products/child-categories")}
-          className="p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition shadow-sm"
-          title="Quay lại danh sách"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <div>
-          <h1 className="text-2xl font-black text-slate-800">
-            {isEditMode ? "Cập Nhật Danh Mục Con" : "Thêm Danh Mục Con Mới"}
-          </h1>
-          <p className="text-xs font-bold text-slate-400 mt-1">
-            {isEditMode
-              ? `Đang chỉnh sửa mã: ${id}`
-              : "Điền các thông tin cơ bản để tạo mới"}
-          </p>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      /* 🌟 ĐÃ ĐỒNG BỘ: Chuyển p-6 thành p-1 bung sát biên 2 bên mép màn hình, nền #fafafa */
+      className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
+    >
+      <div className="w-full">
+        {/* HEADER SECTION */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={() => navigate("/admin/products/child-categories")}
+            className="w-11 h-11 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition shadow-sm shrink-0 cursor-pointer flex items-center justify-center"
+            title="Quay lại danh sách"
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+              {isEditMode ? "Cập nhật danh mục con" : "Thêm danh mục con mới"}
+            </h1>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-1">
+              <span>Tổng hành dinh</span>
+              <span>❯</span>
+              <span>Danh mục con</span>
+              <span>❯</span>
+              <span className="text-emerald-700 font-bold">
+                {isEditMode ? "Cập nhật" : "Khởi tạo mới"}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Main Form Box */}
-      <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden p-8">
-        <form onSubmit={handleSubmitForm} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Tên Danh Mục Con */}
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                Tên danh mục con <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Ví dụ: Nước ngọt có gas"
-                value={formData.ten_danh_muc_con}
-                onChange={(e) =>
-                  setFormData({ ...formData, ten_danh_muc_con: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
-              />
-            </div>
-
-            {/* Quốc Gia */}
-            <div>
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                Thị trường Quốc gia
-              </label>
-              <select
-                value={formData.ma_quoc_gia}
-                onChange={(e) =>
-                  setFormData({ ...formData, ma_quoc_gia: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer appearance-none"
-              >
-                {countries.map((c) => (
-                  <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>
-                    {c.bieu_tuong_co} {c.ten_quoc_gia}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Danh Mục Cha (Lọc theo Quốc gia) */}
-            <div>
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                Thuộc Danh Mục Cha <span className="text-red-500">*</span>
-              </label>
-              <select
-                required
-                value={formData.ma_dm_cha}
-                onChange={(e) =>
-                  setFormData({ ...formData, ma_dm_cha: e.target.value })
-                }
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition cursor-pointer"
-              >
-                <option value="">-- Chọn danh mục cha --</option>
-                {parentCategories
-                  .filter((p) => p.ma_quoc_gia === formData.ma_quoc_gia)
-                  .map((p) => (
-                    <option key={p.ma_dm_cha} value={p.ma_dm_cha}>
-                      {p.ten_danh_muc_cha}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            {/* Mã Danh Mục Con */}
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                Mã danh mục con (Tùy chọn)
-              </label>
-
-              {isEditMode ? (
+        {/* MAIN CONTAINER (BUNG FULL WIDTH) */}
+        <div className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative">
+          <form onSubmit={handleSubmitForm} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* Tên Danh Mục Con */}
+              <div className="md:col-span-2 space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Tên danh mục con <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
-                  value={formData.ma_dm_con}
-                  disabled
-                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 cursor-not-allowed"
+                  required
+                  placeholder="Ví dụ: Nước ngọt có gas"
+                  value={formData.ten_danh_muc_con}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ten_danh_muc_con: e.target.value })
+                  }
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
                 />
-              ) : (
-                <div className="space-y-2">
+              </div>
+
+              {/* Phân vùng thị trường */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Phân vùng thị trường
+                </label>
+                <select
+                  value={formData.ma_quoc_gia}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ma_quoc_gia: e.target.value })
+                  }
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer"
+                >
+                  {countries.map((c) => (
+                    <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>
+                      {c.bieu_tuong_co} {c.ten_quoc_gia}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Danh Mục Cha */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Thuộc Danh Mục Cha <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={formData.ma_dm_cha}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ma_dm_cha: e.target.value })
+                  }
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer"
+                >
+                  <option value="">-- Chọn danh mục cha --</option>
+                  {parentCategories
+                    .filter((p) => p.ma_quoc_gia === formData.ma_quoc_gia)
+                    .map((p) => (
+                      <option key={p.ma_dm_cha} value={p.ma_dm_cha}>
+                        {p.ten_danh_muc_cha}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Mã Danh Mục Con */}
+              <div className="md:col-span-2 space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Mã định danh danh mục con (Tùy chọn)
+                </label>
+
+                {isEditMode ? (
                   <input
                     type="text"
-                    placeholder="Ví dụ: SNACK, HEALTH, NOODLE..."
-                    value={codeSuffix}
-                    onChange={(e) => setCodeSuffix(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
+                    value={formData.ma_dm_con}
+                    disabled
+                    className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-400 outline-none cursor-not-allowed"
                   />
-                  {generatedCode && (
-                    <p className="text-[11px] font-bold text-[#006c49] bg-emerald-50 px-3 py-1 rounded-lg inline-block">
-                      Mã dự kiến:{" "}
-                      <span className="font-mono">{generatedCode}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Hình ảnh */}
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-                Hình ảnh Danh mục Con
-              </label>
-              <div className="flex gap-4 items-start">
-                {/* 🌟 THÊM class relative VÀO ĐÂY ĐỂ HIỂN THỊ SPINNER */}
-                <div className="w-24 h-24 shrink-0 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center relative">
-                  {formData.hinh_anh ? (
-                    <img
-                      src={formData.hinh_anh}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: SNACK, HEALTH, NOODLE..."
+                      value={codeSuffix}
+                      onChange={(e) => setCodeSuffix(e.target.value)}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
                     />
-                  ) : (
-                    <span className="text-[10px] text-slate-400 font-bold uppercase text-center leading-tight p-2">
-                      No Image
-                    </span>
-                  )}
-                  {/* Overlay loading khi đang upload ảnh */}
-                  {uploadingImage && (
-                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-sm">
-                      <Loader2
-                        size={20}
-                        className="animate-spin text-[#006c49]"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 space-y-3">
-                  <button
-                    type="button"
-                    disabled={uploadingImage}
-                    onClick={() => fileInputRef.current.click()}
-                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-[#006c49]/5 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <UploadCloud size={18} />{" "}
-                    {uploadingImage
-                      ? "Đang tải ảnh..."
-                      : "Chọn ảnh từ máy tính"}
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                  />
-                  <div className="flex items-center gap-3">
-                    <div className="h-px bg-slate-200 flex-1"></div>
-                    <span className="text-[10px] text-slate-400 font-black uppercase">
-                      Hoặc dán URL
-                    </span>
-                    <div className="h-px bg-slate-200 flex-1"></div>
+                    {generatedCode && (
+                      <p className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 mt-1 font-mono w-fit">
+                        Khớp mã: {generatedCode}
+                      </p>
+                    )}
                   </div>
-                  <input
-                    type="url"
-                    placeholder="https://example.com/image.jpg"
-                    value={
-                      formData.hinh_anh.startsWith("http")
-                        ? formData.hinh_anh
-                        : ""
-                    }
-                    onChange={(e) =>
-                      setFormData({ ...formData, hinh_anh: e.target.value })
-                    }
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
-                  />
+                )}
+              </div>
+
+              {/* Hình ảnh danh mục con */}
+              <div className="md:col-span-2 space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Hình ảnh phân loại con
+                </label>
+                <div className="flex gap-4 items-start flex-col sm:flex-row">
+                  <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-slate-50 border border-slate-200 flex items-center justify-center relative shadow-inner">
+                    {formData.hinh_anh ? (
+                      <img
+                        src={formData.hinh_anh}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[9px] text-slate-400 font-black uppercase">Trống</span>
+                    )}
+                    {uploadingImage && (
+                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-xs">
+                        <Loader2 size={16} className="animate-spin text-emerald-700" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2 w-full">
+                    <button
+                      type="button"
+                      disabled={uploadingImage}
+                      onClick={() => fileInputRef.current.click()}
+                      className="w-full py-2 border border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:border-emerald-600 hover:bg-emerald-50/20 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <UploadCloud size={14} /> 
+                      {uploadingImage ? "Đang đồng bộ..." : "Tải ảnh cục bộ"}
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                    />
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="h-[1px] bg-slate-100 flex-1"></div>
+                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">Hoặc sử dụng URL</span>
+                      <div className="h-[1px] bg-slate-100 flex-1"></div>
+                    </div>
+
+                    <input
+                      type="url"
+                      placeholder="https://giao-dien-anh..."
+                      value={formData.hinh_anh.startsWith("http") ? formData.hinh_anh : ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, hinh_anh: e.target.value })
+                      }
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-emerald-600 transition"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => navigate("/admin/products/child-categories")}
-              className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              disabled={submitLoading || uploadingImage}
-              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitLoading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Save size={18} />
-              )}
-              {isEditMode ? "Lưu Cập Nhật" : "Hoàn Tất Tạo Mới"}
-            </button>
-          </div>
-        </form>
+            {/* BUTTONS XÁC NHẬN */}
+            <div className="pt-4 mt-6 border-t border-slate-100 flex items-center justify-end gap-3 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => navigate("/admin/products/child-categories")}
+                className="px-5 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                disabled={submitLoading || uploadingImage}
+                className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow transition transform active:scale-98 cursor-pointer disabled:opacity-50"
+              >
+                {submitLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )}
+                {isEditMode ? "Lưu cập nhật" : "Hoàn tất cấu trúc"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
