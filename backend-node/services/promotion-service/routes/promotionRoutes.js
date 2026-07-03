@@ -5,7 +5,8 @@ import {
     updateFlashSale, 
     deleteFlashSale, 
     getActiveFlashSaleClient,
-    getAllFlashSalesAdmin   
+    getAllFlashSalesAdmin,
+    getFlashSaleByIdAdmin   
 } from '../controllers/promotionController.js';
 
 const router = express.Router();
@@ -16,7 +17,6 @@ const router = express.Router();
 // Lấy chương trình Flash Sale đang chạy để hiện ra trang Home
 router.get('/client/flash-sale/active', getActiveFlashSaleClient);
 
-// ==========================================
 //  API DÀNH CHO ADMIN (QUẢN TRỊ VIÊN)
 // ==========================================
 // 1. Tạo chương trình Khuyến mãi mới
@@ -34,4 +34,6 @@ router.delete('/admin/flash-sale/:ma_khuyen_mai', deleteFlashSale);
 // 5. Lấy danh sách tất cả chương trình
 router.get('/admin/flash-sale', getAllFlashSalesAdmin);
 
+// 6. Lấy thông tin chi tiết của một chương trình theo ID
+router.get('/admin/flash-sale/:ma_khuyen_mai', getFlashSaleByIdAdmin);
 export default router;

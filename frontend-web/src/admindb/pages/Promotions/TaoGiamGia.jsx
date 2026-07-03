@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Save,
@@ -35,7 +35,11 @@ const removeVietnameseTones = (str) => {
 
 export default function TaoGiamGia() {
   const navigate = useNavigate();
+  const { id } = useParams(); // Lấy mã khuyến mãi từ URL nếu đang ở chế độ Edit
+  const isEditMode = !!id;
+
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(isEditMode); // Để hiện loading khi đang fetch data cũ
 
   const [campaignInfo, setCampaignInfo] = useState({
     ten_chuong_trinh: "",
@@ -48,50 +52,98 @@ export default function TaoGiamGia() {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedItems, setSelectedItems] = useState([]);
 
-  // Lấy danh sách sản phẩm và bóc tách TOÀN BỘ biến thể (Bao gồm Tải bù & Khớp đúng tên cột DB)
-  useEffect(() => {
-    const fetchProductsForSelection = async () => {
-      try {
-        const res = await productApi.get("/products?role=admin&limit=100");
+  // ========================================================
+  // 1. FETCH DANH SÁCH SẢN PHẨM GỐC
+  // ========================================================
+  const fetchProductsForSelection = async () => {
+    try {
+      const res = await productApi.get("/products?role=admin&limit=100");
+      let flatVariants = [];
 
-        if (res.data && res.data.products) {
-          const flatVariants = [];
-          const groupedProductIds = [];
-          const groupedProductsMap = {};
+      if (res.data && res.data.products) {
+        const groupedProductIds = [];
+        const groupedProductsMap = {};
 
-          res.data.products.forEach((p) => {
-            const isSingle =
-              p.co_bien_the === false ||
-              p.co_bien_the === "false" ||
-              p.co_bien_the === 0 ||
-              !p.co_bien_the;
+        res.data.products.forEach((p) => {
+          const isSingle =
+            p.co_bien_the === false ||
+            p.co_bien_the === "false" ||
+            p.co_bien_the === 0 ||
+            !p.co_bien_the;
 
-            if (isSingle) {
-              flatVariants.push({
-                ma_san_pham: p.ma_san_pham,
-                ten_san_pham: p.ten_san_pham,
-                hinh_anh: p.hinh_anh_chinh,
-                ma_bien_the: p.ma_bien_the_mac_dinh || p.ma_san_pham,
-                ten_bien_the: "Mặc định",
-                gia_goc: p.gia_ban_le || p.gia_ban_thap_nhat || p.gia_ban || 0,
-                ton_kho_goc: p.so_luong_ton || p.tong_ton_kho || p.ton_kho || 0,
-                sku: p.sku || "",
+          if (isSingle) {
+            flatVariants.push({
+              ma_san_pham: p.ma_san_pham,
+              ten_san_pham: p.ten_san_pham,
+              hinh_anh: p.hinh_anh_chinh,
+              ma_bien_the: p.ma_bien_the_mac_dinh || p.ma_san_pham,
+              ten_bien_the: "Mặc định",
+              gia_goc: p.gia_ban_le || p.gia_ban_thap_nhat || p.gia_ban || 0,
+              ton_kho_goc: p.so_luong_ton || p.tong_ton_kho || p.ton_kho || 0,
+              sku: p.sku || "",
+            });
+          } else {
+            const variantArray =
+              p.chi_tiet_bien_the ||
+              p.bien_the ||
+              p.danh_sach_bien_the ||
+              p.variants ||
+              p.bien_the_san_pham ||
+              [];
+            if (variantArray.length > 0) {
+              variantArray.forEach((v) => {
+                flatVariants.push({
+                  ma_san_pham: p.ma_san_pham,
+                  ten_san_pham: p.ten_san_pham,
+                  hinh_anh: v.hinh_anh || p.hinh_anh_chinh,
+                  ma_bien_the: v.ma_bien_the,
+                  ten_bien_the:
+                    v.ten_bien_the ||
+                    `${v.mau_sac || ""} ${v.kich_thuoc || ""}`.trim() ||
+                    "Biến thể",
+                  gia_goc:
+                    v.gia_ban_le ||
+                    v.gia_ban ||
+                    p.gia_ban_le ||
+                    p.gia_ban_thap_nhat ||
+                    0,
+                  ton_kho_goc: v.so_luong_ton || v.ton_kho || 0,
+                  sku: v.sku || "",
+                });
               });
             } else {
-              const variantArray =
-                p.chi_tiet_bien_the ||
-                p.bien_the ||
-                p.danh_sach_bien_the ||
-                p.variants ||
-                p.bien_the_san_pham ||
-                [];
+              groupedProductIds.push(p.ma_san_pham);
+              groupedProductsMap[p.ma_san_pham] = p;
+            }
+          }
+        });
 
-              if (variantArray.length > 0) {
-                variantArray.forEach((v) => {
+        if (groupedProductIds.length > 0) {
+          const detailPromises = groupedProductIds.map((id) =>
+            productApi.get(`/products/${id}?role=admin`).catch(() => null),
+          );
+          const detailResponses = await Promise.all(detailPromises);
+
+          detailResponses.forEach((response) => {
+            if (response && response.data) {
+              const pDetail =
+                response.data.product || response.data.data || response.data;
+              if (!pDetail) return;
+              const baseP = groupedProductsMap[pDetail.ma_san_pham];
+              if (!baseP) return;
+
+              const vArray =
+                pDetail.chi_tiet_bien_the ||
+                pDetail.bien_the ||
+                pDetail.variants ||
+                pDetail.bien_the_san_pham ||
+                [];
+              if (vArray.length > 0) {
+                vArray.forEach((v) => {
                   flatVariants.push({
-                    ma_san_pham: p.ma_san_pham,
-                    ten_san_pham: p.ten_san_pham,
-                    hinh_anh: v.hinh_anh || p.hinh_anh_chinh,
+                    ma_san_pham: baseP.ma_san_pham,
+                    ten_san_pham: baseP.ten_san_pham,
+                    hinh_anh: v.hinh_anh || baseP.hinh_anh_chinh,
                     ma_bien_the: v.ma_bien_the,
                     ten_bien_the:
                       v.ten_bien_the ||
@@ -100,78 +152,97 @@ export default function TaoGiamGia() {
                     gia_goc:
                       v.gia_ban_le ||
                       v.gia_ban ||
-                      p.gia_ban_le ||
-                      p.gia_ban_thap_nhat ||
+                      baseP.gia_ban_le ||
+                      baseP.gia_ban_thap_nhat ||
                       0,
                     ton_kho_goc: v.so_luong_ton || v.ton_kho || 0,
                     sku: v.sku || "",
                   });
                 });
-              } else {
-                groupedProductIds.push(p.ma_san_pham);
-                groupedProductsMap[p.ma_san_pham] = p;
               }
             }
           });
-
-          if (groupedProductIds.length > 0) {
-            const detailPromises = groupedProductIds.map((id) =>
-              productApi.get(`/products/${id}?role=admin`).catch(() => null),
-            );
-
-            const detailResponses = await Promise.all(detailPromises);
-
-            detailResponses.forEach((response) => {
-              if (response && response.data) {
-                const pDetail =
-                  response.data.product || response.data.data || response.data;
-                if (!pDetail) return;
-
-                const baseP = groupedProductsMap[pDetail.ma_san_pham];
-                if (!baseP) return;
-
-                const vArray =
-                  pDetail.chi_tiet_bien_the ||
-                  pDetail.bien_the ||
-                  pDetail.variants ||
-                  pDetail.bien_the_san_pham ||
-                  [];
-
-                if (vArray.length > 0) {
-                  vArray.forEach((v) => {
-                    flatVariants.push({
-                      ma_san_pham: baseP.ma_san_pham,
-                      ten_san_pham: baseP.ten_san_pham,
-                      hinh_anh: v.hinh_anh || baseP.hinh_anh_chinh,
-                      ma_bien_the: v.ma_bien_the,
-                      ten_bien_the:
-                        v.ten_bien_the ||
-                        `${v.mau_sac || ""} ${v.kich_thuoc || ""}`.trim() ||
-                        "Biến thể",
-                      gia_goc:
-                        v.gia_ban_le ||
-                        v.gia_ban ||
-                        baseP.gia_ban_le ||
-                        baseP.gia_ban_thap_nhat ||
-                        0,
-                      ton_kho_goc: v.so_luong_ton || v.ton_kho || 0,
-                      sku: v.sku || "",
-                    });
-                  });
-                }
-              }
-            });
-          }
-
-          setAvailableProducts(flatVariants);
         }
-      } catch (error) {
-        console.error("Lỗi tải danh sách sản phẩm:", error);
       }
+      return flatVariants;
+    } catch (error) {
+      console.error("Lỗi tải danh sách sản phẩm:", error);
+      return [];
+    }
+  };
+
+  // ========================================================
+  // 2. LOGIC LOAD DATA (CHẾ ĐỘ EDIT) KẾT HỢP VỚI PRODUCT LIST
+  // ========================================================
+  useEffect(() => {
+    const initializeData = async () => {
+      // 1. Lấy toàn bộ sản phẩm gốc trước để lấy giá gốc, tồn kho gốc, hình ảnh
+      const allProducts = await fetchProductsForSelection();
+      setAvailableProducts(allProducts);
+
+      // 2. Nếu đang là chế độ Edit -> Gọi API lấy dữ liệu cũ đắp vào
+      if (isEditMode) {
+        try {
+          // Gọi đúng API lấy chi tiết của Admin (không bị lỗi 404 nữa)
+          const res = await promotionApi.get(`/admin/flash-sale/${id}`);
+
+          if (res.data.success) {
+            const { chuong_trinh, products } = res.data.data;
+
+            // Hàm chuyển đổi thời gian để hiện lên thẻ input
+            const formatTime = (timeStr) => {
+              if (!timeStr) return "";
+              const date = new Date(timeStr);
+              const offset = date.getTimezoneOffset() * 60000;
+              return new Date(date - offset).toISOString().slice(0, 16);
+            };
+
+            // 2.1 Set thông tin cơ bản
+            setCampaignInfo({
+              ten_chuong_trinh: chuong_trinh.ten_chuong_trinh,
+              mo_ta: chuong_trinh.mo_ta || "",
+              thoi_gian_bat_dau: formatTime(chuong_trinh.thoi_gian_bat_dau),
+              thoi_gian_ket_thuc: formatTime(chuong_trinh.thoi_gian_ket_thuc),
+            });
+
+            // 2.2 Đắp danh sách sản phẩm vào bảng
+            if (products && products.length > 0) {
+              const oldSelectedItems = products.map((item) => {
+                // Lấy thông tin gốc (tên, hình, giá, tồn) từ danh sách allProducts
+                const productBase =
+                  allProducts.find((p) => p.ma_bien_the === item.ma_bien_the) ||
+                  {};
+
+                return {
+                  ma_san_pham: item.ma_san_pham,
+                  ten_san_pham:
+                    productBase.ten_san_pham || `Sản phẩm ${item.ma_san_pham}`,
+                  hinh_anh: productBase.hinh_anh || "",
+                  ma_bien_the: item.ma_bien_the,
+                  ten_bien_the: productBase.ten_bien_the || "Mặc định",
+                  gia_goc: productBase.gia_goc || 0,
+                  ton_kho_goc: productBase.ton_kho_goc || 0,
+                  sku: productBase.sku || "",
+                  gia_khuyen_mai: item.gia_khuyen_mai,
+                  phan_tram_giam: "",
+                  loai_giam_gia: "price",
+                  so_luong_gioi_han: item.so_luong_gioi_han,
+                };
+              });
+              setSelectedItems(oldSelectedItems);
+            }
+          }
+        } catch (error) {
+          console.error("Lỗi khi load dữ liệu Edit:", error);
+          alert("Không thể tải thông tin chiến dịch.");
+          navigate("/admin/promotions/danh-sach");
+        }
+      }
+      setInitialLoading(false);
     };
 
-    fetchProductsForSelection();
-  }, []);
+    initializeData();
+  }, [id, isEditMode, navigate]);
 
   const handleAddItem = (variant) => {
     const isExist = selectedItems.find(
@@ -238,6 +309,9 @@ export default function TaoGiamGia() {
     setSelectedItems(newItems);
   };
 
+  // ========================================================
+  // 3. LƯU DỮ LIỆU CHUNG CHO CẢ TẠO MỚI & SỬA
+  // ========================================================
   const handleSaveCampaign = async (e) => {
     e.preventDefault();
     if (selectedItems.length === 0) {
@@ -253,30 +327,46 @@ export default function TaoGiamGia() {
 
     try {
       setLoading(true);
-      const createRes = await promotionApi.post(
-        "/admin/flash-sale",
-        campaignInfo,
-      );
 
-      if (createRes.data.success) {
-        const newPromoId = createRes.data.data.ma_khuyen_mai;
-        const itemsPayload = selectedItems.map((item) => ({
-          ma_san_pham: item.ma_san_pham,
-          ma_bien_the: item.ma_bien_the,
-          gia_khuyen_mai: item.gia_khuyen_mai,
-          so_luong_gioi_han: item.so_luong_gioi_han,
-        }));
+      const itemsPayload = selectedItems.map((item) => ({
+        ma_san_pham: item.ma_san_pham,
+        ma_bien_the: item.ma_bien_the,
+        gia_khuyen_mai: item.gia_khuyen_mai,
+        so_luong_gioi_han: item.so_luong_gioi_han,
+      }));
 
-        await promotionApi.post(`/admin/flash-sale/${newPromoId}/items`, {
+      if (isEditMode) {
+        // GỌI API PUT ĐỂ SỬA THÔNG TIN CHIẾN DỊCH
+        await promotionApi.put(`/admin/flash-sale/${id}`, campaignInfo);
+
+        // GỌI API POST ĐỂ UPDATE DANH SÁCH ITEMS (Dùng On Conflict bên Backend)
+        await promotionApi.post(`/admin/flash-sale/${id}/items`, {
           items: itemsPayload,
         });
 
-        alert("Tạo chương trình giảm giá thành công!");
-        navigate("/admin/promotions/danh-sach");
+        alert("Cập nhật chương trình giảm giá thành công!");
+      } else {
+        // GỌI API POST ĐỂ TẠO MỚI
+        const createRes = await promotionApi.post(
+          "/admin/flash-sale",
+          campaignInfo,
+        );
+        if (createRes.data.success) {
+          const newPromoId = createRes.data.data.ma_khuyen_mai;
+          await promotionApi.post(`/admin/flash-sale/${newPromoId}/items`, {
+            items: itemsPayload,
+          });
+          alert("Tạo chương trình giảm giá thành công!");
+        }
       }
+
+      navigate("/admin/promotions/danh-sach");
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || "Lỗi khi lưu chương trình!");
+      alert(
+        error.response?.data?.message ||
+          "Lỗi khi lưu chương trình! (Có thể sản phẩm đang bị trùng giờ)",
+      );
     } finally {
       setLoading(false);
     }
@@ -296,6 +386,14 @@ export default function TaoGiamGia() {
     );
   });
 
+  if (initialLoading) {
+    return (
+      <div className="w-full text-center py-20 text-gray-500">
+        Đang tải dữ liệu chiến dịch...
+      </div>
+    );
+  }
+
   return (
     <div className="w-full text-gray-800 pb-10">
       <div className="mb-6 flex items-center justify-between">
@@ -308,7 +406,7 @@ export default function TaoGiamGia() {
           </Link>
           <div>
             <h1 className="text-2xl font-black text-gray-900">
-              Tạo Chiến Dịch Mới
+              {isEditMode ? "Chỉnh Sửa Chiến Dịch" : "Tạo Chiến Dịch Mới"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
               Thiết lập thông tin và chọn sản phẩm áp dụng giảm giá.
@@ -320,7 +418,8 @@ export default function TaoGiamGia() {
           disabled={loading}
           className="bg-[#007A5A] hover:bg-[#006349] text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
         >
-          <Save size={18} /> {loading ? "Đang lưu..." : "Lưu Chiến Dịch"}
+          <Save size={18} />{" "}
+          {loading ? "Đang lưu..." : isEditMode ? "Cập Nhật" : "Lưu Chiến Dịch"}
         </button>
       </div>
 
@@ -416,7 +515,6 @@ export default function TaoGiamGia() {
             <h2 className="font-bold text-sm uppercase mb-4 text-gray-800">
               1. Chọn sản phẩm / Biến thể tham gia
             </h2>
-
             <div className="relative mb-4">
               <Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -553,7 +651,6 @@ export default function TaoGiamGia() {
                         <td className="px-3 py-3 text-right text-gray-400 line-through text-[12px]">
                           {Number(item.gia_goc).toLocaleString()}
                         </td>
-
                         <td className="px-3 py-3 text-center">
                           <input
                             type="number"
@@ -570,7 +667,6 @@ export default function TaoGiamGia() {
                             }
                           />
                         </td>
-
                         <td className="px-3 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <input
@@ -602,7 +698,6 @@ export default function TaoGiamGia() {
                             </button>
                           </div>
                         </td>
-
                         <td className="px-3 py-3 text-center">
                           <div className="flex flex-col items-center">
                             <input
@@ -624,7 +719,6 @@ export default function TaoGiamGia() {
                             </span>
                           </div>
                         </td>
-
                         <td className="px-3 py-3 text-center">
                           <button
                             onClick={() => handleRemoveItem(item.ma_bien_the)}

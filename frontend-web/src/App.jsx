@@ -850,6 +850,7 @@ const AppRoutes = () => (
         <Route index element={<Navigate to="danh-sach" replace />} />
         <Route path="danh-sach" element={<DanhSachGiamGia />} />
         <Route path="tao-moi" element={<TaoGiamGia />} />
+        <Route path="flash-sale/edit/:id" element={<TaoGiamGia />} />
       </Route>
 
       {/* 🌍 Bọc Quản Lý Cửa Hàng / Quốc Gia */}

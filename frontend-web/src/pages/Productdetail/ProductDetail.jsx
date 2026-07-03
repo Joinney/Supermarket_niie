@@ -273,7 +273,28 @@ export default function ProductDetail() {
   const stockCount = selectedVariant?.so_luong_ton || 0;
   const isOutOfStock = !selectedVariant || stockCount <= 0;
 
+  // HÀM KIỂM TRA ĐĂNG NHẬP (Lưu ý: sửa "token" thành tên biến của bạn nếu cần)
+  const checkIsLoggedIn = () => {
+    const token = localStorage.getItem("token");
+    return !!token;
+  };
+
+  // ==========================================
+  // XỬ LÝ NÚT: MUA NGAY
+  // ==========================================
   const handleBuyNow = () => {
+    // 1. Kiểm tra đăng nhập
+    if (!checkIsLoggedIn()) {
+      const confirmLogin = window.confirm(
+        "Bạn cần đăng nhập để mua sản phẩm. Đi tới trang đăng nhập?",
+      );
+      if (confirmLogin) {
+        navigate("/login");
+      }
+      return;
+    }
+
+    // 2. Chạy logic Mua Ngay
     if (!product || !selectedVariant || isOutOfStock) return;
     navigate("/checkout", {
       state: {
@@ -283,7 +304,22 @@ export default function ProductDetail() {
     });
   };
 
+  // ==========================================
+  // XỬ LÝ NÚT: THÊM VÀO GIỎ HÀNG
+  // ==========================================
   const handleAddToCart = (e) => {
+    // 1. Kiểm tra đăng nhập
+    if (!checkIsLoggedIn()) {
+      const confirmLogin = window.confirm(
+        "Bạn cần đăng nhập để thêm sản phẩm vào giỏ hàng. Đi tới trang đăng nhập?",
+      );
+      if (confirmLogin) {
+        navigate("/login");
+      }
+      return;
+    }
+
+    // 2. Chạy logic Thêm vào giỏ
     if (!product || !selectedVariant || isOutOfStock) return;
 
     let cleanEAVArray = [];
@@ -328,6 +364,7 @@ export default function ProductDetail() {
 
     addToCart(itemToCart);
 
+    // Hiệu ứng bay vào giỏ hàng
     const startX = e.clientX;
     const startY = e.clientY;
     const cartIcon = document.getElementById("cart-icon");
@@ -354,6 +391,7 @@ export default function ProductDetail() {
 
     setTimeout(() => dot.remove(), 800);
 
+    // Hiệu ứng thông báo thành công
     const toast = document.createElement("div");
     toast.className = "custom-toast";
     toast.innerHTML = `

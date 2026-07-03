@@ -547,7 +547,7 @@ export default function Sidebar() {
                       }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/promotions/tao-moi")}`}
                     >
-                      <span>Tạo mới Khuyến mãi</span>
+                      <span>Chiến dịch Khuyến mãi</span>
                     </button>
                   </div>
                 )}

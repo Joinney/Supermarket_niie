@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
@@ -7,6 +7,7 @@ import { useCart } from "../../context/CartContext";
 const ProductCard = ({ p, categoryName, categorySlug }) => {
   const { currentStore, formatPrice } = useStore();
   const { addToCart } = useCart();
+  const navigate = useNavigate();
 
   const defaultImage =
     "https://media.istockphoto.com/id/2209753844/vi/anh/mua-s%E1%BA%AFm-d%E1%BB%8Dc-theo-k%E1%BB%87-h%C3%A0ng-%E1%BB%9F-l%E1%BB%91i-%C4%91i-si%C3%AAu-th%E1%BB%8B-hi%E1%BB%87n-%C4%91%E1%BA%A1i.jpg?s=612x612&w=0&k=20&c=lw3Ya3lz386J1OTWV_vsl4F9cl-YbGg6h1_PleW_0ZI=";
@@ -23,9 +24,25 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
   const stockCount = p.tong_ton_kho ? Number(p.tong_ton_kho) : 0;
   const isOutOfStock = stockCount <= 0;
 
+  const checkIsLoggedIn = () => {
+    const token = localStorage.getItem("token");
+    return !!token;
+  };
+
   const handleQuickAddCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const isLoggedIn = checkIsLoggedIn();
+    if (!isLoggedIn) {
+      const confirmLogin = window.confirm(
+        "Bạn cần đăng nhập để thêm sản phẩm vào giỏ hàng. Đi tới trang đăng nhập?",
+      );
+      if (confirmLogin) {
+        navigate("/login");
+      }
+      return;
+    }
 
     if (isOutOfStock) {
       alert("Sản phẩm này hiện đang tạm hết hàng!");
