@@ -66,7 +66,7 @@ export const getInternalVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 1. LẤY TẤT CẢ SẢN PHẨM (TRANG HOME & ADMIN) 
+// 1. LẤY TẤT CẢ SẢN PHẨM (PHÂN TÁCH LOGIC RÕ RÀNG GIỮA CLIENT VÀ ADMIN) 
 // =========================================================================
 export const getAllProducts = async (req, res) => {
     try {
@@ -75,73 +75,145 @@ export const getAllProducts = async (req, res) => {
         
         const { sort, market, role, type } = req.query; 
 
-        let whereClause = `WHERE 1=1`; 
         let values = [];
         let valueIndex = 1;
 
+        // =====================================================================
+        // NHÁNH 1: DÀNH CHO CLIENT (HIỂN THỊ CHI TIẾT TỪNG BIẾN THỂ / SKU)
+        // =====================================================================
         if (role === 'client') {
-            whereClause += ` AND sp.trang_thai = true`;
+            let whereClause = `WHERE bt.trang_thai = true AND sp.trang_thai = true`; 
+
+            if (market && market !== 'all') {
+                whereClause += ` AND UPPER(sp.ma_quoc_gia) = $${valueIndex}`;
+                values.push(market.toUpperCase());
+                valueIndex++;
+            }
+
+            if (type === 'single') {
+                whereClause += ` AND sp.co_bien_the = false`;
+            } else if (type === 'group') {
+                whereClause += ` AND sp.co_bien_the = true`;
+            }
+
+            // Đếm tổng số lượng Biến thể (SKU)
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM public.bien_the_san_pham bt
+                JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
+                LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+                ${whereClause};
+            `;
+            const { rows: countResult } = await pool.query(countQuery, values);
+            const totalItems = parseInt(countResult[0]?.total || 0);
+            const totalPages = Math.ceil(totalItems / limit);
+
+            let orderByClause = `ORDER BY bt.ngay_tao DESC`;
+            if (sort === 'oldest') orderByClause = `ORDER BY bt.ngay_tao ASC`;
+            if (sort === 'price_desc') orderByClause = `ORDER BY bt.gia_ban_le DESC NULLS LAST`;
+            if (sort === 'price_asc') orderByClause = `ORDER BY bt.gia_ban_le ASC NULLS LAST`;
+
+            // Lấy thẳng dữ liệu từ bảng BIẾN THỂ
+            const query = `
+                SELECT 
+                    sp.ma_san_pham, 
+                    -- Đổi tên hiển thị: Nếu có biến thể, ghép thêm tên biến thể (VD: C2 - Vị Đào)
+                    CASE 
+                        WHEN sp.co_bien_the = true THEN sp.ten_san_pham || ' - ' || bt.ten_bien_the
+                        ELSE sp.ten_san_pham
+                    END AS ten_san_pham, 
+                    sp.mo_ta, sp.trang_thai, bt.ngay_tao, sp.ngay_cap_nhat,
+                    sp.ma_quoc_gia, sp.co_bien_the, 
+                    dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
+                    
+                    bt.ma_bien_the,
+                    bt.sku AS ma_sku,
+                    bt.ten_bien_the,
+                    
+                    -- Ép tên cột giống Frontend đang gọi để không phải sửa ProductCard
+                    bt.so_luong_ton AS tong_ton_kho,
+                    bt.gia_ban_le AS gia_ban_thap_nhat,
+                    
+                    -- Ưu tiên lấy ảnh của biến thể, nếu không có mới lấy ảnh gốc sản phẩm
+                    COALESCE(
+                        (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_bien_the = bt.ma_bien_the AND la_anh_chinh = true LIMIT 1),
+                        (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1)
+                    ) AS hinh_anh_chinh
+                    
+                FROM public.bien_the_san_pham bt
+                JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
+                LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+                ${whereClause}
+                ${orderByClause}
+                LIMIT $${valueIndex} OFFSET $${valueIndex + 1};
+            `;
+
+            values.push(limit, offset);
+            const { rows: products } = await pool.query(query, values);
+
+            return res.status(200).json({ products, totalPages, currentPage: page, totalItems });
+        } 
+        
+        // =====================================================================
+        // NHÁNH 2: DÀNH CHO ADMIN (GIỮ NGUYÊN CODE CŨ CỦA BẠN - TỔNG HỢP SP MẸ)
+        // =====================================================================
+        else {
+            let whereClause = `WHERE 1=1`; 
+
+            if (market && market !== 'all') {
+                whereClause += ` AND UPPER(sp.ma_quoc_gia) = $${valueIndex}`;
+                values.push(market.toUpperCase());
+                valueIndex++;
+            }
+
+            if (type === 'single') {
+                whereClause += ` AND sp.co_bien_the = false`;
+            } else if (type === 'group') {
+                whereClause += ` AND sp.co_bien_the = true`;
+            }
+
+            const countQuery = `
+                SELECT COUNT(*) as total 
+                FROM public.san_pham sp
+                LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+                ${whereClause};
+            `;
+            const { rows: countResult } = await pool.query(countQuery, values);
+            const totalItems = parseInt(countResult[0]?.total || 0);
+            const totalPages = Math.ceil(totalItems / limit);
+
+            let orderByClause = `ORDER BY sp.ngay_tao DESC`;
+            if (sort === 'oldest') orderByClause = `ORDER BY sp.ngay_tao ASC`;
+            if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
+            if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
+
+            const query = `
+                SELECT 
+                    sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
+                    sp.ma_quoc_gia, sp.co_bien_the, 
+                    dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
+                    
+                    COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
+                    
+                    -- Lấy giá thấp nhất từ bảng biến thể cho cả Sản phẩm Đơn và Nhóm
+                    COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                    
+                    (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh,
+
+                    (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh
+                    
+                FROM public.san_pham sp
+                LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
+                ${whereClause}
+                ${orderByClause}
+                LIMIT $${valueIndex} OFFSET $${valueIndex + 1};
+            `;
+
+            values.push(limit, offset);
+            const { rows: products } = await pool.query(query, values);
+
+            return res.status(200).json({ products, totalPages, currentPage: page, totalItems });
         }
-
-        if (market && market !== 'all') {
-            whereClause += ` AND UPPER(sp.ma_quoc_gia) = $${valueIndex}`;
-            values.push(market.toUpperCase());
-            valueIndex++;
-        }
-
-        if (type === 'single') {
-            whereClause += ` AND sp.co_bien_the = false`;
-        } else if (type === 'group') {
-            whereClause += ` AND sp.co_bien_the = true`;
-        }
-
-        const countQuery = `
-            SELECT COUNT(*) as total 
-            FROM public.san_pham sp
-            LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            ${whereClause};
-        `;
-        const { rows: countResult } = await pool.query(countQuery, values);
-        const totalItems = parseInt(countResult[0]?.total || 0);
-        const totalPages = Math.ceil(totalItems / limit);
-
-        let orderByClause = `ORDER BY sp.ngay_tao DESC`;
-        if (sort === 'oldest') orderByClause = `ORDER BY sp.ngay_tao ASC`;
-        if (sort === 'price_desc') orderByClause = `ORDER BY gia_ban_thap_nhat DESC NULLS LAST`;
-        if (sort === 'price_asc') orderByClause = `ORDER BY gia_ban_thap_nhat ASC NULLS LAST`;
-
-        const query = `
-            SELECT 
-                sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat,
-                sp.ma_quoc_gia, sp.co_bien_the, 
-                dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc,
-                
-                COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
-                
-                -- Lấy giá thấp nhất từ bảng biến thể cho cả Sản phẩm Đơn và Nhóm
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
-                
-                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true LIMIT 1) AS hinh_anh_chinh,
-
-                (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh
-                
-            FROM public.san_pham sp
-            LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
-            ${whereClause}
-            ${orderByClause}
-            LIMIT $${valueIndex} OFFSET $${valueIndex + 1};
-        `;
-
-        values.push(limit, offset);
-
-        const { rows: products } = await pool.query(query, values);
-
-        res.status(200).json({
-            products,
-            totalPages,
-            currentPage: page,
-            totalItems
-        });
     } catch (error) {
         console.error("❌ Lỗi API getAllProducts:", error.message);
         res.status(500).json({ error: "Không thể lấy danh sách sản phẩm." });
@@ -586,9 +658,7 @@ export const createProduct = async (req, res) => {
                 so_luong_ton || 0
             ]);
         }
-        // ==============================================================
 
-        // Lưu ảnh chính (nếu có)
         if (hinh_anh_chinh) {
             const ma_media = generateUniqueId('MED'); 
             await client.query(`

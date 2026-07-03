@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
 
@@ -10,6 +10,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
 
   const defaultImage =
     "https://media.istockphoto.com/id/2209753844/vi/anh/mua-s%E1%BA%AFm-d%E1%BB%8Dc-theo-k%E1%BB%87-h%C3%A0ng-%E1%BB%9F-l%E1%BB%91i-%C4%91i-si%C3%AAu-th%E1%BB%8B-hi%E1%BB%87n-%C4%91%E1%BA%A1i.jpg?s=612x612&w=0&k=20&c=lw3Ya3lz386J1OTWV_vsl4F9cl-YbGg6h1_PleW_0ZI=";
+
   const mainImage = p.hinh_anh_chinh || defaultImage;
   const currentPrice = Number(p.gia_ban_thap_nhat) || 0;
 
@@ -18,6 +19,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
 
   const category = categorySlug || p.slug_danh_muc || "san-pham";
 
+  // Vì API (nhánh client) đã trả về tồn kho chính xác của SKU trong trường tong_ton_kho
   const stockCount = p.tong_ton_kho ? Number(p.tong_ton_kho) : 0;
   const isOutOfStock = stockCount <= 0;
 
@@ -30,11 +32,9 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       return;
     }
 
-    // 🌟 FIX QUAN TRỌNG: Ưu tiên mã biến thể/SKU cụ thể đang được truyền vào từ API Khuyến mãi/Danh sách
+    // Đã sửa lại để lấy ưu tiên `ma_bien_the` (từ API Client trả về)
     const targetVariantId =
       p.ma_bien_the || p.ma_sku || p.ma_bien_the_mac_dinh || p.ma_san_pham;
-
-    // Ưu tiên lấy tên của phiên bản/biến thể đó nếu có
     const targetVariantName = p.ten_bien_the || p.ten_phien_ban || "Mặc định";
 
     const itemToCart = {
@@ -47,7 +47,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       productId: p.ma_san_pham,
       categorySlug: category,
       countryCode: country,
-      variantName: targetVariantName, // Đã sửa để lấy đúng tên SKU
+      variantName: targetVariantName,
     };
 
     addToCart(itemToCart);
@@ -133,6 +133,16 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
               </div>
             </div>
           )}
+
+          {/* 🌟 KHÔI PHỤC NÚT CỘNG (KHI CÒN HÀNG) */}
+          {!isOutOfStock && (
+            <button
+              className="absolute bottom-3 right-3 w-9 h-9 bg-white border border-slate-100 rounded-xl flex items-center justify-center shadow-lg text-[#006c49] hover:bg-[#006c49] hover:text-white transition-all transform active:scale-90 z-20"
+              onClick={handleQuickAddCart}
+            >
+              <Plus size={20} strokeWidth={3} />
+            </button>
+          )}
         </div>
 
         <div className="space-y-1 px-1">
@@ -150,9 +160,11 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
               </span>
             )}
           </div>
+
           <p className="text-[13px] text-[#161b22] leading-tight line-clamp-2 h-8 font-bold group-hover:text-[#006c49] transition-colors">
             {p.ten_san_pham}
           </p>
+
           <div className="flex gap-1 items-center pt-0.5">
             <span className="bg-[#e6f0ed] text-[#006c49] text-[8px] font-black px-1.5 py-0.5 rounded uppercase">
               {categoryName ||
@@ -161,6 +173,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
                 "Siêu thị"}
             </span>
           </div>
+
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest">
             TỒN KHO: {stockCount}
           </p>
