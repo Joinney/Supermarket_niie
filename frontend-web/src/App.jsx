@@ -23,6 +23,7 @@ import Login from "./pages/Auth/Login";
 import Signup from "./pages/Auth/Signup";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
 import Profile from "./pages/Profile/Profile";
+import Promotion from "./pages/Promotion/PromotionPage";
 import CategoryPage from "./pages/Category/CategoryPage";
 import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
@@ -731,6 +732,10 @@ const AppRoutes = () => (
     <Route element={<MainLayout />}>
       <Route path="/" element={<Home />} />
       <Route path="/:country_code" element={<Home />} />
+      <Route
+        path="/:country_code/category/khuyen-mai"
+        element={<Promotion />}
+      />
       <Route path="/category/:slug" element={<CategoryPage />} />
       <Route path="/category/:parentSlug/:slug" element={<CategoryPage />} />
       <Route path="/:country_code/category/:slug" element={<CategoryPage />} />

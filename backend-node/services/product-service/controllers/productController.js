@@ -228,7 +228,6 @@ export const getProductById = async (req, res) => {
     const { role } = req.query;
 
     try {
-        // 🌟 FIX: Lấy tổng tồn kho và giá bán từ bảng bien_the_san_pham thay vì bảng san_pham
         const productQuery = `
             SELECT 
                 sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, 
@@ -280,6 +279,12 @@ export const getProductById = async (req, res) => {
                     ten_bien_the: row.ten_bien_the,
                     sku: row.sku,
                     gia_ban_le: Number(row.gia_ban_le),
+                    // ======================================
+                    // MẶC ĐỊNH LÀ KHÔNG CÓ FLASH SALE
+                    // ======================================
+                    gia_khuyen_mai: null, 
+                    is_flash_sale: false,
+                    
                     so_luong_ton: row.so_luong_ton || 0,
                     trang_thai: row.trang_thai, 
                     thuoc_tinh: {},
@@ -296,7 +301,50 @@ export const getProductById = async (req, res) => {
             }
         });
 
-        const bien_the = Object.values(variantsMap);
+        let bien_the = Object.values(variantsMap);
+
+        // =========================================================================
+        // 🌟 BƯỚC NÂNG CẤP DÀNH CHO CLIENT: GỌI SANG PROMOTION SERVICE CHECK GIÁ
+        // =========================================================================
+        if (role === 'client' && bien_the.length > 0) {
+            const PROMOTION_SERVICE_URL = process.env.PROMOTION_SERVICE_URL || 'http://localhost:5007';
+            
+            // Chạy vòng lặp để kiểm tra giá cho từng biến thể
+            const promotionPromises = bien_the.map(async (bt) => {
+                try {
+                    const promoRes = await axios.post(`${PROMOTION_SERVICE_URL}/api/promotions/internal/check-promotion`, {
+                        ma_bien_the: bt.ma_bien_the
+                    });
+                    
+                    const promoData = promoRes.data;
+                    if (promoData.success && promoData.is_flash_sale) {
+                        // Nếu có Flash Sale đang diễn ra, cập nhật thông tin biến thể
+                        bt.is_flash_sale = true;
+                        bt.gia_khuyen_mai = Number(promoData.data.gia_khuyen_mai);
+                        
+                        // Nếu cần, bạn có thể ghi đè số lượng tồn kho bằng tồn kho Sale:
+                        // bt.so_luong_ton = Number(promoData.data.ton_kho_sale);
+                    }
+                } catch (err) {
+                    // Nếu lỗi (Promotion Service sập), cứ kệ nó, dùng giá gốc
+                    console.warn(`⚠️ Bỏ qua kiểm tra giá biến thể ${bt.ma_bien_the}:`, err.message);
+                }
+                return bt;
+            });
+
+            // Chờ tất cả API hoàn thành
+            bien_the = await Promise.all(promotionPromises);
+            
+            // Cập nhật lại gia_ban_thap_nhat của sản phẩm chính nếu giá Flash Sale rẻ hơn
+            let lowestPrice = product.gia_ban_thap_nhat;
+            bien_the.forEach(bt => {
+                const finalPrice = bt.gia_khuyen_mai || bt.gia_ban_le;
+                if (finalPrice < lowestPrice || lowestPrice === 0) {
+                    lowestPrice = finalPrice;
+                }
+            });
+            product.gia_ban_thap_nhat = lowestPrice;
+        }
 
         const attributes = Object.keys(attributesRaw).map((ten, index) => ({
             id_nhom: index + 1,

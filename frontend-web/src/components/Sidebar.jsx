@@ -108,6 +108,12 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const handleMainMenuClick = (menuSlug) => {
     setActiveCategory(menuSlug);
+
+    // Lấy tiền tố quốc gia
+    const prefix = country_code
+      ? `/${country_code}`
+      : `/${currentStore?.code?.toLowerCase() || "vn"}`;
+
     if (menuSlug === "search") {
       if (window.innerWidth < 1024) onClose();
       const searchInput = document.getElementById("demi-search-bar");
@@ -115,6 +121,11 @@ export default function Sidebar({ isOpen, onClose }) {
         searchInput.focus();
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
+    }
+    // 🌟 ĐIỀU HƯỚNG TỚI TRANG PROMOTION RIÊNG BIỆT
+    else if (menuSlug === "promotion") {
+      navigate(`${prefix}/category/khuyen-mai`);
+      if (window.innerWidth < 1024) onClose();
     }
   };
 

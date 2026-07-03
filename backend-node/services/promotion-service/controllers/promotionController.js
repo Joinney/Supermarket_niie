@@ -47,7 +47,7 @@ export const createFlashSale = async (req, res) => {
 };
 
 // =========================================================================
-// [ADMIN] 2. THÊM SẢN PHẨM (BIẾN THỂ) VÀO CHƯƠNG TRÌNH (🌟 ĐÃ NÂNG CẤP CHỐNG TRÙNG)
+// [ADMIN] 2. THÊM SẢN PHẨM (BIẾN THỂ) VÀO CHƯƠNG TRÌNH 
 // =========================================================================
 export const addItemsToFlashSale = async (req, res) => {
     const client = await pool.connect();
@@ -304,5 +304,64 @@ export const getFlashSaleByIdAdmin = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi getFlashSaleByIdAdmin:", error.message);
         res.status(500).json({ success: false, message: "Lỗi hệ thống khi lấy chi tiết." });
+    }
+};
+
+// =========================================================================
+// [INTERNAL] 8. API NỘI BỘ CHO PRODUCT SERVICE CHECK GIÁ FLASH SALE VÀ KHO
+// =========================================================================
+export const checkInternalVariantPromotion = async (req, res) => {
+    try {
+        const { ma_bien_the } = req.body;
+
+        if (!ma_bien_the) {
+            return res.status(400).json({ success: false, message: "Thiếu ma_bien_the" });
+        }
+
+        // Truy vấn tìm xem biến thể này có nằm trong chương trình Flash Sale nào ĐANG CHẠY hay không
+        const query = `
+            SELECT fsi.gia_khuyen_mai, fsi.so_luong_gioi_han, fsi.da_ban, 
+                   fs.ma_khuyen_mai, fs.ten_chuong_trinh, fs.thoi_gian_ket_thuc
+            FROM public.flash_sale_items fsi
+            JOIN public.flash_sales fs ON fsi.ma_khuyen_mai = fs.ma_khuyen_mai
+            WHERE fsi.ma_bien_the = $1
+              AND fs.trang_thai = true
+              AND fsi.trang_thai = true
+              AND NOW() >= fs.thoi_gian_bat_dau 
+              AND NOW() <= fs.thoi_gian_ket_thuc
+            LIMIT 1;
+        `;
+        
+        const { rows } = await pool.query(query, [ma_bien_the]);
+
+        if (rows.length === 0) {
+            // Không nằm trong đợt Flash Sale nào đang diễn ra
+            return res.status(200).json({ success: true, is_flash_sale: false });
+        }
+
+        const item = rows[0];
+        const ton_kho_flash = item.so_luong_gioi_han - item.da_ban;
+
+        // Nếu nằm trong Flash Sale nhưng đợt sale đó đã bị bán hết hàng
+        if (ton_kho_flash <= 0) {
+            return res.status(200).json({ success: true, is_flash_sale: false, reason: "Hết kho Flash Sale" });
+        }
+
+        // Trả về thông tin ưu đãi cho Product Service ghi đè giá
+        return res.status(200).json({
+            success: true,
+            is_flash_sale: true,
+            data: {
+                ma_khuyen_mai: item.ma_khuyen_mai,
+                ten_chuong_trinh: item.ten_chuong_trinh,
+                gia_khuyen_mai: item.gia_khuyen_mai,
+                ton_kho_sale: ton_kho_flash,
+                thoi_gian_ket_thuc: item.thoi_gian_ket_thuc
+            }
+        });
+
+    } catch (error) {
+        console.error("❌ Lỗi checkInternalVariantPromotion:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống kiểm tra khuyến mãi nội bộ." });
     }
 };

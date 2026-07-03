@@ -10,11 +10,28 @@ import {
   Zap,
   AlertCircle,
 } from "lucide-react";
-import { promotionApi, productApi } from "../../../api/axios.js";
+import { promotionApi } from "../../../api/axios.js";
+
+// HÀM LOẠI BỎ DẤU TIẾNG VIỆT ĐỂ TÌM KIẾM
+const removeVietnameseTones = (str) => {
+  if (!str) return "";
+  str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+  str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+  str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+  str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+  str = str.replace(/đ/g, "d");
+  return str.toLowerCase();
+};
+
 export default function FlashSaleList() {
   const [flashSales, setFlashSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // 🌟 STATE CHO TÌM KIẾM
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   const fetchFlashSales = async () => {
     try {
@@ -35,28 +52,24 @@ export default function FlashSaleList() {
     fetchFlashSales();
   }, []);
 
-  // Hàm thay đổi trạng thái (Bật/Tắt) nhanh
   const toggleStatus = async (ma_khuyen_mai, currentStatus) => {
     try {
       const response = await promotionApi.put(
         `/admin/flash-sale/${ma_khuyen_mai}`,
-        {
-          trang_thai: !currentStatus,
-        },
+        { trang_thai: !currentStatus },
       );
       if (response.data.success) {
-        fetchFlashSales(); // Load lại data
+        fetchFlashSales();
       }
     } catch (err) {
       alert("Lỗi khi cập nhật trạng thái!");
     }
   };
 
-  // Hàm xóa chương trình
   const handleDelete = async (ma_khuyen_mai) => {
     if (
       window.confirm(
-        "Bạn có chắc chắn muốn xóa vĩnh viễn chương trình này? Mọi sản phẩm trong chương trình cũng sẽ bị xóa khỏi đợt giảm giá.",
+        "Bạn có chắc chắn muốn xóa vĩnh viễn chương trình này? Các sản phẩm trong chương trình sẽ lập tức trở về giá gốc.",
       )
     ) {
       try {
@@ -72,7 +85,7 @@ export default function FlashSaleList() {
     }
   };
 
-  // Hàm check trạng thái chương trình dựa trên thời gian thực tế
+  // 🌟 TỐI ƯU HÀM LẤY TRẠNG THÁI (TRÁNH LỖI MÚI GIỜ)
   const getStatusBadge = (fs) => {
     if (!fs.trang_thai)
       return (
@@ -81,9 +94,9 @@ export default function FlashSaleList() {
         </span>
       );
 
-    const now = new Date();
-    const start = new Date(fs.thoi_gian_bat_dau);
-    const end = new Date(fs.thoi_gian_ket_thuc);
+    const now = new Date().getTime();
+    const start = new Date(fs.thoi_gian_bat_dau).getTime();
+    const end = new Date(fs.thoi_gian_ket_thuc).getTime();
 
     if (now < start) {
       return (
@@ -105,6 +118,19 @@ export default function FlashSaleList() {
       );
     }
   };
+
+  // 🌟 LOGIC TÌM KIẾM KHÔNG DẤU
+  const filteredFlashSales = flashSales.filter((fs) => {
+    if (!searchKeyword) return true;
+    const keywordNormalized = removeVietnameseTones(searchKeyword);
+    const nameNormalized = removeVietnameseTones(fs.ten_chuong_trinh);
+    const idNormalized = removeVietnameseTones(fs.ma_khuyen_mai);
+
+    return (
+      nameNormalized.includes(keywordNormalized) ||
+      idNormalized.includes(keywordNormalized)
+    );
+  });
 
   return (
     <div className="w-full text-gray-800">
@@ -138,6 +164,8 @@ export default function FlashSaleList() {
             type="text"
             placeholder="Tìm theo mã hoặc tên chiến dịch..."
             className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#007A5A] transition-colors"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
           />
         </div>
       </div>
@@ -184,17 +212,19 @@ export default function FlashSaleList() {
                     <AlertCircle size={18} /> {error}
                   </td>
                 </tr>
-              ) : flashSales.length === 0 ? (
+              ) : filteredFlashSales.length === 0 ? (
                 <tr>
                   <td
                     colSpan="5"
                     className="p-12 text-center text-gray-400 font-medium"
                   >
-                    Chưa có chiến dịch nào được tạo.
+                    {searchKeyword
+                      ? "Không tìm thấy chiến dịch phù hợp."
+                      : "Chưa có chiến dịch nào được tạo."}
                   </td>
                 </tr>
               ) : (
-                flashSales.map((fs) => (
+                filteredFlashSales.map((fs) => (
                   <tr
                     key={fs.ma_khuyen_mai}
                     className="hover:bg-gray-50/50 transition-colors group"

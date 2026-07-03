@@ -13,33 +13,25 @@ import {
 } from "lucide-react";
 import { promotionApi, productApi } from "../../../api/axios.js";
 
-// HÀM LOẠI BỎ DẤU TIẾNG VIỆT ĐỂ TÌM KIẾM
 const removeVietnameseTones = (str) => {
   if (!str) return "";
   str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
   str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
   str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
-  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+  str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ợ|ở|ỡ/g, "o");
   str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
   str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
   str = str.replace(/đ/g, "d");
-  str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
-  str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
-  str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
-  str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
-  str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
-  str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
-  str = str.replace(/Đ/g, "D");
-  return str;
+  return str.toLowerCase(); // Chuyển luôn về chữ thường cho dễ tìm kiếm
 };
 
 export default function TaoGiamGia() {
   const navigate = useNavigate();
-  const { id } = useParams(); // Lấy mã khuyến mãi từ URL nếu đang ở chế độ Edit
+  const { id } = useParams();
   const isEditMode = !!id;
 
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(isEditMode); // Để hiện loading khi đang fetch data cũ
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [campaignInfo, setCampaignInfo] = useState({
     ten_chuong_trinh: "",
@@ -49,12 +41,17 @@ export default function TaoGiamGia() {
   });
 
   const [availableProducts, setAvailableProducts] = useState([]);
+  const [busyVariants, setBusyVariants] = useState(new Set()); // Lưu các mã biến thể đang dính Flash Sale khác
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedItems, setSelectedItems] = useState([]);
 
-  // ========================================================
-  // 1. FETCH DANH SÁCH SẢN PHẨM GỐC
-  // ========================================================
+  // 🌟 Biến cờ kiểm tra lỗi giá để Disable nút Lưu
+  const hasPriceError = selectedItems.some(
+    (item) =>
+      item.gia_khuyen_mai !== "" &&
+      Number(item.gia_khuyen_mai) >= Number(item.gia_goc),
+  );
+
   const fetchProductsForSelection = async () => {
     try {
       const res = await productApi.get("/products?role=admin&limit=100");
@@ -119,8 +116,8 @@ export default function TaoGiamGia() {
         });
 
         if (groupedProductIds.length > 0) {
-          const detailPromises = groupedProductIds.map((id) =>
-            productApi.get(`/products/${id}?role=admin`).catch(() => null),
+          const detailPromises = groupedProductIds.map((pid) =>
+            productApi.get(`/products/${pid}?role=admin`).catch(() => null),
           );
           const detailResponses = await Promise.all(detailPromises);
 
@@ -171,25 +168,41 @@ export default function TaoGiamGia() {
     }
   };
 
-  // ========================================================
-  // 2. LOGIC LOAD DATA (CHẾ ĐỘ EDIT) KẾT HỢP VỚI PRODUCT LIST
-  // ========================================================
   useEffect(() => {
     const initializeData = async () => {
-      // 1. Lấy toàn bộ sản phẩm gốc trước để lấy giá gốc, tồn kho gốc, hình ảnh
+      setInitialLoading(true);
+
       const allProducts = await fetchProductsForSelection();
       setAvailableProducts(allProducts);
 
-      // 2. Nếu đang là chế độ Edit -> Gọi API lấy dữ liệu cũ đắp vào
+      // 🌟 YÊU CẦU 1: Lấy danh sách các biến thể đang có Sale để CHẶN (Block)
+      try {
+        const activeRes = await promotionApi.get("/client/flash-sale/active");
+        if (activeRes.data.success) {
+          const activePromos = activeRes.data.data;
+          const busySet = new Set();
+
+          activePromos.forEach((promo) => {
+            // Nếu đang Edit, bỏ qua việc chặn các sản phẩm thuộc CHÍNH đợt sale này (để còn sửa chứ)
+            if (isEditMode && promo.chuong_trinh.ma_khuyen_mai === id) return;
+
+            promo.products.forEach((p) => {
+              busySet.add(p.chi_tiet_bien_the[0].ma_bien_the);
+            });
+          });
+          setBusyVariants(busySet);
+        }
+      } catch (e) {
+        console.warn("Không lấy được danh sách Sale đang chạy", e);
+      }
+
       if (isEditMode) {
         try {
-          // Gọi đúng API lấy chi tiết của Admin (không bị lỗi 404 nữa)
           const res = await promotionApi.get(`/admin/flash-sale/${id}`);
 
           if (res.data.success) {
             const { chuong_trinh, products } = res.data.data;
 
-            // Hàm chuyển đổi thời gian để hiện lên thẻ input
             const formatTime = (timeStr) => {
               if (!timeStr) return "";
               const date = new Date(timeStr);
@@ -197,7 +210,6 @@ export default function TaoGiamGia() {
               return new Date(date - offset).toISOString().slice(0, 16);
             };
 
-            // 2.1 Set thông tin cơ bản
             setCampaignInfo({
               ten_chuong_trinh: chuong_trinh.ten_chuong_trinh,
               mo_ta: chuong_trinh.mo_ta || "",
@@ -205,14 +217,11 @@ export default function TaoGiamGia() {
               thoi_gian_ket_thuc: formatTime(chuong_trinh.thoi_gian_ket_thuc),
             });
 
-            // 2.2 Đắp danh sách sản phẩm vào bảng
             if (products && products.length > 0) {
               const oldSelectedItems = products.map((item) => {
-                // Lấy thông tin gốc (tên, hình, giá, tồn) từ danh sách allProducts
                 const productBase =
                   allProducts.find((p) => p.ma_bien_the === item.ma_bien_the) ||
                   {};
-
                 return {
                   ma_san_pham: item.ma_san_pham,
                   ten_san_pham:
@@ -245,6 +254,14 @@ export default function TaoGiamGia() {
   }, [id, isEditMode, navigate]);
 
   const handleAddItem = (variant) => {
+    // 🌟 Kiểm tra chặn thêm nếu đang bận Sale khác
+    if (busyVariants.has(variant.ma_bien_the)) {
+      alert(
+        "Sản phẩm này đang tham gia một chương trình khuyến mãi khác. Vui lòng chọn sản phẩm khác!",
+      );
+      return;
+    }
+
     const isExist = selectedItems.find(
       (item) => item.ma_bien_the === variant.ma_bien_the,
     );
@@ -290,7 +307,6 @@ export default function TaoGiamGia() {
           let percent = numValue > 100 ? 100 : numValue < 0 ? 0 : numValue;
           updatedItem.loai_giam_gia = "percent";
           updatedItem.phan_tram_giam = percent;
-
           let calculatedPrice = item.gia_goc - (item.gia_goc * percent) / 100;
           updatedItem.gia_khuyen_mai =
             calculatedPrice < 1000 ? 1000 : calculatedPrice;
@@ -309,9 +325,6 @@ export default function TaoGiamGia() {
     setSelectedItems(newItems);
   };
 
-  // ========================================================
-  // 3. LƯU DỮ LIỆU CHUNG CHO CẢ TẠO MỚI & SỬA
-  // ========================================================
   const handleSaveCampaign = async (e) => {
     e.preventDefault();
     if (selectedItems.length === 0) {
@@ -319,9 +332,19 @@ export default function TaoGiamGia() {
       return;
     }
 
-    const hasEmptyPrice = selectedItems.some((item) => !item.gia_khuyen_mai);
+    const hasEmptyPrice = selectedItems.some(
+      (item) => item.gia_khuyen_mai === "",
+    );
     if (hasEmptyPrice) {
       alert("Vui lòng thiết lập giá khuyến mãi cho tất cả sản phẩm đã chọn!");
+      return;
+    }
+
+    // 🌟 YÊU CẦU 2: Validate cứng trước khi gửi API
+    if (hasPriceError) {
+      alert(
+        "Có sản phẩm đang set giá Khuyến mãi LỚN HƠN hoặc BẰNG giá gốc. Vui lòng kiểm tra lại (được bôi đỏ).",
+      );
       return;
     }
 
@@ -336,17 +359,12 @@ export default function TaoGiamGia() {
       }));
 
       if (isEditMode) {
-        // GỌI API PUT ĐỂ SỬA THÔNG TIN CHIẾN DỊCH
         await promotionApi.put(`/admin/flash-sale/${id}`, campaignInfo);
-
-        // GỌI API POST ĐỂ UPDATE DANH SÁCH ITEMS (Dùng On Conflict bên Backend)
         await promotionApi.post(`/admin/flash-sale/${id}/items`, {
           items: itemsPayload,
         });
-
         alert("Cập nhật chương trình giảm giá thành công!");
       } else {
-        // GỌI API POST ĐỂ TẠO MỚI
         const createRes = await promotionApi.post(
           "/admin/flash-sale",
           campaignInfo,
@@ -372,14 +390,10 @@ export default function TaoGiamGia() {
     }
   };
 
-  const searchKeywordNormalized = removeVietnameseTones(
-    searchKeyword.toLowerCase(),
-  );
+  const searchKeywordNormalized = removeVietnameseTones(searchKeyword);
   const filteredProducts = availableProducts.filter((p) => {
-    const nameNormalized = removeVietnameseTones(p.ten_san_pham.toLowerCase());
-    const skuNormalized = p.sku
-      ? removeVietnameseTones(p.sku.toLowerCase())
-      : "";
+    const nameNormalized = removeVietnameseTones(p.ten_san_pham);
+    const skuNormalized = p.sku ? removeVietnameseTones(p.sku) : "";
     return (
       nameNormalized.includes(searchKeywordNormalized) ||
       skuNormalized.includes(searchKeywordNormalized)
@@ -415,8 +429,12 @@ export default function TaoGiamGia() {
         </div>
         <button
           onClick={handleSaveCampaign}
-          disabled={loading}
-          className="bg-[#007A5A] hover:bg-[#006349] text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+          disabled={loading || hasPriceError}
+          className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm ${
+            loading || hasPriceError
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-[#007A5A] hover:bg-[#006349] text-white"
+          }`}
         >
           <Save size={18} />{" "}
           {loading ? "Đang lưu..." : isEditMode ? "Cập Nhật" : "Lưu Chiến Dịch"}
@@ -532,47 +550,58 @@ export default function TaoGiamGia() {
             {searchKeyword.trim() !== "" && (
               <div className="max-h-[300px] overflow-y-auto border border-gray-100 rounded-xl p-2 bg-gray-50/50 flex flex-col gap-2 custom-scrollbar">
                 {filteredProducts.length > 0 ? (
-                  filteredProducts.map((product, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between bg-white p-2 rounded-lg border border-gray-100 shadow-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={
-                            product.hinh_anh || "https://via.placeholder.com/50"
-                          }
-                          alt=""
-                          className="w-10 h-10 rounded-md object-cover border border-gray-100"
-                        />
-                        <div>
-                          <p className="text-[13px] font-bold text-gray-800">
-                            {product.ten_san_pham}
-                          </p>
-                          <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">
-                            {product.sku && (
-                              <span className="font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                SKU: {product.sku}
-                              </span>
-                            )}
-                            <span>
-                              Phân loại:{" "}
-                              <span className="font-semibold text-[#007A5A]">
-                                {product.ten_bien_the}
-                              </span>{" "}
-                              | Kho: {product.ton_kho_goc}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleAddItem(product)}
-                        className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors"
+                  filteredProducts.map((product, idx) => {
+                    const isBusy = busyVariants.has(product.ma_bien_the);
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between p-2 rounded-lg border shadow-sm ${isBusy ? "bg-orange-50 border-orange-100 opacity-60" : "bg-white border-gray-100"}`}
                       >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                  ))
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={
+                              product.hinh_anh ||
+                              "https://via.placeholder.com/50"
+                            }
+                            alt=""
+                            className="w-10 h-10 rounded-md object-cover border border-gray-100"
+                          />
+                          <div>
+                            <p className="text-[13px] font-bold text-gray-800 flex items-center gap-2">
+                              {product.ten_san_pham}
+                              {isBusy && (
+                                <span className="bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded uppercase">
+                                  Đang Sale
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">
+                              {product.sku && (
+                                <span className="font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                                  SKU: {product.sku}
+                                </span>
+                              )}
+                              <span>
+                                Phân loại:{" "}
+                                <span className="font-semibold text-[#007A5A]">
+                                  {product.ten_bien_the}
+                                </span>{" "}
+                                | Kho: {product.ton_kho_goc}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleAddItem(product)}
+                          disabled={isBusy}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isBusy ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white"}`}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="text-center text-sm text-gray-400 py-4">
                     Không tìm thấy sản phẩm nào phù hợp.
@@ -625,110 +654,124 @@ export default function TaoGiamGia() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedItems.map((item, index) => (
-                      <tr
-                        key={index}
-                        className="border-b border-gray-50 hover:bg-gray-50/50"
-                      >
-                        <td className="px-3 py-3">
-                          <p
-                            className="font-bold text-[12px] text-gray-800 truncate max-w-[120px]"
-                            title={item.ten_san_pham}
-                          >
-                            {item.ten_san_pham}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-1 mt-1">
-                            {item.sku && (
-                              <span className="text-[10px] text-gray-600 font-mono bg-gray-200 px-1.5 py-0.5 rounded border border-gray-300">
-                                {item.sku}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                              {item.ten_bien_the}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-right text-gray-400 line-through text-[12px]">
-                          {Number(item.gia_goc).toLocaleString()}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <input
-                            type="number"
-                            placeholder="%"
-                            className="w-16 border border-blue-200 rounded-lg px-2 py-1.5 text-[13px] font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-gray-100 disabled:opacity-50"
-                            value={item.phan_tram_giam}
-                            disabled={item.loai_giam_gia === "price"}
-                            onChange={(e) =>
-                              handleUpdateItemData(
-                                item.ma_bien_the,
-                                "phan_tram_giam",
-                                e.target.value,
-                              )
-                            }
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
-                              placeholder="Giá giảm"
-                              className="w-24 border border-emerald-200 rounded-lg px-2 py-1.5 text-[13px] font-bold text-[#007A5A] focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:bg-gray-100 disabled:opacity-50"
-                              value={item.gia_khuyen_mai}
-                              disabled={item.loai_giam_gia === "percent"}
-                              onChange={(e) =>
-                                handleUpdateItemData(
-                                  item.ma_bien_the,
-                                  "gia_khuyen_mai",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                            <button
-                              onClick={() =>
-                                handleUpdateItemData(
-                                  item.ma_bien_the,
-                                  "reset_discount",
-                                  "",
-                                )
-                              }
-                              title="Nhập lại cách giảm"
-                              className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                    {selectedItems.map((item, index) => {
+                      // 🌟 KIỂM TRA LỖI GIÁ: NẾU GIÁ KHUYẾN MÃI >= GIÁ GỐC THÌ BÔI ĐỎ
+                      const isPriceError =
+                        item.gia_khuyen_mai !== "" &&
+                        Number(item.gia_khuyen_mai) >= Number(item.gia_goc);
+
+                      return (
+                        <tr
+                          key={index}
+                          className={`border-b border-gray-50 hover:bg-gray-50/50 ${isPriceError ? "bg-red-50/50" : ""}`}
+                        >
+                          <td className="px-3 py-3">
+                            <p
+                              className="font-bold text-[12px] text-gray-800 truncate max-w-[120px]"
+                              title={item.ten_san_pham}
                             >
-                              <RotateCcw size={14} />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <div className="flex flex-col items-center">
+                              {item.ten_san_pham}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {item.sku && (
+                                <span className="text-[10px] text-gray-600 font-mono bg-gray-200 px-1.5 py-0.5 rounded border border-gray-300">
+                                  {item.sku}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                                {item.ten_bien_the}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-right text-gray-400 line-through text-[12px]">
+                            {Number(item.gia_goc).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-3 text-center">
                             <input
                               type="number"
-                              placeholder="0"
-                              className="w-16 border border-orange-200 rounded-lg px-2 py-1.5 text-[13px] font-bold text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                              value={item.so_luong_gioi_han}
-                              max={item.ton_kho_goc}
+                              placeholder="%"
+                              className="w-16 border border-blue-200 rounded-lg px-2 py-1.5 text-[13px] font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-gray-100 disabled:opacity-50"
+                              value={item.phan_tram_giam}
+                              disabled={item.loai_giam_gia === "price"}
                               onChange={(e) =>
                                 handleUpdateItemData(
                                   item.ma_bien_the,
-                                  "so_luong_gioi_han",
+                                  "phan_tram_giam",
                                   e.target.value,
                                 )
                               }
                             />
-                            <span className="text-[9px] text-gray-400 mt-0.5">
-                              Tồn: {item.ton_kho_goc}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <button
-                            onClick={() => handleRemoveItem(item.ma_bien_the)}
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  placeholder="Giá giảm"
+                                  className={`w-24 border rounded-lg px-2 py-1.5 text-[13px] font-bold focus:outline-none focus:ring-2 disabled:bg-gray-100 disabled:opacity-50 ${isPriceError ? "border-red-400 text-red-600 focus:ring-red-500/20" : "border-emerald-200 text-[#007A5A] focus:ring-emerald-500/20"}`}
+                                  value={item.gia_khuyen_mai}
+                                  disabled={item.loai_giam_gia === "percent"}
+                                  onChange={(e) =>
+                                    handleUpdateItemData(
+                                      item.ma_bien_the,
+                                      "gia_khuyen_mai",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                                <button
+                                  onClick={() =>
+                                    handleUpdateItemData(
+                                      item.ma_bien_the,
+                                      "reset_discount",
+                                      "",
+                                    )
+                                  }
+                                  title="Nhập lại cách giảm"
+                                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+                              </div>
+                              {isPriceError && (
+                                <span className="text-[10px] text-red-500 font-bold">
+                                  * Phải nhỏ hơn giá gốc
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <div className="flex flex-col items-center">
+                              <input
+                                type="number"
+                                placeholder="0"
+                                className="w-16 border border-orange-200 rounded-lg px-2 py-1.5 text-[13px] font-bold text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                value={item.so_luong_gioi_han}
+                                max={item.ton_kho_goc}
+                                onChange={(e) =>
+                                  handleUpdateItemData(
+                                    item.ma_bien_the,
+                                    "so_luong_gioi_han",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                              <span className="text-[9px] text-gray-400 mt-0.5">
+                                Tồn: {item.ton_kho_goc}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <button
+                              onClick={() => handleRemoveItem(item.ma_bien_the)}
+                              className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
