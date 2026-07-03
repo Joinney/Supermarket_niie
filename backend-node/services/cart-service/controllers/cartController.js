@@ -228,3 +228,55 @@ export const uploadPaymentProof = async (req, res) => {
     res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải ảnh." });
   }
 };
+// Thêm hàm này vào cuối file controllers/cartController.js của bạn
+export const getCartByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const cart = await Cart.findOne({ userId: userId });
+    
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return res.status(200).json({ userId: userId, items: [] });
+    }
+
+    // Đóng gói mảng xử lý bất đồng bộ, map đầy đủ thuộc tính EAV phân loại giống getCart gốc
+    const detailedItemsPromises = cart.items.map(async (item) => {
+      const itemObj = item.toObject();
+      
+      if (itemObj.thuoc_tinh_hop_nhat && itemObj.thuoc_tinh_hop_nhat.length > 0) {
+        return itemObj;
+      }
+
+      try {
+        // Fallback: Gọi liên dịch vụ sang Product Service (Cổng 5002)
+        const response = await axios.get(`http://localhost:5002/api/products/variants/${item.variantId}`);
+        if (response.data) {
+          const vData = response.data;
+          return {
+            ...itemObj,
+            productId: itemObj.productId || vData.ma_san_pham || "",
+            variantName: vData.ten_bien_the || itemObj.variantName || "",
+            image: vData.hinh_anh_url || vData.duong_dan_url || itemObj.image || "",
+            price: Number(vData.gia_ban_le) || itemObj.price || 0, 
+            thuoc_tinh_hop_nhat: vData.thuoc_tinh_hop_nhat || [],
+            ten_don_vi: vData.ten_don_vi || "Gói"
+          };
+        }
+      } catch (apiError) {
+        console.warn(`⚠️ [Admin View - Connection Refused] Mã biến thể: ${item.variantId}`);
+      }
+      
+      return { ...itemObj, thuoc_tinh_hop_nhat: itemObj.thuoc_tinh_hop_nhat || [], ten_don_vi: itemObj.ten_don_vi || "Gói" };
+    });
+
+    const finalItems = await Promise.all(detailedItemsPromises);
+
+    res.status(200).json({
+      userId: cart.userId,
+      items: finalItems
+    });
+
+  } catch (error) {
+    console.error("🔥 Lỗi tại getCartByUserId Backend:", error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
