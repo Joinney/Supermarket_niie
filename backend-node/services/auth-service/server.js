@@ -30,17 +30,17 @@ import addressRoutes from './routes/addressRoutes.js';
 import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
 
 // Initialize app and port
-
 const PORT = process.env.PORT_AUTH || 5001; 
 
-// 2. Cấu hình CORS - Chấp nhận cả 5173 và 5174 để không bao giờ bị chặn nữa
+// 2. Cấu hình CORS - Đồng bộ môi trường Production trên Render
 const allowedOrigins = [
     process.env.FRONTEND_URL, 
     'http://localhost:5173', 
     'http://127.0.0.1:5173',
     'http://localhost:5174', 
     'http://127.0.0.1:5174',
-    'http://localhost:3000'
+    'http://localhost:3000',
+    'https://demimart-fe.onrender.com' // 🌟 THÊM MỚI: Cấp quyền cho tên miền Frontend chạy trên Render của bạn
 ].filter(Boolean);
 
 app.use(cors({ 
@@ -52,9 +52,12 @@ app.use(cors({
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // 🌟 ĐỒNG BỘ: Thêm PATCH và OPTIONS phục vụ an toàn định tuyến chéo
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// 🚀 PHÒNG THỦ CHẮC CHẮN: Đánh chặn và phản hồi trạng thái 200 OK ngay lập tức cho các request OPTIONS Preflight
+app.options('*', cors());
 
 // 3. Bảo mật & Xử lý dữ liệu
 app.use(express.json({ limit: '5mb' })); 
@@ -115,7 +118,6 @@ app.use('/api/auth/google', googleRoutes);
 console.log("Đang đăng ký profileRoutes...");
 app.use('/api/profile', profileRoutes);
 
-
 // 🎯 HÀM ĐỊA CHÍNH CÔNG KHAI TUYỆT ĐỐI - ĐÓN ĐẦU TRƯỚC TIỀN TỐ TRUNG GIAN
 app.get('/api/addresses/locations/provinces', getProvincesProxy);
 app.get('/api/addresses/locations/districts', getDistrictsProxy);
@@ -130,7 +132,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error('🔥 LỖI HỆ THỐNG CHI TIẾT:', err);
+    console.error('🔥 LỒI HỆ THỐNG CHI TIẾT:', err);
     res.status(500).json({ 
         success: false, 
         message: "Server gặp sự cố nhỏ, check log nhé!",
@@ -145,7 +147,8 @@ import { Server } from 'socket.io';
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
-        origin: allowedOrigins,
+        origin: allowedOrigins, // Tự động đồng bộ cấp quyền cho domain Render của Frontend tại đây
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         credentials: true
     }
 });
