@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import { ChevronLeft, Loader2, Save } from "lucide-react";
 
 export default function NationalForm() {
@@ -25,15 +26,14 @@ export default function NationalForm() {
     bieu_tuong_co: "🇻🇳",
   });
 
-  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-  // Lấy dữ liệu nếu đang ở chế độ Sửa (Edit)
+  // Lấy dữ liệu nếu đang ở chế độ Sửa (Edit) via productApi Interceptor
   useEffect(() => {
     const fetchNation = async () => {
       if (!isEditMode) return;
       try {
         setLoading(true);
-        const res = await axios.get(`${apiUrl}/api/nations/${id}`);
+        // 🚀 TỐI ƯU: Sử dụng đường dẫn tương đối ngắn sạch qua productApi
+        const res = await productApi.get(`/nations/${id}`);
         if (res.data && res.data.success) {
           setFormData(res.data.data);
         } else {
@@ -48,7 +48,7 @@ export default function NationalForm() {
       }
     };
     fetchNation();
-  }, [id, apiUrl, isEditMode, navigate]);
+  }, [id, isEditMode, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,12 +57,12 @@ export default function NationalForm() {
 
     try {
       if (isEditMode) {
-        // Cập nhật
-        await axios.put(`${apiUrl}/api/nations/${id}`, formData);
+        // Cập nhật via productApi
+        await productApi.put(`/nations/${id}`, formData);
         alert("✅ Cập nhật thông tin quốc gia thành công!");
       } else {
-        // Thêm mới
-        await axios.post(`${apiUrl}/api/nations`, formData);
+        // Thêm mới via productApi
+        await productApi.post("/nations", formData);
         alert("✅ Thêm cửa hàng quốc gia mới thành công!");
       }
       navigate("/admin/nations/list");
@@ -87,7 +87,6 @@ export default function NationalForm() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      /* 🌟 THAY ĐỔI: Chuyển bg về #fafafa và dùng p-1 để bung sát mép hai bên đồng bộ hệ thống */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
       <div className="w-full">
@@ -164,7 +163,7 @@ export default function NationalForm() {
                   onChange={(e) =>
                     setFormData({ ...formData, ten_quoc_gia: e.target.value })
                   }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition text-slate-800"
                 />
               </div>
 
@@ -294,14 +293,14 @@ export default function NationalForm() {
               <button
                 type="button"
                 onClick={() => navigate("/admin/nations/list")}
-                className="px-5 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                className="px-5 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer bg-white"
               >
                 Hủy bỏ
               </button>
               <button
                 type="submit"
                 disabled={submitLoading}
-                className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow transition transform active:scale-98 cursor-pointer"
+                className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow transition transform active:scale-98 cursor-pointer disabled:opacity-50"
               >
                 {submitLoading ? (
                   <>

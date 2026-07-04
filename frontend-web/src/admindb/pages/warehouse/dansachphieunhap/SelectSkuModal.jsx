@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import axios from "axios";
+// 🌟 SỬA BƯỚC 1: Thay thế import "axios" trần bằng instance "productApi" đã được cấu hình của bạn
+import { productApi } from "../../../../api/axios";
+
 import { 
   X, 
   Search, 
@@ -27,9 +29,9 @@ export default function SelectItemModal({ isOpen, onClose, onSelect }) {
     const fetchProducts = async () => {
       setLoading(true);
       try {
-        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        // Không truyền tham số lọc type nữa để lấy tất cả sản phẩm
-        const response = await axios.get(`${apiUrl}/api/products?page=1&limit=50`);
+        // 🌟 SỬA BƯỚC 2: Sử dụng productApi.get với path tương đối thay cho axios và apiUrl cũ
+        // Bản thân productApi đã tự động trỏ sang cổng 5002 ở local hoặc Render ở DevOps
+        const response = await productApi.get("/products?page=1&limit=50");
         
         const data = response.data?.products || response.data || [];
         setProducts(Array.isArray(data) ? data : []);
@@ -45,7 +47,6 @@ export default function SelectItemModal({ isOpen, onClose, onSelect }) {
 
   // 🌟 Xử lý mở rộng để tải biến thể con cho sản phẩm có nhóm biến thể
   const handleToggleProduct = async (product) => {
-    // Nếu là sản phẩm đơn, không cho phép mở rộng hành động click dòng
     if (!product.co_bien_the) return;
 
     if (expandedProductId === product.ma_san_pham) {
@@ -59,8 +60,8 @@ export default function SelectItemModal({ isOpen, onClose, onSelect }) {
 
     setLoadingVariants(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const response = await axios.get(`${apiUrl}/api/products/${product.ma_san_pham}`);
+      // 🌟 SỬA BƯỚC 3: Thay thế luồng gọi chi tiết sản phẩm qua productApi
+      const response = await productApi.get(`/products/${product.ma_san_pham}`);
       
       const detailedData = response.data || {};
       const variants = detailedData.bien_the || [];
@@ -201,10 +202,8 @@ export default function SelectItemModal({ isOpen, onClose, onSelect }) {
                       </div>
                     </div>
 
-                    {/* Điều hướng nút hành động dựa trên việc sản phẩm có biến thể hay không */}
                     <div className="flex items-center gap-4">
                       {product.co_bien_the ? (
-                        /* LUỒNG 1: SẢN PHẨM CÓ BIẾN THỂ -> HIỂN THỊ NÚT MỞ RỘNG */
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
                             Mở rộng SKUs
@@ -215,7 +214,6 @@ export default function SelectItemModal({ isOpen, onClose, onSelect }) {
                           />
                         </div>
                       ) : (
-                        /* LUỒNG 2: SẢN PHẨM ĐƠN -> HIỂN THỊ GIÁ VÀ NÚT CHỌN THẲNG */
                         <div className="flex items-center gap-4">
                           <div className="text-right">
                             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Giá bán</p>
@@ -245,7 +243,7 @@ export default function SelectItemModal({ isOpen, onClose, onSelect }) {
                     </div>
                   </div>
 
-                  {/* Khu vực hiển thị danh sách biến thể con (Chỉ kích hoạt khi có biến thể và được click mở rộng) */}
+                  {/* Khu vực hiển thị danh sách biến thể con */}
                   {product.co_bien_the && isExpanded && (
                     <div className="bg-slate-50/50 border-t border-slate-100 px-4 py-3 divide-y divide-slate-100">
                       {loadingVariants ? (

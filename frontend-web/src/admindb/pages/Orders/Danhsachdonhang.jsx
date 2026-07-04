@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom"; // 🌟 Thêm useNavigate
-import axios from "axios";
+import { Link, useNavigate } from "react-router-dom"; 
+// 🌟 ĐỒNG BỘ: Sử dụng instance orderApi đã được cấu hình toàn cục
+import { orderApi } from "../../../api/axios"; // Hãy đảm bảo đường dẫn này trỏ đúng đến file chứa orderApi của bạn
 
 export default function Danhsachdonhang() {
-  const navigate = useNavigate(); // 🌟 Khởi tạo hook điều hướng
+  const navigate = useNavigate(); 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,26 +16,23 @@ export default function Danhsachdonhang() {
   const [totalItems, setTotalItems] = useState(0);
   const [limit, setLimit] = useState(10);
 
-// 🎯 HÀM TẢI DỮ LIỆU ĐƠN HÀNG TỪ ORDER-SERVICE
+  // 🎯 HÀM TẢI DỮ LIỆU ĐƠN HÀNG TỪ ORDER-SERVICE
   const fetchOrders = async () => {
     setLoading(true);
     setError(null);
     try {
-      const orderApiUrl = import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
-      
-      // 🌟 LẤY TOKEN QUẢN TRỊ TỪ LOCALSTORAGE
-      const token = localStorage.getItem("adminToken");
+      // 🚀 KHẮC PHỤC LỖI 401: Chủ động lấy adminToken trong localStorage của Admin panel
+      const adminToken = localStorage.getItem("adminToken");
 
-      const response = await axios.get(`${orderApiUrl}/api/orders`, {
+      const response = await orderApi.get("/orders", {
         params: {
           page: currentPage,
           limit: limit,
           search: searchTerm || undefined
         },
-        // 🌟 ĐÍNH KÈM HEADER XÁC THỰC BEARER TOKEN VÀO REQUEST
+        // Đính kèm trực tiếp vào cấu hình request để đảm bảo không bị lệch key với Interceptor
         headers: {
-          Authorization: token ? `Bearer ${token}` : "",
-          "Content-Type": "application/json"
+          Authorization: adminToken ? `Bearer ${adminToken}` : ""
         }
       });
 
@@ -52,11 +50,10 @@ export default function Danhsachdonhang() {
     } catch (err) {
       console.error("❌ Lỗi truy xuất danh sách đơn hàng:", err);
       
-      // 🌟 TỐI ƯU CẢNH BÁO: Hiển thị đúng bản chất lỗi xác thực nếu có
       if (err.response?.status === 401) {
-        setError("Phiên đăng nhập hết hạn hoặc không có quyền truy cập dữ liệu đơn hàng (401 Unauthorized)!");
+        setError("Phiên đăng nhập hết hạn hoặc bạn không có quyền truy cập dữ liệu đơn hàng (401 Unauthorized)!");
       } else {
-        setError("Không thể kết nối đến phân hệ Order Service (Cổng 5005)!");
+        setError("Không thể kết nối đến phân hệ Order Service!");
       }
     } finally {
       setLoading(false);
@@ -80,7 +77,6 @@ export default function Danhsachdonhang() {
     fetchOrders();
   };
 
-  // 🌟 HÀM ĐIỀU HƯỚNG SANG TRANG CHI TIẾT ĐƠN HÀNG KÈM DỮ LIỆU
   const handleViewOrderDetail = (order) => {
     navigate("/admin/Donhang/Chitietdonhang", {
       state: { 
@@ -221,7 +217,7 @@ export default function Danhsachdonhang() {
               {loading && (
                 <tr>
                   <td colSpan="8" className="py-8 text-center text-[#006c49] font-bold animate-pulse">
-                    Đang kết nối cổng 5005 nạp danh sách dữ liệu từ Postgres...
+                    🔄 Đang kết nối phân hệ dữ liệu đơn hàng...
                   </td>
                 </tr>
               )}
@@ -271,7 +267,6 @@ export default function Danhsachdonhang() {
                   </td>
                   <td className="py-4 px-5">
                     <div className="flex items-center justify-center gap-2.5">
-                      {/* 🌟 NÚT XEM CHI TIẾT: Kích hoạt hàm điều hướng */}
                       <button 
                         onClick={() => handleViewOrderDetail(order)}
                         className="text-gray-300 hover:text-emerald-600 transition" 
@@ -333,7 +328,7 @@ export default function Danhsachdonhang() {
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                ❯navigate
+                ❯
               </button>
             </div>
           </div>

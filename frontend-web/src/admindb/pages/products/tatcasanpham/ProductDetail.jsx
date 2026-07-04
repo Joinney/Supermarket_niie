@@ -21,7 +21,8 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 
 export default function AdminProductDetail() {
   const { id } = useParams();
@@ -52,11 +53,8 @@ export default function AdminProductDetail() {
     async (showLoading = true) => {
       if (showLoading) setLoading(true);
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        const response = await axios.get(
-          `${apiUrl}/api/products/${id}?role=admin`,
-        );
+        // 🚀 TỐI ƯU: Sử dụng đường dẫn tương đối ngắn sạch qua productApi
+        const response = await productApi.get(`/products/${id}?role=admin`);
 
         if (response.data) {
           const data = Array.isArray(response.data)
@@ -135,9 +133,8 @@ export default function AdminProductDetail() {
       )
     ) {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        await axios.delete(`${apiUrl}/api/products/variants/${variantId}`);
+        // 🚀 TỐI ƯU: Đồng bộ luồng xóa mềm qua productApi
+        await productApi.delete(`/products/variants/${variantId}`);
         alert("✅ Đã lưu trữ biến thể thành công!");
         fetchDetail(false);
       } catch (err) {
@@ -154,11 +151,8 @@ export default function AdminProductDetail() {
       window.confirm(`🧨 NGUY HIỂM: Lưu trữ TOÀN BỘ biến thể của sản phẩm này?`)
     ) {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        await axios.delete(
-          `${apiUrl}/api/products/${product.ma_san_pham}/variants-all`,
-        );
+        // 🚀 TỐI ƯU: Đồng bộ qua productApi
+        await productApi.delete(`/products/${product.ma_san_pham}/variants-all`);
         alert("✅ Đã lưu trữ toàn bộ biến thể thành công!");
         fetchDetail(false);
       } catch (err) {
@@ -177,9 +171,8 @@ export default function AdminProductDetail() {
       )
     ) {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        await axios.put(`${apiUrl}/api/products/variants/${variantId}/restore`);
+        // 🚀 TỐI ƯU: Đồng bộ qua productApi
+        await productApi.put(`/products/variants/${variantId}/restore`);
         alert("✅ Đã khôi phục biến thể thành công!");
         fetchDetail(false);
       } catch (err) {
@@ -198,9 +191,8 @@ export default function AdminProductDetail() {
       )
     ) {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        await axios.delete(`${apiUrl}/api/products/variants/${variantId}/hard`);
+        // 🚀 TỐI ƯU: Đồng bộ xóa cứng qua productApi
+        await productApi.delete(`/products/variants/${variantId}/hard`);
         alert("✅ Đã xóa vĩnh viễn biến thể khỏi hệ thống!");
         fetchDetail(false);
       } catch (err) {
@@ -231,21 +223,21 @@ export default function AdminProductDetail() {
 
     setIsUploadingMedia(true);
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
       let finalUrl = newMediaUrl.trim();
 
       if (newMediaFile) {
         const formData = new FormData();
         formData.append("image", newMediaFile);
 
-        const uploadRes = await axios.post(`${apiUrl}/api/upload`, formData, {
+        // 🚀 TỐI ƯU: Đồng bộ qua productApi
+        const uploadRes = await productApi.post("/api/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         finalUrl = uploadRes.data.url;
       }
 
-      await axios.post(`${apiUrl}/api/products/${product.ma_san_pham}/media`, {
+      // 🚀 TỐI ƯU: Đồng bộ qua productApi
+      await productApi.post(`/products/${product.ma_san_pham}/media`, {
         duong_dan_url: finalUrl,
       });
 
@@ -265,7 +257,7 @@ export default function AdminProductDetail() {
     return (
       <div className="w-full bg-[#fafafa] min-h-screen flex items-center justify-center font-sans">
         <div className="flex items-center gap-2 text-[#006c49] font-bold text-sm animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang nạp toàn bộ dữ liệu...
+          <span className="w-2.5 h-2.5 rounded-full bg-[#006c49]"></span> Đang tải thông tin...
         </div>
       </div>
     );
@@ -276,7 +268,7 @@ export default function AdminProductDetail() {
       <div className="w-full bg-[#fafafa] p-1 font-sans text-left min-h-screen antialiased text-slate-700">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-black mb-6"
+          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-black mb-6 cursor-pointer"
         >
           <ArrowLeft size={16} /> Quay lại danh sách
         </button>
@@ -331,7 +323,7 @@ export default function AdminProductDetail() {
         </div>
       </div>
 
-      {/* ================= MAIN CONTAINER (BUNG FULL WIDTH GIỐNG PRODUCT LIST) ================= */}
+      {/* ================= MAIN CONTAINER ================= */}
       <div className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6 relative">
         
         {/* ================= TAB NAVIGATION ================= */}
@@ -362,13 +354,11 @@ export default function AdminProductDetail() {
         {/* ================= GRID 2 CỘT CHÍNH ================= */}
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* ----------------- CỘT TRÁI: THÔNG TIN CHI TIẾT (Chiếm 8 phần) ----------------- */}
+          {/* ----------------- CỘT TRÁI: THÔNG TIN CHI TIẾT ----------------- */}
           <div className="lg:col-span-8 space-y-6 order-2 lg:order-1">
             
-            {/* TAB 1: THÔNG TIN CHUNG CỦA SẢN PHẨM */}
             {activeTab === "info" && (
               <div className="space-y-6">
-                {/* SECTION: THÔNG TIN CƠ BẢN */}
                 <div className="space-y-4">
                   <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#006c49]"></span> THÔNG TIN CƠ BẢN
@@ -402,14 +392,13 @@ export default function AdminProductDetail() {
                   </div>
 
                   <div className="pt-2">
-                    <span className="text-xs font-bold text-slate-400 block mb-1.5">Mô tả sản phẩm (`mo_ta`)</span>
+                    <span className="text-xs font-bold text-slate-400 block mb-1.5">Mô tả sản phẩm</span>
                     <p className="p-4 bg-slate-50/70 border border-slate-100 rounded-2xl text-xs text-slate-600 font-semibold leading-relaxed whitespace-pre-line max-h-[300px] overflow-y-auto custom-scrollbar">
                       {product.mo_ta || "Sản phẩm chưa có nội dung mô tả chi tiết."}
                     </p>
                   </div>
                 </div>
 
-                {/* SECTION: ĐẶC TÍNH HỆ THỐNG */}
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#006c49]"></span> ĐẶC TÍNH HỆ THỐNG
@@ -449,7 +438,6 @@ export default function AdminProductDetail() {
                   </div>
                 </div>
 
-                {/* KHOẢNG GIÁ & TỒN KHO */}
                 <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Báo cáo khoảng giá niêm yết</span>
                   <h4 className="text-xl font-extrabold text-slate-900 font-mono">
@@ -467,7 +455,6 @@ export default function AdminProductDetail() {
               </div>
             )}
 
-            {/* TAB 2: SKU & BIẾN THỂ */}
             {activeTab === "variants" && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -479,7 +466,7 @@ export default function AdminProductDetail() {
                     {totalVariants > 0 && (
                       <button
                         onClick={handleDeleteAllVariants}
-                        className="flex items-center gap-1 px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition cursor-pointer"
+                        className="flex items-center gap-1 px-3 py-1.5 border border-red-200 bg-red-50 Guest text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition cursor-pointer"
                       >
                         <Trash2 size={13} /> Xóa tất cả
                       </button>
@@ -606,7 +593,7 @@ export default function AdminProductDetail() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan="6" className="py-8 text-center text-slate-400 font-medium bg-slate-50/50">
+                          <td colSpan="6" className="py-8 text-center text-gray-400 font-medium bg-slate-50/50">
                             Sản phẩm chưa có biến thể nào được tạo.
                           </td>
                         </tr>
@@ -642,7 +629,6 @@ export default function AdminProductDetail() {
               </div>
             )}
 
-            {/* TAB 3: GHI CHÚ NỘI BỘ */}
             {activeTab === "notes" && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -681,7 +667,7 @@ export default function AdminProductDetail() {
             )}
           </div>
 
-          {/* ----------------- CỘT PHẢI: HÌNH ẢNH & TRẠNG THÁI (Chiếm 4 phần) ----------------- */}
+          {/* ----------------- CỘT PHẢI: HÌNH ẢNH & TRẠNG THÁI ----------------- */}
           <div className="lg:col-span-4 space-y-4 order-1 lg:order-2 lg:sticky lg:top-4">
             
             {/* BOX MEDIA HÌNH ẢNH */}
@@ -707,7 +693,6 @@ export default function AdminProductDetail() {
                   </div>
                 )}
 
-                {/* THIẾT LẬP ẢNH CHÍNH */}
                 {activeMediaObj && (
                   <div className="absolute top-3 left-3">
                     {activeMediaObj.la_anh_chinh ? (
@@ -718,8 +703,8 @@ export default function AdminProductDetail() {
                       <button
                         onClick={async () => {
                           try {
-                            const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                            await axios.put(`${apiUrl}/api/products/media/set-main`, {
+                            // 🚀 TỐI ƯU: Sử dụng productApi
+                            await productApi.put("/products/media/set-main", {
                               ma_san_pham: product.ma_san_pham,
                               ma_media: activeMediaObj.ma_media,
                             });
@@ -833,7 +818,7 @@ export default function AdminProductDetail() {
                     setNewMediaUrl(e.target.value);
                     setNewMediaFile(null);
                   }}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-[#006c49] transition"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:border-[#006c49] transition text-slate-800"
                 />
               </div>
             </div>

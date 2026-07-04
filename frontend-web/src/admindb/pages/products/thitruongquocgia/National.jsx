@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import {
   Globe,
   Plus,
@@ -22,13 +23,12 @@ export default function Nation() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL, ACTIVE, INACTIVE
 
-  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-  // Gọi API lấy danh sách quốc gia
+  // Gọi API lấy danh sách quốc gia qua instance chung
   const fetchNations = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${apiUrl}/api/nations`);
+      // 🚀 TỐI ƯU: Sử dụng đường dẫn tương đối ngắn sạch qua productApi
+      const res = await productApi.get("/nations");
       if (res.data && res.data.success) {
         setNations(res.data.data);
       } else {
@@ -84,7 +84,8 @@ export default function Nation() {
     const actionText = currentStatus ? "tạm khóa" : "khôi phục";
     if (window.confirm(`⚠️ Bạn có chắc muốn ${actionText} quốc gia "${ten_quoc_gia}"?`)) {
       try {
-        await axios.patch(`${apiUrl}/api/nations/${ma_quoc_gia}/toggle`);
+        // 🚀 TỐI ƯU: Chuyển đổi phương thức gọi PATCH đồng bộ qua productApi
+        await productApi.patch(`/nations/${ma_quoc_gia}/toggle`);
         fetchNations(); // Load lại danh sách
       } catch (error) {
         alert(
@@ -103,7 +104,8 @@ export default function Nation() {
       )
     ) {
       try {
-        await axios.delete(`${apiUrl}/api/nations/${ma_quoc_gia}`);
+        // 🚀 TỐI ƯU: Chuyển đổi phương thức gọi DELETE đồng bộ qua productApi
+        await productApi.delete(`/nations/${ma_quoc_gia}`);
         alert(`✅ Đã xóa vĩnh viễn quốc gia ${ten_quoc_gia}.`);
         fetchNations();
       } catch (error) {
@@ -147,7 +149,7 @@ export default function Nation() {
                 placeholder="Tìm mã, tên hoặc mã GS1..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition text-slate-800"
               />
             </div>
 
@@ -243,7 +245,6 @@ export default function Nation() {
                           )}
                         </td>
 
-                        {/* 🌟 ĐÃ SỬA CHUẨN: Phần logic hoàn chỉnh của các nút thao tác */}
                         <td className="py-3 px-4 text-right pr-6 bg-white sticky right-0 shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.03)] group-hover:bg-slate-50 transition-colors">
                           <div className="flex items-center justify-end gap-1 text-slate-400">
                             <button

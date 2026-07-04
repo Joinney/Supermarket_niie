@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
+// 🌟 SỬA BƯỚC 1: Import đúng các instance api đã cấu hình để gánh Token tự động và hoán đổi Local / DevOps
+import { authApi, cartApi } from "../../../api/axios"; // <--- Điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 
 const Chitietkhachhang = () => {
   const location = useLocation();
@@ -24,8 +25,6 @@ const Chitietkhachhang = () => {
   const [paymentSearch, setPaymentSearch] = useState("");
   const [paymentFilterStatus, setPaymentFilterStatus] = useState("ALL");
 
-  const userApiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-
   useEffect(() => {
     const fetchCustomerDetailAndCart = async () => {
       if (!userId) {
@@ -34,22 +33,20 @@ const Chitietkhachhang = () => {
       }
       setLoading(true);
       try {
-        // 1. Gọi API lấy thông tin Profile User
-        const userRequest = axios.get(`${userApiUrl}/api/auth/internal/users/${userId}`);
+        // 🌟 SỬA BƯỚC 2: Gọi thông tin Profile qua authApi bằng đường dẫn tương đối ngắn sạch
+        const userRequest = authApi.get(`/auth/internal/users/${userId}`);
         
-        // 2. 🚀 ĐÃ SỬA: Gọi đúng API Giỏ hàng nội bộ đã được cập nhật ở Mục 2
-        const cartRequest = axios.get(`${userApiUrl}/api/cart/internal/${userId}`).catch(err => {
+        // 🌟 SỬA BƯỚC 3: Gọi thông tin Giỏ hàng nội bộ qua đúng phân hệ cartApi (Cổng 5003 hoặc Render DevOps)
+        const cartRequest = cartApi.get(`/cart/internal/${userId}`).catch(err => {
           console.warn("⚠️ Không lấy được giỏ hàng từ API, có thể do User chưa có giỏ hoặc sai Route:", err.message);
           return { data: { items: [] } };
         });
 
-        // Kích hoạt đồng thời cả 2 API
+        // Kích hoạt song song đồng thời cả 2 API Microservices
         const [userResponse, cartResponse] = await Promise.all([userRequest, cartRequest]);
 
         if (userResponse.data) {
           const userData = userResponse.data;
-          
-          // Đọc mảng items từ payload trả về chuẩn của hàm getCartByUserId
           const cartItems = cartResponse.data?.items || [];
 
           const mergedData = {
@@ -69,8 +66,6 @@ const Chitietkhachhang = () => {
 
             orders: userData.orders || [],
             payments: userData.payments || [],
-            
-            // 🛒 ĐỒNG BỘ: Đổ dữ liệu mảng giỏ hàng thật từ API Backend vào
             cart: cartItems 
           };
 
@@ -87,7 +82,7 @@ const Chitietkhachhang = () => {
     };
 
     fetchCustomerDetailAndCart();
-  }, [userId, userApiUrl]);
+  }, [userId]);
 
   const loadFallbackData = () => {
     const fallback = {
@@ -112,7 +107,6 @@ const Chitietkhachhang = () => {
       payments: [
         { id: "TX-5521", date: "28/03/24", method: "Thẻ ATM", status: "THÀNH CÔNG", amount: "2,450,000 VND" }
       ],
-      // Dữ liệu mẫu EAV phòng khi không truyền userId
       cart: [
         { 
           variantId: "v-101", 
@@ -148,7 +142,6 @@ const Chitietkhachhang = () => {
   const defaultOrders = customer.orders?.slice(0, 3) || [];
   const defaultPayments = customer.payments?.slice(0, 3) || [];
 
-  // Tính tổng giá trị giỏ hàng động dựa trên dữ liệu thật kiểu Number nguyên bản
   const totalCartValue = customer.cart?.reduce((sum, item) => {
     const numPrice = parseInt(String(item.price).replace(/[^0-9]/g, '')) || 0;
     return sum + (numPrice * (item.quantity || 1));
@@ -186,7 +179,7 @@ const Chitietkhachhang = () => {
       {/* Grid Bento Box Hệ Thống */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
-        {/* KHỐI TRÁI + KHỐI GIỮA (Thông tin Profile) */}
+        {/* KHỐI TRÁI + KHỐI GIỮA */}
         <div className="lg:col-span-2 space-y-6">
           
           {/* Avatar Profile */}
@@ -263,7 +256,7 @@ const Chitietkhachhang = () => {
           </div>
         </div>
 
-        {/* KHỐI BÊN PHẢI (Địa chỉ + Bản đồ tương tác + Giỏ hàng hiện tại) */}
+        {/* KHỐI BÊN PHẢI */}
         <div className="space-y-6">
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-4">Phân loại tài khoản</h3>
@@ -323,7 +316,7 @@ const Chitietkhachhang = () => {
             )}
           </div>
 
-          {/* 🛒 KHỐI BENTO GIỎ HÀNG THẬT LẤY TỪ HÀM GETCARTBYUSERID */}
+          {/* GIỎ HÀNG THẬT LẤY TỪ HÀM GETCARTBYUSERID VIA CARTAPI */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
             <div className="flex justify-between items-center select-none">
               <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
@@ -339,7 +332,6 @@ const Chitietkhachhang = () => {
                 customer.cart.map((item, idx) => (
                   <div key={item.variantId || idx} className="p-3 bg-[#fafafa] border border-slate-100 rounded-xl text-xs space-y-2 flex flex-col">
                     <div className="flex items-start gap-3">
-                      {/* Ảnh từ Cloudinary / Fallback chuỗi mặc định */}
                       <div className="w-12 h-12 bg-white border border-slate-200/60 rounded-lg overflow-hidden p-1 shadow-sm shrink-0 flex items-center justify-center">
                         {item.image && item.image.startsWith("http") ? (
                           <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
@@ -348,19 +340,17 @@ const Chitietkhachhang = () => {
                         )}
                       </div>
                       
-                      {/* Tên sản phẩm chính & Đơn vị */}
                       <div className="min-w-0 flex-1 text-left">
                         <p className="font-black text-slate-800 text-xs tracking-tight line-clamp-2 uppercase italic" title={item.name}>
                           {item.name}
                         </p>
                         <p className="text-[10px] font-bold text-emerald-700 mt-1">
                           {parseInt(String(item.price).replace(/[^0-9]/g, '') || "0").toLocaleString()}đ × <span className="text-slate-900 font-black">{item.quantity || 1}</span>
-                          <span className="text-gray-400 font-medium ml-1">({item.ten_don_vi || "Gói"})</span>
+                          <span className="text-gray-400 font-medium ml-1">({item.ten_don_vi || "Cái"})</span>
                         </p>
                       </div>
                     </div>
 
-                    {/* Vòng lặp map mảng EAV thuộc tính giống Cart gốc */}
                     {item.thuoc_tinh_hop_nhat && item.thuoc_tinh_hop_nhat.length > 0 && (
                       <div className="flex flex-wrap gap-1 pt-2 border-t border-slate-200/50">
                         {item.thuoc_tinh_hop_nhat.map((attr, aIdx) => (

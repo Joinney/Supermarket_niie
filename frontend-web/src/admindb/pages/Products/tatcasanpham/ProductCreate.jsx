@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi từ file config Axios chung của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import {
   ChevronLeft,
   X,
@@ -75,17 +76,15 @@ export default function ProductCreate() {
     ? `MDM_${formData.ma_quoc_gia}_${childCodeSuffix.toUpperCase().replace(/\s+/g, "_")}`
     : "";
 
-  const apiUrl =
-    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
+  // 🚀 TỐI ƯU: Nạp dữ liệu khởi tạo đồng bộ thông qua productApi
   useEffect(() => {
     const fetchInitData = async () => {
       try {
         setLoadingCategories(true);
         const [resParents, resCat, resNations] = await Promise.all([
-          axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
-          axios.get(`${apiUrl}/api/categories/children?country=ALL`),
-          axios.get(`${apiUrl}/api/nations`),
+          productApi.get("/categories/parents?country=ALL"),
+          productApi.get("/categories/children?country=ALL"),
+          productApi.get("/nations"),
         ]);
         setParents(resParents.data.data || []);
         setChildren(resCat.data.data || resCat.data || []);
@@ -99,7 +98,7 @@ export default function ProductCreate() {
       }
     };
     fetchInitData();
-  }, [apiUrl]);
+  }, []);
 
   useEffect(() => {
     setFilter({ ma_dm_cha: "" });
@@ -118,13 +117,10 @@ export default function ProductCreate() {
     formUpload.append("image", file);
 
     try {
-      const response = await axios.post(
-        `${apiUrl}/api/products/upload`,
-        formUpload,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
-      );
+      // 🚀 TỐI ƯU: Đồng bộ luồng upload qua productApi
+      const response = await productApi.post("/products/upload", formUpload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       if (response.data && response.data.url) {
         setFormData({ ...formData, hinh_anh_chinh: response.data.url });
       }
@@ -160,7 +156,8 @@ export default function ProductCreate() {
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, ""),
       };
-      const res = await axios.post(`${apiUrl}/api/categories/parents`, payload);
+      // 🚀 TỐI ƯU: Đồng bộ tạo danh mục cha qua productApi
+      const res = await productApi.post("/categories/parents", payload);
       const newParent = res.data.data;
       setParents([...parents, newParent]);
       setFilter({ ma_dm_cha: newParent.ma_dm_cha });
@@ -192,10 +189,8 @@ export default function ProductCreate() {
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, ""),
       };
-      const res = await axios.post(
-        `${apiUrl}/api/categories/children`,
-        payload,
-      );
+      // 🚀 TỐI ƯU: Đồng bộ tạo danh mục con qua productApi
+      const res = await productApi.post("/categories/children", payload);
       const newChild = res.data.data;
       setChildren([...children, newChild]);
       setFormData({ ...formData, ma_dm_con: newChild.ma_dm_con });
@@ -219,7 +214,8 @@ export default function ProductCreate() {
     setSubmitting(true);
     setError("");
     try {
-      const response = await axios.post(`${apiUrl}/api/products`, formData);
+      // 🚀 TỐI ƯU: Đồng bộ cấu trúc gửi biểu mẫu sản phẩm qua productApi
+      const response = await productApi.post("/products", formData);
 
       if (response.data?.success) {
         const newProductId = response.data.data?.ma_san_pham;
@@ -262,7 +258,7 @@ export default function ProductCreate() {
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={() => navigate("/admin/products")}
-            className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm shrink-0"
+            className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm shrink-0 cursor-pointer"
           >
             <ChevronLeft size={20} strokeWidth={2.5} />
           </button>
@@ -299,7 +295,7 @@ export default function ProductCreate() {
                   onChange={(e) =>
                     setFormData({ ...formData, ten_san_pham: e.target.value })
                   }
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition"
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-300 outline-none focus:border-[#006c49] transition text-slate-800"
                 />
               </div>
 
@@ -316,8 +312,7 @@ export default function ProductCreate() {
                 >
                   {nations.map((nation) => (
                     <option key={nation.ma_quoc_gia} value={nation.ma_quoc_gia}>
-                      {nation.bieu_tuong_co} {nation.ten_quoc_gia} (
-                      {nation.ma_quoc_gia})
+                      {nation.bieu_tuong_co} {nation.ten_quoc_gia} ({nation.ma_quoc_gia})
                     </option>
                   ))}
                 </select>
@@ -331,13 +326,12 @@ export default function ProductCreate() {
               </label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Nút: Sản phẩm đơn */}
                 <button
                   type="button"
                   onClick={() =>
                     setFormData({ ...formData, co_bien_the: false })
                   }
-                  className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200 hover:border-emerald-200"}`}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden cursor-pointer ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200 hover:border-emerald-200"}`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div
@@ -352,15 +346,13 @@ export default function ProductCreate() {
                     </h3>
                   </div>
                   <p className="text-xs text-slate-500 font-medium">
-                    Bán trực tiếp một lựa chọn duy nhất. Không chia màu sắc,
-                    kích thước.
+                    Bán trực tiếp một lựa chọn duy nhất. Không chia màu sắc, kích thước.
                   </p>
                   {!formData.co_bien_the && (
                     <div className="absolute top-0 right-0 w-16 h-16 bg-[#006c49] opacity-5 rounded-bl-full"></div>
                   )}
                 </button>
 
-                {/* Nút: Có biến thể */}
                 <button
                   type="button"
                   onClick={() =>
@@ -372,7 +364,7 @@ export default function ProductCreate() {
                       sku: "",
                     })
                   }
-                  className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200 hover:border-indigo-200"}`}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all relative overflow-hidden cursor-pointer ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200 hover:border-indigo-200"}`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div
@@ -387,8 +379,7 @@ export default function ProductCreate() {
                     </h3>
                   </div>
                   <p className="text-xs text-slate-500 font-medium">
-                    Khách hàng có thể chọn nhiều biến thể (Ví dụ: Màu sắc, Kích
-                    thước).
+                    Khách hàng có thể chọn nhiều biến thể (Ví dụ: Màu sắc, Kích thước).
                   </p>
                   {formData.co_bien_the && (
                     <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600 opacity-5 rounded-bl-full"></div>
@@ -396,7 +387,6 @@ export default function ProductCreate() {
                 </button>
               </div>
 
-              {/* 🌟 FORM THÔNG SỐ: CHỈ HIỆN KHI LÀ SẢN PHẨM ĐƠN */}
               {!formData.co_bien_the && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -407,7 +397,6 @@ export default function ProductCreate() {
                     Thông số bán hàng trực tiếp (Sản phẩm đơn)
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {/* 🌟 ĐÃ KHÓA Ô SKU THEO YÊU CẦU */}
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
                         Mã SKU (Tự động)
@@ -421,8 +410,7 @@ export default function ProductCreate() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
-                        Giá Bán Niêm Yết (VND){" "}
-                        <span className="text-red-500">*</span>
+                        Giá Bán Niêm Yết (VND) <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -450,15 +438,13 @@ export default function ProductCreate() {
                         className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs font-black text-slate-400 outline-none cursor-not-allowed transition"
                       />
                       <p className="text-[10px] text-slate-400 font-bold italic">
-                        * Kho sẽ được cập nhật sau khi tạo các biến thể hoặc qua
-                        phiếu nhập kho.
+                        * Kho sẽ được cập nhật sau khi tạo các biến thể hoặc qua phiếu nhập kho.
                       </p>
                     </div>
                   </div>
                 </motion.div>
               )}
 
-              {/* GIAO DIỆN CHỌN LOẠI BIẾN THỂ KHI CO_BIEN_THE = TRUE */}
               {formData.co_bien_the && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -470,7 +456,6 @@ export default function ProductCreate() {
                   </label>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Lựa chọn 1: Biến thể đơn */}
                     <div
                       onClick={() => setVariantType("SINGLE")}
                       className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${variantType === "SINGLE" ? "bg-white border-indigo-500 shadow-sm" : "bg-transparent border-transparent hover:bg-slate-100"}`}
@@ -491,13 +476,11 @@ export default function ProductCreate() {
                           Biến Thể Đơn Lập
                         </h4>
                         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                          Phù hợp sản phẩm có các tên gọi tách rời, không theo
-                          ma trận. (VD: "Bản tiêu chuẩn", "Bản cao cấp").
+                          Phù hợp sản phẩm có các tên gọi tách rời, không theo ma trận. (VD: "Bản tiêu chuẩn", "Bản cao cấp").
                         </p>
                       </div>
                     </div>
 
-                    {/* Lựa chọn 2: Biến thể nhóm (Ma trận) */}
                     <div
                       onClick={() => setVariantType("GROUP")}
                       className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${variantType === "GROUP" ? "bg-white border-indigo-500 shadow-sm" : "bg-transparent border-transparent hover:bg-slate-100"}`}
@@ -518,8 +501,7 @@ export default function ProductCreate() {
                           Ma Trận Thuộc Tính
                         </h4>
                         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                          Phù hợp sản phẩm cấu hình chéo nhiều lớp thuộc tính.
-                          (VD: Áo thun Size M - Màu Đỏ).
+                          Phù hợp sản phẩm cấu hình chéo nhiều lớp thuộc tính. (VD: Áo thun Size M - Màu Đỏ).
                         </p>
                       </div>
                     </div>
@@ -605,7 +587,6 @@ export default function ProductCreate() {
 
             {/* 4. HÌNH ẢNH CHÍNH & MÔ TẢ */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-              {/* Khu vực Upload Ảnh */}
               <div className="md:col-span-5 space-y-4">
                 <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
                   Hình ảnh đại diện <span className="text-red-500">*</span>
@@ -624,7 +605,7 @@ export default function ProductCreate() {
                           onClick={() =>
                             setFormData({ ...formData, hinh_anh_chinh: "" })
                           }
-                          className="text-white text-xs font-bold uppercase border border-white px-3 py-1.5 rounded-lg hover:bg-white hover:text-black transition"
+                          className="text-white text-xs font-bold uppercase border border-white px-3 py-1.5 rounded-lg hover:bg-white hover:text-black transition cursor-pointer"
                         >
                           Gỡ ảnh
                         </button>
@@ -633,7 +614,7 @@ export default function ProductCreate() {
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-slate-400">
                       {uploadingImage ? (
-                        <Loader2 className="animate-spin" size={32} />
+                        <Loader2 className="animate-spin text-emerald-600" size={32} />
                       ) : (
                         <ImageIcon size={32} className="opacity-50" />
                       )}
@@ -649,7 +630,7 @@ export default function ProductCreate() {
                     type="button"
                     onClick={() => productFileInputRef.current.click()}
                     disabled={uploadingImage}
-                    className="w-full py-2.5 bg-slate-100 hover:bg-[#006c49] text-slate-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-2.5 bg-slate-100 hover:bg-[#006c49] text-slate-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     <UploadCloud size={16} /> Chọn ảnh từ máy tính
                   </button>
@@ -664,7 +645,7 @@ export default function ProductCreate() {
                   <div className="flex items-center gap-3">
                     <div className="h-px bg-slate-200 flex-1"></div>
                     <span className="text-[10px] text-slate-400 font-black uppercase">
-                      Hoặc dán URL URL
+                      Hoặc dán URL
                     </span>
                     <div className="h-px bg-slate-200 flex-1"></div>
                   </div>
@@ -684,7 +665,6 @@ export default function ProductCreate() {
                 </div>
               </div>
 
-              {/* Khối Mô tả */}
               <div className="md:col-span-7 flex flex-col">
                 <div className="flex justify-between items-center mb-2">
                   <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
@@ -710,14 +690,14 @@ export default function ProductCreate() {
               <button
                 type="button"
                 onClick={() => navigate("/admin/products")}
-                className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition"
+                className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#005137] transition active:scale-95 shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+                className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#005137] transition active:scale-95 shadow-md disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
               >
                 {submitting ? (
                   <>
@@ -732,7 +712,7 @@ export default function ProductCreate() {
         </div>
       </div>
 
-      {/* ======================================= MODAL TẠO NHANH DANH MỤC CHA ==================================== */}
+      {/* ================= MODAL TẠO NHANH DANH MỤC CHA ================= */}
       <AnimatePresence>
         {showParentModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
@@ -752,7 +732,7 @@ export default function ProductCreate() {
               <div className="sticky top-0 bg-white/90 backdrop-blur-md z-20 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-black text-slate-800">
-                    Thêm Danh Mục Cha Mới
+                    Thêm Danh Mạc Cha Mới
                   </h3>
                   <p className="text-xs font-bold text-slate-400 mt-1">
                     Điền các thông tin cơ bản để tạo mới
@@ -760,7 +740,7 @@ export default function ProductCreate() {
                 </div>
                 <button
                   onClick={() => setShowParentModal(false)}
-                  className="w-10 h-10 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full flex items-center justify-center transition"
+                  className="w-10 h-10 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full flex items-center justify-center transition cursor-pointer"
                 >
                   <X size={20} strokeWidth={2.5} />
                 </button>
@@ -778,7 +758,7 @@ export default function ProductCreate() {
                       autoFocus
                       value={newParentName}
                       onChange={(e) => setNewParentName(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition text-slate-800"
                     />
                   </div>
                   <div>
@@ -799,7 +779,7 @@ export default function ProductCreate() {
                       type="text"
                       value={parentCodeSuffix}
                       onChange={(e) => setParentCodeSuffix(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition text-slate-800"
                     />
                     {generatedParentCode && (
                       <p className="text-[11px] font-bold text-[#006c49] bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
@@ -832,7 +812,7 @@ export default function ProductCreate() {
                         <button
                           type="button"
                           onClick={() => parentFileInputRef.current.click()}
-                          className="w-full p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-emerald-50 hover:text-[#006c49] transition font-bold"
+                          className="w-full p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-emerald-50 hover:text-[#006c49] transition font-bold cursor-pointer"
                         >
                           <UploadCloud size={18} /> Chọn ảnh từ máy
                         </button>
@@ -850,7 +830,7 @@ export default function ProductCreate() {
                             parentImage.startsWith("http") ? parentImage : ""
                           }
                           onChange={(e) => setParentImage(e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:border-[#006c49] transition"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:border-[#006c49] transition text-slate-800"
                         />
                       </div>
                     </div>
@@ -860,14 +840,14 @@ export default function ProductCreate() {
                   <button
                     type="button"
                     onClick={() => setShowParentModal(false)}
-                    className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+                    className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
                     disabled={isCreatingParent}
-                    className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold hover:bg-[#005137] flex gap-2 items-center transition shadow-md active:scale-95"
+                    className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold hover:bg-[#005137] flex gap-2 items-center transition shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
                   >
                     {isCreatingParent ? (
                       <Loader2 size={18} className="animate-spin" />
@@ -883,7 +863,7 @@ export default function ProductCreate() {
         )}
       </AnimatePresence>
 
-      {/* ======================================= MODAL TẠO NHANH DANH MỤC CON ==================================== */}
+      {/* ================= MODAL TẠO NHANH DANH MỤC CON ================= */}
       <AnimatePresence>
         {showChildModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
@@ -911,7 +891,7 @@ export default function ProductCreate() {
                 </div>
                 <button
                   onClick={() => setShowChildModal(false)}
-                  className="w-10 h-10 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full flex items-center justify-center transition"
+                  className="w-10 h-10 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full flex items-center justify-center transition cursor-pointer"
                 >
                   <X size={20} strokeWidth={2.5} />
                 </button>
@@ -929,7 +909,7 @@ export default function ProductCreate() {
                       autoFocus
                       value={newChildName}
                       onChange={(e) => setNewChildName(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition text-slate-800"
                     />
                   </div>
                   <div>
@@ -959,7 +939,7 @@ export default function ProductCreate() {
                       type="text"
                       value={childCodeSuffix}
                       onChange={(e) => setChildCodeSuffix(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition"
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-[#006c49] transition text-slate-800"
                     />
                     {generatedChildCode && (
                       <p className="text-[11px] font-bold text-[#006c49] bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 w-fit">
@@ -992,7 +972,7 @@ export default function ProductCreate() {
                         <button
                           type="button"
                           onClick={() => childFileInputRef.current.click()}
-                          className="w-full p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-emerald-50 hover:text-[#006c49] transition font-bold"
+                          className="w-full p-3 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-sm text-slate-600 hover:border-[#006c49] hover:bg-emerald-50 hover:text-[#006c49] transition font-bold cursor-pointer"
                         >
                           <UploadCloud size={18} /> Chọn ảnh từ máy
                         </button>
@@ -1010,7 +990,7 @@ export default function ProductCreate() {
                             childImage.startsWith("http") ? childImage : ""
                           }
                           onChange={(e) => setChildImage(e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:border-[#006c49] transition"
+                          className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:border-[#006c49] transition text-slate-800"
                         />
                       </div>
                     </div>
@@ -1020,14 +1000,14 @@ export default function ProductCreate() {
                   <button
                     type="button"
                     onClick={() => setShowChildModal(false)}
-                    className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+                    className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="submit"
                     disabled={isCreatingChild}
-                    className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold hover:bg-[#005137] flex gap-2 items-center transition shadow-md active:scale-95"
+                    className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold hover:bg-[#005137] flex gap-2 items-center transition shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
                   >
                     {isCreatingChild ? (
                       <Loader2 size={18} className="animate-spin" />

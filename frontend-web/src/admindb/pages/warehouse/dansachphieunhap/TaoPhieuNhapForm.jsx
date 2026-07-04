@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import SelectSkuModal from "./SelectSkuModal";
 import ProductDetailModal from "./ProductDetailModal"; 
-import axios from "axios";
+// 🌟 SỬA BƯỚC 1: Thay thế import "axios" trần bằng instance "warehouseApi" đã cấu hình của bạn
+import { warehouseApi } from "../../../../api/axios"; // <--- Thay bằng đường dẫn thực tế đến file config Axios của bạn
+import axios from "axios"; // Vẫn giữ import này dự phòng nếu có chỗ dùng tạo instance trống
 
 export default function TaoPhieuNhapForm() {
   const navigate = useNavigate();
@@ -17,7 +19,6 @@ export default function TaoPhieuNhapForm() {
   const [globalLots, setGlobalLots] = useState([]); 
 
   const [warehouse, setWarehouse] = useState("");
-  // 🌟 ĐÃ CẬP NHẬT: Thay đổi giá trị khởi tạo mặc định thành "NHAP" để khớp với DB Check Constraint
   const [importType, setImportType] = useState("NHAP");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -36,18 +37,18 @@ export default function TaoPhieuNhapForm() {
   const dropdownLotRef = useRef(null);
   const dropdownRatioRef = useRef(null);
 
-  // ĐỒNG BỘ DỮ LIỆU TỪ BACKEND WAREHOUSE-SERVICE
+  // ĐỒNG BỘ DỮ LIỆU TỪ BACKEND WAREHOUSE-SERVICE VIA INTERCEPTOR
   useEffect(() => {
-    const backendUrl = "http://localhost:5006/api/v1";
-
-    axios.get(`${backendUrl}/warehouses`)
+    // 🌟 SỬA BƯỚC 2: Chuyển sang dùng các path tương đối thông qua instance warehouseApi
+    // Bản thân instance này đã bọc sẵn tiền tố '/api/v1' và tự động nhảy cổng 5006 / Render
+    warehouseApi.get("/warehouses")
       .then(res => {
         setDbWarehouses(res.data);
         if (res.data.length > 0) setWarehouse(res.data[0].ma_kho);
       })
       .catch(err => console.error("Lỗi tải danh sách kho nhận:", err));
 
-    axios.get(`${backendUrl}/unit-conversions`)
+    warehouseApi.get("/unit-conversions")
       .then(res => {
         const mappedRatios = res.data.map(item => ({
           id: `ratio_${item.id}`,
@@ -61,7 +62,7 @@ export default function TaoPhieuNhapForm() {
       })
       .catch(err => console.error("Lỗi tải danh mục quy đổi từ DB:", err));
 
-    axios.get(`${backendUrl}/lots`)
+    warehouseApi.get("/lots")
       .then(res => {
         const mappedLots = res.data.map(lot => ({
           id: lot.ma_lo_hang,
@@ -172,7 +173,8 @@ export default function TaoPhieuNhapForm() {
     };
 
     try {
-      const res = await axios.post("http://localhost:5006/api/v1/lots", payloadNewLot);
+      // 🌟 SỬA BƯỚC 3: Đưa endpoint post lô hàng qua warehouseApi
+      const res = await warehouseApi.post("/lots", payloadNewLot);
       if (res.status === 200 || res.status === 201) {
         const newLotObj = { 
           id: autoLotId, 
@@ -250,44 +252,35 @@ export default function TaoPhieuNhapForm() {
 
   const { itemsWithTotals, grandTotal } = calculateTotals();
 
-const handleConfirmSubmit = async (e) => {
+  const handleConfirmSubmit = async (e) => {
     e.preventDefault();
     if (selectedProducts.length === 0) return showNotification("Phiếu chưa có sản phẩm!", "error");
     if (selectedProducts.some(item => !item.selectedLotId)) return showNotification("Vui lòng điền đủ Số Lô & HSD!", "error");
 
     setSubmitting(true);
     try {
-      // 🌟 LẤY THÔNG TIN USER ĐĂNG NHẬP THỰC TẾ TỪ ADMININFO
-      // Tìm đoạn const savedAdminStr = localStorage.getItem("adminInfo"); bên trong handleConfirmSubmit và sửa thành:
-const savedAdminStr = localStorage.getItem("adminInfo");
-let currentUserId = 1; 
-let currentFullName = "Hệ thống kho";
+      const savedAdminStr = localStorage.getItem("adminInfo");
+      let currentUserId = 1; 
+      let currentFullName = "Hệ thống kho";
 
-if (savedAdminStr) {
-  try {
-    const parsedAdmin = JSON.parse(savedAdminStr);
-    currentUserId = parsedAdmin.id || parsedAdmin.user_id || 1;
-    
-    // Lấy thông tin full_name và role (ví dụ: user.role lưu từ AdminLogin)
-    const fullName = parsedAdmin.full_name || parsedAdmin.fullName || parsedAdmin.username || "Hệ thống";
-    const role = parsedAdmin.role || localStorage.getItem("adminRole") || "Staff";
-    
-    // 🌟 ĐÓNG GÓI DẠNG: "Phan Minh Thuận (Admin)"
-    currentFullName = `${fullName} (${role})`;
-  } catch (parseErr) {
-    console.error("Lỗi parse thông tin adminInfo từ localStorage:", parseErr);
-  }
-}
+      if (savedAdminStr) {
+        try {
+          const parsedAdmin = JSON.parse(savedAdminStr);
+          currentUserId = parsedAdmin.id || parsedAdmin.user_id || 1;
+          const fullName = parsedAdmin.full_name || parsedAdmin.fullName || parsedAdmin.username || "Hệ thống";
+          const role = parsedAdmin.role || localStorage.getItem("adminRole") || "Staff";
+          currentFullName = `${fullName} (${role})`;
+        } catch (parseErr) {
+          console.error("Lỗi parse thông tin adminInfo từ localStorage:", parseErr);
+        }
+      }
 
       const payload = {
         warehouse_id: warehouse,
-        import_type: importType, // "NHAP"
+        import_type: importType, 
         note: note || "",
-        
-        // 🌟 BỔ SUNG: Truyền thông tin định danh động lên Server
         user_id: parseInt(currentUserId, 10),
         full_name: currentFullName,
-
         products: itemsWithTotals.map(item => {
           const lotObj = globalLots.find(l => l.id === item.selectedLotId);
           return {
@@ -301,7 +294,8 @@ if (savedAdminStr) {
         })
       };
 
-      const response = await axios.post("http://localhost:5006/api/v1/inventory", payload);
+      // 🌟 SỬA BƯỚC 4: Đẩy payload tạo chứng từ mới qua warehouseApi
+      const response = await warehouseApi.post("/inventory", payload);
       if (response.status === 200 || response.status === 201) {
         showNotification("🎉 Đã lưu chứng từ và cập nhật số lượng tồn kho!");
         setTimeout(() => { navigate("/admin/inventory/import-list"); }, 1500);
@@ -552,7 +546,6 @@ if (savedAdminStr) {
             
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">Hình thức kiểm duyệt *</label>
-              {/* 🌟 ĐÃ SỬA: value chuyển thành "NHAP" thay vì "mua" / "tra" để vượt qua lớp Check Constraint */}
               <select value={importType} onChange={(e) => setImportType(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-gray-100 rounded-lg text-xs font-black text-emerald-700">
                 <option value="NHAP">Mua Hàng Từ Nhà Cung Cấp</option>
                 <option value="NHAP">Khách Trả Hàng Lưu Kho</option>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import axios from "axios";
+// 🌟 SỬA BƯỚC 1: Thay thế import "axios" trần bằng instance "productApi" từ file config của bạn
+import { productApi } from "../../../../api/axios"; // <--- Thay bằng đường dẫn thực tế đến file config Axios của bạn
 import {
   Layers,
   Plus,
@@ -40,8 +41,8 @@ export default function ParentCategories() {
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        const res = await axios.get(`${apiUrl}/api/nations`);
+        // 🌟 SỬA BƯỚC 2: Gọi qua productApi với endpoint tương đối
+        const res = await productApi.get("/nations");
 
         if (res.data && res.data.success) {
           setCountries(res.data.data);
@@ -61,10 +62,8 @@ export default function ParentCategories() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const res = await axios.get(
-        `${apiUrl}/api/categories/parents?country=${selectedCountry}`,
-      );
+      // 🌟 SỬA BƯỚC 3: Thay thế axios bằng productApi để tự động phân phối URL theo môi trường
+      const res = await productApi.get(`/categories/parents?country=${selectedCountry}`);
       if (res.data && res.data.success) {
         setCategories(res.data.data);
       } else if (Array.isArray(res.data)) {
@@ -112,7 +111,6 @@ export default function ParentCategories() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      /* 🌟 ĐÃ ĐỒNG BỘ: p-1 bung sát biên 2 bên mép màn hình, màu nền #fafafa */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
       <div className="w-full">
@@ -280,8 +278,8 @@ export default function ParentCategories() {
                                   onClick={async () => {
                                     if (window.confirm(`⚠️ Bạn có chắc chắn muốn khóa lưu trữ danh mục gốc "${c.ten_danh_muc_cha}"?`)) {
                                       try {
-                                        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                                        await axios.delete(`${apiUrl}/api/categories/parents/${c.ma_dm_cha}`);
+                                        // 🌟 SỬA BƯỚC 4: Chuyển các lệnh thao tác xóa/khôi phục tương ứng sang productApi
+                                        await productApi.delete(`/categories/parents/${c.ma_dm_cha}`);
                                         fetchCategories();
                                       } catch (error) {
                                         alert("❌ Lỗi: " + (error.response?.data?.message || "Hành động thất bại."));
@@ -299,11 +297,10 @@ export default function ParentCategories() {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                                      await axios.put(`${apiUrl}/api/categories/parents/${c.ma_dm_cha}/restore`);
+                                      await productApi.put(`/categories/parents/${c.ma_dm_cha}/restore`);
                                       fetchCategories();
                                     } catch (error) {
-                                      alert("❌ Lỗi tái khôi phục hoạt động.");
+                                      alert("❌ Lỗi: Tái khôi phục hoạt động thất bại.");
                                     }
                                   }}
                                   className="p-1.5 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
@@ -315,8 +312,7 @@ export default function ParentCategories() {
                                   onClick={async () => {
                                     if (window.confirm(`🚨 CẢNH BÁO NGUY HIỂM: Bạn có chắc muốn xóa VĨNH VIỄN danh mục "${c.ten_danh_muc_cha}"?\nHành động này sẽ xóa sạch dữ liệu và không thể hoàn tác!`)) {
                                       try {
-                                        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                                        await axios.delete(`${apiUrl}/api/categories/parents/${c.ma_dm_cha}/hard`);
+                                        await productApi.delete(`/categories/parents/${c.ma_dm_cha}/hard`);
                                         fetchCategories();
                                       } catch (error) {
                                         alert("❌ Lỗi: " + (error.response?.data?.message || "Hành động thất bại."));

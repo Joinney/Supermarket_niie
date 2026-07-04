@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
+import { motion } from "framer-motion";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi từ file config Axios chung của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import { Loader2, ChevronLeft, Save, Box } from "lucide-react";
 
 export default function UnitForm() {
@@ -15,17 +17,13 @@ export default function UnitForm() {
     mo_ta: "",
   });
 
-  const apiUrl =
-    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-  // 1. TẢI DỮ LIỆU NẾU LÀ CHẾ ĐỘ SỬA
+  // 1. TẢI DỮ LIỆU NẾU LÀ CHẾ ĐỘ SỬA VIA INTERCEPTOR
   useEffect(() => {
     if (isEditMode) {
       const fetchUnitDetail = async () => {
         try {
-          // Lưu ý: Bạn cần chắc chắn Backend có API GET /api/products/units/:id
-          // Nếu Backend chưa có, bạn có thể lấy từ danh sách units hiện tại rồi filter
-          const res = await axios.get(`${apiUrl}/api/products/units`);
+          // 🚀 TỐI ƯU: Gọi path tương đối ngắn gọn sạch sẽ qua productApi
+          const res = await productApi.get("/products/units");
           const unit = res.data.find((u) => u.id.toString() === id.toString());
 
           if (unit) {
@@ -45,9 +43,9 @@ export default function UnitForm() {
       };
       fetchUnitDetail();
     }
-  }, [id, isEditMode, apiUrl, navigate]);
+  }, [id, isEditMode, navigate]);
 
-  // 2. GỬI DỮ LIỆU
+  // 2. GỬI DỮ LIỆU QUA INSTANCE CHUNG
   const handleSubmitForm = async (e) => {
     e.preventDefault();
     if (!formData.ten_don_vi.trim())
@@ -56,13 +54,14 @@ export default function UnitForm() {
     setSubmitLoading(true);
     try {
       if (isEditMode) {
-        await axios.put(`${apiUrl}/api/products/units/${id}`, {
+        // 🚀 Đồng bộ các phương thức cập nhật/thêm mới qua productApi
+        await productApi.put(`/products/units/${id}`, {
           ten_don_vi: formData.ten_don_vi.trim(),
           mo_ta: formData.mo_ta.trim(),
         });
         alert("✅ Cập nhật thành công!");
       } else {
-        await axios.post(`${apiUrl}/api/products/units`, {
+        await productApi.post("/products/units", {
           ten_don_vi: formData.ten_don_vi.trim(),
           mo_ta: formData.mo_ta.trim(),
         });
@@ -92,7 +91,7 @@ export default function UnitForm() {
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={() => navigate("/admin/products/units")}
-          className="p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition shadow-sm"
+          className="p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition shadow-sm cursor-pointer"
         >
           <ChevronLeft size={20} />
         </button>
@@ -147,14 +146,14 @@ export default function UnitForm() {
             <button
               type="button"
               onClick={() => navigate("/admin/products/units")}
-              className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+              className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
             >
               Hủy bỏ
             </button>
             <button
               type="submit"
               disabled={submitLoading}
-              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2"
+              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {submitLoading ? (
                 <Loader2 size={18} className="animate-spin" />

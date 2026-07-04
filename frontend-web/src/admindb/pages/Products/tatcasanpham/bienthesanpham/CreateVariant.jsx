@@ -22,7 +22,8 @@ import {
   X,
   Database
 } from "lucide-react";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 
 // Hàm lấy Base ID (VD: từ MSP893020726001 lấy ra 020726001)
 const getBaseId = (fullId) => {
@@ -110,7 +111,7 @@ function SafeApp() {
   const [newValInputs, setNewValInputs] = useState({});
 
   // =========================================================================
-  // 🌟 HÀM GỌI XUỐNG BACKEND ĐỂ LẤY SKU CHỐNG TRÙNG LẶP (QUÉT DB THỰC TẾ)
+  // 🌟 HÀM GỌI XUỐNG BACKEND ĐỂ LẤY SKU CHỐNG TRÙNG LẶP (QUÉT DB THỰC TẾ VIA INTERCEPTOR)
   // =========================================================================
   const fetchSafeSkuFromDB = async (isGroup, attrs, country = "VN") => {
     try {
@@ -134,9 +135,8 @@ function SafeApp() {
         if (attrParts) baseSku += `-${attrParts}`;
       }
 
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const res = await axios.post(`${apiUrl}/api/products/generate-sku`, {
+      // 🚀 TỐI ƯU: Gọi path tương đối thông qua productApi
+      const res = await productApi.post("/products/generate-sku", {
         baseSku,
       });
 
@@ -189,17 +189,15 @@ function SafeApp() {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
+        // 🚀 TỐI ƯU: Chuyển toàn bộ Promise.all sang sử dụng productApi
         const [productResponse, globalAttrResponse, unitsResponse] =
           await Promise.all([
-            axios.get(`${apiUrl}/api/products/${id}`),
-            axios
-              .get(`${apiUrl}/api/products/attributes/matrix`)
+            productApi.get(`/products/${id}`),
+            productApi
+              .get("/products/attributes/matrix")
               .catch(() => ({ data: [] })),
-            axios
-              .get(`${apiUrl}/api/products/units`)
+            productApi
+              .get("/products/units")
               .catch(() => ({ data: [] })),
           ]);
 
@@ -331,9 +329,8 @@ function SafeApp() {
     }
 
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const res = await axios.post(`${apiUrl}/api/products/variants/simple`, {
+      // 🚀 TỐI ƯU: Đổi luồng post qua productApi
+      const res = await productApi.post("/products/variants/simple", {
         ma_san_pham: id,
         ...simpleForm,
         gia_ban_le: 0,
@@ -421,9 +418,8 @@ function SafeApp() {
       setShowDropdown(false);
     } else {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        const response = await axios.post(`${apiUrl}/api/products/attributes`, {
+        // 🚀 TỐI ƯU: Đổi luồng post qua productApi
+        const response = await productApi.post("/products/attributes", {
           ten_thuoc_tinh: finalName,
         });
 
@@ -519,13 +515,10 @@ function SafeApp() {
     formData.append("image", file);
 
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const response = await axios.post(
-        `${apiUrl}/api/products/upload`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
+      // 🚀 TỐI ƯU: Đổi luồng upload tệp qua productApi
+      const response = await productApi.post("/products/upload", formData, { 
+        headers: { "Content-Type": "multipart/form-data" } 
+      });
       if (response.data && response.data.url) {
         setVariantImageUrl(response.data.url);
         showToast("Tải ảnh biến thể lên máy chủ thành công!", "success");
@@ -635,9 +628,8 @@ function SafeApp() {
           )
         ) {
           try {
-            const apiUrl =
-              import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-            await axios.delete(`${apiUrl}/api/products/${id}/variants-all`);
+            // 🚀 TỐI ƯU: Đổi luồng delete qua productApi
+            await productApi.delete(`/products/${id}/variants-all`);
             setAvailableAttributes([]);
             setExistingVariants([]);
             setIsVariantMode(false);
@@ -678,9 +670,8 @@ function SafeApp() {
     if (!newUnitName.trim()) return showToast("Vui lòng nhập tên đơn vị tính!", "warning");
     setIsSubmittingUnit(true);
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      const res = await axios.post(`${apiUrl}/api/products/units`, {
+      // 🚀 TỐI ƯU: Đổi luồng post đơn vị mới qua productApi
+      const res = await productApi.post("/products/units", {
         ten_don_vi: newUnitName.trim(),
         mo_ta: newUnitDesc.trim(),
       });
@@ -728,9 +719,6 @@ function SafeApp() {
 
     setSaving(true);
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
       const filterAttributesPayload =
         isVariantMode && availableAttributes.length > 0
           ? availableAttributes.reduce((acc, attr) => {
@@ -757,10 +745,8 @@ function SafeApp() {
       };
 
       if (matchedVariant) {
-        await axios.put(
-          `${apiUrl}/api/products/variants/${matchedVariant.ma_bien_the}`,
-          payload,
-        );
+        // 🚀 TỐI ƯU: Đổi luồng put cập nhật qua productApi
+        await productApi.put(`/products/variants/${matchedVariant.ma_bien_the}`, payload);
         showToast(`💾 Đã lưu & đồng bộ thành công biến thể [${matchedVariant.sku}]`, "success");
 
         setExistingVariants((prev) =>
@@ -771,10 +757,8 @@ function SafeApp() {
           ),
         );
       } else {
-        const res = await axios.post(
-          `${apiUrl}/api/products/${id}/variants`,
-          payload,
-        );
+        // 🚀 TỐI ƯU: Đổi luồng post khởi tạo qua productApi
+        const res = await productApi.post(`/products/${id}/variants`, payload);
         showToast("🎉 Đã khởi tạo biến thể mới vào cơ sở dữ liệu!", "success");
         const newVariantData = {
           ...res.data.data,
@@ -823,8 +807,8 @@ function SafeApp() {
                 : toast.type === "warning"
                   ? "bg-amber-500 text-slate-900"
                   : toast.type === "info"
-                    ? "bg-[#006c49]"
-                    : "bg-[#006c49]"
+                    ? "bg-emerald-700"
+                    : "bg-emerald-700"
             }`}
           >
             {toast.type === "error" ? (
@@ -846,7 +830,7 @@ function SafeApp() {
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-slate-600 hover:bg-[#006c49] hover:text-white hover:border-[#006c49] transition shadow-sm shrink-0"
+            className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-slate-600 hover:bg-[#006c49] hover:text-white hover:border-[#006c49] transition shadow-sm shrink-0 cursor-pointer"
           >
             <ArrowLeft size={18} />
           </button>
@@ -865,7 +849,7 @@ function SafeApp() {
           <button
             type="button"
             onClick={handleResetToCreateNew}
-            className="px-4 py-2 bg-slate-100 hover:bg-[#e6f0ed] text-slate-600 hover:text-[#006c49] rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center gap-1.5 border border-transparent hover:border-[#006c49]/30"
+            className="px-4 py-2 bg-slate-100 hover:bg-[#e6f0ed] text-slate-600 hover:text-[#006c49] rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center gap-1.5 border border-transparent hover:border-[#006c49]/30 cursor-pointer"
           >
             <Plus size={14} /> + Chuyển sang Tạo Mới
           </button>
@@ -875,9 +859,7 @@ function SafeApp() {
       <form onSubmit={handleSaveVariant} className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* ==========================================================
-              CỘT TRÁI (COL-SPAN-5): GOM CHUNG BƯỚC 1 & BƯỚC 3 THÀNH KHỐI
-             ========================================================== */}
+          {/* CỘT TRÁI (COL-SPAN-5) */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden divide-y divide-gray-100">
               
@@ -896,7 +878,7 @@ function SafeApp() {
                       <button
                         type="button"
                         onClick={openSimpleModal}
-                        className="text-[10px] bg-emerald-50 text-[#006c49] border border-emerald-150 font-black px-2.5 py-1.5 rounded-lg hover:bg-emerald-100 transition shadow-sm"
+                        className="text-[10px] bg-emerald-50 text-[#006c49] border border-emerald-150 font-black px-2.5 py-1.5 rounded-lg hover:bg-emerald-100 transition shadow-sm cursor-pointer"
                       >
                         + Thêm vỏ đơn
                       </button>
@@ -960,7 +942,7 @@ function SafeApp() {
                           <button
                             type="button"
                             onClick={() => handleRemoveAttributeGroup(attr.id)}
-                            className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover/box:opacity-100 p-1"
+                            className="text-gray-300 hover:text-red-500 transition opacity-0 group-hover/box:opacity-100 p-1 cursor-pointer"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -976,7 +958,7 @@ function SafeApp() {
                                 type="button"
                                 key={val}
                                 onClick={() => handleSelectAttribute(attr.id, val)}
-                                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border relative overflow-hidden ${
+                                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border relative overflow-hidden cursor-pointer ${
                                   isSelected
                                     ? "bg-[#006c49] text-white border-[#006c49] shadow-sm scale-105"
                                     : isComboValid
@@ -1012,12 +994,12 @@ function SafeApp() {
                                 [attr.id]: e.target.value,
                               })
                             }
-                            className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 px-2.5 py-1.5 rounded-xl text-[11px] font-medium outline-none transition shadow-inner focus:shadow-none"
+                            className="flex-1 bg-white border border-gray-200 focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 px-2.5 py-1.5 rounded-xl text-[11px] font-medium outline-none transition shadow-inner focus:shadow-none text-slate-800"
                           />
                           <button
                             type="button"
                             onClick={() => handleAddNewValueToAttribute(attr.id)}
-                            className="bg-slate-100 hover:bg-[#006c49] p-2 rounded-xl border border-gray-200 text-slate-600 hover:text-white transition"
+                            className="bg-slate-100 hover:bg-[#006c49] p-2 rounded-xl border border-gray-200 text-slate-600 hover:text-white transition cursor-pointer"
                           >
                             <Plus size={14} />
                           </button>
@@ -1029,7 +1011,7 @@ function SafeApp() {
                       <button
                         type="button"
                         onClick={handleSuggestMissingCombination}
-                        className="w-full bg-[#006c49]/5 border border-[#006c49]/15 text-[#006c49] hover:bg-[#006c49]/10 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition shadow-sm active:scale-[0.98]"
+                        className="w-full bg-[#006c49]/5 border border-[#006c49]/15 text-[#006c49] hover:bg-[#006c49]/10 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition shadow-sm active:scale-[0.98] cursor-pointer"
                       >
                         <Layers size={14} /> Gợi ý cấu hình còn thiếu
                       </button>
@@ -1056,7 +1038,7 @@ function SafeApp() {
                               }
                             }}
                             onChange={(e) => setNewAttrName(e.target.value)}
-                            className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 px-3 py-2 rounded-xl text-xs font-bold outline-none transition"
+                            className="w-full bg-slate-50 border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 px-3 py-2 rounded-xl text-xs font-bold outline-none transition text-slate-800"
                           />
                           {showDropdown && (
                             <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 shadow-xl rounded-xl divide-y divide-gray-50 text-left">
@@ -1068,7 +1050,7 @@ function SafeApp() {
                                     onMouseDown={() =>
                                       handleAddOrCreateAttributeGroup(name)
                                     }
-                                    className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[#006c49]/10 hover:text-[#006c49] transition text-left flex items-center justify-between"
+                                    className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-[#006c49]/10 hover:text-[#006c49] transition text-left flex items-center justify-between cursor-pointer"
                                   >
                                     <span>📦 {name}</span>
                                     <span className="text-[9px] bg-emerald-50 text-[#006c49] px-1.5 py-0.5 rounded font-black">
@@ -1088,7 +1070,7 @@ function SafeApp() {
                           type="button"
                           disabled={!newAttrName.trim() || isAlreadyInProductMatrix}
                           onClick={() => handleAddOrCreateAttributeGroup()}
-                          className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 transition shrink-0 text-white shadow-sm ${
+                          className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 transition shrink-0 text-white shadow-sm cursor-pointer ${
                             isAlreadyInProductMatrix
                               ? "bg-gray-300 cursor-not-allowed"
                               : isExistingInGlobal
@@ -1125,14 +1107,13 @@ function SafeApp() {
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src =
-                                "https://placehold.co/400x400?text=Lỗi+Ảnh";
+                              e.target.src = "https://placehold.co/400x400?text=Loi+Anh";
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => setVariantImageUrl("")}
-                            className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-[10px] font-black uppercase transition-all duration-150"
+                            className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-[10px] font-black uppercase transition-all duration-150 cursor-pointer"
                           >
                             Gỡ bỏ ảnh
                           </button>
@@ -1155,7 +1136,7 @@ function SafeApp() {
                         placeholder="Nhập hoặc dán địa chỉ link ảnh..."
                         value={variantImageUrl}
                         onChange={(e) => setVariantImageUrl(e.target.value)}
-                        className="w-full bg-white border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 outline-none p-2.5 rounded-xl text-xs font-semibold transition shadow-sm"
+                        className="w-full bg-white border border-gray-200 focus:bg-white focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 outline-none p-2.5 rounded-xl text-xs font-semibold transition shadow-sm text-slate-800"
                       />
                     </div>
                     <div className="flex items-center gap-2">
@@ -1170,7 +1151,7 @@ function SafeApp() {
                         type="button"
                         disabled={uploadingImage}
                         onClick={() => fileInputRef.current?.click()}
-                        className="bg-white hover:bg-[#006c49]/5 border border-gray-200 hover:border-[#006c49]/30 text-slate-700 hover:text-[#006c49] px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm"
+                        className="bg-white hover:bg-[#006c49]/5 border border-gray-200 hover:border-[#006c49]/30 text-slate-700 hover:text-[#006c49] px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
                       >
                         <Upload size={13} className="text-[#006c49]" />{" "}
                         {uploadingImage ? "Đang tải lên..." : "Tải lên tệp ảnh"}
@@ -1183,9 +1164,7 @@ function SafeApp() {
             </div>
           </div>
 
-          {/* ==========================================================
-              CỘT PHẢI (COL-SPAN-7): PHÂN BỔ NGANG BƯỚC 2 & BẢNG ĐỐI CHIẾU
-             ========================================================== */}
+          {/* CỘT PHẢI (COL-SPAN-7) */}
           <div className="lg:col-span-7 space-y-6">
             
             {matchedVariant && (
@@ -1206,10 +1185,10 @@ function SafeApp() {
               </motion.div>
             )}
 
-            {/* Bố cục chia đôi song song: Cấu hình chỉ số & Bảng đối soát */}
+            {/* Bố cục chia đôi song song */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
               
-              {/* PHÂN KHU 2A: THÔNG SỐ THƯƠNG MẠI */}
+              {/* PHẦN KHU 2A: THÔNG SỐ THƯƠNG MẠI */}
               <div
                 className={`bg-white rounded-3xl border p-5 shadow-sm space-y-5 flex flex-col justify-between transition-colors ${
                   matchedVariant ? "border-[#006c49]/40" : "border-gray-200/80"
@@ -1306,7 +1285,7 @@ function SafeApp() {
                                   }}
                                   className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition ${
                                     unit === u.ten_don_vi
-                                      ? "bg-[#e6f0ed] text-[#006c49]"
+                                      ? "bg-emerald-50 text-[#006c49]"
                                       : "text-slate-600 hover:bg-slate-50"
                                   }`}
                                 >
@@ -1336,7 +1315,7 @@ function SafeApp() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="w-full font-black py-3 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition active:scale-[0.98] disabled:opacity-50 text-white bg-[#006c49] hover:bg-[#005137]"
+                    className="w-full font-black py-3 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition active:scale-[0.98] disabled:opacity-50 text-white bg-[#006c49] hover:bg-[#005137] cursor-pointer"
                   >
                     <Save size={14} />{" "}
                     {saving
@@ -1352,7 +1331,7 @@ function SafeApp() {
               <div className="bg-white rounded-3xl border border-gray-200/80 p-5 shadow-sm space-y-4 flex flex-col justify-between self-stretch">
                 <div className="space-y-1">
                   <h3 className="text-xs font-black text-[#006c49] bg-emerald-50 border border-emerald-150 px-3 py-2 rounded-xl flex items-center gap-1.5">
-                    📊 Bảng đối chiếu danh mục SKU
+                    <span>📊</span> Bảng đối chiếu danh mục SKU
                   </h3>
                   <p className="text-[10px] text-gray-400 font-semibold pl-1">
                     Chọn nhanh bản ghi có sẵn để chỉnh sửa hàng loạt
@@ -1435,7 +1414,7 @@ function SafeApp() {
               </h2>
               <button
                 onClick={() => setIsAddUnitModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1"
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -1450,7 +1429,7 @@ function SafeApp() {
                   onChange={(e) => setNewUnitName(e.target.value)}
                   type="text"
                   placeholder="VD: Thùng, Lốc, Khay..."
-                  className="w-full bg-slate-50 border border-gray-200 focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 p-3 rounded-xl text-xs font-bold outline-none"
+                  className="w-full bg-slate-50 border border-gray-200 focus:border-[#006c49] focus:ring-1 focus:ring-[#006c49]/20 p-3 rounded-xl text-xs font-bold outline-none text-slate-800"
                 />
               </div>
             </div>
@@ -1458,7 +1437,7 @@ function SafeApp() {
               <button
                 type="button"
                 onClick={() => setIsAddUnitModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition"
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer"
               >
                 Hủy bỏ
               </button>
@@ -1466,7 +1445,7 @@ function SafeApp() {
                 type="button"
                 onClick={handleAddNewUnitSubmit}
                 disabled={isSubmittingUnit}
-                className="px-5 py-2 bg-[#006c49] text-white text-xs font-black rounded-lg shadow-md hover:bg-[#005137] transition"
+                className="px-5 py-2 bg-[#006c49] text-white text-xs font-black rounded-lg shadow-md hover:bg-[#005137] transition cursor-pointer disabled:opacity-50"
               >
                 Lưu lại
               </button>
@@ -1493,7 +1472,7 @@ function SafeApp() {
             <div className="space-y-3">
               <input
                 placeholder="Tên biến thể hàng"
-                className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
+                className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49] text-slate-800"
                 value={simpleForm.ten_bien_the}
                 onChange={(e) =>
                   setSimpleForm({ ...simpleForm, ten_bien_the: e.target.value })
@@ -1501,7 +1480,7 @@ function SafeApp() {
               />
               <input
                 placeholder="Mã SKU"
-                className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49]"
+                className="w-full p-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#006c49] text-slate-800"
                 value={simpleForm.sku}
                 onChange={(e) =>
                   setSimpleForm({ ...simpleForm, sku: e.target.value })
@@ -1512,14 +1491,14 @@ function SafeApp() {
               <button
                 type="button"
                 onClick={() => setShowSimpleModal(false)}
-                className="flex-1 py-2 text-xs font-bold text-gray-500 hover:text-slate-800 transition"
+                className="flex-1 py-2 text-xs font-bold text-gray-500 hover:text-slate-800 transition cursor-pointer"
               >
                 Hủy
               </button>
               <button
                 type="button"
                 onClick={handleSaveSimpleVariant}
-                className="flex-1 py-2 bg-[#006c49] text-white rounded-lg text-xs font-black shadow-lg hover:bg-[#005137] transition"
+                className="flex-1 py-2 bg-[#006c49] text-white rounded-lg text-xs font-black shadow-lg hover:bg-[#005137] transition cursor-pointer"
               >
                 Khởi tạo vỏ
               </button>

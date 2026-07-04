@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import {
   Layers,
   Plus,
@@ -40,20 +41,15 @@ export default function ChildCategories() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-      const res = await axios.get(
-        `${apiUrl}/api/categories/children?country=${selectedCountry}`,
-      );
-      const resParents = await axios.get(
-        `${apiUrl}/api/categories/parents?country=${selectedCountry}`,
-      );
+      // 🚀 TỐI ƯU: Gọi đồng loạt qua productApi bằng các path tương đối ngắn gọn
+      const res = await productApi.get(`/categories/children?country=${selectedCountry}`);
+      const resParents = await productApi.get(`/categories/parents?country=${selectedCountry}`);
 
       setCategories(res.data.data || []);
       setParentCategories(resParents.data.data || []);
 
       if (countries.length === 0) {
-        const resNations = await axios.get(`${apiUrl}/api/nations`);
+        const resNations = await productApi.get("/nations");
         setCountries(resNations.data.data || []);
       }
     } catch (error) {
@@ -72,8 +68,8 @@ export default function ChildCategories() {
 
   const handleToggleHot = async (id, currentStatus) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-      await axios.put(`${apiUrl}/api/categories/children/${id}/toggle-hot`, {
+      // 🚀 Đồng bộ luồng PUT qua productApi
+      await productApi.put(`/categories/children/${id}/toggle-hot`, {
         la_danh_muc_hot: !currentStatus,
       });
       fetchData();
@@ -111,7 +107,6 @@ export default function ChildCategories() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      /* 🌟 ĐÃ ĐỒNG BỘ: p-1 bung sát biên 2 bên mép màn hình, nền #fafafa */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
       <div className="w-full">
@@ -211,7 +206,6 @@ export default function ChildCategories() {
                                 src={c.hinh_anh}
                                 className="w-full h-full object-cover"
                                 alt="Category thumb"
-                                transform
                                 onError={(e) => {
                                   e.target.onerror = null;
                                   e.target.src = "https://placehold.co/100x100/f1f5f9/94a3b8?text=No+Img";
@@ -297,8 +291,8 @@ export default function ChildCategories() {
                                   onClick={async () => {
                                     if (window.confirm(`⚠️ Bạn có chắc muốn đưa danh mục con "${c.ten_danh_muc_con}" vào lưu trữ ẩn?`)) {
                                       try {
-                                        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                                        await axios.delete(`${apiUrl}/api/categories/children/${c.ma_dm_con}`);
+                                        // 🚀 Thay thế xoá mềm qua productApi
+                                        await productApi.delete(`/categories/children/${c.ma_dm_con}`);
                                         fetchData();
                                       } catch (e) {
                                         alert("❌ Lỗi: " + (e.response?.data?.message || e.message));
@@ -316,8 +310,8 @@ export default function ChildCategories() {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                                      await axios.put(`${apiUrl}/api/categories/children/${c.ma_dm_con}/restore`);
+                                      // 🚀 Thay thế khôi phục qua productApi
+                                      await productApi.put(`/categories/children/${c.ma_dm_con}/restore`);
                                       fetchData();
                                     } catch (e) {
                                       alert("❌ Thao tác tái khôi phục thất bại.");
@@ -332,8 +326,8 @@ export default function ChildCategories() {
                                   onClick={async () => {
                                     if (window.confirm(`🚨 CẢNH BÁO: Bạn chắc chắn muốn xóa VĨNH VIỄN danh mục con "${c.ten_danh_muc_con}"?\nHành động này không thể hoàn tác!`)) {
                                       try {
-                                        const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-                                        await axios.delete(`${apiUrl}/api/categories/children/${c.ma_dm_con}/hard`);
+                                        // 🚀 Thay thế xoá cứng qua productApi
+                                        await productApi.delete(`/categories/children/${c.ma_dm_con}/hard`);
                                         fetchData();
                                       } catch (e) {
                                         alert("❌ Lỗi xóa vĩnh viễn: " + (e.response?.data?.message || e.message));

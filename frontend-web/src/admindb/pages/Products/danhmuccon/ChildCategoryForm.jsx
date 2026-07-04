@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import { UploadCloud, Loader2, ChevronLeft, Save } from "lucide-react";
 
 export default function ChildCategoryForm() {
@@ -25,28 +26,22 @@ export default function ChildCategoryForm() {
     hinh_anh: "",
   });
 
-  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-  // Khởi tạo dữ liệu
+  // Khởi tạo dữ liệu via productApi Interceptor
   useEffect(() => {
     const fetchInitData = async () => {
       try {
         setLoading(true);
-        // 1. Lấy danh sách quốc gia
-        const resNations = await axios.get(`${apiUrl}/api/nations`);
+        // 1. Lấy danh sách quốc gia qua path tương đối
+        const resNations = await productApi.get("/nations");
         setCountries(resNations.data.data || []);
 
         // 2. Lấy danh sách danh mục cha
-        const resParents = await axios.get(
-          `${apiUrl}/api/categories/parents?country=ALL`,
-        );
+        const resParents = await productApi.get("/categories/parents?country=ALL");
         setParentCategories(resParents.data.data || []);
 
         // 3. Nếu đang ở chế độ Sửa, lấy thông tin danh mục con
         if (isEditMode) {
-          const resChildren = await axios.get(
-            `${apiUrl}/api/categories/children?country=ALL`,
-          );
+          const resChildren = await productApi.get("/categories/children?country=ALL");
 
           const targetCategory = resChildren.data.data.find(
             (c) => c.ma_dm_con === id,
@@ -73,7 +68,7 @@ export default function ChildCategoryForm() {
     };
 
     fetchInitData();
-  }, [id, apiUrl, navigate, isEditMode]);
+  }, [id, navigate, isEditMode]);
 
   const generatedCode = isEditMode
     ? formData.ma_dm_con
@@ -94,11 +89,10 @@ export default function ChildCategoryForm() {
     uploadData.append("image", file);
 
     try {
-      const response = await axios.post(
-        `${apiUrl}/api/products/upload`,
-        uploadData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
+      // 🚀 Đồng bộ luồng upload qua productApi
+      const response = await productApi.post("/products/upload", uploadData, { 
+        headers: { "Content-Type": "multipart/form-data" } 
+      });
 
       if (response.data && response.data.url) {
         setFormData({ ...formData, hinh_anh: response.data.url });
@@ -124,10 +118,8 @@ export default function ChildCategoryForm() {
       }
 
       if (isEditMode) {
-        await axios.put(
-          `${apiUrl}/api/categories/children/${id}`,
-          finalPayload,
-        );
+        // 🚀 Đồng bộ các phương thức cập nhật/thêm mới qua productApi
+        await productApi.put(`/categories/children/${id}`, finalPayload);
         alert("✅ Cập nhật danh mục con thành công!");
       } else {
         const payload = {
@@ -138,7 +130,7 @@ export default function ChildCategoryForm() {
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, ""),
         };
-        await axios.post(`${apiUrl}/api/categories/children`, payload);
+        await productApi.post("/categories/children", payload);
         alert("✅ Thêm danh mục con mới thành công!");
       }
       navigate("/admin/products/child-categories");
@@ -165,7 +157,6 @@ export default function ChildCategoryForm() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      /* 🌟 ĐÃ ĐỒNG BỘ: Chuyển p-6 thành p-1 bung sát biên 2 bên mép màn hình, nền #fafafa */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
       <div className="w-full">
@@ -194,7 +185,7 @@ export default function ChildCategoryForm() {
           </div>
         </div>
 
-        {/* MAIN CONTAINER (BUNG FULL WIDTH) */}
+        {/* MAIN CONTAINER */}
         <div className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative">
           <form onSubmit={handleSubmitForm} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

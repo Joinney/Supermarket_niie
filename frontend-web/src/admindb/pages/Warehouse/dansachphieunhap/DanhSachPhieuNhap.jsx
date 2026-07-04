@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom"; 
-import axios from "axios";
+// 🌟 SỬA BƯỚC 1: Thay đổi import "axios" trần bằng instance "warehouseApi" từ file config của bạn
+// Điều này giúp tự động đổi thành localhost:5006/api/v1 khi ở local và link Render khi lên DevOps!
+import { warehouseApi } from "../../../../api/axios"; // <--- Thay bằng đường dẫn thực tế đến file config Axios của bạn
 
 export default function DanhSachPhieuNhap() {
   const navigate = useNavigate();
@@ -10,37 +12,38 @@ export default function DanhSachPhieuNhap() {
   const [importTickets, setImportTickets] = useState([]);
   const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-    axios.get("http://localhost:5006/api/v1/inventory-tickets") 
+  useEffect(() => {
+    // 🌟 SỬA BƯỚC 2: Sử dụng warehouseApi thay thế cho axios
+    warehouseApi.get("/inventory-tickets") 
       .then((res) => {
         console.log("DỮ LIỆU THỰC TẾ TỪ BACKEND:", res.data);
         const rawData = Array.isArray(res.data) ? res.data : res.data.data || [];
         
-        // Thay thế đoạn xử lý creatorName trong hàm useEffect của file DanhSachPhieuNhap.jsx:
-const mappedData = rawData.map((item) => {
-  let creatorName = "Hệ thống";
-  
-  if (item.ghi_chu && item.ghi_chu.includes("Người lập:")) {
-    // Tách chuỗi sau chữ "Người lập:"
-    const partAfterCreator = item.ghi_chu.split("Người lập:")[1];
-    // Lấy phần dữ liệu trước dấu gạch đứng "|" nếu có ghi chú vận hành đi kèm
-    creatorName = partAfterCreator.split("|")[0].trim();
-  } else if (item.nguoi_thuc_hien_id) {
-    creatorName = `User ID: ${item.nguoi_thuc_hien_id}`;
-  }
+        const mappedData = rawData.map((item) => {
+          let creatorName = "Hệ thống";
+          
+          if (item.ghi_chu && item.ghi_chu.includes("Người lập:")) {
+            // 🌟 SỬA BƯỚC 3: Sửa lỗi crash split() chuỗi ghi chú
+            const partAfterCreator = item.ghi_chu.split("Người lập:")[1]; // Lấy phần tử index 1 (chuỗi đứng sau)
+            if (partAfterCreator) {
+              creatorName = partAfterCreator.split("|")[0].trim(); // Bây giờ mới split "|" an toàn
+            }
+          } else if (item.nguoi_thuc_hien_id) {
+            creatorName = `User ID: ${item.nguoi_thuc_hien_id}`;
+          }
 
-  return {
-    id: item.ma_phieu, 
-    warehouse: item.ma_kho || "Kho Tổng",
-    status: "completed", 
-    date: item.ngay_tao && item.ngay_tao !== "0001-01-01T00:00:00Z" 
-      ? new Date(item.ngay_tao).toLocaleString("vi-VN") 
-      : "N/A",
-    creator: creatorName, // 🌟 Sẽ hiển thị chuẩn: Phan Minh Thuận (Admin)
-    total: item.tong_tien || 0, 
-    debt: 0
-  };
-});
+          return {
+            id: item.ma_phieu, 
+            warehouse: item.ma_kho || "Kho Tổng",
+            status: "completed", 
+            date: item.ngay_tao && item.ngay_tao !== "0001-01-01T00:00:00Z" 
+              ? new Date(item.ngay_tao).toLocaleString("vi-VN") 
+              : "N/A",
+            creator: creatorName, 
+            total: item.tong_tien || 0, 
+            debt: 0
+          };
+        });
 
         setImportTickets(mappedData);
       })
@@ -136,13 +139,12 @@ const mappedData = rawData.map((item) => {
                 </tr>
               ) : (
                 importTickets
-  .filter((row) => {
-    // Kiểm tra an toàn xem row.id có tồn tại hay không trước khi gọi toLowerCase()
-    const matchId = row.id ? row.id.toLowerCase().includes(search.toLowerCase()) : false;
-    const matchStatus = status === "" || row.status === status;
-    return matchId && matchStatus;
-  })
-  .map((row) => (
+                  .filter((row) => {
+                    const matchId = row.id ? row.id.toLowerCase().includes(search.toLowerCase()) : false;
+                    const matchStatus = status === "" || row.status === status;
+                    return matchId && matchStatus;
+                  })
+                  .map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                       <td 
                         onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
@@ -166,7 +168,6 @@ const mappedData = rawData.map((item) => {
                       <td className={`py-4 px-6 text-right font-bold font-mono ${row.debt > 0 ? "text-rose-500" : "text-gray-300"}`}>
                         {row.debt > 0 ? formatCurrency(row.debt) : "0 đ"}
                       </td>
-                      
                       <td className="py-4 px-6 text-center">
                         <button
                           type="button"

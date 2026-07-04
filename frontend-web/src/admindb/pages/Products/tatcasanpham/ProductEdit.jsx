@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
-import {
-  Loader2,
-  Save,
-  ChevronLeft,
-  Package,
-  Layers,
-  CheckCircle2,
-} from "lucide-react";
+import { motion } from "framer-motion";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
+import { Loader2, ChevronLeft, Save, Package, Layers, CheckCircle2 } from "lucide-react";
 
 export default function ProductEdit() {
   const { id } = useParams();
@@ -44,19 +39,18 @@ export default function ProductEdit() {
   const [oldCoBienThe, setOldCoBienThe] = useState(false);
   const [variantType, setVariantType] = useState("GROUP");
 
-  const apiUrl =
-    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
+  // Khởi tạo dữ liệu via productApi Interceptor
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
+        // 🚀 TỐI ƯU: Gọi các API bằng path tương đối thông qua productApi
         const [resProduct, resCat, resParents, resNations] = await Promise.all([
-          axios.get(`${apiUrl}/api/products/${id}?role=admin`),
-          axios.get(`${apiUrl}/api/categories/children?country=ALL`),
-          axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
-          axios.get(`${apiUrl}/api/nations`),
+          productApi.get(`/products/${id}?role=admin`),
+          productApi.get("/categories/children?country=ALL"),
+          productApi.get("/categories/parents?country=ALL"),
+          productApi.get("/nations"),
         ]);
 
         const product = resProduct.data;
@@ -110,7 +104,7 @@ export default function ProductEdit() {
       }
     };
     fetchData();
-  }, [id, apiUrl]);
+  }, [id]);
 
   useEffect(() => {
     setFilter((prev) => ({ ...prev, ma_dm_cha: "" }));
@@ -121,7 +115,8 @@ export default function ProductEdit() {
     e.preventDefault();
     setSubmitLoading(true);
     try {
-      await axios.put(`${apiUrl}/api/products/${id}`, {
+      // 🚀 TỐI ƯU: Cập nhật sản phẩm qua productApi
+      await productApi.put(`/products/${id}`, {
         ten_san_pham: formData.ten_san_pham,
         ma_dm_con: formData.ma_dm_con,
         mo_ta: formData.mo_ta,
@@ -141,16 +136,14 @@ export default function ProductEdit() {
         navigate(`/admin/products/create-variant/${id}`);
       } else {
         if (formData.ma_bien_the_an) {
-          await axios.put(
-            `${apiUrl}/api/products/variants/${formData.ma_bien_the_an}`,
-            {
-              ma_san_pham: id,
-              ten_bien_the: "Mặc định",
-              sku: formData.sku.trim().toUpperCase(),
-              gia_ban_le: formData.gia_ban,
-              so_luong_ton: formData.so_luong_ton,
-            },
-          );
+          // 🚀 TỐI ƯU: Cập nhật biến thể ẩn qua productApi
+          await productApi.put(`/products/variants/${formData.ma_bien_the_an}`, {
+            ma_san_pham: id,
+            ten_bien_the: "Mặc định",
+            sku: formData.sku.trim().toUpperCase(),
+            gia_ban_le: formData.gia_ban,
+            so_luong_ton: formData.so_luong_ton,
+          });
         }
         alert("✅ Cập nhật sản phẩm đơn thành công!");
         navigate("/admin/products/Danhsachsanpham");
@@ -170,13 +163,14 @@ export default function ProductEdit() {
     );
 
   return (
-    <div className="p-6 w-full flex-1 font-sans">
+    <div className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased">
       <div className="max-w-4xl mx-auto">
+        {/* HEADER */}
         <div className="flex items-center gap-4 mb-8">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm"
+            className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm cursor-pointer"
             title="Quay lại"
           >
             <ChevronLeft size={20} strokeWidth={2.5} />
@@ -191,6 +185,7 @@ export default function ProductEdit() {
           </div>
         </div>
 
+        {/* CONTAINER */}
         <div className="bg-white p-8 rounded-[24px] shadow-sm border border-slate-200/80">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
@@ -215,7 +210,7 @@ export default function ProductEdit() {
                 onChange={(e) =>
                   setFormData({ ...formData, ten_san_pham: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition text-slate-800"
               />
             </div>
 
@@ -250,7 +245,7 @@ export default function ProductEdit() {
                     onClick={() =>
                       setFormData({ ...formData, co_bien_the: false })
                     }
-                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200"}`}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 cursor-pointer ${!formData.co_bien_the ? "border-[#006c49] bg-emerald-50/50" : "border-slate-200"}`}
                   >
                     <div
                       className={`p-2 rounded-lg ${!formData.co_bien_the ? "bg-[#006c49] text-white" : "bg-slate-100 text-slate-500"}`}
@@ -271,7 +266,7 @@ export default function ProductEdit() {
                     onClick={() =>
                       setFormData({ ...formData, co_bien_the: true })
                     }
-                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200"}`}
+                    className={`p-3 rounded-xl border-2 text-left transition-all flex items-center gap-3 cursor-pointer ${formData.co_bien_the ? "border-indigo-600 bg-indigo-50/50" : "border-slate-200"}`}
                   >
                     <div
                       className={`p-2 rounded-lg ${formData.co_bien_the ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}
@@ -356,7 +351,6 @@ export default function ProductEdit() {
                   Thông số bán hàng trực tiếp (Sản phẩm đơn)
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {/* 🌟 ĐÃ KHÓA Ô SKU THEO YÊU CẦU */}
                   <div className="space-y-1.5">
                     <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wide">
                       Mã SKU (Tự động)
@@ -467,23 +461,24 @@ export default function ProductEdit() {
                 onChange={(e) =>
                   setFormData({ ...formData, mo_ta: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition resize-none leading-relaxed text-slate-800"
                 placeholder="Nhập mô tả sản phẩm..."
               />
             </div>
 
+            {/* BUTTONS XÁC NHẬN */}
             <div className="pt-6 mt-6 border-t border-slate-100 flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => navigate(-1)}
-                className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+                className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 type="submit"
                 disabled={submitLoading}
-                className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#005137] transition active:scale-95 shadow-md"
+                className="px-8 py-3 bg-[#006c49] text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-[#005137] transition active:scale-95 shadow-md cursor-pointer disabled:opacity-50"
               >
                 {submitLoading ? (
                   <Loader2 className="animate-spin" size={18} />

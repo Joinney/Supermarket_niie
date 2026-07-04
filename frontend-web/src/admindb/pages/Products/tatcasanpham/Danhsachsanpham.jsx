@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 
 export default function ProductList() {
   const navigate = useNavigate();
-  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,7 @@ export default function ProductList() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch danh sách sản phẩm
+  // Fetch danh sách sản phẩm via productApi
   const fetchProducts = async () => {
     setLoading(true);
     setError("");
@@ -51,8 +51,9 @@ export default function ProductList() {
         type: filters.type !== "all" ? filters.type : undefined,
       };
 
+      // 🚀 TỐI ƯU: Gọi path tương đối ngắn gọn qua instance productApi
       if (debouncedTerm.trim() !== "") {
-        response = await axios.get(`${apiUrl}/api/products/search`, {
+        response = await productApi.get("/products/search", {
           params: { keyword: debouncedTerm, ...queryParams },
         });
         if (response.data) {
@@ -61,7 +62,7 @@ export default function ProductList() {
           setTotalPages(1);
         }
       } else {
-        response = await axios.get(`${apiUrl}/api/products`, {
+        response = await productApi.get("/products", {
           params: queryParams,
         });
         if (response.data?.products) {
@@ -70,7 +71,6 @@ export default function ProductList() {
           setTotalItems(response.data.totalItems);
         }
       }
-      // Reset checkbox khi data thay đổi (chuyển trang/lọc)
       setSelectedIds([]);
     } catch (err) {
       console.error("Lỗi tải sản phẩm:", err);
@@ -84,18 +84,18 @@ export default function ProductList() {
     fetchProducts();
   }, [page, limit, debouncedTerm, filters]);
 
-  // Fetch quốc gia
+  // Fetch quốc gia via productApi
   useEffect(() => {
     const fetchNations = async () => {
       try {
-        const res = await axios.get(`${apiUrl}/api/nations`);
+        const res = await productApi.get("/nations");
         setCountries(res.data.data || []);
       } catch (err) {
         console.error("Lỗi lấy danh sách quốc gia:", err);
       }
     };
     fetchNations();
-  }, [apiUrl]);
+  }, []);
 
   // Xử lý Logic Checkbox
   const handleSelectAll = (e) => {
@@ -136,7 +136,7 @@ export default function ProductList() {
       )
     ) {
       try {
-        await axios.delete(`${apiUrl}/api/products/${id}`);
+        await productApi.delete(`/products/${id}`);
         setProducts(products.filter((p) => p.ma_san_pham !== id));
         setTotalItems((prev) => prev - 1);
         setSelectedIds((prev) => prev.filter((item) => item !== id));
@@ -156,7 +156,7 @@ export default function ProductList() {
       )
     ) {
       try {
-        await Promise.all(selectedIds.map((id) => axios.delete(`${apiUrl}/api/products/${id}`)));
+        await Promise.all(selectedIds.map((id) => productApi.delete(`/products/${id}`)));
         alert("✅ Đã xóa thành công các sản phẩm đã chọn!");
         fetchProducts();
       } catch (err) {
@@ -168,7 +168,7 @@ export default function ProductList() {
   // Ẩn/Hiện nhanh trạng thái
   const handleToggleStatus = async (id, currentStatus) => {
     try {
-      await axios.put(`${apiUrl}/api/products/${id}/toggle-status`);
+      await productApi.put(`/products/${id}/toggle-status`);
       setProducts(
         products.map((p) =>
           p.ma_san_pham === id ? { ...p, trang_thai: !currentStatus } : p,
@@ -192,7 +192,6 @@ export default function ProductList() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      /* 🌟 THAY ĐỔI: Chuyển bg về #fafafa và dùng p-1 để bung sát mép giống file phiếu nhập */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
       {/* HEADER SECTION */}
@@ -212,17 +211,16 @@ export default function ProductList() {
           onClick={() => navigate("/admin/products/create")}
           className="flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+          <svg xmlns="http://www.w3.org/2000/xl" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
           Thêm sản phẩm mới
         </button>
       </div>
 
-      {/* MAIN CONTAINER (BUNG FULL WIDTH) */}
+      {/* MAIN CONTAINER */}
       <div className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6 relative">
         
-        {/* Sync loading indicator */}
         {loading && (
           <div className="absolute top-4 right-6 text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full animate-pulse">
             <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
@@ -236,17 +234,16 @@ export default function ProductList() {
           </div>
         )}
 
-        {/* THANH ĐIỀU KHIỂN & KHÔNG GIAN THAO TÁC HÀNG LOẠT */}
+        {/* THANH ĐIỀU KHIỂN */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-2">
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-            {/* Thanh Tìm Kiếm */}
             <div className="relative w-full sm:w-80">
               <input
                 type="text"
                 placeholder="Tìm theo tên sản phẩm hoặc mã định danh..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition text-slate-800"
               />
               <span className="absolute left-3 top-2.5 text-slate-400">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -255,24 +252,22 @@ export default function ProductList() {
               </span>
             </div>
 
-            {/* Các nút chức năng lọc */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleRefresh}
-                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer bg-white shadow-2xs"
               >
                 Làm mới
               </button>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-1.5 px-4 py-2 border rounded-xl text-xs font-bold transition cursor-pointer ${showFilters ? "bg-emerald-700 text-white border-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                className={`flex items-center gap-1.5 px-4 py-2 border rounded-xl text-xs font-bold transition cursor-pointer bg-white shadow-2xs ${showFilters ? "bg-emerald-700 text-white border-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
               >
                 Bộ lọc chuyên sâu {showFilters ? "▲" : "▼"}
               </button>
             </div>
           </div>
 
-          {/* HIỂN THỊ HÀNH ĐỘNG HÀNG LOẠT KHI CÓ CHECKBOX ĐƯỢC CHỌN */}
           <AnimatePresence>
             {selectedIds.length > 0 && (
               <motion.div
@@ -351,12 +346,11 @@ export default function ProductList() {
           )}
         </AnimatePresence>
 
-        {/* CONTAINER BẢNG DỮ LIỆU FULL SCREEN */}
+        {/* BẢNG DỮ LIỆU */}
         <div className="w-full overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-left border-collapse table-auto min-w-[900px]">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                {/* Cột Checkbox Chọn tất cả */}
                 <th className="py-3.5 px-4 w-12 text-center">
                   <input
                     type="checkbox"
@@ -382,7 +376,6 @@ export default function ProductList() {
                     key={item.ma_san_pham || index}
                     className={`group transition hover:bg-slate-50/60 ${isSelected ? "bg-emerald-50/20 hover:bg-emerald-50/40" : ""}`}
                   >
-                    {/* Checkbox Từng sản phẩm */}
                     <td className="py-4 px-4 text-center">
                       <input
                         type="checkbox"
@@ -477,6 +470,7 @@ export default function ProductList() {
                     <td className="py-4 px-4 text-right pr-6">
                       <div className="flex items-center justify-end gap-1 text-slate-400">
                         <button
+                          type="button"
                           onClick={() => navigate(`/admin/products/detail/${item.ma_san_pham}`)}
                           className="p-1.5 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                           title="Xem chi tiết"
@@ -487,6 +481,7 @@ export default function ProductList() {
                           </svg>
                         </button>
                         <button
+                          type="button"
                           onClick={() => navigate(`/admin/products/edit/${item.ma_san_pham}`)}
                           className="p-1.5 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                           title="Chỉnh sửa thông tin"
@@ -496,6 +491,7 @@ export default function ProductList() {
                           </svg>
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDelete(item.ma_san_pham, item.ten_san_pham)}
                           className="p-1.5 hover:text-red-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                           title="Xóa vĩnh viễn"
@@ -521,7 +517,7 @@ export default function ProductList() {
           </table>
         </div>
 
-        {/* PHÂN TRANG & THÔNG SỐ */}
+        {/* PHÂN TRANG */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-slate-100 text-xs font-bold text-slate-400">
           <div>
             Hiển thị <span className="text-slate-800 font-extrabold">{startItem}</span> -{" "}
@@ -549,14 +545,14 @@ export default function ProductList() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer bg-white shadow-2xs"
               >
                 ❮
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer bg-white shadow-2xs"
               >
                 ❯
               </button>

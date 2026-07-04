@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom"; // Import useNavigate để điều hướng URL
+import { useNavigate } from "react-router-dom"; 
+// 🌟 ĐỒNG BỘ: Sử dụng instance authApi đã bọc sẵn Interceptor Token và nhận diện môi trường
+import { authApi } from "../../../api/axios"; 
 
 const Danhsachkhachhang = () => {
-  const navigate = useNavigate(); // Khởi tạo điều hướng
+  const navigate = useNavigate(); 
 
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,8 +24,6 @@ const Danhsachkhachhang = () => {
   const [deletingUserId, setDeletingUserId] = useState(null); 
   const [submitLoading, setSubmitLoading] = useState(false);
 
-  const userApiUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-
   // Cơ chế hoãn (Debounce) khi gõ tìm kiếm
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,12 +33,13 @@ const Danhsachkhachhang = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Hàm tải dữ liệu khách hàng Buyer
+  // Hàm tải dữ liệu khách hàng Buyer via authApi
   const fetchBuyers = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${userApiUrl}/api/auth/buyers`, {
+      // 🚀 Sử dụng đường dẫn tương đối ngắn gọn sạch sẽ
+      const response = await authApi.get("/auth/buyers", {
         params: {
           page: currentPage,
           limit: limit,
@@ -71,7 +71,7 @@ const Danhsachkhachhang = () => {
     e.preventDefault();
     setSubmitLoading(true);
     try {
-      await axios.put(`${userApiUrl}/api/auth/internal/users/${editingUser.user_id}`, {
+      await authApi.put(`/auth/internal/users/${editingUser.user_id}`, {
         full_name: editingUser.full_name,
         phone_number: editingUser.phone_number,
         gender: editingUser.gender,
@@ -96,7 +96,7 @@ const Danhsachkhachhang = () => {
   const handleConfirmDelete = async () => {
     setSubmitLoading(true);
     try {
-      await axios.delete(`${userApiUrl}/api/auth/internal/users/${deletingUserId}`);
+      await authApi.delete(`/auth/internal/users/${deletingUserId}`);
       alert("Đã xóa tài khoản khách hàng thành công. 🎉");
       setDeletingUserId(null);
       
@@ -147,7 +147,6 @@ const Danhsachkhachhang = () => {
     );
   };
 
-  // Hàm chuyển hướng sang trang chi tiết bằng URL mong muốn
   const handleViewDetail = (userId) => {
     navigate("/admin/customers/list/Chitietkhachhang", { state: { userId } });
   };
@@ -187,7 +186,7 @@ const Danhsachkhachhang = () => {
         </div>
       </div>
 
-      {/* BẢNG DỮ LIỆU CHUẨN MA TRẬN */}
+      {/* BẢNG DỮ LIỆU */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden mb-6">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
@@ -213,7 +212,7 @@ const Danhsachkhachhang = () => {
               {loading && (
                 <tr>
                   <td colSpan="7" className="py-8 text-center text-[#006c49] font-bold animate-pulse">
-                    Đang nạp dữ liệu khách hàng Buyer từ hệ thống Postgres...
+                    🔄 Đang nạp dữ liệu khách hàng Buyer từ hệ thống Postgres...
                   </td>
                 </tr>
               )}
@@ -241,7 +240,6 @@ const Danhsachkhachhang = () => {
                     />
                   </td>
                   
-                  {/* Click thẳng vào vùng tên khách hàng để mở URL chi tiết */}
                   <td className="py-4 px-6 cursor-pointer group" onClick={() => handleViewDetail(row.user_id)}>
                     <div className="flex items-center gap-3">
                       {row.avatar_url ? (
@@ -277,7 +275,6 @@ const Danhsachkhachhang = () => {
                   
                   <td className="py-4 px-6 text-center">
                     <div className="flex items-center justify-center gap-3">
-                      {/* Nút Xem chi tiết (👁️) kích hoạt chuyển URL */}
                       <button 
                         onClick={() => handleViewDetail(row.user_id)}
                         className="text-slate-400 hover:text-emerald-600 transition p-1.5 hover:bg-slate-50 rounded-lg"

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import {
   Box,
   Plus,
@@ -18,9 +19,6 @@ export default function Units() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const apiUrl =
-    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
   // Hàm format ngày tháng
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -37,7 +35,8 @@ export default function Units() {
   const fetchUnits = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${apiUrl}/api/products/units`);
+      // 🚀 TỐI ƯU: Sử dụng đường dẫn tương đối ngắn sạch qua productApi
+      const res = await productApi.get("/products/units");
       setUnits(Array.isArray(res.data) ? res.data : res.data.data || []);
     } catch (error) {
       console.error("Lỗi tải đơn vị:", error);
@@ -72,6 +71,7 @@ export default function Units() {
 
   const handleGoToCreate = () => navigate("/admin/products/units/create");
   const handleGoToEdit = (id) => navigate(`/admin/products/units/edit/${id}`);
+  
   const handleDelete = async (id, name, isHardDelete = false) => {
     const confirmMsg = isHardDelete
       ? `CẢNH BÁO: Xóa vĩnh viễn "${name}"?`
@@ -79,10 +79,11 @@ export default function Units() {
 
     if (window.confirm(confirmMsg)) {
       try {
-        const url = isHardDelete
-          ? `${apiUrl}/api/products/units/${id}/hard`
-          : `${apiUrl}/api/products/units/${id}`;
-        await axios.delete(url);
+        // 🚀 Đồng bộ luồng DELETE qua productApi
+        const path = isHardDelete
+          ? `/products/units/${id}/hard`
+          : `/products/units/${id}`;
+        await productApi.delete(path);
         fetchUnits();
       } catch (error) {
         alert("❌ Lỗi: " + (error.response?.data?.message || "Có lỗi xảy ra."));
@@ -92,7 +93,8 @@ export default function Units() {
 
   const handleRestore = async (id) => {
     try {
-      await axios.put(`${apiUrl}/api/products/units/${id}/restore`);
+      // 🚀 Đồng bộ luồng PUT khôi phục qua productApi
+      await productApi.put(`/products/units/${id}/restore`);
       fetchUnits();
     } catch (error) {
       alert("❌ Lỗi khôi phục.");
@@ -192,7 +194,7 @@ export default function Units() {
                             <>
                               <button
                                 onClick={() => handleGoToEdit(u.id)}
-                                className="p-2 bg-slate-100 text-slate-600 hover:bg-sky-100 hover:text-sky-700 rounded-lg transition"
+                                className="p-2 bg-slate-100 text-slate-600 hover:bg-sky-100 hover:text-sky-700 rounded-lg transition cursor-pointer"
                                 title="Sửa"
                               >
                                 <Edit size={14} />
@@ -201,7 +203,7 @@ export default function Units() {
                                 onClick={() =>
                                   handleDelete(u.id, u.ten_don_vi, false)
                                 }
-                                className="p-2 bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 rounded-lg transition"
+                                className="p-2 bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 rounded-lg transition cursor-pointer"
                                 title="Tạm tắt"
                               >
                                 <Trash2 size={14} />
@@ -211,7 +213,7 @@ export default function Units() {
                             <>
                               <button
                                 onClick={() => handleRestore(u.id)}
-                                className="p-2 bg-slate-100 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                                className="p-2 bg-slate-100 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
                                 title="Khôi phục"
                               >
                                 <RotateCcw size={14} />
@@ -220,7 +222,7 @@ export default function Units() {
                                 onClick={() =>
                                   handleDelete(u.id, u.ten_don_vi, true)
                                 }
-                                className="p-2 bg-slate-100 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                className="p-2 bg-slate-100 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
                                 title="Xóa vĩnh viễn"
                               >
                                 <AlertTriangle size={14} />

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import axios from "axios";
+// 🌟 SỬA BƯỚC 1: Thay thế import "axios" trần bằng instance "productApi" từ file config của bạn
+import { productApi } from "../../../../api/axios"; // <--- Thay bằng đường dẫn thực tế đến file config Axios của bạn
 import { UploadCloud, Loader2, ChevronLeft, Save, Smile } from "lucide-react";
 
 export default function ParentCategoryForm() {
@@ -24,20 +25,18 @@ export default function ParentCategoryForm() {
     bieu_tuong: "", 
   });
 
-  const apiUrl = import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-  // Khởi tạo dữ liệu
+  // Khởi tạo dữ liệu via Interceptor
   useEffect(() => {
     const fetchInitData = async () => {
       try {
         setLoading(true);
-        const resNations = await axios.get(`${apiUrl}/api/nations`);
+        // 🌟 SỬA BƯỚC 2: Gọi các API bằng path tương đối thông qua productApi
+        // Tránh trùng lặp code bóc tách apiUrl thủ công
+        const resNations = await productApi.get("/nations");
         setCountries(resNations.data.data || []);
 
         if (isEditMode) {
-          const resParents = await axios.get(
-            `${apiUrl}/api/categories/parents?country=ALL`,
-          );
+          const resParents = await productApi.get("/categories/parents?country=ALL");
           const parentList = resParents.data.data || [];
           const targetCategory = parentList.find((p) => p.ma_dm_cha === id);
 
@@ -62,7 +61,7 @@ export default function ParentCategoryForm() {
     };
 
     fetchInitData();
-  }, [id, apiUrl, navigate, isEditMode]);
+  }, [id, navigate, isEditMode]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -77,11 +76,10 @@ export default function ParentCategoryForm() {
     uploadData.append("image", file);
 
     try {
-      const response = await axios.post(
-        `${apiUrl}/api/products/upload`,
-        uploadData,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
+      // 🌟 SỬA BƯỚC 3: Đổi luồng upload tệp sang dùng productApi
+      const response = await productApi.post("/products/upload", uploadData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       if (response.data && response.data.url) {
         setFormData({ ...formData, hinh_anh: response.data.url });
@@ -111,7 +109,8 @@ export default function ParentCategoryForm() {
       }
 
       if (isEditMode) {
-        await axios.put(`${apiUrl}/api/categories/parents/${id}`, finalPayload);
+        // 🌟 SỬA BƯỚC 4: Gọi lệnh PUT và POST thông qua productApi
+        await productApi.put(`/categories/parents/${id}`, finalPayload);
         alert("✅ Cập nhật danh mục thành công!");
       } else {
         const payload = {
@@ -122,7 +121,7 @@ export default function ParentCategoryForm() {
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, ""),
         };
-        await axios.post(`${apiUrl}/api/categories/parents`, payload);
+        await productApi.post("/categories/parents", payload);
         alert("✅ Thêm danh mục mới thành công!");
       }
       navigate("/admin/products/parent-categories");
@@ -149,7 +148,6 @@ export default function ParentCategoryForm() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      /* 🌟 ĐÃ ĐỒNG BỘ: Chuyển p-6 thành p-1 bung sát biên 2 bên mép màn hình, nền #fafafa */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
     >
       <div className="w-full">
@@ -178,7 +176,7 @@ export default function ParentCategoryForm() {
           </div>
         </div>
 
-        {/* MAIN CONTAINER (BUNG FULL WIDTH) */}
+        {/* MAIN CONTAINER */}
         <div className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative">
           <form onSubmit={handleSubmitForm} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

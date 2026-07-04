@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"; 
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+// 🌟 SỬA BƯỚC 1: Thay đổi import "axios" bằng instance "warehouseApi" từ file cấu hình của bạn
+import { warehouseApi } from "../../../../api/axios"; // <--- Thay bằng đường dẫn thực tế đến file config Axios của bạn
 
 export default function ChiTietPhieuNhap() {
   const { id } = useParams(); // Nhận ma_phieu động từ URL (Ví dụ: PNK-20260630-663)
@@ -17,7 +18,10 @@ export default function ChiTietPhieuNhap() {
   // ĐỒNG BỘ REAL-TIME DATA TỪ BACKEND WAREHOUSE-SERVICE
   useEffect(() => {
     setLoading(true);
-    axios.get(`http://localhost:5006/api/v1/inventory-import/${id}`)
+    
+    // 🌟 SỬA BƯỚC 2: Sử dụng warehouseApi và chuyển sang path tương đối
+    // Hệ thống sẽ tự dịch thành: localhost:5006/api/v1/inventory-import/:id hoặc link Render tương ứng
+    warehouseApi.get(`/inventory-import/${id}`)
       .then((res) => {
         const data = res.data;
         

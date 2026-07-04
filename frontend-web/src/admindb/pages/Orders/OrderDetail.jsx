@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+// 🌟 ĐỒNG BỘ: Sử dụng instance orderApi thay cho axios trần
+import { orderApi } from "../../../api/axios"; // <--- Hãy đảm bảo đường dẫn này trỏ đúng đến file cấu hình Axios của bạn
 import { ArrowLeft, User, Phone, MapPin, CreditCard, ShoppingBag, FileText, CheckCircle2, Circle } from 'lucide-react';
 
 const OrderDetail = () => {
@@ -15,21 +16,20 @@ const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-useEffect(() => {
+  useEffect(() => {
     const fetchOrderDetail = async () => {
       if (!orderId) {
         setLoading(false);
         return;
       }
       try {
-        // 🌟 LẤY TOKEN QUẢN TRỊ TỪ LOCALSTORAGE
-        const token = localStorage.getItem("adminToken");
+        // 🚀 KHẮC PHỤC LỖI 401: Lấy adminToken trong localStorage của Admin panel
+        const adminToken = localStorage.getItem("adminToken");
 
-        // 🔥 Gọi API lên cổng 5005 kèm theo Header xác thực Authorization
-        const response = await axios.get(`http://localhost:5005/api/orders/${orderId}`, {
+        // Gọi API sử dụng đường dẫn tương đối ngắn gọn qua orderApi.get
+        const response = await orderApi.get(`/orders/${orderId}`, {
           headers: {
-            Authorization: token ? `Bearer ${token}` : "",
-            "Content-Type": "application/json"
+            Authorization: adminToken ? `Bearer ${adminToken}` : ""
           }
         });
 
@@ -43,11 +43,10 @@ useEffect(() => {
       } catch (err) {
         console.error("Lỗi khi kết nối API:", err);
         
-        // 🌟 HIỂN THỊ ĐÚNG BẢN CHẤT LỖI NẾU SAI/HẾT HẠN TOKEN
         if (err.response?.status === 401) {
           setErrorMsg("Phiên làm việc hết hạn hoặc bạn không có quyền xem chi tiết hóa đơn này (401 Unauthorized).");
         } else {
-          setErrorMsg("Lỗi kết nối đến dịch vụ đơn hàng (Cổng 5005).");
+          setErrorMsg("Lỗi kết nối đến dịch vụ đơn hàng.");
         }
       } finally {
         setLoading(false);
@@ -105,7 +104,7 @@ useEffect(() => {
   const customerName = orderData.user_info?.full_name || "Khách mua hàng";
   const customerPhone = orderData.user_info?.phone_number || "Chưa cập nhật SĐT";
   const customerEmail = orderData.user_info?.email || "Chưa cập nhật Email";
-  const customerAddress = orderData.address || "Nhận tại siêu thị Demi Mart"; // Địa chỉ giao hàng giữ nguyên từ bảng orders
+  const customerAddress = orderData.address || "Nhận tại siêu thị Demi Mart";
   const customerAvatar = orderData.user_info?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop";
   const paymentMethod = orderData.phuong_thuc_thanh_toan || "Thanh toán khi nhận hàng (COD)";
 
@@ -249,30 +248,28 @@ useEffect(() => {
                   <div className="text-slate-800">{customerPhone}</div>
                 </div>
               </div>
-              {/* 🚀 HIỂN THỊ THÊM EMAIL */}
-  <div className="flex gap-3 items-start">
-    <span className="text-gray-400 mt-0.5 shrink-0">✉️</span>
-    <div>
-      <div className="text-gray-400 font-medium mb-0.5">Email liên hệ</div>
-      <div className="text-slate-800">{customerEmail}</div>
-    </div>
-  </div>
+              
+              <div className="flex gap-3 items-start">
+                <span className="text-gray-400 mt-0.5 shrink-0">✉️</span>
+                <div>
+                  <div className="text-gray-400 font-medium mb-0.5">Email liên hệ</div>
+                  <div className="text-slate-800">{customerEmail}</div>
+                </div>
+              </div>
 
-  {/* 🚀 HIỂN THỊ THÊM NGÀY SINH & GIỚI TÍNH NẾU CÓ */}
-  {orderData.user_info?.birthday && (
-    <div className="flex gap-3 items-start">
-      <span className="text-gray-400 mt-0.5 shrink-0">🎂</span>
-      <div>
-        <div className="text-gray-400 font-medium mb-0.5">Ngày sinh / Giới tính</div>
-        <div className="text-slate-800">
-          {new Date(orderData.user_info.birthday).toLocaleDateString('vi-VN')} 
-          {orderData.user_info.gender && ` (${orderData.user_info.gender})`}
-        </div>
-      </div>
-    </div>
-  )}
+              {orderData.user_info?.birthday && (
+                <div className="flex gap-3 items-start">
+                  <span className="text-gray-400 mt-0.5 shrink-0">🎂</span>
+                  <div>
+                    <div className="text-gray-400 font-medium mb-0.5">Ngày sinh / Giới tính</div>
+                    <div className="text-slate-800">
+                      {new Date(orderData.user_info.birthday).toLocaleDateString('vi-VN')} 
+                      {orderData.user_info.gender && ` (${orderData.user_info.gender})`}
+                    </div>
+                  </div>
+                </div>
+              )}
 
-  
               <div className="flex gap-3 items-start">
                 <MapPin size={16} className="text-gray-400 mt-0.5 shrink-0" />
                 <div>

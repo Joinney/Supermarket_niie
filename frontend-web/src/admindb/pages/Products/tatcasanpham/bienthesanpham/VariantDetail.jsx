@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
+// 🌟 ĐỒNG BỘ: Sử dụng instance productApi trích xuất từ tệp cấu hình Interceptor của bạn
+import { productApi } from "../../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
 import {
   ArrowLeft,
   Tag,
@@ -17,7 +19,6 @@ import {
   Edit3,
   Plus,
 } from "lucide-react";
-import axios from "axios";
 
 export default function AdminVariantDetail() {
   const { variantId } = useParams();
@@ -34,18 +35,15 @@ export default function AdminVariantDetail() {
   const [editStock, setEditStock] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // 🟢 State & Ref phục vụ Upload ảnh
+  // State & Ref phục vụ Upload ảnh
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     const fetchVariantDetail = async () => {
       try {
-        const apiUrl =
-          import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-        const response = await axios.get(
-          `${apiUrl}/api/products/variants/${variantId}`,
-        );
+        // 🚀 TỐI ƯU: Sử dụng đường dẫn tương đối ngắn sạch qua productApi
+        const response = await productApi.get(`/products/variants/${variantId}`);
 
         if (response.data) {
           const data = response.data;
@@ -69,11 +67,8 @@ export default function AdminVariantDetail() {
   const handleSaveVariant = async () => {
     setSaving(true);
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-      // 🌟 FIX BẢO MẬT DỮ LIỆU: Bổ sung ten_bien_the và ten_don_vi để BE không overwrite thành NULL
-      await axios.put(`${apiUrl}/api/products/variants/${variantId}`, {
+      // 🚀 TỐI ƯU: Sử dụng productApi Interceptor cho phương thức cập nhật PUT
+      await productApi.put(`/products/variants/${variantId}`, {
         ten_bien_the: variant.ten_bien_the,
         ten_don_vi: variant.ten_don_vi,
         gia_ban_le: editPrice,
@@ -96,7 +91,6 @@ export default function AdminVariantDetail() {
     }
   };
 
-  // 🟢 Hàm xử lý Upload ảnh
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -115,11 +109,9 @@ export default function AdminVariantDetail() {
     formData.append("loai_media", "image");
 
     try {
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-      const response = await axios.post(
-        `${apiUrl}/api/products/variants/${variantId}/upload-image`,
+      // 🚀 TỐI ƯU: Đổi luồng upload tệp media qua productApi
+      const response = await productApi.post(
+        `/products/variants/${variantId}/upload-image`,
         formData,
         {
           headers: {
@@ -159,7 +151,7 @@ export default function AdminVariantDetail() {
       <div className="w-full bg-[#fafafa] p-6 font-sans text-left min-h-screen antialiased text-slate-700">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-black mb-6"
+          className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-black mb-6 cursor-pointer"
         >
           <ArrowLeft size={16} /> Quay lại trang trước
         </button>
@@ -207,7 +199,7 @@ export default function AdminVariantDetail() {
               else setIsEditing(true);
             }}
             disabled={saving}
-            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition transform active:scale-98 cursor-pointer text-white ${
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition transform active:scale-98 cursor-pointer text-white disabled:opacity-50 ${
               isEditing ? "bg-amber-500 hover:bg-amber-600 !text-slate-900" : "bg-[#006c49] hover:bg-[#005137]"
             }`}
           >
@@ -215,7 +207,6 @@ export default function AdminVariantDetail() {
             {isEditing ? (saving ? "Đang lưu..." : "Lưu cấu hình") : "Chỉnh sửa"}
           </button>
 
-          {/* 🌟 ĐÃ SỬA: Nút "Sửa ma trận thuộc tính" được đổi sang màu vàng hổ phách (amber) nổi bật hơn */}
           {!isEditing && (
             <button
               onClick={() => navigate(`/admin/products/create-variant/${variant.ma_san_pham}/${variant.ma_bien_the}`)}
@@ -230,7 +221,6 @@ export default function AdminVariantDetail() {
       {/* ================= MAIN CONTAINER ================= */}
       <div className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
         
-        {/* Bản diễn giải định danh chính của phiên bản */}
         <div className="flex flex-wrap items-center gap-3 mb-6 pb-4 border-b border-slate-100">
           <h2 className="text-lg font-black text-slate-800">
             {variant.ten_bien_the || "Biến thể mặc định"}
@@ -242,7 +232,7 @@ export default function AdminVariantDetail() {
 
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* ----------------- CỘT TRÁI: HÌNH ẢNH ĐẠI DIỆN PHIÊN BẢN (4 Phần) ----------------- */}
+          {/* ----------------- CỘT TRÁI: HÌNH ẢNH ----------------- */}
           <div className="lg:col-span-4 space-y-4">
             <div className="border border-slate-100 bg-slate-50/50 rounded-xl p-3 shadow-2xs">
               <div className="aspect-square flex items-center justify-center overflow-hidden bg-white relative rounded-lg border border-slate-100/60 group">
@@ -297,7 +287,7 @@ export default function AdminVariantDetail() {
             </div>
           </div>
 
-          {/* ----------------- CỘT PHẢI: THÔNG SỐ VÀ MA TRẬN PHÂN LOẠI (8 Phần) ----------------- */}
+          {/* ----------------- CỘT PHẢI: THÔNG SỐ VÀ MA TRẬN PHÂN LOẠI ----------------- */}
           <div className="lg:col-span-8 space-y-6">
             
             {/* THÔNG SỐ ĐỊNH VỊ THƯƠNG MẠI */}
