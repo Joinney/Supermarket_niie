@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
-import { orderApi } from "../../api/axios";
+// 🌟 ĐỒNG BỘ: Sử dụng authApi và orderApi từ tệp cấu hình interceptor tập trung
+import { authApi, orderApi } from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext"; 
 import L from 'leaflet';
 import Cropper from "react-easy-crop";
@@ -26,16 +26,6 @@ import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl: iconMarker, shadowUrl: iconShadow });
-
-const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = isLocalhost ? 'http://localhost:5001' : 'https://authservice-sz4p.onrender.com';
-
-const api = axios.create({ baseURL: `${API_BASE_URL}/api`, withCredentials: true });
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token'); 
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-}, (error) => Promise.reject(error));
 
 const getCroppedImg = (imageSrc, pixelCrop) => {
   return new Promise((resolve, reject) => {
@@ -63,7 +53,6 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { tab } = useParams();
 
-  // 1. ĐƯA CÁC STATE NÀY LÊN TRƯỚC (Bắt buộc phải khai báo trước khi dùng)
   const [activeTab, setActiveTab] = useState("profile");
   const [toast, setToast] = useState({ show: false, message: "", type: "success" });
   const [loading, setLoading] = useState(true);
@@ -73,7 +62,9 @@ export default function ProfilePage() {
   const [ordersList, setOrdersList] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
 
-  // 2. ĐẶT USEEFFECT NẰM PHÍA DƯỚI BỘ STATE VỪA KHAI BÁO
+  // Đọc động URL gốc từ authApi cấu hình tập trung để truyền tải media chính xác
+  const API_BASE_URL = authApi.defaults.baseURL ? authApi.defaults.baseURL.replace(/\/api$/, '') : '';
+
   useEffect(() => {
     if (activeTab === "orders") {
       const fetchRealOrders = async () => {
@@ -170,7 +161,8 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const response = await api.get("/profile/hoso");
+        // 🚀 TỐI ƯU: Gọi dữ liệu qua authApi động
+        const response = await authApi.get("/profile/hoso");
         if (response.data.success) setProfile(response.data.data);
       } catch (error) { console.error("Lỗi kết nối API hồ sơ:", error); }
       finally { setLoading(false); }
@@ -187,7 +179,8 @@ export default function ProfilePage() {
       const fetchProvincesGeo = async () => {
         try {
           setLoadingGeography(true);
-          const res = await axios.get(`${API_BASE_URL}/api/addresses/locations/provinces`);
+          // 🚀 TỐI ƯU: Chuyển sang nạp thông tin địa chính thông qua authApi tập trung
+          const res = await authApi.get("/addresses/locations/provinces");
           if (res.data && res.data.success) setProvinces(res.data.data || []);
         } catch (err) { console.error("🔥 Lỗi bốc danh mục Tỉnh/Thành:", err.message); }
         finally { setLoadingGeography(false); }
@@ -215,13 +208,13 @@ export default function ProfilePage() {
         }
       }
       try {
-        const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+        const res = await authApi.get(`https://nominatim.openstreetmap.org/search`, {
           params: searchParams, headers: { "User-Agent": "DemiMartApp_HighAccuracy/2.0 (dev@demimart.com)" }
         });
         if (res.data && res.data.length > 0) {
           setAddressSuggestions(res.data); setShowSuggestions(true);
         } else {
-          const fallbackRes = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+          const fallbackRes = await authApi.get(`https://nominatim.openstreetmap.org/search`, {
             params: { q: `${addressForm.detail_address.trim()}, ${addressForm.district_name || ''} ${addressForm.province_name || 'Việt Nam'}`, format: "json", limit: 4, "accept-language": "vi" },
             headers: { "User-Agent": "DemiMartApp_HighAccuracy/2.0" }
           });
@@ -235,7 +228,7 @@ export default function ProfilePage() {
 
   const fetchAddresses = async () => {
     try {
-      const response = await api.get("/addresses");
+      const response = await authApi.get("/addresses");
       if (response.data.success) setAddresses(response.data.data);
     } catch (error) { console.error("Lỗi tải danh sách địa chỉ:", error); }
   };
@@ -245,7 +238,7 @@ export default function ProfilePage() {
     setAddressForm(prev => ({ ...prev, province_id: id, province_name: name, district_id: '', district_name: '', ward_code: '', ward_name: '' }));
     setOpenDropdown(null); setSearchTerm(''); setLoadingGeography(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/addresses/locations/districts?province_id=${id}`);
+      const res = await authApi.get(`/addresses/locations/districts?province_id=${id}`);
       if (res.data && res.data.success) setDistricts(res.data.data || []);
     } catch (err) { console.error("🔥 Lỗi lấy danh mục Quận/Huyện:", err.message); }
     finally { setLoadingGeography(false); }
@@ -256,7 +249,7 @@ export default function ProfilePage() {
     setAddressForm(prev => ({ ...prev, district_id: id, district_name: name, ward_code: '', ward_name: '' }));
     setOpenDropdown(null); setSearchTerm(''); setLoadingGeography(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/addresses/locations/wards?district_id=${id}`);
+      const res = await authApi.get(`/addresses/locations/wards?district_id=${id}`);
       if (res.data && res.data.success) setWards(res.data.data || []);
     } catch (err) { console.error("🔥 Lỗi lấy danh mục Phường/Xã:", err.message); }
     finally { setLoadingGeography(false); }
@@ -297,7 +290,7 @@ export default function ProfilePage() {
 
   const fetchAddressFromCoords = async (lat, lng) => {
     try {
-      const res = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
+      const res = await authApi.get(`https://nominatim.openstreetmap.org/reverse`, {
         params: { format: "json", lat, lon: lng, zoom: 18, addressdetails: 1, "accept-language": "vi" },
         headers: { "User-Agent": "DemiMartApp_HighAccuracy/2.0" }
       });
@@ -319,10 +312,10 @@ export default function ProfilePage() {
     if (addr.province_id) {
       try {
         setLoadingGeography(true);
-        const distRes = await axios.get(`${API_BASE_URL}/api/addresses/locations/districts?province_id=${addr.province_id}`);
+        const distRes = await authApi.get(`/addresses/locations/districts?province_id=${addr.province_id}`);
         if (distRes.data.success) setDistricts(distRes.data.data || []);
         if (addr.district_id) {
-          const wardRes = await axios.get(`${API_BASE_URL}/api/addresses/locations/wards?district_id=${addr.district_id}`);
+          const wardRes = await authApi.get(`/addresses/locations/wards?district_id=${addr.district_id}`);
           if (wardRes.data.success) setWards(wardRes.data.data || []);
         }
       } catch (err) { console.error("Lỗi tải đệm địa chính khi chỉnh sửa:", err); }
@@ -340,7 +333,7 @@ export default function ProfilePage() {
         ward_id: String(addressForm.ward_code), ward_code: String(addressForm.ward_code),
         latitude: markerPos.lat, longitude: markerPos.lng
       };
-      const res = editingAddressId ? await api.put(`/addresses/${editingAddressId}`, payload) : await api.post("/addresses", payload);
+      const res = editingAddressId ? await authApi.put(`/addresses/${editingAddressId}`, payload) : await authApi.post("/addresses", payload);
       if (res.data.success) {
         showToast(editingAddressId ? "Cập nhật thành công!" : "Đã thêm địa chỉ mới!");
         setIsAddressModalOpen(false); fetchAddresses();
@@ -356,7 +349,7 @@ export default function ProfilePage() {
         ...targetAddr, is_default: true, province_id: Number(targetAddr.province_id), district_id: Number(targetAddr.district_id),
         ward_id: String(targetAddr.ward_code || targetAddr.ward_id), ward_code: String(targetAddr.ward_code || targetAddr.ward_id)
       };
-      const res = await api.put(`/addresses/${addrId}`, payload);
+      const res = await authApi.put(`/addresses/${addrId}`, payload);
       if (res.data.success) { showToast("Đã đặt làm điểm nhận hàng mặc định!"); fetchAddresses(); }
     } catch (error) { showToast("Không thể thiết lập mặc định", "error"); }
   };
@@ -364,14 +357,14 @@ export default function ProfilePage() {
   const handleDeleteAddress = async (id) => {
     if (!window.confirm("Bạn có chắc muốn xóa địa chỉ này khỏi sổ lưu trữ?")) return;
     try {
-      const res = await api.delete(`/addresses/${id}`);
+      const res = await authApi.delete(`/addresses/${id}`);
       if (res.data.success) { showToast("Đã xóa địa chỉ thành công!"); fetchAddresses(); }
     } catch (error) { showToast("Lỗi khi xóa địa chỉ", "error"); }
   };
 
   const handleSaveProfile = async () => {
     try {
-      const response = await api.put("/profile/hoso", profile);
+      const response = await authApi.put("/profile/hoso", profile);
       if (response.data.success) {
         if (updateUser) updateUser(profile); 
         showToast("Đã cập nhật hồ sơ cá nhân rực rỡ!");
@@ -394,7 +387,7 @@ export default function ProfilePage() {
       const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
       const formData = new FormData();
       formData.append("avatar", croppedBlob, "cropped-avatar.jpeg");
-      const response = await api.post("/profile/upload-avatar", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const response = await authApi.post("/profile/upload-avatar", formData, { headers: { "Content-Type": "multipart/form-data" } });
       if (response.data.success) {
           const newUrl = response.data.avatarUrl;
           setProfile(prev => ({ ...prev, avatar_url: newUrl }));
@@ -407,21 +400,21 @@ export default function ProfilePage() {
 
   const handleVerifyCurrentPassword = async () => {
     try {
-      const res = await api.post("/profile/verify-password", { password: currentPassword });
+      const res = await authApi.post("/profile/verify-password", { password: currentPassword });
       if (res.data.success) { showToast("Xác thực danh tính thành công!"); setSecurityStep("reset-password"); }
     } catch (err) { showToast(err.response?.data?.message || "Mật khẩu không chính xác", "error"); }
   };
 
   const handleSendOTP = async () => {
     try {
-      const res = await api.post("/auth/forgot-password", { email: profile.email });
+      const res = await authApi.post("/auth/forgot-password", { email: profile.email });
       if (res.data.success) { showToast("Mã OTP bảo mật đã được gửi!"); setSecurityStep("otp-verify"); }
     } catch (err) { showToast("Lỗi gửi mã xác thực", "error"); }
   };
 
   const handleVerifyOTP = async () => {
     try {
-      const res = await api.post("/auth/verify-otp", { email: profile.email, otp: otpCode });
+      const res = await authApi.post("/auth/verify-otp", { email: profile.email, otp: otpCode });
       if (res.data.success) { showToast("Mã OTP hợp lệ!"); setSecurityStep("reset-password"); }
     } catch (err) { showToast("Mã OTP không đúng hoặc đã hết hạn", "error"); }
   };
@@ -430,8 +423,8 @@ export default function ProfilePage() {
     if (newPassword !== confirmNewPassword) return showToast("Mật khẩu nhập lại không khớp!", "error");
     try {
       let res = otpCode 
-        ? await api.post("/auth/reset-password", { email: profile.email, otp: otpCode, newPassword })
-        : await api.put("/profile/change-password", { newPassword });
+        ? await authApi.post("/auth/reset-password", { email: profile.email, otp: otpCode, newPassword })
+        : await authApi.put("/profile/change-password", { newPassword });
       if (res.data.success) {
         showToast("Đổi mật khẩu bảo mật thành công!"); setSecurityStep("verify-password");
         setNewPassword(""); setConfirmNewPassword(""); setOtpCode(""); setCurrentPassword("");
@@ -455,10 +448,6 @@ export default function ProfilePage() {
   const notifications = [
     { id: 1, title: "Ưu đãi Platinum độc quyền", desc: "Giảm ngay 100k cho đơn hàng từ 500k.", time: "10 phút trước", unread: true },
     { id: 2, title: "Đơn hàng #DM9922 thành công", desc: "Kiện hàng của bạn đã được giao đến đích.", time: "2 giờ trước", unread: false },
-  ];
-
-  const orders = [
-    { id: "DM1002", date: "22/10/2023", total: "450.000đ", status: "Đã giao", items: ["Táo Envy Mỹ", "Sữa tươi TH"], img: "https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=100" },
   ];
 
   const orderSteps = [
@@ -489,7 +478,7 @@ export default function ProfilePage() {
           <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-800">
             <div className="p-5 border-b flex justify-between items-center bg-white">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Cắt chỉnh ảnh đại diện</h3>
-              <button disabled={isCropping} onClick={() => setImageSrc(null)} className="text-slate-400 hover:text-red-500 transition-all"><X size={18}/></button>
+              <button disabled={isCropping} onClick={() => setImageSrc(null)} className="text-slate-400 hover:text-red-500 transition-all cursor-pointer"><X size={18}/></button>
             </div>
             <div className="relative w-full h-80 bg-slate-900">
               <Cropper image={imageSrc} crop={crop} zoom={zoom} aspect={1} cropShape="rect" onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} />
@@ -502,8 +491,8 @@ export default function ProfilePage() {
                 <input type="range" value={zoom} min={1} max={3} step={0.1} aria-label="Zoom" className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#006c49]" onChange={(e) => setZoom(Number(e.target.value))} />
               </div>
               <div className="flex gap-3 pt-2 border-t">
-                <button type="button" disabled={isCropping} onClick={() => setImageSrc(null)} className="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider text-slate-400 hover:bg-slate-50 border disabled:opacity-50">Hủy bỏ</button>
-                <button type="button" disabled={isCropping} onClick={handleUploadCroppedAvatar} className="flex-1 bg-[#006c49] text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md flex items-center justify-center gap-2 disabled:opacity-75">
+                <button type="button" disabled={isCropping} onClick={() => setImageSrc(null)} className="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider text-slate-400 hover:bg-slate-50 border disabled:opacity-50 cursor-pointer">Hủy bỏ</button>
+                <button type="button" disabled={isCropping} onClick={handleUploadCroppedAvatar} className="flex-1 bg-[#006c49] text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md flex items-center justify-center gap-2 disabled:opacity-75 cursor-pointer">
                   {isCropping ? <Loader2 size={12} className="animate-spin" /> : "Xác nhận cắt"}
                 </button>
               </div>
@@ -519,7 +508,7 @@ export default function ProfilePage() {
             <img src={getAvatarSrc(profile.avatar_url)} className="w-10 h-10 rounded-2xl object-cover border-2" alt="avt" />
             <div className="absolute -top-1 -right-1 bg-amber-400 text-white p-0.5 rounded-md border border-white shadow-sm"><Award size={8} fill="currentColor" /></div>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col text-left">
             <span className="font-black text-slate-900 text-sm tracking-tight leading-none">{profile.full_name}</span>
             <p className="text-[8px] font-black text-[#006c49] uppercase tracking-widest flex items-center gap-1 mt-1.5"><Zap size={8} fill="currentColor"/> Platinum Member</p>
           </div>
@@ -549,7 +538,7 @@ export default function ProfilePage() {
                 <img src={getAvatarSrc(profile.avatar_url)} className="w-14 h-14 rounded-2xl object-cover border-4 border-[#f0f9f6]" alt="Avatar" />
                 <div className="absolute -top-1 -right-1 bg-amber-400 text-white p-1 rounded-lg border-2 border-white shadow-sm"><Award size={10} fill="currentColor" /></div>
               </div>
-              <div className="overflow-hidden">
+              <div className="overflow-hidden text-left">
                 <h4 className="font-black text-slate-900 truncate tracking-tight text-sm">{profile.full_name}</h4>
                 <p className="text-[9px] font-black text-[#006c49] uppercase tracking-widest flex items-center gap-1"><Zap size={9} fill="currentColor"/> Platinum</p>
               </div>
@@ -560,8 +549,8 @@ export default function ProfilePage() {
                 <div key={idx} className="space-y-0.5">
                   <p className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{group.title}</p>
                   {group.items.map((item) => (
-                    <button key={item.id} onClick={() => { setActiveTab(item.id); navigate(item.path ? `/profile/${item.path}` : '/profile'); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all ${activeTab === item.id ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}>
-                      <span className={activeTab === item.id ? "text-white" : "text-slate-300"}>{item.icon}</span>
+                    <button key={item.id} onClick={() => { setActiveTab(item.id); navigate(item.path ? `/profile/${item.path}` : '/profile'); }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${activeTab === item.id ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}>
+                      <span className={activeTab === item.id ? "text-white" : "text-slate-300"}Clone>{item.icon}</span>
                       {item.label}
                     </button>
                   ))}
@@ -575,21 +564,21 @@ export default function ProfilePage() {
             {/* WIDGETS WALLET SECTION */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:gap-4">
               <div className="md:col-span-2 bg-[#006c49] rounded-none md:rounded-[28px] p-5 text-white relative overflow-hidden shadow-lg h-[110px] md:h-[100px]">
-                <div className="relative z-10 flex flex-col justify-between h-full">
+                <div className="relative z-10 flex flex-col justify-between h-full text-left">
                   <div className="flex justify-between items-start">
                     <span className="text-[8px] font-black uppercase tracking-widest flex items-center gap-2"><Wallet size={12}/> Ví Demi Pay</span>
                     <Eye size={12} className="opacity-50 cursor-pointer hover:opacity-100"/>
                   </div>
                   <div className="flex items-end justify-between">
                     <h2 className="text-2xl md:text-xl font-black tracking-tight">2.450.000đ</h2>
-                    <button onClick={() => showToast("Hệ thống nạp ví đang bảo trì")} className="bg-white text-[#006c49] px-4 py-1.5 rounded-xl font-black text-[9px] shadow-sm">Nạp tiền</button>
+                    <button onClick={() => showToast("Hệ thống nạp ví đang bảo trì")} className="bg-white text-[#006c49] px-4 py-1.5 rounded-xl font-black text-[9px] shadow-sm cursor-pointer">Nạp tiền</button>
                   </div>
                 </div>
                 <CreditCard className="absolute -right-4 -bottom-4 w-20 h-20 opacity-10 -rotate-12" />
               </div>
               
               <div className="bg-white rounded-none md:rounded-[28px] p-4 shadow-sm border border-slate-100 flex flex-row md:flex-col justify-between items-center h-auto md:h-[100px]">
-                <div className="flex items-center justify-between w-full gap-2 md:block">
+                <div className="flex items-center justify-between w-full gap-2 md:block text-left">
                   <div className="flex items-center gap-2 md:justify-between">
                     <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Star size={12} fill="#fea619" className="text-[#fea619]"/> Thưởng tích lũy</p>
                     <span onClick={() => showToast("Chức năng đổi quà đang bảo trì")} className="text-[8px] font-black text-[#006c49] cursor-pointer hover:underline uppercase">Đổi quà</span>
@@ -604,7 +593,7 @@ export default function ProfilePage() {
             {/* TAB HORIZONTAL MOBILE */}
             <div className="md:hidden bg-[#f0f2f5] py-2 px-4 flex overflow-x-auto no-scrollbar gap-2 sticky top-[73px] z-[90]">
               {mobileTabs.map((item) => (
-                <button key={item.id} onClick={() => { setActiveTab(item.id); navigate(item.path ? `/profile/${item.path}` : '/profile'); }} className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase border shadow-sm ${activeTab === item.id ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}>
+                <button key={item.id} onClick={() => { setActiveTab(item.id); navigate(item.path ? `/profile/${item.path}` : '/profile'); }} className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase border shadow-sm cursor-pointer ${activeTab === item.id ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}>
                   {item.icon} {item.label}
                 </button>
               ))}
@@ -622,7 +611,7 @@ export default function ProfilePage() {
                 ))}
               </div>
 
-              <div className="px-5 md:px-8 lg:px-12 pb-10 pt-6 animate-fadeIn flex-1">
+              <div className="px-5 md:px-8 lg:px-12 pb-10 pt-6 animate-fadeIn flex-1 text-left">
                 {/* RENDER CONTENT DỰA TRÊN ACTIVE TAB */}
                 {activeTab === "profile" && <Tabhoso profile={profile} setProfile={setProfile} handleSaveProfile={handleSaveProfile} handleAvatarChange={handleAvatarChange} getAvatarSrc={getAvatarSrc} />}
                 

@@ -2,6 +2,8 @@ import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { useNavigate, Link } from "react-router-dom";
+// 🌟 SỬA CHUẨN: Import chính xác authApi để nhận diện domain động
+import { authApi } from "../../api/axios"; 
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
 export default function Login() {
@@ -20,20 +22,17 @@ export default function Login() {
         { value: "30m", label: "Fast Delivery" },
     ];
 
-    // Nếu đã có user hợp lệ nằm vững trong hệ thống thì điều hướng về Home
     useEffect(() => {
         if (user) {
             navigate("/", { replace: true });
         }
     }, [user, navigate]);
 
-    // 🎯 CẬP NHẬT: Xử lý đăng nhập, dọn dẹp chéo Admin & gộp giỏ hàng
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
         setLoading(true);
 
-        // 1. LỘT BỎ TÀN DƯ ADMIN (Tránh xung đột Axios Interceptors sau này)
         localStorage.removeItem("adminToken");
         localStorage.removeItem("adminRefreshToken");
         localStorage.removeItem("adminRole");
@@ -43,26 +42,19 @@ export default function Login() {
             const result = await login(username, password);
 
             if (result && result.success) {
-                console.log("🚀 Login thành công! Tiến hành đồng bộ dữ liệu...");
-
-                // 2. GỘP GIỎ HÀNG (Guest Cart -> Member Cart)
                 if (typeof mergeCart === "function") {
                     try {
                         await mergeCart();
-                        console.log("🛒 Đã gộp giỏ hàng Local vào Database thành công!");
                     } catch (cartErr) {
                         console.error("Lỗi đồng bộ giỏ hàng:", cartErr);
                     }
                 }
-
-                // 3. ĐIỀU HƯỚNG VỀ TRANG CHỦ MƯỢT MÀ
                 navigate("/", { replace: true });
             } else {
                 setError(result?.message || "Email hoặc mật khẩu không đúng");
                 setLoading(false);
             }
         } catch (err) {
-            console.error("Login logic error:", err);
             setError("Lỗi kết nối server. Vui lòng thử lại sau.");
             setLoading(false);
         }
@@ -71,21 +63,22 @@ export default function Login() {
     const handleGoogleLogin = () => {
         setLoading(true);
 
-        // Dọn dẹp tàn dư Admin trước khi rẽ nhánh sang OAuth Google
         localStorage.removeItem("adminToken");
         localStorage.removeItem("adminRefreshToken");
         localStorage.removeItem("adminRole");
         localStorage.removeItem("adminInfo");
 
-        const apiBaseUrl = import.meta.env.VITE_API_AUTH_URL || "http://localhost:5001";
+        // 🚀 TỐI ƯU: Đọc trực tiếp baseURL từ authApi để tự động nhảy sang Render khi deploy
+        const apiBaseUrl = authApi.defaults.baseURL;
+        
         setTimeout(() => {
-            window.location.href = `${apiBaseUrl}/api/auth/google`;
+            // Sẽ tự động thành https://authservice-sz4p.onrender.com/api/auth/google khi lên Render
+            window.location.href = `${apiBaseUrl}/auth/google`;
         }, 500);
     };
 
     return (
         <div className="fixed inset-0 h-screen w-screen flex bg-white overflow-y-auto font-['Plus_Jakarta_Sans',sans-serif] z-[9999]">
-            
             {/* TRÁI: HERO SECTION */}
             <section className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 xl:p-16 text-white border-none shrink-0 overflow-hidden sticky top-0 h-screen">
                 <div className="absolute inset-0 z-0">
@@ -94,11 +87,11 @@ export default function Login() {
                         className="w-full h-full object-cover" 
                         alt="Fresh" 
                     />
-                    <div className="absolute inset-0 bg-[#006c49]/80 mix-blend-multiply"></div>
+                    <div className="absolute inset-0 bg-emerald-800/80 mix-blend-multiply"></div>
                 </div>
 
                 <div className="relative z-10 space-y-6 max-w-xl text-left">
-                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-[#006c49] shadow-xl">
+                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-emerald-700 shadow-xl">
                         <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
                             <path d="M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C7.14,19.87 7.64,20 8.13,20C11,20 13.85,18.08 15,15.27C16.15,18.08 19,20 21.87,20C22.36,20 22.86,19.87 23.34,19.7L24.29,22L26.18,21.34C24.1,16.17 22,10 13,8L15,3L13,2L11,7L13,8M8.13,18C7,18 6,17.43 5.4,16.43C5.94,15.05 6.5,13.62 7.07,12.18C8.28,12.04 9.14,12.56 9.61,13.72C10.08,14.89 9.87,16.22 8.13,18M21.87,18C20.13,16.22 19.92,14.89 20.39,13.72C20.86,12.56 21.72,12.04 22.93,12.18C23.5,13.62 24.06,15.05 24.6,16.43C24,17.43 23,18 21.87,18Z"/>
                         </svg>
@@ -124,10 +117,9 @@ export default function Login() {
 
             {/* PHẢI: LOGIN FORM */}
             <section className="w-full lg:w-1/2 flex flex-col items-center justify-center p-6 xl:p-20 bg-white min-h-screen relative shrink-0">
-                
                 <Link 
                     to="/" 
-                    className="absolute top-8 left-8 flex items-center gap-2 text-slate-400 hover:text-[#006c49] transition-all group font-bold text-[10px] uppercase tracking-widest"
+                    className="absolute top-8 left-8 flex items-center gap-2 text-slate-400 hover:text-emerald-700 transition-all group font-bold text-[10px] uppercase tracking-widest"
                 >
                     <div className="p-2 rounded-lg bg-slate-50 group-hover:bg-[#006c49]/10 transition-colors">
                         <ArrowLeft size={16} />
@@ -151,7 +143,7 @@ export default function Login() {
                         <div className="space-y-1.5 relative text-left">
                             <label className="text-[10px] xl:text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Email / Username</label>
                             <div className="relative group">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#006c49] z-10 transition-colors" size={18} />
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-700 z-10 transition-colors" size={18} />
                                 <input 
                                     type="text" 
                                     placeholder="name@company.com" 
@@ -174,7 +166,7 @@ export default function Login() {
                                 </Link>
                             </div>
                             <div className="relative group">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#006c49] z-10 transition-colors" size={18} />
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-700 z-10 transition-colors" size={18} />
                                 <input 
                                     type={showPassword ? "text" : "password"} 
                                     placeholder="••••••••" 
@@ -186,7 +178,7 @@ export default function Login() {
                                 <button 
                                     type="button" 
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors cursor-pointer"
                                 >
                                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
@@ -195,7 +187,7 @@ export default function Login() {
 
                         <button 
                             disabled={loading} 
-                            className="w-full bg-[#006c49] hover:bg-[#004d34] text-white py-3.5 xl:py-4.5 rounded-xl font-black text-sm xl:text-lg shadow-lg active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed transition-all uppercase flex items-center justify-center gap-2"
+                            className="w-full bg-[#006c49] hover:bg-[#004d34] text-white py-3.5 xl:py-4.5 rounded-xl font-black text-sm xl:text-lg shadow-lg active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed transition-all uppercase flex items-center justify-center gap-2 cursor-pointer"
                         >
                             {loading ? (
                                 <span className="animate-pulse">Processing...</span>
@@ -215,11 +207,11 @@ export default function Login() {
                         <button 
                             type="button"
                             onClick={handleGoogleLogin}
-                            className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-slate-700 text-xs"
+                            className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-slate-700 text-xs cursor-pointer bg-white shadow-2xs"
                         >
                             <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-4 h-4" alt="G" /> Google
                         </button>
-                        <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-slate-700 text-xs">
+                        <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-slate-700 text-xs cursor-pointer bg-white shadow-2xs">
                             <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" className="w-4 h-4" alt="F" /> Facebook
                         </button>
                     </div>

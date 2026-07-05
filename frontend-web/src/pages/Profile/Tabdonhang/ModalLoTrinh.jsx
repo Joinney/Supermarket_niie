@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom"; // Sử dụng portal đưa modal lên body
 import { X, Truck, MapPin, ShieldCheck, Loader2 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -141,12 +142,12 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
   if (!isOpen) return null;
 
-  return (
-    // 🌟 ĐÃ GỘP CHUẨN: z-[9999] nằm ở thẻ ngoài cùng để đè Header
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+  return createPortal(
+    // 🌟 ĐÃ NÂNG CẤP: z-[99999] đè bẹp hoàn toàn Header và Sidebar cố định
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
       
-      {/* 🌟 ĐÃ GỘP CHUẨN: mt-36 nằm ở thẻ chứa nội dung trắng để tụt xuống */}
-      <div className="bg-white w-full max-w-3xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 max-h-[90vh] mt-36">
+      {/* 🌟 ĐÃ SỬA: Loại bỏ mt-36 để Flexbox căn giữa (items-center) tự động kéo toàn bộ khung trắng vào giữa tâm màn hình */}
+      <div className="bg-white w-full max-w-3xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col border border-slate-100 max-h-[90vh]">
         
         {/* Header Modal */}
         <div className="p-4 border-b flex justify-between items-center bg-[#006c49] text-white shrink-0">
@@ -204,6 +205,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

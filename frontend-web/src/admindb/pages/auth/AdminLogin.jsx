@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+// 🌟 ĐỒNG BỘ: Sử dụng cấu hình instance axios tập trung đã gán sẵn BaseURL bảo mật
 import axios from "../../../api/axios"; 
 
 // Đồng bộ hóa Logo từ thư mục assets
@@ -23,7 +24,8 @@ export default function AdminLogin() {
         browserIp = '127.0.0.1';
       }
 
-      const response = await axios.post('http://localhost:5001/api/auth/signin', { 
+      // 🚀 TỐI ƯU: Loại bỏ URL gán cứng, truyền endpoint tương đối sạch sẽ qua instance axios
+      const response = await axios.post('/auth/signin', { 
         username: email, 
         password: password,
         browser_ip: browserIp 
@@ -51,7 +53,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="fixed inset-0 min-h-screen w-screen flex flex-col justify-between bg-emerald-950 font-sans select-none overflow-hidden">
+    <div className="fixed inset-0 min-h-screen w-screen flex flex-col justify-between bg-emerald-950 font-sans select-none overflow-hidden text-left">
       
       {/* ẢNH NỀN KHÔNG CẮT */}
       <img 
@@ -76,12 +78,12 @@ export default function AdminLogin() {
         </div>
         
         <div className="flex items-center gap-4 text-white/80">
-          <button className="hover:text-white transition-colors p-1 hover:bg-white/10 rounded-full" title="Help">
+          <button className="hover:text-white transition-colors p-1 hover:bg-white/10 rounded-full cursor-pointer" title="Help">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
             </svg>
           </button>
-          <button className="relative hover:text-white transition-colors p-1 hover:bg-white/10 rounded-full" title="Notifications">
+          <button className="relative hover:text-white transition-colors p-1 hover:bg-white/10 rounded-full cursor-pointer" title="Notifications">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
             </svg>
@@ -132,7 +134,7 @@ export default function AdminLogin() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 cursor-pointer"
                 >
                   {showPassword ? (
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -151,7 +153,7 @@ export default function AdminLogin() {
             {/* Sign-in Button */}
             <button
               type="submit"
-              className="w-full bg-[#40966d] hover:bg-[#35825d] text-white py-2.5 mt-2 rounded-lg font-medium text-sm transition-all active:scale-[0.99] shadow-md"
+              className="w-full bg-[#40966d] hover:bg-[#35825d] text-white py-2.5 mt-2 rounded-lg font-medium text-sm transition-all active:scale-[0.99] shadow-md cursor-pointer"
             >
               Login
             </button>
@@ -171,7 +173,7 @@ export default function AdminLogin() {
         </div>
       </main>
 
-      {/* FOOTER BAR - Đã tối ưu hóa hòa hợp hoàn toàn với giao diện kính mờ */}
+      {/* FOOTER BAR */}
       <footer className="relative z-20 w-full px-6 py-4 md:px-8 flex flex-col sm:flex-row items-center justify-between text-[11px] font-medium text-white/60 border-t border-white/10 bg-emerald-950/40 backdrop-blur-md gap-3 tracking-wide">
         <div className="uppercase text-center sm:text-left drop-shadow-sm select-none">
           © 2026 <span className="text-white font-semibold">Demi Mart Enterprises</span>. Restricted Administrative Access.

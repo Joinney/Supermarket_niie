@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { useLanguage } from "./LanguageContext";
-import axios from "axios";
+// 🌟 ĐỒNG BỘ: Sử dụng productApi từ file cấu hình interceptor tập trung
+import { productApi } from "../api/axios"; 
 
 const StoreContext = createContext();
 
@@ -10,14 +11,12 @@ export const StoreProvider = ({ children }) => {
   const [stores, setStores] = useState([]);
   const [currentStore, setCurrentStore] = useState(null);
 
-  const apiUrl =
-    import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
   // 1. Fetch danh sách quốc gia
   useEffect(() => {
     const fetchNations = async () => {
       try {
-        const res = await axios.get(`${apiUrl}/api/nations`);
+        // 🚀 TỐI ƯU: Sử dụng route tương đối sạch sẽ thông qua productApi
+        const res = await productApi.get("/nations");
         const data = res.data.data || [];
         const formattedStores = data.map((item) => ({
           code: item.ma_quoc_gia,
@@ -30,7 +29,7 @@ export const StoreProvider = ({ children }) => {
       }
     };
     fetchNations();
-  }, [apiUrl]);
+  }, []);
 
   // 2. Thiết lập cửa hàng & Chặn truy cập
   useEffect(() => {
@@ -56,13 +55,17 @@ export const StoreProvider = ({ children }) => {
     }
   }, [stores, window.location.pathname]);
 
-  // 3. Socket Real-time
+  // 3. Socket Real-time tự động nhận diện 100%
   useEffect(() => {
-    const socket = io(apiUrl);
+    const apiBaseUrl = productApi.defaults.baseURL || "";
+    
+    // Tự động bóc tách hậu tố '/api' để lấy domain gốc cho Socket.IO (Local hoặc Render)
+    const socketUrl = apiBaseUrl.replace(/\/api$/, '');
+    const socket = io(socketUrl);
 
     socket.on("connect", () => {
       console.log(
-        "✅ StoreContext: Đã kết nối Socket tới Product Server (Port 5002)!",
+        `✅ StoreContext: Đã kết nối Socket tới Product Server thực tế!`,
       );
     });
 
@@ -91,7 +94,7 @@ export const StoreProvider = ({ children }) => {
     });
 
     return () => socket.disconnect();
-  }, [currentStore, apiUrl]);
+  }, [currentStore]);
 
   // --- HÀM FORMAT ---
   const currencyMap = {
@@ -130,7 +133,6 @@ export const StoreProvider = ({ children }) => {
         currentCurrency,
       }}
     >
-      {/* Đã xóa sạch Modal khóa và class làm mờ màn hình ở đây */}
       {children}
     </StoreContext.Provider>
   );

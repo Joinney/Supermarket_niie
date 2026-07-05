@@ -13,6 +13,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
+// 🌟 ĐỒNG BỘ: Sử dụng cấu hình productApi tập trung xử lý môi trường tự động
 import { productApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
 import { useStore } from "../../context/StoreContext";
@@ -27,7 +28,6 @@ export default function CategoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSort = searchParams.get("sort") || "noi-bat";
   const selectedPrice = searchParams.get("price") || "tat-ca";
-  // Đã xóa selectedOrigin
   const freshShipping = searchParams.get("fresh") === "true";
   const globalShipping = searchParams.get("global") === "true";
   const currentPage = parseInt(searchParams.get("page")) || 1;
@@ -99,10 +99,13 @@ export default function CategoryPage() {
     }
   };
 
+  // === 📡 HỆ THỐNG KẾT NỐI REAL-TIME TỰ ĐỘNG NHẬN DIỆN 100% ===
   useEffect(() => {
-    const apiUrl =
-      import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-    const socket = io(apiUrl);
+    const apiBaseUrl = productApi.defaults.baseURL || "";
+    
+    // Tự động gỡ bỏ hậu tố '/api' ở cuối đường dẫn để lấy domain gốc cho Socket.IO
+    const socketUrl = apiBaseUrl.replace(/\/api$/, '');
+    const socket = io(socketUrl);
 
     socket.on("category_status_changed", (data) => {
       if (data.trang_thai === false) {
@@ -291,7 +294,7 @@ export default function CategoryPage() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto p-4 md:p-6 font-sans bg-white min-h-screen">
+    <div className="max-w-[1400px] mx-auto p-4 md:p-6 font-sans bg-white min-h-screen text-left">
       <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-4 uppercase tracking-wider">
         <Link
           to={country_code ? `/${String(country_code).toLowerCase()}` : "/"}
@@ -311,7 +314,7 @@ export default function CategoryPage() {
         <div className="relative w-full mb-6 group/subnav">
           <button
             onClick={() => handleScroll("left")}
-            className="absolute left-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
+            className="absolute left-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95 cursor-pointer"
           >
             <ChevronLeft size={20} strokeWidth={3} />
           </button>
@@ -331,7 +334,7 @@ export default function CategoryPage() {
                 <button
                   key={sub.id || sub.ma_dm_con}
                   onClick={() => handleSubCategoryClick(sub.slug)}
-                  className={`flex items-center justify-between rounded-2xl border min-w-[215px] max-w-[215px] h-[74px] flex-shrink-0 transition-all snap-start text-left relative overflow-hidden group
+                  className={`flex items-center justify-between rounded-2xl border min-w-[215px] max-w-[215px] h-[74px] flex-shrink-0 transition-all snap-start text-left relative overflow-hidden group cursor-pointer
                     ${
                       isActive
                         ? "border-[#006c49] ring-2 ring-[#006c49]/20 shadow-md"
@@ -371,7 +374,7 @@ export default function CategoryPage() {
 
           <button
             onClick={() => handleScroll("right")}
-            className="absolute right-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95"
+            className="absolute right-[-14px] top-1/2 -translate-y-1/2 bg-[#f3f5f9] text-slate-900 border-4 border-white w-12 h-12 rounded-full shadow-[0_3px_10px_rgba(0,0,0,0.14)] flex items-center justify-center z-30 hover:bg-white transition-all duration-200 opacity-0 group-hover/subnav:opacity-100 active:scale-95 cursor-pointer"
           >
             <ChevronRight size={20} strokeWidth={3} />
           </button>
@@ -387,7 +390,7 @@ export default function CategoryPage() {
           <select
             value={selectedSort}
             onChange={(e) => updateFilter("sort", e.target.value)}
-            className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#006c49]"
+            className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:border-[#006c49] cursor-pointer"
           >
             <option value="noi-bat">Nổi bật (mặc định)</option>
             <option value="gia-thap">Giá: Thấp đến Cao</option>
@@ -415,7 +418,7 @@ export default function CategoryPage() {
                 <p className="font-bold text-lg text-slate-600">Ối! {error}</p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="text-[#006c49] underline font-bold mt-2"
+                  className="text-[#006c49] underline font-bold mt-2 cursor-pointer"
                 >
                   Thử lại
                 </button>
@@ -445,14 +448,14 @@ export default function CategoryPage() {
               <button
                 onClick={() => handlePageChange(1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-colors cursor-pointer bg-white"
               >
                 <ChevronsLeft size={16} />
               </button>
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 flex items-center gap-1 text-xs font-semibold"
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 flex items-center gap-1 text-xs font-semibold cursor-pointer bg-white"
               >
                 <ChevronLeft size={16} /> Trước
               </button>
@@ -462,10 +465,10 @@ export default function CategoryPage() {
                   <button
                     key={pageNum}
                     onClick={() => handlePageChange(pageNum)}
-                    className={`w-9 h-9 rounded-lg border text-xs font-bold transition-all ${
+                    className={`w-9 h-9 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
                       currentPage === pageNum
                         ? "bg-[#006c49] border-[#006c49] text-white shadow-sm shadow-emerald-700/20"
-                        : "border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+                        : "border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 bg-white"
                     }`}
                   >
                     {pageNum}
@@ -475,14 +478,14 @@ export default function CategoryPage() {
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 flex items-center gap-1 text-xs font-semibold"
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 flex items-center gap-1 text-xs font-semibold cursor-pointer bg-white"
               >
                 Sau <ChevronRight size={16} />
               </button>
               <button
                 onClick={() => handlePageChange(totalPages)}
                 disabled={currentPage === totalPages}
-                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-colors cursor-pointer bg-white"
               >
                 <ChevronsRight size={16} />
               </button>
@@ -495,7 +498,7 @@ export default function CategoryPage() {
             <h3 className="font-bold text-slate-800 text-sm">Chọn lọc</h3>
             <button
               onClick={() => setSearchParams({})}
-              className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+              className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
             >
               Đặt lại
             </button>
@@ -511,7 +514,7 @@ export default function CategoryPage() {
                   type="checkbox"
                   checked={freshShipping}
                   onChange={(e) => updateFilter("fresh", e.target.checked)}
-                  className="rounded text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
+                  className="rounded text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5 cursor-pointer accent-[#006c49]"
                 />{" "}
                 Giao hàng hoả tốc
               </label>
@@ -520,7 +523,7 @@ export default function CategoryPage() {
                   type="checkbox"
                   checked={globalShipping}
                   onChange={(e) => updateFilter("global", e.target.checked)}
-                  className="rounded text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
+                  className="rounded text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5 cursor-pointer accent-[#006c49]"
                 />{" "}
                 <span className="bg-orange-500 text-white text-[10px] px-1 rounded font-black scale-90">
                   GLOBAL
@@ -543,7 +546,7 @@ export default function CategoryPage() {
                     value={item.value}
                     checked={selectedPrice === item.value}
                     onChange={() => updateFilter("price", item.value)}
-                    className="text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5"
+                    className="text-[#006c49] focus:ring-[#006c49] w-3.5 h-3.5 cursor-pointer accent-[#006c49]"
                   />{" "}
                   {item.label}
                 </label>

@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useCallback, useContext, useRef } from "react";
-import axios from "axios"; // Đấu nối trực tiếp để kiểm soát Header Authorization
+// 🌟 ĐỒNG BỘ: Sử dụng instance cartApi chuyên biệt từ file cấu hình interceptor chung của bạn
+import { cartApi } from "../api/axios"; 
 import { AuthContext } from "./AuthContext";
 
 export const CartContext = createContext();
@@ -23,7 +24,7 @@ export const CartProvider = ({ children }) => {
             });
         }
 
-        // 🚀 BẮT TRIỆT ĐỂ: Giải quyết tận gốc lỗi không lấy được mã sản phẩm (productId)
+        // Giải quyết tận gốc lỗi không lấy được mã sản phẩm (productId)
         const resolvedProductId = item.productId || item.product_id || item.id || item.ma_san_pham || item.id_san_pham || "";
 
         return {
@@ -58,14 +59,8 @@ export const CartProvider = ({ children }) => {
 
         setLoading(true);
         try {
-            // ✅ ĐÃ SỬA: Thêm cấu hình CORS an toàn
-            const res = await axios.get("http://localhost:5003/api/cart", {
-                headers: { 
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                withCredentials: true
-            });
+            // 🚀 TỐI ƯU: Gọi qua instance cartApi để tự động nhận diện domain động
+            const res = await cartApi.get("/cart");
             const backendItems = res.data?.items || res.data || [];
             setCart((Array.isArray(backendItems) ? backendItems : []).map(formatItem));
         } catch (err) {
@@ -83,18 +78,8 @@ export const CartProvider = ({ children }) => {
         
         if (token && local.length > 0) {
             try {
-                // ✅ ĐÃ SỬA: Thêm cấu hình CORS an toàn
-                await axios.post(
-                    "http://localhost:5003/api/cart/merge", 
-                    { items: local },
-                    { 
-                        headers: { 
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json"
-                        },
-                        withCredentials: true
-                    }
-                );
+                // 🚀 TỐI ƯU: Thay thế url cứng bằng endpoint tương đối của cartApi
+                await cartApi.post("/cart/merge", { items: local });
                 localStorage.removeItem("demi_cart");
             } catch (err) {
                 console.error("❌ Lỗi merge giỏ hàng:", err.response?.data || err.message);
@@ -121,7 +106,7 @@ export const CartProvider = ({ children }) => {
         }
     }, [user, mergeCart, fetchCart]);
 
-    // ✅ 3. THÊM SẢN PHẨM VÀO GIỎ HÀNG (Sửa liên kết HTTP Post + Vá CORS)
+    // ✅ 3. THÊM SẢN PHẨM VÀO GIỎ HÀNG
     const addToCart = useCallback(async (product) => {
         const newItem = formatItem(product);
         if (!newItem || !newItem.variantId) {
@@ -147,26 +132,15 @@ export const CartProvider = ({ children }) => {
             try {
                 setLoading(true); // Bật loading khóa UI tạm thời
 
-                // 1. Đẩy dữ liệu định danh lên MongoDB
-                // ✅ ĐÃ SỬA: Thêm cấu hình CORS an toàn với withCredentials
-                await axios.post(
-                    "http://localhost:5003/api/cart/add", 
-                    newItem, 
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json"
-                        },
-                        withCredentials: true
-                    }
-                );
+                // 🚀 TỐI ƯU: Đẩy dữ liệu định danh lên MongoDB qua cartApi
+                await cartApi.post("/cart/add", newItem);
 
                 console.log("🚀 Đã ghi nhận vào MongoDB, đợi DB ổn định luồng liên dịch vụ...");
 
-                // 2. Vá khoảng delay nhỏ tránh lệch nhịp liên dịch vụ
+                // Vá khoảng delay nhỏ tránh lệch nhịp liên dịch vụ
                 await new Promise((resolve) => setTimeout(resolve, 150));
 
-                // 3. Tiến hành fetch lại toàn bộ giỏ hàng full mảng thuộc tính động
+                // Tiến hành fetch lại toàn bộ giỏ hàng full mảng thuộc tính động
                 await fetchCart();
 
             } catch (err) {
@@ -186,14 +160,8 @@ export const CartProvider = ({ children }) => {
             setCart(local.map(formatItem));
         } else {
             try {
-                // ✅ ĐÃ SỬA: Thêm cấu hình CORS an toàn
-                await axios.delete(`http://localhost:5003/api/cart/remove/${variantId}`, {
-                    headers: { 
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    withCredentials: true
-                });
+                // 🚀 TỐI ƯU: Gọi hàm xóa của cartApi với chuỗi template string động sạch sẽ
+                await cartApi.delete(`/cart/remove/${variantId}`);
                 await fetchCart();
             } catch (err) {
                 console.error("❌ Lỗi khi xóa item khỏi giỏ hàng:", err.response?.data || err.message);
@@ -206,14 +174,8 @@ export const CartProvider = ({ children }) => {
         const token = localStorage.getItem("token");
         try {
             if (token) {
-                // ✅ ĐÃ SỬA: Thêm cấu hình CORS an toàn
-                await axios.delete('http://localhost:5003/api/cart/clear', {
-                    headers: { 
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    withCredentials: true
-                });
+                // 🚀 TỐI ƯU: Dọn sạch giỏ hàng trên DB qua cartApi
+                await cartApi.delete('/cart/clear');
             } else {
                 localStorage.removeItem("demi_cart");
             }
@@ -231,18 +193,8 @@ export const CartProvider = ({ children }) => {
         const token = localStorage.getItem("token");
         try {
             if (token) {
-                // ✅ ĐÃ SỬA: Thêm cấu hình CORS an toàn
-                await axios.post(
-                    'http://localhost:5003/api/cart/remove-selected', 
-                    { variant_ids: boughtVariantIds },
-                    { 
-                        headers: { 
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json"
-                        },
-                        withCredentials: true
-                    }
-                );
+                // 🚀 TỐI ƯU: Gọi API dọn các item đã mua thông qua cartApi
+                await cartApi.post('/cart/remove-selected', { variant_ids: boughtVariantIds });
                 await fetchCart();
             } else {
                 const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Trash2, Edit2, Check, Loader2, ChevronDown, Search } from 'lucide-react';
-import axios from 'axios';
-import { authApi } from '../../api/axios';
+// 🌟 ĐỒNG BỘ: Sử dụng authApi và orderApi từ file cấu hình interceptor tập trung
+import { authApi, orderApi } from '../../api/axios';
 
 export default function AddressModal({ isOpen, onClose, onSelect, currentAddresses, selectedAddressId, onRefresh }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -52,13 +52,14 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 1. TỰ ĐỘNG LẤY DANH SÁCH TỈNH/THÀNH PHỐ TỪ ORDER SERVICE (PORT 5005)
+  // 1. TỰ ĐỘNG LẤY DANH SÁCH TỈNH/THÀNH PHỐ THÔNG QUA ORDER SERVICE TRUNG TÂM
   useEffect(() => {
     if (isFormOpen) {
       const fetchProvinces = async () => {
         try {
           setLoadingGeography(true);
-          const res = await axios.get('http://localhost:5005/api/orders/locations/provinces');
+          // 🚀 TỐI ƯU: Sử dụng route tương đối sạch sẽ thông qua orderApi thay vì chuỗi localhost cứng
+          const res = await orderApi.get('/orders/locations/provinces');
           if (res.data && res.data.success) {
             setProvinces(res.data.data || []);
           }
@@ -74,7 +75,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
   if (!isOpen) return null;
 
-  // --- XỬ LÝ CHỌN VÀ FETCH DỮ LIỆU LỒNG NHAU (PORT 5005) ---
+  // --- XỬ LÝ CHỌN VÀ FETCH DỮ LIỆU LỒNG NHAU THEO ĐƯỜNG DẪN ĐỘNG ---
   const selectProvince = async (id, name) => {
     setDistricts([]);
     setWards([]);
@@ -92,7 +93,8 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
     setLoadingGeography(true);
     try {
-      const res = await axios.get(`http://localhost:5005/api/orders/locations/districts?province_id=${id}`);
+      // 🚀 TỐI ƯU: Chuyển sang gọi qua instance orderApi
+      const res = await orderApi.get(`/orders/locations/districts?province_id=${id}`);
       if (res.data && res.data.success) {
         setDistricts(res.data.data || []);
       }
@@ -117,7 +119,8 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
     setLoadingGeography(true);
     try {
-      const res = await axios.get(`http://localhost:5005/api/orders/locations/wards?district_id=${id}`);
+      // 🚀 TỐI ƯU: Chuyển sang gọi qua instance orderApi
+      const res = await orderApi.get(`/orders/locations/wards?district_id=${id}`);
       if (res.data && res.data.success) {
         setWards(res.data.data || []);
       }
@@ -173,11 +176,12 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
     if (addr.province_id) {
       try {
         setLoadingGeography(true);
-        const distRes = await axios.get(`http://localhost:5005/api/orders/locations/districts?province_id=${addr.province_id}`);
+        // 🚀 TỐI ƯU: Chuyển các hàm bổ trợ sang orderApi để đồng bộ môi trường
+        const distRes = await orderApi.get(`/orders/locations/districts?province_id=${addr.province_id}`);
         if (distRes.data.success) setDistricts(distRes.data.data || []);
         
         if (addr.district_id) {
-          const wardRes = await axios.get(`http://localhost:5005/api/orders/locations/wards?district_id=${addr.district_id}`);
+          const wardRes = await orderApi.get(`/orders/locations/wards?district_id=${addr.district_id}`);
           if (wardRes.data.success) setWards(wardRes.data.data || []);
         }
       } catch (err) {
@@ -267,7 +271,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
     <div className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-lg p-6 relative shadow-2xl border border-white/20 border-l-4 border-l-[#006c49]">
         
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors cursor-pointer">
           <X size={24} />
         </button>
 
@@ -291,11 +295,11 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                     <p className="text-sm text-gray-600 mt-1">{addr.detail_address}, {addr.ward_name}, {addr.district_name}, {addr.province_name}</p>
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 opacity-80 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                       {!Boolean(addr.is_default) && (
-                        <button onClick={(e) => handleSetDefault(e, addr)} className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-emerald-100 rounded-lg transition-colors z-10"><Check size={16} /></button>
+                        <button onClick={(e) => handleSetDefault(e, addr)} className="p-1.5 text-gray-400 hover:text-[#006c49] hover:bg-emerald-100 rounded-lg transition-colors z-10 cursor-pointer"><Check size={16} /></button>
                       )}
-                      <button onClick={(e) => handleEditClick(e, addr)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors z-10"><Edit2 size={14} /></button>
+                      <button onClick={(e) => handleEditClick(e, addr)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors z-10 cursor-pointer"><Edit2 size={14} /></button>
                       {!Boolean(addr.is_default) && (
-                        <button onClick={(e) => handleDeleteAddress(e, addr.address_id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-10"><Trash2 size={16} /></button>
+                        <button onClick={(e) => handleDeleteAddress(e, addr.address_id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors z-10 cursor-pointer"><Trash2 size={16} /></button>
                       )}
                     </div>
                   </div>
@@ -304,7 +308,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                 <p className="text-center text-gray-500 py-4">Bạn chưa có địa chỉ nào.</p>
               )}
             </div>
-            <button onClick={handleAddClick} className="w-full mt-6 py-3 border-2 border-dashed border-gray-300 rounded-xl font-bold text-gray-500 hover:border-[#006c49] hover:text-[#006c49] hover:bg-emerald-50/20 transition-all">+ Thêm địa chỉ mới</button>
+            <button onClick={handleAddClick} className="w-full mt-6 py-3 border-2 border-dashed border-gray-300 rounded-xl font-bold text-gray-500 hover:border-[#006c49] hover:text-[#006c49] hover:bg-emerald-50/20 transition-all cursor-pointer">+ Thêm địa chỉ mới</button>
           </>
         ) : (
           <>
@@ -317,20 +321,20 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Tên người nhận</label>
-                  <input required type="text" className="w-full border p-2.5 rounded-xl text-sm outline-none focus:border-[#006c49]" value={formData.receiver_name} onChange={(e) => setFormData({...formData, receiver_name: e.target.value})} />
+                  <input required type="text" className="w-full border p-2.5 rounded-xl text-sm outline-none focus:border-[#006c49] bg-white text-slate-850" value={formData.receiver_name} onChange={(e) => setFormData({...formData, receiver_name: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Số điện thoại</label>
-                  <input required type="text" className="w-full border p-2.5 rounded-xl text-sm outline-none focus:border-[#006c49]" value={formData.receiver_phone} onChange={(e) => setFormData({...formData, receiver_phone: e.target.value})} />
+                  <input required type="text" className="w-full border p-2.5 rounded-xl text-sm outline-none focus:border-[#006c49] bg-white text-slate-850" value={formData.receiver_phone} onChange={(e) => setFormData({...formData, receiver_phone: e.target.value})} />
                 </div>
               </div>
 
-              {/* 🎯 SEARCHABLE DROPDOWN 1: TỈNH / THÀNH PHỐ */}
+              {/* DROPDOWN 1: TỈNH / THÀNH PHỐ */}
               <div className="relative" ref={provinceRef}>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Tỉnh / Thành phố</label>
                 <div 
                   onClick={() => { setOpenDropdown(openDropdown === 'province' ? null : 'province'); setSearchTerm(''); }}
-                  className="w-full border p-2.5 rounded-xl text-sm flex justify-between items-center bg-white cursor-pointer hover:border-gray-400 focus:border-[#006c49]"
+                  className="w-full border p-2.5 rounded-xl text-sm flex justify-between items-center bg-white mercantile-dropdown cursor-pointer hover:border-gray-400 focus:border-[#006c49]"
                 >
                   <span className={formData.province_name ? 'text-black font-semibold' : 'text-gray-400'}>
                     {formData.province_name || '-- Gõ để tìm kiếm Tỉnh / Thành --'}
@@ -346,7 +350,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                         autoFocus
                         type="text" 
                         placeholder="Nhập tên tỉnh thành để tìm..." 
-                        className="w-full bg-transparent text-sm outline-none"
+                        className="w-full bg-transparent text-sm outline-none text-slate-800"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
@@ -357,7 +361,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                           <div 
                             key={p.ProvinceID}
                             onClick={() => selectProvince(p.ProvinceID, p.ProvinceName)}
-                            className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left"
+                            className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left text-slate-700"
                           >
                             {p.ProvinceName}
                           </div>
@@ -371,7 +375,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* 🎯 SEARCHABLE DROPDOWN 2: QUẬN / HUYỆN */}
+                {/* DROPDOWN 2: QUẬN / HUYỆN */}
                 <div className="relative" ref={districtRef}>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Quận / Huyện</label>
                   <div 
@@ -396,7 +400,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                           autoFocus
                           type="text" 
                           placeholder="Nhập quận huyện để tìm..." 
-                          className="w-full bg-transparent text-sm outline-none"
+                          className="w-full bg-transparent text-sm outline-none text-slate-800"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -407,7 +411,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                             <div 
                               key={d.DistrictID}
                               onClick={() => selectDistrict(d.DistrictID, d.DistrictName)}
-                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left"
+                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left text-slate-700"
                             >
                               {d.DistrictName}
                             </div>
@@ -420,7 +424,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                   )}
                 </div>
 
-                {/* 🎯 SEARCHABLE DROPDOWN 3: PHƯỜNG / XÃ */}
+                {/* DROPDOWN 3: PHƯỜNG / XÃ */}
                 <div className="relative" ref={wardRef}>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Phường / Xã</label>
                   <div 
@@ -445,7 +449,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                           autoFocus
                           type="text" 
                           placeholder="Nhập phường xã để tìm..." 
-                          className="w-full bg-transparent text-sm outline-none"
+                          className="w-full bg-transparent text-sm outline-none text-slate-800"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -456,7 +460,7 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
                             <div 
                               key={w.WardCode}
                               onClick={() => selectWard(w.WardCode, w.WardName)}
-                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left"
+                              className="p-2.5 text-sm hover:bg-emerald-50 hover:text-[#006c49] font-semibold cursor-pointer transition-colors text-left text-slate-700"
                             >
                               {w.WardName}
                             </div>
@@ -472,17 +476,17 @@ export default function AddressModal({ isOpen, onClose, onSelect, currentAddress
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">Địa chỉ chi tiết (Số nhà, thôn, đường)</label>
-                <input required type="text" placeholder="Ví dụ: Thôn 1 Hòa Bình" className="w-full border p-2.5 rounded-xl text-sm outline-none focus:border-[#006c49]" value={formData.detail_address} onChange={(e) => setFormData({...formData, detail_address: e.target.value})} />
+                <input required type="text" placeholder="Ví dụ: Thôn 1 Hòa Bình" className="w-full border p-2.5 rounded-xl text-sm outline-none focus:border-[#006c49] bg-white text-slate-800" value={formData.detail_address} onChange={(e) => setFormData({...formData, detail_address: e.target.value})} />
               </div>
 
               <div className="flex items-center gap-2 pt-2">
-                <input type="checkbox" id="is_default" checked={formData.is_default} onChange={(e) => setFormData({...formData, is_default: e.target.checked})} className="w-4 h-4 accent-[#006c49]" />
-                <label htmlFor="is_default" className="text-sm font-bold text-gray-700 cursor-pointer">Đặt làm địa chỉ mặc định</label>
+                <input type="checkbox" id="is_default" checked={formData.is_default} onChange={(e) => setFormData({...formData, is_default: e.target.checked})} className="w-4 h-4 accent-[#006c49] cursor-pointer" />
+                <label htmlFor="is_default" className="text-sm font-bold text-gray-700 cursor-pointer select-none">Đặt làm địa chỉ mặc định</label>
               </div>
 
               <div className="flex gap-4 pt-4 border-t">
-                <button type="button" onClick={() => setIsFormOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all">Hủy bỏ</button>
-                <button type="submit" className="flex-1 py-3 bg-[#006c49] text-white rounded-xl font-bold hover:bg-[#005a3d] transition-all">Lưu lại</button>
+                <button type="button" onClick={() => setIsFormOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all cursor-pointer">Hủy bỏ</button>
+                <button type="submit" className="flex-1 py-3 bg-[#006c49] text-white rounded-xl font-bold hover:bg-[#005a3d] transition-all cursor-pointer">Lưu lại</button>
               </div>
             </form>
           </>
