@@ -58,12 +58,15 @@ export default function Home() {
     (item) => new Date(item.chuong_trinh.thoi_gian_bat_dau) > currentTime,
   );
 
-  // HÀM HỖ TRỢ HIỂN THỊ THỜI GIAN ĐẾM NGƯỢC CHO TỪNG CHƯƠNG TRÌNH
+  // 🌟 ĐÃ FIX: Hàm format thời gian (Có thêm Ngày)
   const formatTimeLeft = (endTime) => {
     const diff = new Date(endTime) - currentTime;
-    if (diff <= 0) return { hh: "00", mm: "00", ss: "00" };
+    if (diff <= 0) return { dd: "00", hh: "00", mm: "00", ss: "00" };
 
     return {
+      dd: Math.floor(diff / (1000 * 60 * 60 * 24))
+        .toString()
+        .padStart(2, "0"),
       hh: Math.floor((diff / (1000 * 60 * 60)) % 24)
         .toString()
         .padStart(2, "0"),
@@ -76,10 +79,17 @@ export default function Home() {
     };
   };
 
-  // 🌟 TÁCH RỜI LUỒNG GỌI API
+  const calculateDiscount = (originalPrice, salePrice) => {
+    if (!originalPrice || !salePrice || originalPrice <= salePrice)
+      return "-HOT";
+    const percent = Math.round(
+      ((originalPrice - salePrice) / originalPrice) * 100,
+    );
+    return `-${percent}%`;
+  };
+
   useEffect(() => {
     window.scrollTo(0, 0);
-
     const targetCountry = country_code || currentStore?.code || "vn";
 
     const fetchGeneralProducts = async () => {
@@ -173,12 +183,17 @@ export default function Home() {
 
   const cleanProducts = getCleanProductList();
 
+  // Xác định prefix quốc gia cho các thẻ Link
+  const currentPrefix = country_code
+    ? `/${country_code.toLowerCase()}`
+    : `/${currentStore?.code?.toLowerCase() || "vn"}`;
+
   return (
     <div className="space-y-12 pb-20 bg-[#fafbfc] font-sans pt-[10px] selection:bg-[#006c49] selection:text-white">
       <QuangCao t={t} />
 
       {/* ========================================================== */}
-      {/* KHỐI 1: KHUYẾN MÃI NHANH (FLASH SALE) */}
+      {/* 🌟 KHỐI 1: KHUYẾN MÃI NHANH (FLASH SALE) */}
       {/* ========================================================== */}
       <section className="mx-6 md:mx-10 space-y-6">
         {loadingFlashSale ? (
@@ -194,83 +209,99 @@ export default function Home() {
                 return (
                   <div
                     key={idx}
-                    className="bg-white border-2 border-[#f05a28] rounded-[40px] p-6 sm:p-8 shadow-[0_12px_40px_rgba(240,90,40,0.05)]"
+                    className="bg-white rounded-[32px] p-6 md:p-8 shadow-sm border border-slate-100 relative overflow-hidden"
                   >
-                    <div className="flex flex-row items-center justify-between gap-4 mb-6 pb-2">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#f05a28] to-[#ff7e5f]"></div>
+
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#f05a28] rounded-full flex items-center justify-center text-white shadow-sm shadow-orange-200">
-                          <Flame size={20} className="fill-white" />
+                        <div className="w-12 h-12 bg-gradient-to-br from-[#f05a28] to-[#ea580c] rounded-2xl flex items-center justify-center shadow-md">
+                          <Flame
+                            size={24}
+                            className="text-white fill-white/20"
+                          />
                         </div>
-                        <div className="flex flex-col items-start gap-1">
-                          <div className="flex items-center gap-2">
-                            <h2 className="text-2xl font-black text-[#f05a28] tracking-tight uppercase italic font-sans">
-                              {promo.chuong_trinh.ten_chuong_trinh ||
-                                "Khuyến mãi nhanh"}
-                            </h2>
-                            <span className="bg-[#f05a28] text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide">
-                              GOLD DEALS
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold">
-                            <span className="text-xs text-slate-400 font-medium">
-                              Sắp kết thúc:
-                            </span>
-                            <div className="flex items-center gap-1 font-sans">
-                              <span className="bg-white text-[#ea580c] border border-orange-100 px-2 py-0.5 rounded font-black text-xs min-w-[24px] text-center shadow-sm">
-                                {timeLeft.hh}
-                              </span>
-                              <span className="text-[#ea580c] font-black text-xs">
-                                :
-                              </span>
-                              <span className="bg-white text-[#ea580c] border border-orange-100 px-2 py-0.5 rounded font-black text-xs min-w-[24px] text-center shadow-sm">
-                                {timeLeft.mm}
-                              </span>
-                              <span className="text-[#ea580c] font-black text-xs">
-                                :
-                              </span>
-                              <span className="bg-white text-[#ea580c] border border-orange-100 px-2 py-0.5 rounded font-black text-xs min-w-[24px] text-center shadow-sm">
-                                {timeLeft.ss}
-                              </span>
-                            </div>
-                          </div>
+                        <div>
+                          <h2 className="text-xl md:text-2xl font-black text-[#161b22] uppercase tracking-tight">
+                            {promo.chuong_trinh.ten_chuong_trinh ||
+                              "Khuyến mãi nhanh"}
+                          </h2>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Săn deal chớp nhoáng - Số lượng có hạn
+                          </p>
                         </div>
                       </div>
 
-                      <Link
-                        to="/category/khuyen-mai"
-                        className="text-xs font-black text-[#f05a28] uppercase tracking-wider flex items-center gap-1.5 bg-[#fff1f0] hover:bg-[#ffe4e1] px-5 py-2.5 rounded-2xl transition-all border border-orange-50 shadow-sm"
-                      >
-                        Săn ngay{" "}
-                        <span className="text-sm font-bold">&rarr;</span>
-                      </Link>
+                      <div className="flex items-center gap-4">
+                        {/* 🌟 ĐÃ FIX: Đồng hồ đếm ngược có hiển thị NGÀY */}
+                        <div className="flex items-center gap-3 bg-[#fff1f0] px-5 py-2.5 rounded-2xl border border-orange-100">
+                          <span className="text-xs font-bold text-[#f05a28] uppercase tracking-widest hidden sm:block">
+                            Kết thúc sau
+                          </span>
+                          <div className="flex gap-1.5 text-[#f05a28] font-black text-lg items-center">
+                            {timeLeft.dd !== "00" && (
+                              <>
+                                <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm text-center">
+                                  {timeLeft.dd}n
+                                </span>
+                                <span className="text-[#f05a28] font-black">
+                                  :
+                                </span>
+                              </>
+                            )}
+                            <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm min-w-[36px] text-center">
+                              {timeLeft.hh}
+                            </span>
+                            :
+                            <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm min-w-[36px] text-center">
+                              {timeLeft.mm}
+                            </span>
+                            :
+                            <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm min-w-[36px] text-center">
+                              {timeLeft.ss}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Nút Xem thêm */}
+                        <Link
+                          to={`${currentPrefix}/category/khuyen-mai`}
+                          className="text-xs font-black text-[#f05a28] bg-orange-50 hover:bg-[#f05a28] hover:text-white px-5 py-3 rounded-2xl transition-all shadow-sm active:scale-95 whitespace-nowrap hidden lg:flex items-center gap-2 border border-orange-100"
+                        >
+                          Săn ngay <ArrowRight size={16} />
+                        </Link>
+                      </div>
                     </div>
 
                     {/* Carousel Sản phẩm của chương trình hiện tại */}
                     <div
                       ref={favRef}
-                      className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-2"
+                      className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 pt-2"
                     >
                       {promo.products?.map((p, pIdx) => (
                         <div
                           key={`flash-${promo.chuong_trinh.ma_khuyen_mai}-${p.ma_san_pham}-${pIdx}`}
-                          className="min-w-[180px] md:min-w-[220px] bg-white border border-slate-100 rounded-[28px] p-3 hover:shadow-xl hover:border-slate-200/60 transition-all duration-300 relative group text-left flex flex-col justify-between"
+                          className="w-[180px] md:w-[200px] shrink-0 bg-white border border-slate-100/80 rounded-[28px] p-2 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group flex flex-col justify-between"
                         >
-                          <div className="absolute top-4 left-4 z-10 bg-red-500 text-white font-black text-[9px] px-2 py-0.5 rounded-md uppercase tracking-wide shadow-sm">
-                            -HOT
-                          </div>
-                          <ProductCard p={p} />
-                          <div className="mt-3 space-y-1 w-full px-1">
-                            <div className="flex justify-between text-[10px] font-black uppercase text-slate-400">
+                          <ProductCard
+                            p={p}
+                            categoryName="Siêu Sale"
+                            categorySlug="khuyen-mai"
+                          />
+                          <div className="mt-3 px-2 pb-2 w-full">
+                            <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 mb-1.5">
                               <span>
                                 Đã bán {p.thong_tin_sale?.da_ban || 0}
                               </span>
-                              <span className="text-red-500 font-extrabold">
-                                Hot 🔥
+                              <span className="text-[#f05a28]">
+                                CÒN{" "}
+                                {(p.thong_tin_sale?.so_luong_gioi_han || 0) -
+                                  (p.thong_tin_sale?.da_ban || 0)}
                               </span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full"
+                                className="h-full bg-gradient-to-r from-orange-400 to-[#f05a28] rounded-full"
                                 style={{
                                   width: `${p.thong_tin_sale?.phan_tram_da_ban || 0}%`,
                                 }}
@@ -284,35 +315,40 @@ export default function Home() {
                 );
               })
             ) : (
-              <div className="text-center py-6 text-slate-400 italic font-medium">
-                Không có chương trình nào đang diễn ra.
+              <div className="w-full bg-white border border-slate-100 rounded-3xl py-12 flex flex-col items-center justify-center text-slate-400 shadow-sm">
+                <Zap size={32} className="text-slate-200 mb-3" />
+                <p className="font-bold text-[15px]">
+                  Hiện không có chương trình sale nào đang diễn ra.
+                </p>
               </div>
             )}
 
             {/* 1.2 DANH SÁCH SẮP DIỄN RA */}
             {upcomingPromos.length > 0 && (
               <div className="bg-white border border-blue-100 rounded-[30px] p-6 shadow-sm">
-                <h3 className="font-black text-blue-900 mb-4 uppercase text-sm tracking-widest flex items-center gap-2">
-                  <Timer size={16} className="text-blue-500" /> Sắp diễn ra:
+                <h3 className="font-black text-blue-900 mb-5 uppercase text-sm tracking-widest flex items-center gap-2">
+                  <Timer size={18} className="text-blue-500" /> Sắp diễn ra
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {upcomingPromos.map((promo, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-4 bg-blue-50 rounded-2xl border border-blue-100"
+                      className="flex items-center justify-between p-4 bg-blue-50/50 hover:bg-blue-50 transition-colors rounded-2xl border border-blue-100"
                     >
                       <div>
                         <p className="font-bold text-blue-900 text-sm">
                           {promo.chuong_trinh.ten_chuong_trinh}
                         </p>
-                        <p className="text-[11px] text-blue-600 mt-1">
+                        <p className="text-[11px] font-medium text-slate-500 mt-1 flex items-center gap-1.5">
                           Bắt đầu:{" "}
-                          {new Date(
-                            promo.chuong_trinh.thoi_gian_bat_dau,
-                          ).toLocaleString()}
+                          <span className="text-blue-600 bg-white px-2 py-0.5 rounded shadow-sm border border-blue-100">
+                            {new Date(
+                              promo.chuong_trinh.thoi_gian_bat_dau,
+                            ).toLocaleString("vi-VN")}
+                          </span>
                         </p>
                       </div>
-                      <span className="text-[10px] font-black bg-blue-200 text-blue-800 px-3 py-1 rounded-full uppercase">
+                      <span className="text-[9px] font-black bg-blue-500 text-white px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm">
                         Sắp tới
                       </span>
                     </div>
@@ -336,7 +372,7 @@ export default function Home() {
             </h2>
           </div>
           <Link
-            to="/category/tat-ca"
+            to={`${currentPrefix}/category/tat-ca`}
             className="flex items-center gap-2 text-xs font-black text-[#006c49] bg-[#e6f0ed] px-6 py-2.5 rounded-2xl hover:bg-[#006c49] hover:text-white transition-all shadow-sm active:scale-95 uppercase tracking-widest"
           >
             {t("see_more")} <ChevronRight size={14} />
@@ -376,7 +412,7 @@ export default function Home() {
 
           {!loadingProducts && !productError && (
             <Link
-              to="/category/tat-ca"
+              to={`${currentPrefix}/category/tat-ca`}
               className="min-w-[120px] flex items-center justify-center text-[#006c49] font-black text-xs cursor-pointer hover:underline uppercase tracking-widest group"
             >
               Xem Tất Cả{" "}

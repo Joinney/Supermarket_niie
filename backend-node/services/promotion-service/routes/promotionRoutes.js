@@ -39,5 +39,6 @@ router.get('/admin/flash-sale', getAllFlashSalesAdmin);
 router.get('/admin/flash-sale/:ma_khuyen_mai', getFlashSaleByIdAdmin);
 
 // 7. Kiểm tra xem một biến thể có đang trong chương trình khuyến mãi hay không
-router.post('/internal/check-promotion', checkInternalVariantPromotion);
+router.post('/internal/check-variant-promotion', checkInternalVariantPromotion);
+
 export default router;

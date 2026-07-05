@@ -42,7 +42,7 @@ const router = express.Router();
 // =========================================================================
 // 🌐 0. ROUTE NỘI BỘ (INTERNAL INTER-SERVICE ROUTE)
 // =========================================================================
-router.post('/internal/variants', getInternalVariants);
+router.post('/internal-variants', getInternalVariants);
 
 // 🌟 ĐÃ CẬP NHẬT: Tiếp nhận tín hiệu đồng bộ lượng 'TỒN KHO ĐỔI RA' từ Warehouse-Service gửi sang
 // Đường dẫn này khớp chuẩn với cấu trúc định tuyến tổng thể của Demi Mart

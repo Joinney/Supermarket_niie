@@ -15,7 +15,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
 
-import { productApi } from "../../api/axios";
+import { productApi, promotionApi } from "../../api/axios"; // 🌟 ĐÃ THÊM promotionApi
 import Feedback from "./Feedback";
 import RelatedProducts from "./RelatedProducts";
 import RecommendedProducts from "./RecommendedProducts";
@@ -48,9 +48,11 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedAttributes, setSelectedAttributes] = useState({});
 
+  // 🌟 STATE CHỨA DỮ LIỆU FLASH SALE TRỰC TIẾP TỪ FRONTEND
+  const [activeFlashSales, setActiveFlashSales] = useState([]);
+
   useEffect(() => {
     const storeCodeLowerCase = String(currentStore?.code || "vn").toLowerCase();
-
     if (currentStore?.code && storeCodeLowerCase !== country && product) {
       const cSlug = category_slug || product?.slug_danh_muc || "product";
       navigate(`/${storeCodeLowerCase}/product/${cSlug}/${id}`, {
@@ -59,34 +61,23 @@ export default function ProductDetail() {
     }
   }, [currentStore, country, id, category_slug, navigate, product]);
 
-  // NÂNG CẤP REAL-TIME
+  // Gọi API Flash Sale độc lập để bọc lót cho Backend
   useEffect(() => {
-    const apiUrl =
-      import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-    const socket = io(apiUrl);
+    promotionApi
+      .get("/client/flash-sale/active")
+      .then((res) => {
+        if (res.data?.success && res.data?.data) {
+          setActiveFlashSales(res.data.data);
+        }
+      })
+      .catch((err) => console.error("Lỗi lấy Flash Sale bọc lót:", err));
+  }, []);
 
-    socket.on("product_status_changed", (data) => {
-      if (
-        String(data.ma_san_pham) === String(id) &&
-        data.trang_thai === false
-      ) {
-        console.log(
-          "⚡ [Real-time] Sản phẩm đang xem bị Admin khóa. Văng trang!",
-        );
-        window.location.href = "/";
-      }
-    });
-
-    return () => socket.disconnect();
-  }, [id]);
-
-  // CHỈ GỌI API 1 LẦN KHI VÀO TRANG
   useEffect(() => {
     if (!id || id === "undefined") {
       setLoading(false);
       return;
     }
-
     window.scrollTo(0, 0);
     setLoading(true);
 
@@ -99,14 +90,12 @@ export default function ProductDetail() {
 
         if (productData && productData.ma_san_pham) {
           if (productData.trang_thai === false) {
-            console.warn("🚫 Sản phẩm này đã bị Admin khóa. Ép văng về Home.");
             window.location.href = "/";
             return;
           }
 
           const bienTheList =
             productData.bien_the || productData.variants || [];
-
           productData.bien_the = bienTheList.map((bt) => {
             if (
               Array.isArray(bt.thuoc_tinh_hop_nhat) &&
@@ -172,10 +161,8 @@ export default function ProductDetail() {
       });
   }, [id, country]);
 
-  // CHUYÊN XỬ LÝ ĐỔI BIẾN THỂ MƯỢT MÀ
   useEffect(() => {
     if (!product || !variantId) return;
-
     const targetVariant = product.bien_the?.find(
       (v) => String(v.ma_bien_the) === String(variantId),
     );
@@ -187,13 +174,10 @@ export default function ProductDetail() {
       setSelectedVariant(targetVariant);
       setQuantity(1);
       setSelectedAttributes(targetVariant.thuoc_tinh || {});
-
       const variantMedia = product.media?.find(
         (m) => String(m.ma_bien_the) === String(targetVariant.ma_bien_the),
       );
-      if (variantMedia) {
-        setMainMedia(variantMedia);
-      }
+      if (variantMedia) setMainMedia(variantMedia);
     }
   }, [variantId, product]);
 
@@ -231,7 +215,6 @@ export default function ProductDetail() {
 
   const handleAttributeSelect = (key, value) => {
     if (!product?.bien_the) return;
-
     const nextAttributes = { ...selectedAttributes, [key]: value };
     setSelectedAttributes(nextAttributes);
 
@@ -263,38 +246,71 @@ export default function ProductDetail() {
     }
   };
 
-  const currentPrice =
-    selectedVariant?.gia_khuyen_mai || selectedVariant?.gia_ban_le || 0;
-  const originalPrice = selectedVariant?.gia_khuyen_mai
-    ? selectedVariant?.gia_ban_le
-    : null;
+  // =======================================================================
+  // 🌟 LOGIC "BỌC THÉP": TỰ ĐỘNG ÉP GIÁ FLASH SALE NẾU BACKEND MISS
+  // =======================================================================
+  const activeSaleItem = useMemo(() => {
+    if (!selectedVariant || !activeFlashSales.length) return null;
+    for (const promo of activeFlashSales) {
+      const match = promo.products?.find(
+        (p) =>
+          p.chi_tiet_bien_the?.[0]?.ma_bien_the === selectedVariant.ma_bien_the,
+      );
+      if (match) return match.thong_tin_sale;
+    }
+    return null;
+  }, [selectedVariant, activeFlashSales]);
 
-  // KIỂM TRA HẾT HÀNG AN TOÀN
-  const stockCount = selectedVariant?.so_luong_ton || 0;
+  const isFlashSale =
+    !!activeSaleItem ||
+    !!selectedVariant?.thong_tin_sale ||
+    !!selectedVariant?.is_flash_sale;
+
+  // Lấy Giá Bán chuẩn xác (Ưu tiên activeSaleItem từ FE, sau đó mới tới BE)
+  const currentPrice = isFlashSale
+    ? Number(
+        activeSaleItem?.gia_khuyen_mai ||
+          selectedVariant?.thong_tin_sale?.gia_khuyen_mai ||
+          selectedVariant?.gia_khuyen_mai ||
+          selectedVariant?.gia_ban_le ||
+          0,
+      )
+    : Number(selectedVariant?.gia_ban_le || product?.gia_ban_thap_nhat || 0);
+
+  const rawOriginalPrice = Number(
+    selectedVariant?.gia_goc ||
+      selectedVariant?.gia_ban_le ||
+      product?.gia_ban_thap_nhat ||
+      0,
+  );
+  const originalPrice =
+    isFlashSale && rawOriginalPrice > currentPrice ? rawOriginalPrice : null;
+
+  // Tồn kho cũng ưu tiên Flash Sale
+  const stockCount = isFlashSale
+    ? Number(
+        activeSaleItem?.so_luong_gioi_han - activeSaleItem?.da_ban ||
+          selectedVariant?.thong_tin_sale?.ton_kho_sale ||
+          selectedVariant?.so_luong_ton ||
+          0,
+      )
+    : Number(selectedVariant?.so_luong_ton || 0);
+
   const isOutOfStock = !selectedVariant || stockCount <= 0;
 
-  // HÀM KIỂM TRA ĐĂNG NHẬP (Lưu ý: sửa "token" thành tên biến của bạn nếu cần)
   const checkIsLoggedIn = () => {
     const token = localStorage.getItem("token");
     return !!token;
   };
 
-  // ==========================================
-  // XỬ LÝ NÚT: MUA NGAY
-  // ==========================================
   const handleBuyNow = () => {
-    // 1. Kiểm tra đăng nhập
     if (!checkIsLoggedIn()) {
       const confirmLogin = window.confirm(
         "Bạn cần đăng nhập để mua sản phẩm. Đi tới trang đăng nhập?",
       );
-      if (confirmLogin) {
-        navigate("/login");
-      }
+      if (confirmLogin) navigate("/login");
       return;
     }
-
-    // 2. Chạy logic Mua Ngay
     if (!product || !selectedVariant || isOutOfStock) return;
     navigate("/checkout", {
       state: {
@@ -304,22 +320,15 @@ export default function ProductDetail() {
     });
   };
 
-  // ==========================================
-  // XỬ LÝ NÚT: THÊM VÀO GIỎ HÀNG
-  // ==========================================
   const handleAddToCart = (e) => {
-    // 1. Kiểm tra đăng nhập
     if (!checkIsLoggedIn()) {
       const confirmLogin = window.confirm(
         "Bạn cần đăng nhập để thêm sản phẩm vào giỏ hàng. Đi tới trang đăng nhập?",
       );
-      if (confirmLogin) {
-        navigate("/login");
-      }
+      if (confirmLogin) navigate("/login");
       return;
     }
 
-    // 2. Chạy logic Thêm vào giỏ
     if (!product || !selectedVariant || isOutOfStock) return;
 
     let cleanEAVArray = [];
@@ -343,10 +352,17 @@ export default function ProductDetail() {
       );
     }
 
+    // Tên hiển thị giỏ hàng
+    let targetVariantName =
+      selectedVariant.ten_bien_the || product.ten_san_pham;
+    if (cleanEAVArray.length > 0) {
+      targetVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
+    }
+
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
       name: product.ten_san_pham,
-      price: currentPrice,
+      price: currentPrice, // ĐÃ ĐƯỢC ÉP LẤY GIÁ 25K CHUẨN XÁC
       quantity: quantity,
       stock: stockCount,
       image:
@@ -357,14 +373,13 @@ export default function ProductDetail() {
       productId: product.ma_san_pham,
       categorySlug: product.slug_danh_muc || category_slug,
       countryCode: product.country_code || country,
-      variantName: selectedVariant.ten_bien_the || product.ten_san_pham,
+      variantName: targetVariantName,
       ten_don_vi: selectedVariant.ten_don_vi || product.ten_don_vi || "Gói",
       thuoc_tinh_hop_nhat: cleanEAVArray,
     };
 
     addToCart(itemToCart);
 
-    // Hiệu ứng bay vào giỏ hàng
     const startX = e.clientX;
     const startY = e.clientY;
     const cartIcon = document.getElementById("cart-icon");
@@ -388,17 +403,15 @@ export default function ProductDetail() {
       dot.style.top = `${endY}px`;
       dot.style.transform = "scale(0.2)";
     }, 10);
-
     setTimeout(() => dot.remove(), 800);
 
-    // Hiệu ứng thông báo thành công
     const toast = document.createElement("div");
     toast.className = "custom-toast";
     toast.innerHTML = `
-      <img src="${selectedVariant.hinh_anh_url || selectedVariant.duong_dan_url || mainMedia?.duong_dan_url || "https://placehold.co/300x300?text=Demi+Mart"}" style="width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;">
+      <img src="${itemToCart.image || "https://placehold.co/300x300?text=Demi+Mart"}" style="width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0;">
       <div>
         <h4 style="margin: 0; color: #006c49; font-size: 15px; font-weight: 900; letter-spacing: -0.5px;">Thêm thành công!</h4>
-        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">Cảm ơn khách hàng đã mua <b style="color: #334155;">${product.ten_san_pham}</b></p>
+        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">Đã chọn mua <b style="color: #334155;">${product.ten_san_pham}</b></p>
       </div>
     `;
     document.body.appendChild(toast);
@@ -502,7 +515,7 @@ export default function ProductDetail() {
                 getYouTubeEmbedUrl(mainMedia.duong_dan_url) ? (
                   <iframe
                     src={getYouTubeEmbedUrl(mainMedia.duong_dan_url)}
-                    title="YouTube player"
+                    title="YouTube"
                     className="w-full h-full object-cover rounded-[16px] p-2"
                     allowFullScreen
                   ></iframe>
@@ -551,22 +564,29 @@ export default function ProductDetail() {
 
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
               {selectedVariant ? (
-                <>
-                  <span
-                    className="text-2xl lg:text-3xl 2xl:text-5xl font-black text-[#006c49] tracking-tighter"
-                    translate="no"
-                  >
-                    {formatPrice(currentPrice)}
-                  </span>
+                <div className="flex flex-col">
                   {originalPrice && (
                     <span
-                      className="text-xs 2xl:text-lg text-slate-300 line-through font-bold"
+                      className="text-xs 2xl:text-sm text-slate-400 line-through font-bold mb-[-4px]"
                       translate="no"
                     >
                       {formatPrice(originalPrice)}
                     </span>
                   )}
-                </>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`text-3xl lg:text-4xl 2xl:text-5xl font-black tracking-tighter ${isFlashSale ? "text-[#ff4d4f]" : "text-[#006c49]"}`}
+                      translate="no"
+                    >
+                      {formatPrice(currentPrice)}
+                    </span>
+                    {isFlashSale && (
+                      <span className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] px-2 py-1 rounded shadow-sm font-black uppercase tracking-wider">
+                        Đang Sale 🔥
+                      </span>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <span className="text-xl lg:text-2xl font-black text-rose-500 uppercase tracking-wide italic">
                   Tạm hết hàng
@@ -660,7 +680,7 @@ export default function ProductDetail() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      Số lượng
+                      {isFlashSale ? "SL Mở Bán" : "Số lượng"}
                     </p>
                     <span className="text-[9px] text-[#006c49] font-bold">
                       (Kho: {stockCount})
@@ -681,9 +701,7 @@ export default function ProductDetail() {
                       onClick={() => {
                         if (quantity < stockCount) setQuantity(quantity + 1);
                         else
-                          alert(
-                            `Kho tại khu vực này chỉ còn tối đa ${stockCount} sản phẩm!`,
-                          );
+                          alert(`Kho chỉ còn tối đa ${stockCount} sản phẩm!`);
                       }}
                       disabled={isOutOfStock || quantity >= stockCount}
                       className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"

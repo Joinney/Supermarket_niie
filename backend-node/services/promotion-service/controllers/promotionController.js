@@ -202,7 +202,7 @@ export const getActiveFlashSaleClient = async (req, res) => {
         try {
             // Nếu call thành công thì lấy data
             const productRes = await axios.post(`${PRODUCT_SERVICE_URL}/api/products/internal-variants`, {
-                variantIds: variantIds
+            variantIds: variantIds
             });
             productDetails = productRes.data.data || productRes.data || [];
         } catch (axiosErr) {
@@ -210,7 +210,6 @@ export const getActiveFlashSaleClient = async (req, res) => {
             console.warn(`⚠️ Cảnh báo: Không thể lấy chi tiết sản phẩm từ Product Service (Mã lỗi: ${axiosErr.response?.status}). Sẽ dùng dữ liệu mặc định.`);
         }
 
-        // 4. Ghép nối dữ liệu
         const resultData = promos.map(promo => {
             const itemsInPromo = allItems.filter(i => i.ma_khuyen_mai === promo.ma_khuyen_mai);
             
@@ -223,16 +222,22 @@ export const getActiveFlashSaleClient = async (req, res) => {
                     ma_san_pham: item.ma_san_pham,
                     ten_san_pham: pd.ten_san_pham || "Đang tải tên sản phẩm...",
                     hinh_anh_chinh: pd.hinh_anh_chinh || "",
+                    
+                    // 🌟 ĐƯA GIA_BAN_LE RA NGOÀI CÙNG CẤP VỚI TÊN SẢN PHẨM Ở ĐÂY
+                    gia_ban_le: pd.gia_ban_le || 0,
+
                     chi_tiet_bien_the: [{
                         ma_bien_the: item.ma_bien_the,
                         ten_bien_the: pd.ten_bien_the || "Mặc định",
                         gia_ban: item.gia_khuyen_mai,
                         ton_kho: tonKhoFlashSale > 0 ? tonKhoFlashSale : 0,
-                        sku: pd.sku || ""
+                        sku: pd.sku || "",
+                        tuy_chon: pd.tuy_chon || {}
                     }],
                     thong_tin_sale: {
-                        da_ban: item.da_ban,
+                        gia_khuyen_mai: item.gia_khuyen_mai, 
                         so_luong_gioi_han: item.so_luong_gioi_han,
+                        da_ban: item.da_ban,
                         phan_tram_da_ban: item.so_luong_gioi_han > 0 ? Math.round((item.da_ban / item.so_luong_gioi_han) * 100) : 0
                     }
                 };

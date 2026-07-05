@@ -1,6 +1,6 @@
 import pool from '../configs/database.js';
 import { batchGenerateDescriptions, generateDescriptionFromAI } from '../utils/aiDescriptionGenerator.js'; 
-
+import axios from 'axios';
 // =========================================================================
 // 🛠️ HELPER FUNCTIONS
 // =========================================================================
@@ -37,8 +37,14 @@ export const getInternalVariants = async (req, res) => {
                 bt.ma_san_pham, 
                 bt.ten_bien_the, 
                 bt.sku, 
-                bt.gia_ban_le, 
+                bt.gia_ban_le,
+                bt.so_luong_ton, 
                 bt.trang_thai,
+                sp.ten_san_pham,
+                COALESCE(
+                    (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_bien_the = bt.ma_bien_the AND la_anh_chinh = true AND trang_thai = true LIMIT 1),
+                    (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = bt.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1)
+                ) AS hinh_anh_chinh,
                 COALESCE(
                     (
                         SELECT jsonb_object_agg(dmtt.ten_thuoc_tinh, gttt.gia_tri)
@@ -49,13 +55,15 @@ export const getInternalVariants = async (req, res) => {
                     ), '{}'::jsonb
                 ) AS tuy_chon
             FROM public.bien_the_san_pham bt
+            JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
             WHERE bt.ma_bien_the = ANY($1::text[]) 
               AND bt.trang_thai = true;
         `;
 
         const { rows: variants } = await pool.query(query, [variantIds]);
         
-        res.status(200).json(variants);
+        // 🌟 ĐÃ NÂNG CẤP: Trả về chuẩn cấu trúc { success: true, data: ... }
+        res.status(200).json({ success: true, data: variants });
     } catch (error) {
         console.error('❌ Lỗi API getInternalVariants:', error.message);
         res.status(500).json({ 
@@ -309,36 +317,49 @@ export const getProductById = async (req, res) => {
         if (role === 'client' && bien_the.length > 0) {
             const PROMOTION_SERVICE_URL = process.env.PROMOTION_SERVICE_URL || 'http://localhost:5007';
             
-            // Chạy vòng lặp để kiểm tra giá cho từng biến thể
             const promotionPromises = bien_the.map(async (bt) => {
                 try {
-                    const promoRes = await axios.post(`${PROMOTION_SERVICE_URL}/api/promotions/internal/check-promotion`, {
+                    // ⚠️ QUAN TRỌNG: URL này phải khớp y hệt Route ở Promotion Service
+                    // Nếu bên kia bạn đặt router là /api/promotions thì để nguyên, nếu là /api/promotion thì bỏ chữ 's'
+                    const promoRes = await axios.post(`${PROMOTION_SERVICE_URL}/api/promotions/internal/check-variant-promotion`, {
                         ma_bien_the: bt.ma_bien_the
                     });
                     
                     const promoData = promoRes.data;
+                    
                     if (promoData.success && promoData.is_flash_sale) {
-                        // Nếu có Flash Sale đang diễn ra, cập nhật thông tin biến thể
+                        const saleData = promoData.data;
+
+                        bt.gia_goc = bt.gia_ban_le; 
+                        // Đè trực tiếp giá bán lẻ = giá sale 
+                        bt.gia_ban_le = Number(saleData.gia_khuyen_mai);
+                        bt.gia_khuyen_mai = Number(saleData.gia_khuyen_mai);
                         bt.is_flash_sale = true;
-                        bt.gia_khuyen_mai = Number(promoData.data.gia_khuyen_mai);
                         
-                        // Nếu cần, bạn có thể ghi đè số lượng tồn kho bằng tồn kho Sale:
-                        // bt.so_luong_ton = Number(promoData.data.ton_kho_sale);
+                        // Đè trực tiếp tồn kho = tồn kho của sự kiện Sale
+                        bt.so_luong_ton = Number(saleData.ton_kho_sale);
+                        
+                        // Đóng gói thong_tin_sale y như API danh mục để FE ProductCard dùng chung 1 logic
+                        bt.thong_tin_sale = {
+                            gia_khuyen_mai: Number(saleData.gia_khuyen_mai),
+                            so_luong_gioi_han: Number(saleData.so_luong_gioi_han),
+                            da_ban: Number(saleData.da_ban),
+                            ton_kho_sale: Number(saleData.ton_kho_sale)
+                        };
                     }
                 } catch (err) {
-                    // Nếu lỗi (Promotion Service sập), cứ kệ nó, dùng giá gốc
-                    console.warn(`⚠️ Bỏ qua kiểm tra giá biến thể ${bt.ma_bien_the}:`, err.message);
+                    console.error(`⚠️ Lỗi check giá Sale biến thể ${bt.ma_bien_the}:`, err.response?.data || err.message);
                 }
                 return bt;
             });
 
-            // Chờ tất cả API hoàn thành
+            // Chờ check xong giá của tất cả biến thể
             bien_the = await Promise.all(promotionPromises);
             
-            // Cập nhật lại gia_ban_thap_nhat của sản phẩm chính nếu giá Flash Sale rẻ hơn
+            // Tìm lại giá bán thấp nhất cho tổng sản phẩm
             let lowestPrice = product.gia_ban_thap_nhat;
             bien_the.forEach(bt => {
-                const finalPrice = bt.gia_khuyen_mai || bt.gia_ban_le;
+                const finalPrice = bt.gia_ban_le; 
                 if (finalPrice < lowestPrice || lowestPrice === 0) {
                     lowestPrice = finalPrice;
                 }
@@ -373,6 +394,7 @@ export const getProductById = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API getProductById:", error.message);
         res.status(500).json({ error: "Lỗi hệ thống khi tìm chi tiết sản phẩm.", detail: error.message });
+        console.warn(`⚠️ Lỗi check giá Sale biến thể ${bt.ma_bien_the}:`, err.response?.data || err.message);
     }
 };
 
