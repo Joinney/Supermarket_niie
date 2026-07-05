@@ -15,15 +15,17 @@ dotenv.config();
 
 const app = express();
 
-// === 🛡️ CẤU HÌNH CORS ===
+// === 🛡️ CẤU HÌNH CORS ĐỒNG BỘ MÔI TRƯỜNG ===
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  'http://localhost:5174'
+  'http://localhost:5174',
+  'https://demimart-fe.onrender.com' // 🌟 Cấp quyền cho tên miền Frontend chạy trên Render của bạn
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
+    // Cho phép các request không có origin (như Postman hoặc các service gọi nội bộ qua mạng của Render)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -31,14 +33,17 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // 🌟 Bổ sung PATCH và OPTIONS phòng khi có Preflight Request nâng cao
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// 🚀 PHÒNG THỦ CHẮC CHẮN: Đánh chặn và phản hồi trạng thái 200 OK ngay lập tức cho các request OPTIONS 
+app.options('*', cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// === 📝 CẤU HÌNH SWAGGER ĐỊNH NGHĨA TRỰC TIẾP (FOOLPROOF - 100% THÀNH CÔNG) ===
+// === 📝 CẤU HÌNH SWAGGER ĐỊNH NGHĨA TRỰC TIẾP ===
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -143,7 +148,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, swaggerUiOpti
 // === 🚀 ĐĂNG KÝ CÁC LUỒNG ĐỊNH TUYẾN ===
 app.use('/api/orders', orderRoutes);
 
-// Giao diện trang chủ chào mừng
 app.get('/', (req, res) => {
   res.status(200).send(`
     <div style="text-align: center; margin-top: 50px; font-family: sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px; max-width: 600px; margin-left: auto; margin-right: auto; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);">
@@ -167,7 +171,6 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5005;
 
-// Khởi động kết nối DB trước, sau đó mới lắng nghe HTTP Port
 connectDB().then(() => {
   app.listen(PORT, () => {
     console.log(`\n=========================================`);

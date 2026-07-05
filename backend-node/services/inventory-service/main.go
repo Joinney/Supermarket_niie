@@ -29,11 +29,16 @@ func main() {
 	r.RedirectTrailingSlash = false
 	r.RedirectFixedPath = false
 
-	// Cấu hình CORS tối ưu bảo mật và thông thoáng cho Frontend gọi liên Service
+	// === 🛡️ CẤU HÌNH CORS ĐỒNG BỘ MÔI TRƯỜNG ===
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"}, 
+		// Thêm miền Frontend thực tế chạy trên Render vào danh sách cho phép
+		AllowOrigins: []string{
+			"http://localhost:5173", 
+			"http://localhost:3000",
+			"https://demimart-fe.onrender.com", // 🌟 THÊM MỚI: Cho phép domain Render gọi chéo Service
+		}, 
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -57,7 +62,7 @@ func main() {
 		}
 	}
 
-	// Định tuyến nhóm API V1 chuẩn hóa (Đã loại bỏ mã trùng lặp lồng nhau gây lỗi)
+	// Định tuyến nhóm API V1 chuẩn hóa
 	api := r.Group("/api/v1")
 	{
 		api.GET("/inventory", controllers.GetInventory)
@@ -66,7 +71,7 @@ func main() {
 		
 		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
 		
-		// 🌟 Tuyến endpoint đồng bộ danh sách phiếu nhập kho thực tế cho Frontend
+		// Tuyến endpoint đồng bộ danh sách phiếu nhập kho thực tế cho Frontend
 		api.GET("/inventory-tickets", controllers.GetInventoryTickets)
 		
 		api.GET("/lots", controllers.GetLots)

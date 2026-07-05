@@ -12,25 +12,51 @@ require_relative 'configs/database'
 require_relative 'configs/swagger_config'
 require_relative 'routes/payment_routes'
 
-# Thiết lập Cổng kết nối và Bind IP phục vụ môi trường Docker Container
+# Thiết lập Cổng kết nối và Bind IP phục vụ môi trường Docker / Render
 set :port, ENV['PORT'] || 5004
 set :bind, '0.0.0.0'
-set :protection, :origin_whitelist => ['http://demi_order_service:5005', 'http://localhost:5173', 'http://localhost:5005']
+
+# === 🛡️ CẤU HÌNH CORS VÀ ORIGIN WHITELIST ĐỒNG BỘ MÔI TRƯỜNG ===
+set :protection, :origin_whitelist => [
+  'http://demi_order_service:5005', 
+  'http://localhost:5173', 
+  'http://localhost:5005',
+  'https://demimart-fe.onrender.com' # 🌟 THÊM MỚI: Cấp quyền cho tên miền Frontend chạy trên Render
+]
+
+# Cấu hình CORS xử lý chéo domain trực tiếp tầng HTTP của Sinatra
+configure do
+  enable :cross_origin
+end
+
+before do
+  # Cho phép domain Frontend Render hoặc nội bộ gọi vào phân hệ
+  response.headers['Access-Control-Allow-Origin'] = 'https://demimart-fe.onrender.com'
+  response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+  response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+  response.headers['Access-Control-Allow-Credentials'] = 'true'
+end
+
+# 🚀 ĐÁNH CHẶN PREFLIGHT REQUEST: Trả về trạng thái 200 OK ngay lập tức cho phương thức OPTIONS
+options '*' do
+  response.headers['Access-Control-Allow-Origin'] = 'https://demimart-fe.onrender.com'
+  response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+  response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+  response.headers['Access-Control-Allow-Credentials'] = 'true'
+  halt 200
+end
 
 # ========================================================
 # 🛡️ CẤU HÌNH PHÒNG VỆ VÀ NỚI LỎNG BẢO MẬT TẦNG GỐC APP.RB
 # ========================================================
-# Kiểm tra nếu có PORT (môi trường Render/Docker deploy) hoặc production
 if ENV['PORT'] || ENV['RACK_ENV'] == 'production'
-  # Cho phép bỏ qua hoàn toàn các bộ lọc check host bảo mật của rack-protection
-  set :protection, :except => [:host_authorization, :json_csrf, :remote_token]
+  # Cho phép bỏ qua hoàn toàn các bộ lọc check host bảo mật của rack-protection khi chạy trên cloud
+  set :protection, :except => [:host_authorization, :json_csrf, :remote_token, :http_origin]
 else
-  # 🎯 FIX CHÍ MẠNG: Thêm :host_authorization và :remote_token để thông mạch cuộc gọi nội bộ Docker
   set :protection, :except => [:json_csrf, :host_authorization, :remote_token]
 
   $stdout.sync = true
 
-  # Hiển thị tường minh đường dẫn localhost dễ dàng click trên terminal máy local
   configure do
     puts "\n"
     puts "========================================================"
@@ -42,22 +68,19 @@ else
 end
 
 # ========================================================
-# 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE (SỬA LỖI MAP)
+# 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE
 # ========================================================
-# Sử dụng phương thức Sinatra để bọc class định tuyến an toàn không lo sập app
 use PaymentRoutes
 
 # ========================================================
 # 📜 ROUTE PHỤC VỤ TÀI LIỆU SWAGGER API (/docs)
 # ========================================================
 
-# 1. Trả về cấu trúc JSON đặc tả thiết kế hệ thống API
 get '/swagger.json' do
   content_type :json
   SwaggerConfig.generate_json.to_json
 end
 
-# 2. Render giao diện Swagger UI trực tiếp từ hệ thống CDN 
 get '/docs' do
   content_type :html
   <<-HTML
