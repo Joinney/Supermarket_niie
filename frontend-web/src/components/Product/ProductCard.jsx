@@ -236,8 +236,8 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
           </div>
 
           <p className="text-[13px] text-[#161b22] leading-tight line-clamp-2 h-8 font-bold group-hover:text-[#006c49] transition-colors mt-1">
-            {targetVariantName
-              ? `${p.ten_san_pham} (${targetVariantName})`
+            {targetVariantName && targetVariantName !== "Mặc định"
+              ? targetVariantName
               : p.ten_san_pham}
           </p>
 
