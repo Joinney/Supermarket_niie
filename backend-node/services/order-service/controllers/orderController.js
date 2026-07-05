@@ -109,18 +109,20 @@ const placeOrder = async (req, res) => {
       const vId = String(item.variant_id || item.variantId);
       const pName = item.name || item.product_name || "Sản phẩm Demi Mart";
       
-      // Mặc định lấy sku từ client gửi, nếu không có, tự động dò tìm trong danh sách biến thể từ database vật lý
       let finalSku = item.sku || null;
-      if (!finalSku && databaseVariants.length > 0) {
-        // Tìm sản phẩm khớp theo mã biến thể mặc định hoặc tên sản phẩm để bốc sku/ma_san_pham
+      // 1. Ưu tiên lấy mã sản phẩm từ Frontend gửi lên trước
+      let finalMaSanPham = item.ma_san_pham || item.productId || null; 
+
+      if (databaseVariants.length > 0) {
+        // 2. TÌM KIẾM CHÍNH XÁC: Chỉ match bằng ID biến thể (bỏ match bằng tên để chống lỗi ghi đè)
         const found = databaseVariants.find(p => 
-          String(p.ma_bien_the_mac_dinh) === vId || 
-          String(p.ten_san_pham || "").toLowerCase().trim() === String(pName).toLowerCase().trim()
+          String(p.ma_bien_the) === vId || String(p.ma_bien_the_mac_dinh) === vId
         );
         
         if (found) {
-          // Bốc cấu trúc mã số hoặc dữ liệu thay thế khớp với bảng bien_the_san_pham
-          finalSku = found.sku || found.sku_code || `VN-${String(found.ma_san_pham).replace("MSP", "")}-001`;
+          if (!finalSku) finalSku = found.sku || found.sku_code || `VN-${String(found.ma_san_pham).replace("MSP", "")}-001`;
+          
+          if (!finalMaSanPham) finalMaSanPham = found.ma_san_pham; 
         }
       }
 
@@ -129,10 +131,12 @@ const placeOrder = async (req, res) => {
         quantity: Number(item.quantity || 1),
         price: Number(item.price || 0), 
         product_name: pName,
-        variant_name: item.variantName || item.variant_name || "Mặc định",
+        variant_name: item.variantName || item.variant_name || item.phan_loai || item.variantNameFrontend || "Mặc định",
         image_url: item.image || item.image_url || "",
-        ma_san_pham: item.productId || item.ma_san_pham || null,
-        sku: finalSku // Gán SKU chuẩn hóa đã tìm được vào đây để lưu xuống DB
+        
+        ma_san_pham: finalMaSanPham, 
+        
+        sku: finalSku 
       };
     }).filter(i => i.variant_id && i.quantity > 0);
 
@@ -152,6 +156,25 @@ const placeOrder = async (req, res) => {
         success: false, 
         message: apiError.response?.data?.message || "Sản phẩm trong giỏ hàng đã hết hoặc không đủ số lượng!" 
       });
+    }
+
+    const promotionServiceUrl = process.env.INTERNAL_PROMOTION_URL || 'http://demi_promotion_service:5007'; 
+    
+    try {
+        // Gom danh sách mã biến thể và số lượng để gửi sang Promotion
+        const itemsToPromotion = normalizedItems.map(item => ({
+            ma_bien_the: item.variant_id,
+            so_luong: item.quantity
+        }));
+
+        // Gọi sang API mà chúng ta vừa tạo ở bước trước
+        await axios.post(`${promotionServiceUrl}/api/promotions/internal/update-sold`, {
+            items: itemsToPromotion
+        });
+        console.log("✅ Đã gọi sang Promotion Service đồng bộ số lượng bán thành công!");
+    } catch (promoErr) {
+        // Lỗi này không nên làm hỏng quá trình tạo đơn hàng, chỉ cảnh báo thôi
+        console.warn("⚠️ Cảnh báo: Lỗi khi đồng bộ số lượng đã bán với Promotion Service:", promoErr.message);
     }
 
     // 🚀 BƯỚC C: CHỐT CHI PHÍ GIAO HÀNG

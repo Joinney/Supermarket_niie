@@ -318,7 +318,7 @@ export const getFlashSaleByIdAdmin = async (req, res) => {
 export const checkInternalVariantPromotion = async (req, res) => {
     try {
         const { ma_bien_the } = req.body;
-
+        console.log("🔍 Product Service đang hỏi giá cho biến thể:", ma_bien_the);
         if (!ma_bien_the) {
             return res.status(400).json({ success: false, message: "Thiếu ma_bien_the" });
         }
@@ -361,12 +361,56 @@ export const checkInternalVariantPromotion = async (req, res) => {
                 ten_chuong_trinh: item.ten_chuong_trinh,
                 gia_khuyen_mai: item.gia_khuyen_mai,
                 ton_kho_sale: ton_kho_flash,
-                thoi_gian_ket_thuc: item.thoi_gian_ket_thuc
+                thoi_gian_ket_thuc: item.thoi_gian_ket_thuc,
+                so_luong_gioi_han: item.so_luong_gioi_han,
+                da_ban: item.da_ban
             }
         });
 
     } catch (error) {
         console.error("❌ Lỗi checkInternalVariantPromotion:", error.message);
         res.status(500).json({ success: false, message: "Lỗi hệ thống kiểm tra khuyến mãi nội bộ." });
+    }
+};
+
+// =========================================================================
+// [INTERNAL] 9. API NỘI BỘ CHO ORDER SERVICE CẬP NHẬT SỐ LƯỢNG ĐÃ BÁN (DA_BAN)
+// =========================================================================
+export const updateFlashSaleSoldQuantity = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // Nhận mảng các sản phẩm vừa được thanh toán thành công
+        const { items } = req.body; // Cấu trúc mong đợi: [{ ma_bien_the: "...", so_luong: 2 }]
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: "Danh sách sản phẩm trống." });
+        }
+
+        await client.query('BEGIN');
+
+        for (const item of items) {
+            // Câu lệnh này sẽ tự động tìm chương trình Flash Sale đang chạy chứa biến thể này
+            // và cộng dồn số lượng vừa mua vào cột da_ban
+            const query = `
+                UPDATE public.flash_sale_items fsi
+                SET da_ban = fsi.da_ban + $1
+                FROM public.flash_sales fs
+                WHERE fsi.ma_khuyen_mai = fs.ma_khuyen_mai
+                  AND fsi.ma_bien_the = $2
+                  AND fs.trang_thai = true
+                  AND NOW() >= fs.thoi_gian_bat_dau 
+                  AND NOW() <= fs.thoi_gian_ket_thuc;
+            `;
+            await client.query(query, [item.so_luong, item.ma_bien_the]);
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ success: true, message: "Đã đồng bộ số lượng bán Flash Sale thành công." });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("❌ Lỗi updateFlashSaleSoldQuantity:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi cập nhật số lượng đã bán." });
+    } finally {
+        client.release();
     }
 };

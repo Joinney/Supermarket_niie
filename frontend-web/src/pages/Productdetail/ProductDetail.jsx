@@ -311,13 +311,55 @@ export default function ProductDetail() {
       if (confirmLogin) navigate("/login");
       return;
     }
+
     if (!product || !selectedVariant || isOutOfStock) return;
-    navigate("/checkout", {
-      state: {
-        buyNow: true,
-        product: { ...product, selectedVariant, quantity, currentPrice },
-      },
-    });
+
+    // 1. TẠO TÊN PHÂN LOẠI CHUẨN (Giống hệt handleAddToCart)
+    let cleanEAVArray = [];
+    if (
+      Array.isArray(selectedVariant.thuoc_tinh_hop_nhat) &&
+      selectedVariant.thuoc_tinh_hop_nhat.length > 0
+    ) {
+      cleanEAVArray = selectedVariant.thuoc_tinh_hop_nhat.map((attr) => ({
+        ten_thuoc_tinh: String(attr.ten_thuoc_tinh || "").trim(),
+        gia_tri: String(attr.gia_tri || "").trim(),
+      }));
+    } else if (
+      selectedVariant.thuoc_tinh &&
+      Object.keys(selectedVariant.thuoc_tinh).length > 0
+    ) {
+      cleanEAVArray = Object.entries(selectedVariant.thuoc_tinh).map(
+        ([key, val]) => ({
+          ten_thuoc_tinh: String(key).trim(),
+          gia_tri: String(val).trim(),
+        }),
+      );
+    }
+
+    let targetVariantName =
+      selectedVariant.ten_bien_the || product.ten_san_pham;
+    if (cleanEAVArray.length > 0) {
+      targetVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
+    }
+    const itemToCheckout = {
+      variantId: selectedVariant.ma_bien_the,
+      productId: product.ma_san_pham,
+      name: product.ten_san_pham,
+      variantName: targetVariantName,
+      price: currentPrice,
+      quantity: quantity,
+      image:
+        selectedVariant.hinh_anh_url ||
+        selectedVariant.duong_dan_url ||
+        product.hinh_anh_chinh ||
+        "",
+    };
+
+    // 3. LƯU VÀO LOCALSTORAGE BẰNG ĐÚNG KEY "checkoutItems"
+    localStorage.setItem("checkoutItems", JSON.stringify([itemToCheckout]));
+
+    // 4. CHUYỂN HƯỚNG MÀ KHÔNG CẦN TRUYỀN STATE NỮA
+    navigate("/checkout");
   };
 
   const handleAddToCart = (e) => {
@@ -362,7 +404,7 @@ export default function ProductDetail() {
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
       name: product.ten_san_pham,
-      price: currentPrice, // ĐÃ ĐƯỢC ÉP LẤY GIÁ 25K CHUẨN XÁC
+      price: currentPrice,
       quantity: quantity,
       stock: stockCount,
       image:
@@ -376,6 +418,8 @@ export default function ProductDetail() {
       variantName: targetVariantName,
       ten_don_vi: selectedVariant.ten_don_vi || product.ten_don_vi || "Gói",
       thuoc_tinh_hop_nhat: cleanEAVArray,
+      isFlashSale: !!selectedVariant.is_flash_sale,
+      originalPrice: selectedVariant.gia_goc || selectedVariant.gia_ban_le,
     };
 
     addToCart(itemToCart);

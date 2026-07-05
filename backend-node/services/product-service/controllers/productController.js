@@ -324,14 +324,13 @@ export const getProductById = async (req, res) => {
                     const promoRes = await axios.post(`${PROMOTION_SERVICE_URL}/api/promotions/internal/check-variant-promotion`, {
                         ma_bien_the: bt.ma_bien_the
                     });
-                    
+                    console.log("✅ Dữ liệu giá nhận từ Promotion Service:", promoRes.data);
                     const promoData = promoRes.data;
                     
                     if (promoData.success && promoData.is_flash_sale) {
                         const saleData = promoData.data;
 
                         bt.gia_goc = bt.gia_ban_le; 
-                        // Đè trực tiếp giá bán lẻ = giá sale 
                         bt.gia_ban_le = Number(saleData.gia_khuyen_mai);
                         bt.gia_khuyen_mai = Number(saleData.gia_khuyen_mai);
                         bt.is_flash_sale = true;
@@ -394,7 +393,6 @@ export const getProductById = async (req, res) => {
     } catch (error) {
         console.error("❌ Lỗi API getProductById:", error.message);
         res.status(500).json({ error: "Lỗi hệ thống khi tìm chi tiết sản phẩm.", detail: error.message });
-        console.warn(`⚠️ Lỗi check giá Sale biến thể ${bt.ma_bien_the}:`, err.response?.data || err.message);
     }
 };
 

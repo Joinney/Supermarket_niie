@@ -7,7 +7,8 @@ import {
     getActiveFlashSaleClient,
     getAllFlashSalesAdmin,
     getFlashSaleByIdAdmin,
-    checkInternalVariantPromotion 
+    checkInternalVariantPromotion,
+    updateFlashSaleSoldQuantity 
 } from '../controllers/promotionController.js';
 
 const router = express.Router();
@@ -41,4 +42,6 @@ router.get('/admin/flash-sale/:ma_khuyen_mai', getFlashSaleByIdAdmin);
 // 7. Kiểm tra xem một biến thể có đang trong chương trình khuyến mãi hay không
 router.post('/internal/check-variant-promotion', checkInternalVariantPromotion);
 
+// 8. Cập nhật số lượng đã bán khi có đơn hàng thành công 
+router.post('/internal/update-sold', updateFlashSaleSoldQuantity);
 export default router;
