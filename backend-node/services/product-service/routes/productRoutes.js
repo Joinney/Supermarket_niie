@@ -34,7 +34,8 @@ import {
     updateInternalStock,
     deductStockInternal,
     generateSafeSku,
-    restoreStockInternal
+    restoreStockInternal,
+    getProductStatistics
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -103,5 +104,8 @@ router.post('/:id/media', addProductMedia);
 // xử lý tồn kho nội bộ (internal stock) cho từng biến thể sản phẩm
 router.post('/internal/deduct-stock', deductStockInternal);
 router.post('/internal/restore-stock', restoreStockInternal);
+
+// dashbaord thống kê sản phẩm
+router.get('/admin/statistics', getProductStatistics);
 
 export default router;

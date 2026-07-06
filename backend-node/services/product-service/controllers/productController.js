@@ -2153,3 +2153,97 @@ export const restoreStockInternal = async (req, res) => {
         if (client) client.release();
     }
 };
+
+// ========================================================
+// 📊 API THỐNG KÊ SẢN PHẨM CHO ADMIN DASHBOARD
+// ========================================================
+export const getProductStatistics = async (req, res) => {
+    try {
+        // 1. Tổng sản phẩm gốc
+        const totalProdQuery = `
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN trang_thai = true THEN 1 ELSE 0 END) as active_total
+            FROM public.san_pham
+        `;
+        
+        // 2. Thống kê Biến thể (SKU): Tổng số, Hết hàng, Giá trị tồn kho
+        const skuStatsQuery = `
+    SELECT 
+        COUNT(bt.ma_bien_the) as total_sku,
+        SUM(CASE WHEN sp.trang_thai = true THEN 1 ELSE 0 END) as active_sku,
+        SUM(CASE WHEN bt.so_luong_ton <= 0 THEN 1 ELSE 0 END) as out_of_stock,
+        SUM(CASE WHEN bt.so_luong_ton > 0 THEN 1 ELSE 0 END) as in_stock,
+        SUM(bt.so_luong_ton * bt.gia_ban_le) as total_inventory_value,
+        SUM(bt.so_luong_ton) as total_stock
+    FROM public.bien_the_san_pham bt
+    JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
+`;
+
+        // 3. Top 4 Sản phẩm có nhiều biến thể (SKU) nhất
+        const topProdSkuQuery = `
+            SELECT sp.ma_san_pham, sp.ten_san_pham, COUNT(bt.ma_bien_the) as sku_count
+            FROM public.san_pham sp
+            JOIN public.bien_the_san_pham bt ON sp.ma_san_pham = bt.ma_san_pham
+            GROUP BY sp.ma_san_pham, sp.ten_san_pham
+            ORDER BY sku_count DESC
+            LIMIT 50 
+        `;
+
+        // 4. Top 5 SKU có giá trị tồn kho cao nhất
+        const topValueSkuQuery = `
+            SELECT 
+                bt.ma_bien_the as id,
+                sp.ten_san_pham || ' - ' || COALESCE(bt.ten_bien_the, 'Mặc định') as name,
+                COALESCE(bt.sku, 'Chưa cập nhật') as sku,
+                bt.so_luong_ton as stock,
+                bt.gia_ban_le as price,
+                (bt.so_luong_ton * bt.gia_ban_le) as total_value
+            FROM public.bien_the_san_pham bt
+            JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
+            WHERE bt.so_luong_ton > 0
+            ORDER BY total_value DESC
+            LIMIT 50
+        `;
+
+        const executeSql = async (sql) => {
+            const res = await pool.query(sql);
+            return res.rows ? res.rows : res;
+        };
+
+        const [prodRes, skuRes, topProdRes, topValueRes] = await Promise.all([
+            executeSql(totalProdQuery),
+            executeSql(skuStatsQuery),
+            executeSql(topProdSkuQuery),
+            executeSql(topValueSkuQuery)
+        ]);
+
+        const totalProducts = Number(prodRes[0]?.total || 0);
+        const activeProducts = Number(prodRes[0]?.active_total || 0);
+        const skuStats = skuRes[0] || {};
+        const topProducts = topProdRes;
+        const topSkus = topValueRes;
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                overview: {
+                    total_products: totalProducts,
+                    active_products: activeProducts,
+                    total_inventory_value: Number(skuStats.total_inventory_value || 0),
+                    total_stock_count: Number(skuStats.total_stock || 0),
+                    out_of_stock_skus: Number(skuStats.out_of_stock || 0),
+                    in_stock_skus: Number(skuStats.in_stock || 0), 
+                    total_skus: Number(skuStats.total_sku || 0),
+                    active_skus: Number(skuStats.active_sku || 0)
+                },
+                top_products_sku: topProducts,
+                top_inventory_skus: topSkus
+            }
+        });
+
+    } catch (error) {
+        console.error("🔥 Lỗi lấy thống kê sản phẩm:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi trích xuất dữ liệu sản phẩm!" });
+    }
+};

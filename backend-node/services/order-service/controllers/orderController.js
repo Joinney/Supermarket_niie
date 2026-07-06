@@ -357,29 +357,61 @@ const getAllOrdersAdmin = async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
+    
+    // 🌟 Nhận thêm 2 tham số lọc từ Frontend
+    const status = req.query.status || '';
+    const payment = req.query.payment || '';
 
     let whereClause = `WHERE 1=1`;
     const queryParams = [];
     let pIdx = 1;
 
+    // Lọc theo từ khóa tìm kiếm
     if (search.trim() !== '') {
-      whereClause += ` AND (ma_don_hang ILIKE $${pIdx} OR phuong_thuc_thanh_toan ILIKE $${pIdx})`;
+      whereClause += ` AND (o.ma_don_hang ILIKE $${pIdx} OR o.phuong_thuc_thanh_toan ILIKE $${pIdx})`;
       queryParams.push(`%${search.trim()}%`);
       pIdx++;
     }
 
-    const countSql = `SELECT COUNT(*) as total FROM public.orders ${whereClause}`;
+    // 🌟 Lọc theo trạng thái đơn hàng
+    if (status.trim() !== '') {
+      whereClause += ` AND o.trang_thai_don_hang ILIKE $${pIdx}`;
+      queryParams.push(status.trim());
+      pIdx++;
+    }
+
+    // 🌟 Lọc theo trạng thái thanh toán
+    if (payment.trim() !== '') {
+      whereClause += ` AND o.trang_thai_thanh_toan ILIKE $${pIdx}`;
+      queryParams.push(payment.trim());
+      pIdx++;
+    }
+
+    const countSql = `SELECT COUNT(*) as total FROM public.orders o ${whereClause}`;
     const countRes = db.query ? await db.query(countSql, queryParams) : await db.execute(countSql, queryParams);
     const totalItems = parseInt((countRes.rows ? countRes.rows[0] : countRes[0])?.total || 0);
     const totalPages = Math.ceil(totalItems / limit);
 
     const dataSql = `
       SELECT 
-        id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, 
-        trang_thai_don_hang, tong_thanh_toan, ngay_tao
-      FROM public.orders
+        o.id, o.ma_don_hang, o.phuong_thuc_thanh_toan, o.trang_thai_thanh_toan, 
+        o.trang_thai_don_hang, o.tong_thanh_toan, o.ngay_tao,
+        (
+            SELECT json_agg(
+                json_build_object(
+                    'product_name', oi.product_name,
+                    'variant_name', oi.variant_name,
+                    'quantity', oi.quantity,
+                    'price', oi.price,
+                    'image_url', oi.image_url
+                )
+            )
+            FROM public.order_items oi 
+            WHERE oi.order_id = o.id
+        ) AS danh_sach_san_pham
+      FROM public.orders o
       ${whereClause}
-      ORDER BY ngay_tao DESC
+      ORDER BY o.ngay_tao DESC
       LIMIT $${pIdx} OFFSET $${pIdx + 1};
     `;
 
@@ -387,14 +419,7 @@ const getAllOrdersAdmin = async (req, res) => {
     const dataRes = db.query ? await db.query(dataSql, dataParams) : await db.execute(dataSql, dataParams);
     const orders = dataRes.rows ? dataRes.rows : dataRes;
 
-    return res.status(200).json({
-      success: true,
-      orders,
-      totalPages,
-      currentPage: page,
-      totalItems
-    });
-
+    return res.status(200).json({ success: true, orders, totalPages, currentPage: page, totalItems });
   } catch (err) {
     console.error("🔥 Lỗi API getAllOrdersAdmin:", err.message);
     return res.status(500).json({ success: false, message: "Lỗi máy chủ khi lấy danh sách đơn hàng." });
