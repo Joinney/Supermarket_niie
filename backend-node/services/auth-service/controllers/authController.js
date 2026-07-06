@@ -454,3 +454,127 @@ export const updateUserDetail = async (req, res) => {
         res.status(500).json({ success: false, error: "Lỗi hệ thống khi cập nhật CSDL." });
     }
 };
+
+// ========================================================
+// 📊 API 9: THỐNG KÊ KHÁCH HÀNG CHO ADMIN DASHBOARD
+// ========================================================
+export const getCustomerStatistics = async (req, res) => {
+    try {
+        // --- 1. Lấy dữ liệu tổng quan từ demi_auth_db ---
+        const authStatsQuery = `
+            SELECT 
+                COUNT(*) as total_customers,
+                SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END) as active_customers,
+                SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END) as new_customers_7d
+            FROM public.users 
+            WHERE LOWER(role) = 'buyer'
+        `;
+        const authResult = await pool.query(authStatsQuery);
+        const authStats = authResult.rows[0];
+
+        let returnRate = "0.0";
+        let topCustomers = [];
+
+        // --- 2. Lấy dữ liệu hành vi mua sắm từ demi_order_db ---
+        try {
+            // A. Tính tỷ lệ quay lại (Khách có >= 2 đơn hàng / Tổng khách có đơn hàng trong 30 ngày)
+            const retentionQuery = `
+                WITH CustomerOrders AS (
+                    SELECT user_id, COUNT(*) as order_count
+                    FROM public.orders
+                    WHERE ngay_tao >= NOW() - INTERVAL '30 days' AND user_id IS NOT NULL
+                    GROUP BY user_id
+                )
+                SELECT 
+                    COUNT(*) as total_buying_customers,
+                    SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) as returning_customers
+                FROM CustomerOrders
+            `;
+            const retentionResult = await orderPool.query(retentionQuery);
+            const rData = retentionResult.rows[0];
+            
+            if (rData && parseInt(rData.total_buying_customers) > 0) {
+                returnRate = ((parseInt(rData.returning_customers) / parseInt(rData.total_buying_customers)) * 100).toFixed(1);
+            }
+
+            // B. Lấy TOP 5 Khách hàng chi tiêu cao nhất
+            // Chỉ tính những đơn Đã thanh toán (Online) hoặc Đã giao hàng (COD)
+            const topSpendersQuery = `
+                SELECT 
+                    user_id,
+                    COUNT(ma_don_hang) as total_orders,
+                    SUM(tong_thanh_toan) as total_spent
+                FROM public.orders
+                WHERE user_id IS NOT NULL 
+                  AND (
+                      LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'đã thanh toán', 'success') 
+                      OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao')
+                  )
+                GROUP BY user_id
+                ORDER BY total_spent DESC
+                LIMIT 5
+            `;
+            const topSpendersResult = await orderPool.query(topSpendersQuery);
+            const topSpenderData = topSpendersResult.rows;
+
+            if (topSpenderData.length > 0) {
+                // Trích xuất mảng user_id để query tên bên bảng users
+                const userIds = topSpenderData.map(u => u.user_id);
+                
+                // Móc tên từ bảng users (demi_auth_db)
+                const userNameQuery = `SELECT user_id, full_name, username FROM public.users WHERE user_id = ANY($1)`;
+                const userNameResult = await pool.query(userNameQuery, [userIds]);
+                const userMap = {};
+                userNameResult.rows.forEach(u => {
+                    userMap[u.user_id] = u.full_name || u.username || "Khách hàng Demi";
+                });
+
+                // Gắn tên vào dữ liệu xếp hạng
+                topCustomers = topSpenderData.map((spender, index) => {
+                    const spentAmount = Number(spender.total_spent);
+                    // Phân hạng vui vui cho đẹp giao diện
+                    let rankBadge = "BẠC";
+                    if (spentAmount >= 10000000) rankBadge = "KIM CƯƠNG";
+                    else if (spentAmount >= 5000000) rankBadge = "VÀNG";
+
+                    return {
+                        id: spender.user_id,
+                        rank: `#${index + 1}`,
+                        name: userMap[spender.user_id] || "Tài khoản bị xóa",
+                        orders: `${spender.total_orders} đơn`,
+                        spent: spentAmount,
+                        badge: rankBadge
+                    };
+                });
+            }
+        } catch (orderErr) {
+            console.error("⚠️ Lỗi truy xuất orderPool khi thống kê khách hàng:", orderErr.message);
+        }
+
+        // --- 3. Đánh giá (Tạm thời Mock vì chưa có module Rating) ---
+        const reviewStats = {
+            rating: "4.8",
+            positive_percent: "92%"
+        };
+
+        // --- 4. Trả kết quả ---
+        return res.status(200).json({
+            success: true,
+            data: {
+                overview: {
+                    total_customers: parseInt(authStats.total_customers || 0),
+                    active_customers: parseInt(authStats.active_customers || 0),
+                    new_customers_7d: parseInt(authStats.new_customers_7d || 0),
+                    retention_rate: returnRate,
+                    review_rating: reviewStats.rating,
+                    review_positive_percent: reviewStats.positive_percent
+                },
+                top_customers: topCustomers
+            }
+        });
+
+    } catch (err) {
+        console.error("🔥 Lỗi API getCustomerStatistics:", err.message);
+        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê khách hàng." });
+    }
+};

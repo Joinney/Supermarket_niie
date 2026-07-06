@@ -285,67 +285,75 @@ const updateInternalOrderStatus = async (req, res) => {
 // 📊 CONTROLLER 4: THỐNG KÊ ĐƠN HÀNG CHO ADMIN DASHBOARD
 // ========================================================
 const getOrderStatistics = async (req, res) => {
-  try {
-    if (!req.user || !['Admin', 'Manager', 'Staff'].includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: "Bạn không có quyền truy cập dữ liệu thống kê!" });
+    try {
+        // 1. Thống kê các con số tổng quan 
+        // 🌟 NÂNG CẤP: Dùng COALESCE để bắt lỗi NULL và TRIM để xóa khoảng trắng thừa
+        const statsQuery = `
+            SELECT 
+                COUNT(*) as total_orders,
+                
+                SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') THEN 1 ELSE 0 END) as delivered_orders,
+                
+                -- Đơn chờ xử lý: Bắt cả những đơn có trạng thái 'pending', 'chờ xử lý' hoặc mới tạo bị rỗng (NULL)
+                SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('pending', 'cho_xu_ly', 'chờ xử lý', 'dang_xu_ly', '') THEN 1 ELSE 0 END) as pending_orders,
+                
+                SUM(CASE WHEN DATE(ngay_tao) = CURRENT_DATE THEN 1 ELSE 0 END) as today_orders,
+                
+                -- Doanh thu: Cộng tiền khi ĐÃ THANH TOÁN (Online) HOẶC ĐÃ GIAO HÀNG THÀNH CÔNG (COD)
+                SUM(CASE 
+                    WHEN LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'đã thanh toán', 'success') 
+                    OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') 
+                    THEN CAST(tong_thanh_toan AS numeric) 
+                    ELSE 0 
+                END) as total_revenue
+            FROM public.orders
+        `;
+        const statsRes = db.query ? await db.query(statsQuery) : await db.execute(statsQuery);
+        const stats = statsRes.rows ? statsRes.rows[0] : statsRes[0];
+
+        // 2. Lấy danh sách 5 đơn hàng mới nhất
+        const recentOrdersQuery = `
+            SELECT ma_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, ngay_tao
+            FROM public.orders
+            ORDER BY ngay_tao DESC
+            LIMIT 5
+        `;
+        const recentRes = db.query ? await db.query(recentOrdersQuery) : await db.execute(recentOrdersQuery);
+        const recentOrders = recentRes.rows ? recentRes.rows : recentRes;
+
+        // Tính toán Giá trị trung bình
+        const totalOrdersCount = Number(stats.total_orders || 0);
+        const totalRevenueAmount = Number(stats.total_revenue || 0);
+        const averageOrderValue = totalOrdersCount > 0 ? (totalRevenueAmount / totalOrdersCount) : 0;
+
+        // 🌟 Chuẩn hóa lại mảng danh sách cho Frontend hiển thị
+        const formattedRecentOrders = recentOrders.map(item => ({
+            id: item.ma_don_hang || "N/A",
+            customer: "Khách hàng Demi", 
+            date: new Date(item.ngay_tao).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            total: Number(item.tong_thanh_toan),
+            status: item.trang_thai_don_hang || "Chờ xử lý"
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                overview: {
+                    total_orders: totalOrdersCount,
+                    delivered_orders: Number(stats.delivered_orders || 0),
+                    pending_orders: Number(stats.pending_orders || 0),
+                    today_orders: Number(stats.today_orders || 0),
+                    total_revenue: totalRevenueAmount,
+                    avg_order_value: Math.round(averageOrderValue)
+                },
+                recent_orders: formattedRecentOrders
+            }
+        });
+
+    } catch (err) {
+        console.error("🔥 Lỗi API getOrderStatistics:", err.message);
+        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê đơn hàng." });
     }
-
-    const queryTotal = `SELECT COUNT(*) as total FROM public.orders`;
-    const queryDelivered = `SELECT COUNT(*) as delivered FROM public.orders WHERE trang_thai_don_hang = 'Đã giao' OR trang_thai_thanh_toan = 'COMPLETED'`;
-    const queryPending = `SELECT COUNT(*) as pending FROM public.orders WHERE trang_thai_don_hang = 'Chờ xử lý' OR trang_thai_don_hang IS NULL`;
-    const queryToday = `SELECT COUNT(*) as today FROM public.orders WHERE ngay_tao >= CURRENT_DATE`;
-    const queryRevenue = `SELECT SUM(tong_thanh_toan) as revenue FROM public.orders WHERE trang_thai_thanh_toan = 'COMPLETED' OR trang_thai_don_hang = 'Đã giao'`;
-    const queryAvg = `SELECT AVG(tong_thanh_toan) as avg_val FROM public.orders WHERE tong_thanh_toan > 0`;
-    
-    const queryRecent = `
-      SELECT ma_don_hang, tong_thanh_toan, COALESCE(trang_thai_don_hang, 'Chờ xử lý') as status, TO_CHAR(ngay_tao, 'DD/MM/YYYY') as date
-      FROM public.orders 
-      ORDER BY ngay_tao DESC 
-      LIMIT 10
-    `;
-
-    const executeSql = async (sql) => {
-      const res = db.query ? await db.query(sql) : await db.execute(sql);
-      return res.rows ? res.rows : res;
-    };
-
-    const [totRes, delRes, penRes, todRes, revRes, avgRes, recRes] = await Promise.all([
-      executeSql(queryTotal), executeSql(queryDelivered), executeSql(queryPending),
-      executeSql(queryToday), executeSql(queryRevenue), executeSql(queryAvg), executeSql(queryRecent)
-    ]);
-
-    const totalOrders = Number(totRes[0]?.total || 0);
-    const deliveredOrders = Number(delRes[0]?.delivered || 0);
-    const pendingOrders = Number(penRes[0]?.pending || 0);
-    const todayOrders = Number(todRes[0]?.today || 0);
-    const totalRevenue = Number(revRes[0]?.revenue || 0);
-    const avgOrderValue = Number(avgRes[0]?.avg_val || 0);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        overview: {
-          total_orders: totalOrders,
-          delivered_orders: deliveredOrders,
-          pending_orders: pendingOrders,
-          today_orders: todayOrders,
-          total_revenue: totalRevenue,
-          avg_order_value: avgOrderValue
-        },
-        recent_orders: recRes.map(item => ({
-          id: item.ma_don_hang || "DH-N/A",
-          customer: "Khách hàng Demi", 
-          date: item.date,
-          total: Number(item.tong_thanh_toan).toLocaleString('vi-VN') + ' đ',
-          status: item.status
-        }))
-      }
-    });
-
-  } catch (err) {
-    console.error("🔥 [LỖI TRÍCH XUẤT THỐNG KÊ]:", err.message);
-    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi trích xuất số liệu thống kê!" });
-  }
 };
 
 // ========================================================
