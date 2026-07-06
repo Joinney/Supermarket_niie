@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import axios from "axios"; // 🌟 ĐÃ SỬA: Thay thế "axios-native-axios" bằng "axios" chuẩn
+import axios from "axios";
+// 🌟 THÊM: Import các icon vẽ (SVG) từ lucide-react
+import { 
+  BarChart3, 
+  Clock, 
+  DollarSign, 
+  TrendingUp, 
+  RefreshCw, 
+  Layers 
+} from "lucide-react";
 
 export default function ThongKeDonHang() {
   const [stats, setStats] = useState({
@@ -22,9 +31,8 @@ export default function ThongKeDonHang() {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        setError(""); // Reset lỗi trước khi gọi API
+        setError(""); 
         const token = localStorage.getItem("adminToken");
-        // Gọi vào cổng 5003 (Order Service)
         const apiUrl = import.meta.env.VITE_API_ORDER_URL || "http://localhost:5003";
         
         const response = await axios.get(`${apiUrl}/api/orders/admin/statistics`, {
@@ -45,7 +53,6 @@ export default function ThongKeDonHang() {
     fetchStats();
   }, []);
 
-  // Hàm format tiền tỷ/triệu thu gọn cho Dashboard
   const formatCompactCurrency = (amount) => {
     if (!amount || isNaN(amount)) return "0 Đ";
     if (amount >= 1e9) return (amount / 1e9).toFixed(2) + "B Đ";
@@ -54,13 +61,12 @@ export default function ThongKeDonHang() {
     return amount.toLocaleString("vi-VN") + " Đ";
   };
 
-  // Hàm format tiền đầy đủ cho bảng danh sách đơn hàng
   const formatFullCurrency = (amount) => {
     if (!amount || isNaN(amount)) return "0 Đ";
     return amount.toLocaleString("vi-VN") + " Đ";
   };
 
-  // 1. Mảng cấu hình 4 thẻ thông số gán dữ liệu động từ State
+  // 🌟 CẬP NHẬT: Gán trực tiếp component Icon vẽ vào cấu hình mảng thẻ
   const orderCards = [
     { 
       id: 1, 
@@ -68,7 +74,8 @@ export default function ThongKeDonHang() {
       value: stats.overview.total_orders.toLocaleString("vi-VN"), 
       subText: "Đã giao thành công:", 
       subValue: stats.overview.delivered_orders.toLocaleString("vi-VN"), 
-      bgColor: "bg-blue-50 text-blue-600 border border-blue-100" 
+      bgColor: "bg-blue-50 text-blue-600 border border-blue-100/70",
+      icon: BarChart3 // Icon vẽ tổng quan
     },
     { 
       id: 2, 
@@ -76,7 +83,8 @@ export default function ThongKeDonHang() {
       value: stats.overview.pending_orders.toLocaleString("vi-VN"), 
       subText: "Đơn mới trong ngày:", 
       subValue: stats.overview.today_orders.toLocaleString("vi-VN"), 
-      bgColor: "bg-rose-50 text-rose-600 border border-red-100" 
+      bgColor: "bg-rose-50 text-rose-600 border border-red-100/70",
+      icon: Clock // Icon vẽ đồng hồ chờ
     },
     { 
       id: 3, 
@@ -84,7 +92,8 @@ export default function ThongKeDonHang() {
       value: formatCompactCurrency(stats.overview.total_revenue), 
       subText: "Trạng thái:", 
       subValue: "Đã ghi nhận", 
-      bgColor: "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+      bgColor: "bg-emerald-50 text-emerald-700 border border-emerald-100/70",
+      icon: DollarSign // Icon vẽ doanh thu
     },
     { 
       id: 4, 
@@ -92,13 +101,13 @@ export default function ThongKeDonHang() {
       value: formatCompactCurrency(stats.overview.avg_order_value), 
       subText: "Mục tiêu định biên:", 
       subValue: "200K Đ", 
-      bgColor: "bg-purple-50 text-purple-600 border border-purple-100" 
+      bgColor: "bg-purple-50 text-purple-600 border border-purple-100/70",
+      icon: TrendingUp // Icon vẽ xu hướng phát triển
     },
   ];
 
-  // Hàm sinh màu tem trạng thái động
   const getStatusBadge = (status) => {
-    switch (status?.toUpperCase()) { // Chuyển uppercase để tránh lệch hoa/thường từ DB
+    switch (status?.toUpperCase()) {
       case "ĐÃ GIAO":
       case "COMPLETED":
         return { color: "text-emerald-600 bg-emerald-50 border-emerald-200", text: "Đã giao" };
@@ -135,8 +144,10 @@ export default function ThongKeDonHang() {
             </div>
           </div>
           {loading && (
-            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Đang đồng bộ cơ sở dữ liệu...
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100/50">
+              {/* 🌟 THÊM: Icon quay animation cho trạng thái đang đồng bộ */}
+              <RefreshCw className="w-3 h-3 animate-spin text-emerald-600" />
+              <span>Đang đồng bộ cơ sở dữ liệu...</span>
             </div>
           )}
         </div>
@@ -149,26 +160,34 @@ export default function ThongKeDonHang() {
 
         {/* KHỐI 1: CARDS SỐ LIỆU TỔNG QUAN */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {orderCards.map((card) => (
-            <div key={card.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex items-center justify-between hover:border-slate-200 transition-all">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">{card.title}</span>
-                <span className="text-2xl font-black text-slate-900 block tracking-tight">{card.value}</span>
-                <span className="text-[11px] font-bold text-slate-400 block">
-                  {card.subText} <span className="text-slate-700 font-extrabold">{card.subValue}</span>
-                </span>
+          {orderCards.map((card) => {
+            const CardIcon = card.icon; // Đọc component icon động
+            return (
+              <div key={card.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex items-center justify-between hover:border-slate-200 hover:shadow-md transition-all duration-200">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">{card.title}</span>
+                  <span className="text-2xl font-black text-slate-900 block tracking-tight">{card.value}</span>
+                  <span className="text-[11px] font-bold text-slate-400 block">
+                    {card.subText} <span className="text-slate-700 font-extrabold">{card.subValue}</span>
+                  </span>
+                </div>
+                {/* 🌟 CẬP NHẬT: Render icon vẽ sắc nét với kích thước stroke phù hợp */}
+                <div className={`w-11 h-11 ${card.bgColor} rounded-xl flex items-center justify-center shrink-0 shadow-sm`}>
+                  <CardIcon className="w-5 h-5 stroke-[2.2]" />
+                </div>
               </div>
-              <div className={`w-10 h-10 ${card.bgColor} rounded-xl flex items-center justify-center text-sm shrink-0`}>
-                📊
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* KHỐI 2: BẢNG ĐƠN HÀNG MỚI NHẤT */}
         <div className="bg-white border border-slate-100 rounded-2xl p-5 md:p-6 shadow-sm">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Đơn hàng mới nhất</h3>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              {/* 🌟 THÊM: Icon vẽ tinh tế trước chữ Đơn hàng mới nhất */}
+              <Layers className="w-3.5 h-3.5 text-slate-400 stroke-[2.5]" />
+              Đơn hàng mới nhất
+            </h3>
             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider font-mono">Live DB</span>
           </div>
 
@@ -205,7 +224,6 @@ export default function ThongKeDonHang() {
                           {order.date}
                         </td>
                         <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900 text-sm">
-                          {/* 🌟 ĐÃ CẬP NHẬT: Tự động format tiền tệ đầy đủ nếu `order.total` trả về kiểu số */}
                           {typeof order.total === "number" ? formatFullCurrency(order.total) : order.total}
                         </td>
                         <td className="py-3.5 px-4 text-center pr-6">

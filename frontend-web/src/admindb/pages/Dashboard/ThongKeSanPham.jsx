@@ -1,8 +1,22 @@
 import React from "react";
 import { motion } from "framer-motion";
+// 🌟 THÊM: Import bộ icon vẽ nét đồng bộ chuẩn UI Dashboard
+import {
+  Boxes,
+  Package,
+  AlertTriangle,
+  Layers,
+  Calendar,
+  RefreshCw,
+  Download,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  PieChart
+} from "lucide-react";
 
 export default function Dashboard() {
-  // 1. Dữ liệu cho 4 thẻ Tổng quan trên cùng
+  // 1. Dữ liệu cho 4 thẻ Tổng quan trên cùng sử dụng component Icon vẽ
   const overviewCards = [
     {
       id: 1,
@@ -10,12 +24,8 @@ export default function Dashboard() {
       value: "1,248",
       subText: "Hoạt động:",
       subValue: "1,102",
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.247 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-        </svg>
-      ),
-      bgColor: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+      icon: Boxes, // Icon vẽ nhóm hộp sản phẩm
+      bgColor: "bg-emerald-50 text-emerald-700 border border-emerald-100/70",
     },
     {
       id: 2,
@@ -23,12 +33,8 @@ export default function Dashboard() {
       value: "4.5M",
       subText: "Số lượng:",
       subValue: "15,230",
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-        </svg>
-      ),
-      bgColor: "bg-blue-50 text-blue-600 border border-blue-100",
+      icon: Package, // Icon vẽ kiện hàng bưu kiện
+      bgColor: "bg-blue-50 text-blue-600 border border-blue-100/70",
     },
     {
       id: 3,
@@ -36,12 +42,8 @@ export default function Dashboard() {
       value: "12",
       subText: "Có hàng:",
       subValue: "3,420",
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-        </svg>
-      ),
-      bgColor: "bg-rose-50 text-rose-600 border border-red-100",
+      icon: AlertTriangle, // Icon vẽ cảnh báo tam giác
+      bgColor: "bg-rose-50 text-rose-600 border border-red-100/70",
     },
     {
       id: 4,
@@ -49,12 +51,8 @@ export default function Dashboard() {
       value: "3,432",
       subText: "Hoạt động:",
       subValue: "3,210",
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5" />
-        </svg>
-      ),
-      bgColor: "bg-purple-50 text-purple-600 border border-purple-100",
+      icon: Layers, // Icon vẽ các phân lớp cấu trúc dữ liệu
+      bgColor: "bg-purple-50 text-purple-600 border border-purple-100/70",
     },
   ];
 
@@ -120,7 +118,6 @@ export default function Dashboard() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      /* 🌟 ĐÃ ĐỒNG BỘ: p-1 bung sát biên 2 bên mép màn hình */
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased overflow-y-auto"
     >
       <div className="w-full">
@@ -137,46 +134,58 @@ export default function Dashboard() {
 
           <div className="flex items-center flex-wrap gap-2 self-start sm:self-center">
             {/* Ô chọn ngày */}
-            <div className="flex items-center gap-2 border border-slate-200 bg-white px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 shadow-sm cursor-pointer hover:bg-slate-50">
-              <span>📅 01/10/2023 - 31/10/2023</span>
-              <span className="text-[9px] text-slate-400">▼</span>
+            <div className="flex items-center gap-2 border border-slate-200 bg-white px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 shadow-sm cursor-pointer hover:bg-slate-50 transition">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 stroke-[2.2]" />
+              <span>01/10/2023 - 31/10/2023</span>
+              <span className="text-[8px] text-slate-400">▼</span>
             </div>
+            
             {/* Nút Refresh */}
-            <button className="p-2 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition shadow-sm text-slate-500 cursor-pointer">
-              🔄
+            <button className="p-2 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition shadow-sm text-slate-500 cursor-pointer flex items-center justify-center">
+              <RefreshCw className="w-3.5 h-3.5 stroke-[2.2]" />
             </button>
+            
             {/* Nút Xuất bản ghi */}
             <button className="px-4 py-1.5 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer">
-              📤 Xuất file
+              <Download className="w-3.5 h-3.5 text-slate-400 stroke-[2.2]" />
+              <span>Xuất file</span>
             </button>
           </div>
         </div>
 
-        {/* KHỐI 1: 4 THÈ TỔNG QUAN (OVERVIEW CARDS - FULL WIDTH) */}
+        {/* KHỐI 1: 4 THẺ TỔNG QUAN (OVERVIEW CARDS) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {overviewCards.map((card) => (
-            <div key={card.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">{card.title}</span>
-                <span className="text-2xl font-black text-slate-900 block tracking-tight">{card.value}</span>
-                <span className="text-[11px] font-bold text-slate-400 block">
-                  {card.subText} <span className="text-slate-700 font-extrabold">{card.subValue}</span>
-                </span>
+          {overviewCards.map((card) => {
+            const CardIcon = card.icon;
+            return (
+              <div key={card.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex items-center justify-between hover:border-slate-200 hover:shadow-md transition-all duration-200">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">{card.title}</span>
+                  <span className="text-2xl font-black text-slate-900 block tracking-tight">{card.value}</span>
+                  <span className="text-[11px] font-bold text-slate-400 block">
+                    {card.subText} <span className="text-slate-700 font-extrabold">{card.subValue}</span>
+                  </span>
+                </div>
+                <div className={`w-11 h-11 ${card.bgColor} rounded-xl flex items-center justify-center shrink-0 shadow-sm`}>
+                  <CardIcon className="w-5 h-5 stroke-[2.2]" />
+                </div>
               </div>
-              <div className={`w-10 h-10 ${card.bgColor} rounded-xl flex items-center justify-center shrink-0`}>
-                {card.icon}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* KHỐI 2: HAI BẢNG & SVG CHART (FULL WIDTH) */}
+        {/* KHỐI 2: HAI BẢNG & SVG CHART */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           {/* Cột trái: Top Sản Phẩm Có Nhiều SKU */}
           <div className="bg-white border border-slate-100 rounded-2xl p-5 md:p-6 shadow-sm lg:col-span-2 flex flex-col justify-between">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Top Sản Phẩm Có Nhiều SKU</h3>
-              <button className="text-slate-400 hover:text-slate-600 font-bold text-xs cursor-pointer">•••</button>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-slate-400 stroke-[2.5]" />
+                Top Sản Phẩm Có Nhiều SKU
+              </h3>
+              <button className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-50 transition cursor-pointer flex items-center justify-center">
+                <MoreHorizontal className="w-4 h-4 stroke-[2.5]" />
+              </button>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-slate-50">
@@ -211,8 +220,13 @@ export default function Dashboard() {
           {/* Cột phải: Phân Bố Loại SP */}
           <div className="bg-white border border-slate-100 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col justify-between">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Phân Bố Loại SP</h3>
-              <button className="text-slate-400 hover:text-slate-600 font-bold text-xs cursor-pointer">•••</button>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <PieChart className="w-3.5 h-3.5 text-slate-400 stroke-[2.5]" />
+                Phân Bố Loại SP
+              </h3>
+              <button className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-50 transition cursor-pointer flex items-center justify-center">
+                <MoreHorizontal className="w-4 h-4 stroke-[2.5]" />
+              </button>
             </div>
 
             {/* Mô phỏng biểu đồ tròn SVG Doughnut Chart */}
@@ -247,11 +261,16 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* KHỐI 3: BẢNG LỚN PHÍA DƯỚI (TOP SKU THEO GIÁ TRỊ TỒN KHO - FULL WIDTH) */}
+        {/* KHỐI 3: BẢNG LỚN PHÍA DƯỚI (TOP SKU THEO GIÁ TRỊ TỒN KHO) */}
         <div className="bg-white border border-slate-100 rounded-2xl p-5 md:p-6 shadow-sm">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Top SKU Theo Giá Trị Tồn Kho</h3>
-            <button className="text-slate-400 hover:text-slate-600 font-bold text-xs cursor-pointer">•••</button>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Package className="w-3.5 h-3.5 text-slate-400 stroke-[2.5]" />
+              Top SKU Theo Giá Trị Tồn Kho
+            </h3>
+            <button className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-50 transition cursor-pointer flex items-center justify-center">
+              <MoreHorizontal className="w-4 h-4 stroke-[2.5]" />
+            </button>
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-100">
@@ -305,10 +324,10 @@ export default function Dashboard() {
               </div>
               <div className="flex items-center gap-1">
                 <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer">
-                  ❮
+                  <ChevronLeft className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
                 <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition cursor-pointer">
-                  ❯
+                  <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
               </div>
             </div>
