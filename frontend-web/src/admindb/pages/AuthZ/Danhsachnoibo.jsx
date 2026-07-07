@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+// 🌟 ĐỒNG BỘ: Kế thừa authApi cấu hình tập trung để tự động nhận diện domain động Local/Render
+import { authApi } from "../../../api/axios";
 
 export default function Danhsachnoibo() {
   // Trạng thái ẩn/hiện Modal Thêm tài khoản mới
@@ -20,7 +22,7 @@ export default function Danhsachnoibo() {
     sendEmailNotification: true,
   });
 
-  // Dữ liệu danh sách tài khoản nội bộ gốc từ image_668973.png
+  // Dữ liệu danh sách tài khoản nội bộ gốc
   const [users, setUsers] = useState([
     { name: "Lê Hồng Phong", email: "admin.phong@etechs.vn", role: "ADMIN", roleColor: "bg-red-50 text-red-500 border-red-100", department: "Ban Giám Đốc", status: "Hoạt động", statusColor: "text-emerald-500 bg-emerald-50", lastLogin: "Vừa xong", ip: "IP: 192.168.1.1", avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60" },
     { name: "Trần Đức Huy", email: "huy.tran@etechs.vn", role: "QUẢN LÝ", roleColor: "bg-blue-50 text-blue-600 border-blue-100", department: "Kho & Nông Trại", status: "Hoạt động", statusColor: "text-emerald-500 bg-emerald-50", lastLogin: "2 giờ trước", ip: "Trình duyệt Chrome", avatar: "" },
@@ -68,27 +70,46 @@ export default function Danhsachnoibo() {
     setPermissions(prev => prev.map(item => ({ ...item, view: false, add: false, edit: false, delete: false })));
   };
 
-  // Hàm xử lý lưu thông tin tài khoản mới gửi lên hệ thống
-  const handleCreateAccount = (e) => {
+  // 🚀 TỐI ƯU CHUẨN: Hàm gửi tạo tài khoản nhân viên mới lên Backend qua authApi
+  const handleCreateAccount = async (e) => {
     e.preventDefault();
     if (!formData.fullName || !formData.email) return;
 
-    const newUser = {
-      name: formData.fullName,
-      email: formData.email,
-      role: formData.role.split(" ")[0].toUpperCase(),
-      roleColor: formData.role.includes("ADMIN") ? "bg-red-50 text-red-500 border-red-100" : "bg-slate-50 text-slate-600 border-slate-200",
-      department: formData.department || "Chưa xếp phòng",
-      status: "Hoạt động",
-      statusColor: "text-emerald-500 bg-emerald-50",
-      lastLogin: "Không có dữ liệu",
-      ip: "Tài khoản mới tạo",
-      avatar: "",
-    };
+    try {
+      const payload = {
+        fullName: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role.split(" ")[0].toUpperCase(),
+        department: formData.department || "Chưa xếp phòng"
+      };
 
-    setUsers([newUser, ...users]);
-    setIsCollapsedModal(false); 
-    setFormData({ fullName: "", email: "", password: "1234567890", role: "User (Nhân viên)", department: "", sendEmailNotification: true });
+      // Gọi API tương đối sạch sẽ, an toàn CORS liên dịch vụ
+      const res = await authApi.post('/auth/internal/users', payload);
+
+      if (res.data?.success || res.status === 201) {
+        const newUser = {
+          name: formData.fullName,
+          email: formData.email,
+          role: payload.role,
+          roleColor: formData.role.includes("ADMIN") ? "bg-red-50 text-red-500 border-red-100" : "bg-slate-50 text-slate-600 border-slate-200",
+          department: payload.department,
+          status: "Hoạt động",
+          statusColor: "text-emerald-500 bg-emerald-50",
+          lastLogin: "Vừa tạo xong",
+          ip: "Tài khoản mới tạo",
+          avatar: "",
+        };
+
+        setUsers([newUser, ...users]);
+        setIsCollapsedModal(false); 
+        setFormData({ fullName: "", email: "", password: "1234567890", role: "User (Nhân viên)", department: "", sendEmailNotification: true });
+        alert("Đã khởi tạo nhân sự mới trên máy chủ đám mây thành công!");
+      }
+    } catch (err) {
+      console.error("Lỗi tạo tài khoản nội bộ:", err);
+      alert(err.response?.data?.message || "Lỗi đồng bộ máy chủ khi thêm nhân sự!");
+    }
   };
 
   // Xử lý lưu dữ liệu phân quyền chi tiết
@@ -107,16 +128,16 @@ export default function Danhsachnoibo() {
           <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 mt-1">
             <Link to="/admin/dashboard/thongkesanpham" className="hover:text-slate-600 transition-colors">Dashboard</Link>
             <span>❯</span>
-            <span className="text-[#006c49]">Quản lý tài khoản nội bộ</span>
+            <span className="text-[11px] text-[#006c49] font-bold">Quản lý tài khoản nội bộ</span>
           </div>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-center">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-600 transition shadow-sm">
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-600 transition shadow-sm cursor-pointer">
             Xuất danh sách
           </button>
           <button 
             onClick={() => setIsCollapsedModal(true)}
-            className="flex items-center gap-2 bg-[#006c49] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-[#00563a] active:scale-95 transition-all"
+            className="flex items-center gap-2 bg-[#006c49] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-[#00563a] active:scale-95 transition-all cursor-pointer"
           >
             <span className="text-lg leading-none">+</span> Tạo tài khoản mới
           </button>
@@ -126,28 +147,28 @@ export default function Danhsachnoibo() {
       {/* TOP STATS CARD GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-500 text-lg">👥</div>
+          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-500 text-lg select-none">👥</div>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tổng tài khoản</p>
             <p className="text-2xl font-black text-slate-800 mt-0.5">42</p>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500 text-lg">🛡️</div>
+          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-500 text-lg select-none">🛡️</div>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Admin (Quản trị)</p>
             <p className="text-2xl font-black text-slate-800 mt-0.5">3</p>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 text-lg">💼</div>
+          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 text-lg select-none">💼</div>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quản lý (Manager)</p>
             <p className="text-2xl font-black text-slate-800 mt-0.5">8</p>
           </div>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 text-lg">👤</div>
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500 text-lg select-none">👤</div>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Users (Nhân viên)</p>
             <p className="text-2xl font-black text-slate-800 mt-0.5">31</p>
@@ -178,7 +199,7 @@ export default function Danhsachnoibo() {
             <input
               type="text"
               placeholder="Tìm theo tên, email..."
-              className="w-full pl-10 pr-4 py-2.5 bg-[#f8f9fa] border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-emerald-500/5 transition-all font-medium placeholder-gray-400"
+              className="w-full pl-10 pr-4 py-2.5 bg-[#f8f9fa] border border-transparent rounded-xl text-sm outline-none focus:bg-white focus:border-gray-200 focus:ring-4 focus:ring-emerald-500/5 transition-all font-medium placeholder-gray-400 text-slate-800"
             />
           </div>
         </div>
@@ -208,7 +229,7 @@ export default function Danhsachnoibo() {
                           {user.name.split(" ").pop().substring(0,2).toUpperCase()}
                         </div>
                       )}
-                      <div className="flex flex-col">
+                      <div className="flex flex-col text-left">
                         <span className="font-bold text-slate-800 flex items-center gap-1">
                           {user.name} 
                           {user.role === "ADMIN" && <span className="text-blue-500 text-[10px]">✔</span>}
@@ -230,29 +251,28 @@ export default function Danhsachnoibo() {
                     </span>
                   </td>
                   <td className="py-4 px-4 whitespace-nowrap">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col text-left">
                       <span className="text-slate-700 font-bold">{user.lastLogin}</span>
                       <span className="text-[10px] text-gray-400 font-medium mt-0.5">{user.ip}</span>
                     </div>
                   </td>
                   <td className="py-4 px-6">
                     <div className="flex items-center justify-center gap-3 text-gray-300">
-                      <button className="hover:text-emerald-600 transition">
+                      <button className="hover:text-emerald-600 transition cursor-pointer">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
                       </button>
                       
-                      {/* Click vào Icon Phân quyền chi tiết này để mở Modal mới từ ảnh */}
                       <button 
                         onClick={() => {
                           setSelectedUserPermission(user.name);
                           setIsPermissionModalOpen(true);
                         }} 
-                        className="hover:text-blue-500 transition"
+                        className="hover:text-blue-500 transition cursor-pointer"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" /></svg>
                       </button>
                       
-                      <button className={`${user.status === "Bị Khóa" ? "text-emerald-600 hover:text-emerald-700" : "hover:text-orange-500"} transition`}>
+                      <button className={`${user.status === "Bị Khóa" ? "text-emerald-600 hover:text-emerald-700" : "hover:text-orange-500"} transition cursor-pointer`}>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
                       </button>
                     </div>
@@ -264,11 +284,11 @@ export default function Danhsachnoibo() {
         </div>
 
         {/* FOOTER PAGINATION */}
-        <div className="p-4 sm:p-5 flex justify-between items-center border-t border-gray-50 text-xs font-bold text-gray-400">
+        <div className="p-4 sm:p-5 flex justify-between items-center border-t border-gray-50 text-xs font-bold text-gray-400 select-none">
           <div><span className="text-slate-800">1</span> - 10 of 13 Pages</div>
           <div className="flex items-center gap-1.5">
-            <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 transition">❮</button>
-            <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 transition">❯</button>
+            <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 transition cursor-pointer">❮</button>
+            <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-400 transition cursor-pointer">❯</button>
           </div>
         </div>
       </div>
@@ -278,13 +298,13 @@ export default function Danhsachnoibo() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[999] flex items-center justify-center p-4 select-none animate-fadeIn">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-xl border border-gray-100 overflow-hidden transform transition-all duration-300">
             <div className="p-6 pb-4 flex items-center justify-between border-b border-gray-50">
-              <div>
+              <div className="text-left">
                 <h3 className="text-xl font-bold text-slate-800">Thêm tài khoản mới</h3>
                 <p className="text-xs text-gray-400 font-medium mt-1">Điền thông tin để tạo tài khoản nhân viên mới trên hệ thống.</p>
               </div>
               <button 
                 onClick={() => setIsCollapsedModal(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition cursor-pointer"
               >
                 ✕
               </button>
@@ -298,7 +318,7 @@ export default function Danhsachnoibo() {
                 <div className="flex flex-col text-left">
                   <span className="font-bold text-slate-800">Ảnh đại diện (Avatar)</span>
                   <span className="text-[10px] text-gray-400 font-medium mt-0.5">Định dạng JPG, PNG. Tối đa 2MB.</span>
-                  <button type="button" className="text-xs text-emerald-600 font-bold mt-1 text-left w-max hover:underline">Tải ảnh lên</button>
+                  <button type="button" className="text-xs text-emerald-600 font-bold mt-1 text-left w-max hover:underline cursor-pointer">Tải ảnh lên</button>
                 </div>
               </div>
 
@@ -311,7 +331,7 @@ export default function Danhsachnoibo() {
                   onChange={handleInputChange}
                   placeholder="VD: Nguyễn Văn A" 
                   required
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition text-slate-800 bg-white"
                 />
               </div>
 
@@ -325,7 +345,7 @@ export default function Danhsachnoibo() {
                     onChange={handleInputChange}
                     placeholder="VD: email@etechs.vn" 
                     required
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition text-slate-800 bg-white"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5 relative">
@@ -337,12 +357,12 @@ export default function Danhsachnoibo() {
                       value={formData.password}
                       onChange={handleInputChange}
                       required
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition pr-10"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium transition pr-10 text-slate-800 bg-white"
                     />
                     <button 
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-slate-600 text-xs"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-slate-600 text-xs cursor-pointer"
                     >
                       {showPassword ? "🙈" : "👁"}
                     </button>
@@ -357,7 +377,7 @@ export default function Danhsachnoibo() {
                     name="role"
                     value={formData.role}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer"
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer text-slate-800"
                   >
                     <option>User (Nhân viên)</option>
                     <option>Quản lý (Manager)</option>
@@ -370,7 +390,7 @@ export default function Danhsachnoibo() {
                     name="department"
                     value={formData.department}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer text-gray-500"
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium focus:border-emerald-500 cursor-pointer text-slate-800"
                   >
                     <option value="">Chọn phòng ban...</option>
                     <option value="Ban Giám Đốc">Ban Giám Đốc</option>
@@ -399,13 +419,13 @@ export default function Danhsachnoibo() {
                 <button 
                   type="button"
                   onClick={() => setIsCollapsedModal(false)}
-                  className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-500 transition"
+                  className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-500 transition cursor-pointer bg-white"
                 >
                   Hủy bỏ
                 </button>
                 <button 
                   type="submit"
-                  className="px-5 py-2.5 bg-[#006c49] text-white rounded-xl text-xs font-bold shadow-sm hover:bg-[#00563a] transition flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-[#006c49] text-white rounded-xl text-xs font-bold shadow-sm hover:bg-[#00563a] transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>+</span> Tạo tài khoản
                 </button>
@@ -415,20 +435,20 @@ export default function Danhsachnoibo() {
         </div>
       )}
 
-      {/* ================= MODAL MỚI: PHÂN QUYỀN CHI TIẾT (TỪ ẢNH image_708584.png) ================= */}
+      {/* ================= MODAL: PHÂN QUYỀN CHI TIẾT ================= */}
       {isPermissionModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-[4px] z-[999] flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all max-h-[90vh] flex flex-col">
             
             {/* Modal Header */}
-            <div className="p-6 pb-4 flex items-center justify-between border-b border-gray-100 shrink-0">
+            <div className="p-6 pb-4 flex items-center justify-between border-b border-gray-100 shrink-0 text-left">
               <div>
                 <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">Phân quyền chi tiết</h3>
                 <p className="text-xs text-gray-400 font-medium mt-1">Thiết lập giới hạn truy cập trên từng module cho tài khoản này.</p>
               </div>
               <button 
                 onClick={() => setIsPermissionModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-gray-400 hover:bg-slate-100 hover:text-gray-600 transition"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-gray-400 hover:bg-slate-100 hover:text-gray-600 transition cursor-pointer"
               >
                 ✕
               </button>
@@ -454,14 +474,14 @@ export default function Danhsachnoibo() {
                   <button 
                     type="button" 
                     onClick={handleSelectAllPermissions}
-                    className="px-4 py-2 border border-emerald-200 text-[#006c49] bg-emerald-50/30 rounded-xl text-xs font-bold hover:bg-emerald-50 transition"
+                    className="px-4 py-2 border border-emerald-200 text-[#006c49] bg-emerald-50/30 rounded-xl text-xs font-bold hover:bg-emerald-50 transition cursor-pointer"
                   >
                     Chọn tất cả
                   </button>
                   <button 
                     type="button" 
                     onClick={handleToggleClearAllPermissions}
-                    className="px-4 py-2 border border-gray-200 text-gray-500 bg-white rounded-xl text-xs font-bold hover:bg-gray-50 transition"
+                    className="px-4 py-2 border border-gray-200 text-gray-500 bg-white rounded-xl text-xs font-bold hover:bg-gray-50 transition cursor-pointer"
                   >
                     Bỏ chọn tất cả
                   </button>
@@ -470,7 +490,7 @@ export default function Danhsachnoibo() {
 
               {/* System Note Cảnh báo nghiệp vụ hệ thống */}
               <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 flex gap-3 text-left">
-                <span className="text-amber-600 text-lg leading-none mt-0.5">⚠️</span>
+                <span className="text-amber-600 text-lg leading-none mt-0.5 select-none">⚠️</span>
                 <div className="text-xs leading-relaxed text-amber-800 font-medium">
                   <p className="font-bold text-amber-900 mb-0.5">Lưu ý chuẩn nghiệp vụ hệ thống:</p>
                   Quyền <span className="text-red-600 font-bold">XÓA</span> sẽ loại bỏ vĩnh viễn dữ liệu vật lý (ảnh hưởng đến truy xuất kế toán/tồn kho). Khuyến nghị chỉ cấp cho Admin. Cấp Quản lý/Nhân viên chỉ nên sử dụng tính năng Đổi trạng thái (Khóa/Hủy) trong quá trình vận hành.
@@ -496,7 +516,7 @@ export default function Danhsachnoibo() {
                       <tr key={item.id} className="hover:bg-slate-50/40 transition-colors">
                         {/* Tên Module */}
                         <td className="py-3.5 px-5 flex items-center gap-2.5 text-slate-800 font-semibold">
-                          <span className="text-base text-gray-400">{item.icon}</span>
+                          <span className="text-base text-gray-400 select-none">{item.icon}</span>
                           <span className={item.id === "settings" ? "text-red-500 font-bold" : ""}>{item.name}</span>
                         </td>
                         
@@ -516,7 +536,7 @@ export default function Danhsachnoibo() {
                             type="checkbox"
                             checked={item.add}
                             onChange={() => handlePermissionChange(item.id, "add")}
-                            disabled={item.id === "dashboard"} // Dashboard không có Thêm/Sửa/Xóa giống ảnh mẫu
+                            disabled={item.id === "dashboard"}
                             className="w-4 h-4 rounded text-emerald-600 bg-white border-gray-300 focus:ring-emerald-500 accent-emerald-600 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
                           />
                         </td>
@@ -555,14 +575,14 @@ export default function Danhsachnoibo() {
               <button 
                 type="button" 
                 onClick={() => setIsPermissionModalOpen(false)}
-                className="px-6 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-500 transition shadow-sm"
+                className="px-6 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-500 transition shadow-sm cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button 
                 type="button" 
                 onClick={handleSavePermissions}
-                className="px-6 py-2.5 bg-[#006c49] text-white rounded-xl text-xs font-bold shadow-sm hover:bg-[#00563a] transition flex items-center gap-1.5"
+                className="px-6 py-2.5 bg-[#006c49] text-white rounded-xl text-xs font-bold shadow-sm hover:bg-[#00563a] transition flex items-center gap-1.5 cursor-pointer"
               >
                 <span>✓</span> Lưu phân quyền
               </button>

@@ -34,7 +34,7 @@ import ChatbotAI from "./components/chatbotai/ChatbotAI";
 // --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminProtect from "./admindb/components/AdminProtect";
 import AdminProfile from "./admindb/pages/profile/AdminProfile.jsx";
-import AdminLogin from "./admindb/pages/Auth/AdminLogin";
+import AdminLogin from "./admindb/pages/auth/AdminLogin.jsx";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin from "./admindb/components/Header";
 import Dashboard from "./admindb/pages/dashboard/ThongKeSanPham.jsx";
@@ -43,6 +43,8 @@ import ThongKeKhachHang from "./admindb/pages/dashboard/ThongKeKhachHang.jsx";
 import Danhsachsanpham from "./admindb/pages/products/tatcasanpham/Danhsachsanpham.jsx";
 import Danhsachdonhang from "./admindb/pages/orders/Danhsachdonhang.jsx";
 import Chitietdonhang from "./admindb/pages/orders/OrderDetail.jsx";
+import DanhsachTrackingorder from "./admindb/pages/orders/DanhsachTrackingorder.jsx";
+import Chitiettrackingorder from "./admindb/pages/orders/chitiettrackingorder.jsx";
 import AdminProductDetail from "./admindb/pages/products/tatcasanpham/ProductDetail.jsx";
 import AdminVariantDetail from "./admindb/pages/products/tatcasanpham/bienthesanpham/VariantDetail.jsx";
 import AdminCreateVariant from "./admindb/pages/products/tatcasanpham/bienthesanpham/CreateVariant.jsx";
@@ -68,15 +70,15 @@ import TonKho from "./admindb/pages/warehouse/Tonkho.jsx";
 import ChuyenKho from "./admindb/pages/warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG (ADMIN CONTROL) ---
-import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang";
-import Chitietkhachhang from "./admindb/pages/Customers/Chitietkhachhang";
+import Danhsachkhachhang from "./admindb/pages/customers/Danhsachkhachhang.jsx";
+import Chitietkhachhang from "./admindb/pages/customers/Chitietkhachhang.jsx";
 
 // Nhóm quản lý nội bộ
 import Danhsachnoibo from "./admindb/pages/settings/Quanlynoibo/Danhsachnoibo.jsx";
 import Chitietnoibo from "./admindb/pages/settings/Quanlynoibo/Chitietnoibo.jsx";
 import Danhsachvaitro from "./admindb/pages/settings/Quanlyvaitro/Danhsachvaitro.jsx";
 
-// --- IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI ---
+// --- 🌟 IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI TIẾNG VIỆT CHUẨN CẤU TRÚC 🌟 ---
 import DanhSachGiamGia from "./admindb/pages/Promotions/DanhSachGiamGia.jsx";
 import TaoGiamGia from "./admindb/pages/Promotions/TaoGiamGia.jsx";
 
@@ -872,7 +874,10 @@ const AppRoutes = () => (
         <Route path="edit/:id" element={<NationalForm />} />
       </Route>
 
-      {/* 📄 Bọc Đơn Hàng */}
+{/* 🌟 ĐƯA RA NGOÀI GUARD: Trang chi tiết tracking mock tĩnh nằm độc lập ở đây để không bị đá ra login */}
+      <Route path="Donhang/Chitiettracking/:id" element={<Chitiettrackingorder />} />
+
+      {/* 📄 Bọc Đơn Hàng (Chỉ giữ lại trang danh sách) */}
       <Route
         path="Donhang"
         element={
@@ -881,11 +886,13 @@ const AppRoutes = () => (
           </AdminModuleGuard>
         }
       >
-        <Route index element={<Navigate to="Danhsachdonhang" replace />} />
+        <Route index element={<Navigate to="DanhsachTrackingorder" replace />} />
+        <Route path="DanhsachTrackingorder" element={<DanhsachTrackingorder />} />
+        
+        {/* Giữ nguyên các route đơn hàng cũ của bạn */}
         <Route path="Danhsachdonhang" element={<Danhsachdonhang />} />
         <Route path="Chitietdonhang" element={<Chitietdonhang />} />
       </Route>
-
       {/* 📦 Bọc Kho Hàng */}
       <Route
         path="inventory"

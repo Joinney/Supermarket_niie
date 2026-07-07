@@ -104,14 +104,13 @@ export default function Sidebar() {
     return modulePerm.view === true || modulePerm.view === "true";
   };
 
-  // 🌟 FIX LỖI: Set mặc định state dựa trên URL hiện tại thay vì gắn cứng
+  // Set mặc định state dựa trên URL hiện tại thay vì gắn cứng
   const [activeItem, setActiveItem] = useState(location.pathname);
 
-  // BỔ SUNG STATE khuyenMai VÀO ĐÂY
   const [openDropdowns, setOpenDropdowns] = useState({
     dashboard: location.pathname.includes("/admin/dashboard"),
     sanPham: location.pathname.includes("/admin/products"),
-    khuyenMai: location.pathname.includes("/admin/promotions"), // 🌟 NEW
+    khuyenMai: location.pathname.includes("/admin/promotions"),
     donHang: location.pathname.includes("/admin/Donhang"),
     khoHang: location.pathname.includes("/admin/inventory"),
     khachHang: location.pathname.includes("/admin/customers"),
@@ -132,7 +131,7 @@ export default function Sidebar() {
       sanPham: currentPath.includes("/admin/products") ? true : prev.sanPham,
       khuyenMai: currentPath.includes("/admin/promotions")
         ? true
-        : prev.khuyenMai, // 🌟 NEW
+        : prev.khuyenMai,
       donHang: currentPath.includes("/admin/Donhang") ? true : prev.donHang,
       khoHang: currentPath.includes("/admin/inventory") ? true : prev.khoHang,
       khachHang: currentPath.includes("/admin/customers")
@@ -163,7 +162,7 @@ export default function Sidebar() {
     } else if (menuKey === "khuyenMai" && hasAccess("promotions")) {
       navigate("/admin/promotions/danh-sach");
     } else if (menuKey === "donHang" && hasAccess("orders")) {
-      navigate("/admin/Donhang/Danhsachdonhang");
+      navigate("/admin/Donhang/DanhsachTrackingorder"); // 🌟 Điều hướng mặc định đến trang Tracking
     } else if (menuKey === "khoHang" && hasAccess("inventory")) {
       navigate("/admin/inventory/create-import");
     } else if (menuKey === "khachHang" && hasAccess("customers")) {
@@ -190,7 +189,6 @@ export default function Sidebar() {
     navigate("/admin/login");
   };
 
-  // BỔ SUNG CẬP NHẬT KIỂM TRA ĐƯỜNG DẪN Ở ĐÂY
   const getMainMenuStyle = (path) => {
     if (
       activeItem === path ||
@@ -198,7 +196,7 @@ export default function Sidebar() {
         activeItem.includes("/admin/dashboard")) ||
       (path === "/admin/products" && activeItem.includes("/admin/products")) ||
       (path === "/admin/promotions" &&
-        activeItem.includes("/admin/promotions")) || // 🌟 NEW
+        activeItem.includes("/admin/promotions")) ||
       (path === "/admin/Donhang" && activeItem.includes("/admin/Donhang")) ||
       (path === "/admin/inventory" &&
         activeItem.includes("/admin/inventory")) ||
@@ -598,6 +596,20 @@ export default function Sidebar() {
 
                 {openDropdowns.donHang && !isCollapsed && (
                   <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+                    {/* 🌟 NÚT TRACKING ĐƠN HÀNG MỚI */}
+                    <button
+                      onClick={() =>
+                        handleSubMenuClick("/admin/Donhang/DanhsachTrackingorder")
+                      }
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/Donhang/DanhsachTrackingorder")}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/Donhang/DanhsachTrackingorder") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
+                      <span>Danh sách tracking đơn hàng</span>
+                    </button>
+
+                    {/* DANH SÁCH ĐƠN HÀNG CŨ CỦA BẠN (GIỮ NGUYÊN VẸN) */}
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/Donhang/Danhsachdonhang")
