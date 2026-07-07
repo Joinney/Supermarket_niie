@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 // 🌟 ĐỒNG BỘ: Sử dụng instance productApi từ file config Axios chung của bạn
 import { productApi } from "../../../../api/axios"; // <--- Hãy điều chỉnh đường dẫn thực tế đến file config Axios của bạn
-import { Loader2, ChevronLeft, Save, Box } from "lucide-react";
+import { Loader2, ChevronLeft, Save } from "lucide-react";
 
 export default function UnitForm() {
   const { id } = useParams(); // Lấy ID từ URL
@@ -79,92 +79,106 @@ export default function UnitForm() {
 
   if (loading) {
     return (
-      <div className="p-10 flex justify-center text-[#006c49]">
-        <Loader2 className="animate-spin" size={32} />
+      <div className="p-10 flex justify-center text-emerald-700">
+        <Loader2 className="animate-spin" size={28} />
       </div>
     );
   }
 
   return (
-    <div className="p-6 w-full flex-1 font-sans max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => navigate("/admin/products/units")}
-          className="p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition shadow-sm cursor-pointer"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <div>
-          <h1 className="text-2xl font-black text-slate-800">
-            {isEditMode ? "Cập Nhật Đơn Vị" : "Thêm Đơn Vị Mới"}
-          </h1>
-          <p className="text-xs font-bold text-slate-400 mt-1">
-            Thiết lập quy chuẩn đóng gói cho hệ thống
-          </p>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      /* 🌟 ĐÃ ĐỒNG BỘ: p-1 trải phẳng biên mép 2 bên, nền #fafafa chuẩn hệ thống */
+      className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased"
+    >
+      <div className="w-full max-w-4xl mx-auto">
+        {/* HEADER AREA */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={() => navigate("/admin/products/units")}
+            type="button"
+            className="w-11 h-11 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition shadow-sm shrink-0 cursor-pointer"
+            title="Quay lại"
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+              {isEditMode ? "Cập nhật đơn vị tính" : "Thêm đơn vị tính mới"}
+            </h1>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-1">
+              <span>Tổng hành dinh</span>
+              <span>❯</span>
+              <span>Cấu trúc cấu tạo</span>
+              <span>❯</span>
+              <span className="text-emerald-700 font-bold">Quy chuẩn đóng gói</span>
+            </div>
+          </div>
+        </div>
+
+        {/* MAIN BODY CONTAINER */}
+        <div className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative">
+          <form onSubmit={handleSubmitForm} className="space-y-6">
+            {/* Tên đơn vị */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Tên đơn vị đóng gói <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Ví dụ: Thùng, Lốc, Lon, Chai, Túi, Cái..."
+                value={formData.ten_don_vi}
+                onChange={(e) =>
+                  setFormData({ ...formData, ten_don_vi: e.target.value })
+                }
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
+              />
+            </div>
+
+            {/* Mô tả nghiệp vụ */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Mô tả chi tiết phân vùng sử dụng
+              </label>
+              <textarea
+                rows="4"
+                placeholder="Mô tả mục đích sử dụng thực tế (Ví dụ: Đơn vị cơ sở quy đổi tính toán cho nước giải khát lon)..."
+                value={formData.mo_ta}
+                onChange={(e) =>
+                  setFormData({ ...formData, mo_ta: e.target.value })
+                }
+                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* FOOTER BUTTONS XÁC NHẬN */}
+            <div className="pt-4 mt-6 border-t border-slate-100 flex items-center justify-end gap-3 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => navigate("/admin/products/units")}
+                className="px-5 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                disabled={submitLoading}
+                className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow transition transform active:scale-98 cursor-pointer disabled:opacity-50"
+              >
+                {submitLoading ? (
+                  <Loader2 className="animate-spin" size={14} />
+                ) : (
+                  <Save size={14} />
+                )}
+                {isEditMode ? "Lưu Cập Nhật" : "Hoàn Tất Tạo Mới"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
-
-      {/* Form Card */}
-      <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm p-8">
-        <form onSubmit={handleSubmitForm} className="space-y-6">
-          {/* Tên đơn vị */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-              Tên đơn vị <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="VD: Thùng, Lốc, Lon, Túi..."
-              value={formData.ten_don_vi}
-              onChange={(e) =>
-                setFormData({ ...formData, ten_don_vi: e.target.value })
-              }
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
-            />
-          </div>
-
-          {/* Mô tả */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-slate-500 uppercase mb-2">
-              Mô tả chi tiết
-            </label>
-            <textarea
-              rows="4"
-              placeholder="Mô tả mục đích sử dụng (VD: Đơn vị tính cho bia lon)..."
-              value={formData.mo_ta}
-              onChange={(e) =>
-                setFormData({ ...formData, mo_ta: e.target.value })
-              }
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition resize-none"
-            />
-          </div>
-
-          {/* Buttons */}
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => navigate("/admin/products/units")}
-              className="px-6 py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              disabled={submitLoading}
-              className="px-8 py-3 bg-[#006c49] hover:bg-[#005137] text-white text-sm font-bold rounded-xl shadow-md transition active:scale-95 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {submitLoading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Save size={18} />
-              )}
-              {isEditMode ? "Lưu Cập Nhật" : "Hoàn Tất Tạo Mới"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </motion.div>
   );
 }

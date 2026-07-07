@@ -128,11 +128,12 @@ export default function Units() {
               className="pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-[#006c49] shadow-sm w-56 transition-all"
             />
           </div>
+          {/* 🌟 ĐỒNG BỘ HOÀN TOÀN: Cả màu sắc, hover, padding, gap và kích thước icon theo đúng yêu cầu */}
           <button
             onClick={handleGoToCreate}
-            className="bg-[#006c49] hover:bg-[#005137] text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition active:scale-95 shadow-md"
+            className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer whitespace-nowrap"
           >
-            <Plus size={16} /> Thêm đơn vị
+            <Plus size={14} /> Thêm đơn vị
           </button>
         </div>
       </div>

@@ -116,8 +116,8 @@ export default function Sidebar() {
     khoHang: location.pathname.includes("/admin/inventory"),
     khachHang: location.pathname.includes("/admin/customers"),
     settings:
-      location.pathname.includes("/admin/settings") ||
-      location.pathname.includes("/admin/nations"),
+      location.pathname.includes("/admin/settings/quanlynoibo") ||
+      location.pathname.includes("/admin/settings/quanlyvaitro"),
   });
 
   useEffect(() => {
@@ -139,8 +139,8 @@ export default function Sidebar() {
         ? true
         : prev.khachHang,
       settings:
-        currentPath.includes("/admin/settings") ||
-        currentPath.includes("/admin/nations")
+        currentPath.includes("/admin/settings/quanlynoibo") ||
+        currentPath.includes("/admin/settings/quanlyvaitro")
           ? true
           : prev.settings,
     }));
@@ -175,6 +175,10 @@ export default function Sidebar() {
     }
   };
 
+  const handleSidebarSettingClick = () => {
+    navigate("/admin/settings/generalsettings");
+  };
+
   const handleSubMenuClick = (path) => {
     if (path && path.startsWith("/admin")) {
       navigate(path);
@@ -202,7 +206,9 @@ export default function Sidebar() {
         activeItem.includes("/admin/customers")) ||
       (path === "/admin/settings-auth" &&
         (activeItem.includes("/admin/settings/quanlynoibo") ||
-          activeItem.includes("/admin/settings/quanlyvaitro")))
+          activeItem.includes("/admin/settings/quanlyvaitro"))) ||
+      (path === "/admin/settings/generalsettings" && 
+        activeItem.includes("/admin/settings/generalsettings"))
     ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
     }
@@ -210,7 +216,6 @@ export default function Sidebar() {
   };
 
   const getSubMenuStyle = (path) => {
-    // Check xem URL hiện tại có chứa path của submenu không (giúp bao quát các trang con như detail, edit)
     if (activeItem.includes(path) || activeItem === path) {
       return "bg-[#e6f0ed] font-bold text-[#006c49]";
     }
@@ -483,8 +488,8 @@ export default function Sidebar() {
               </div>
             )}
 
-            {/* 🌟 NEW: MODULE KHUYẾN MÃI (PROMOTIONS) */}
-            {hasAccess("promotions") && ( // Hoặc bạn có thể tự đổi mã id của module nếu cần
+            {/* MODULE KHUYẾN MÃI (PROMOTIONS) */}
+            {hasAccess("promotions") && (
               <div>
                 <button
                   onClick={() =>
@@ -497,7 +502,6 @@ export default function Sidebar() {
                   title={isCollapsed ? "Khuyến Mãi" : ""}
                 >
                   <div className="flex items-center gap-3">
-                    {/* Icon đốm lửa (Flame) */}
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
@@ -782,7 +786,7 @@ export default function Sidebar() {
                 </p>
               )}
               <div className="space-y-1">
-                {/* Thanh tiêu đề cha: Tài khoản & Phân quyền */}
+                {/* Tài khoản & Phân quyền */}
                 {hasAccess("settings") && (
                   <div>
                     <button
@@ -859,15 +863,47 @@ export default function Sidebar() {
               </div>
             </div>
 
+            {/* MỤC CÀI ĐẶT RĂNG CƯA HIỆN ĐẠI & CHUẨN XÁC */}
+            <div>
+              <button
+                onClick={handleSidebarSettingClick}
+                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-3 px-4"} py-3 rounded-xl text-sm font-bold transition duration-150 group ${getMainMenuStyle("/admin/settings/generalsettings")}`}
+                title={isCollapsed ? "Cài đặt" : ""}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.8}
+                  stroke="currentColor"
+                  className={`w-5 h-5 transition-transform duration-500 group-hover:rotate-90 ${activeItem.includes("/admin/settings/generalsettings") ? "text-white" : "text-gray-500 group-hover:text-slate-900"}`}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                {!isCollapsed && (
+                  <span className="animate-fadeIn">Cài đặt</span>
+                )}
+              </button>
+            </div>
+
             {/* Nút Log out */}
-            <div className={`${isCollapsed ? "px-1.5" : "px-3"} mt-4`}>
+            <div>
               <button
                 onClick={handleLogout}
-                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-3 px-3"} py-2.5 rounded-xl text-sm font-bold text-[#f06565] hover:bg-red-50/60 transition-all duration-150 group`}
+                className={`w-full flex items-center ${isCollapsed ? "justify-center" : "gap-3 px-4"} py-2.5 rounded-xl text-sm font-bold text-[#f06565] hover:bg-red-50/60 transition-all duration-150 group`}
                 title={isCollapsed ? "Log out" : ""}
               >
                 <svg
-                  xmlns="http://www.w3.org/2000/xl"
+                  xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
                   strokeWidth={2}

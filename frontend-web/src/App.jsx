@@ -63,7 +63,6 @@ import TaoPhieuNhapForm from "./admindb/pages/warehouse/dansachphieunhap/TaoPhie
 import ChiTietPhieuNhap from "./admindb/pages/warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
 import NhapKhoForm from "./admindb/pages/warehouse/danhsachkho/NhapKhoForm.jsx";
 import TaoKhoForm from "./admindb/pages/warehouse/danhsachkho/TaoKhoForm.jsx";
-// Sửa LoHang -> Lohang và TonKho -> Tonkho
 import LoHang from "./admindb/pages/warehouse/Lohang.jsx";
 import TonKho from "./admindb/pages/warehouse/Tonkho.jsx";
 import ChuyenKho from "./admindb/pages/warehouse/dieuchuyenkho/Chuyenkho.jsx";
@@ -77,12 +76,12 @@ import Danhsachnoibo from "./admindb/pages/settings/Quanlynoibo/Danhsachnoibo.js
 import Chitietnoibo from "./admindb/pages/settings/Quanlynoibo/Chitietnoibo.jsx";
 import Danhsachvaitro from "./admindb/pages/settings/Quanlyvaitro/Danhsachvaitro.jsx";
 
-// --- 🌟 IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI TIẾNG VIỆT CHUẨN CẤU TRÚC 🌟 ---
+// --- IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI ---
 import DanhSachGiamGia from "./admindb/pages/Promotions/DanhSachGiamGia.jsx";
 import TaoGiamGia from "./admindb/pages/Promotions/TaoGiamGia.jsx";
 
 /**
- * 🎯 ĐÃ THAY THẾ: Component Giao Diện Cấu hình chung (General Settings) thực tế theo hình mẫu
+ * 🎯 Component Giao Diện Cấu hình chung (General Settings)
  */
 const SettingsGeneral = () => {
   const [isTaxIncluded, setIsTaxIncluded] = useState(true);
@@ -100,7 +99,7 @@ const SettingsGeneral = () => {
 
       {/* MAIN CONTENT GRID */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 items-start">
-        /* LEFT COLUMN */
+        {/* LEFT COLUMN */}
         <div className="space-y-6 lg:col-span-2">
           {/* SECTION 1: Thông tin cửa hàng & Chi nhánh */}
           <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -238,7 +237,7 @@ const SettingsGeneral = () => {
               </div>
               <div className="md:col-span-2 flex items-center justify-between rounded-xl bg-gray-50/70 p-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-800">
+                  <p className="text-xs font-semibold text-gray-880">
                     Giá đã bao gồm thuế
                   </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
@@ -284,7 +283,7 @@ const SettingsGeneral = () => {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="md:col-span-1 flex items-center justify-between rounded-xl bg-gray-50/70 p-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-880">
+                  <p className="text-xs font-semibold text-gray-800">
                     Xác thực 2 lớp (2FA)
                   </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
@@ -345,7 +344,7 @@ const SettingsGeneral = () => {
               </h2>
             </div>
             <div>
-              /* Webhook URL (Đồng bộ kho hàng) */
+              {/* Webhook URL (Đồng bộ kho hàng) */}
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                 Webhook URL (Đồng bộ kho hàng)
               </label>
@@ -363,12 +362,12 @@ const SettingsGeneral = () => {
                 </button>
               </div>
               <p className="mt-2 text-[11px] text-gray-400">
-                Dùng để đồng bộ tồn kho thời gian thực với các hệ thống bên
-                ngoài.
+                Dùng để đồng bộ tồn kho thời gian thực với các hệ thống bên ngoài.
               </p>
             </div>
           </div>
         </div>
+
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
           {/* SECTION 5: Cài đặt Vùng & Ngôn ngữ */}
@@ -396,7 +395,7 @@ const SettingsGeneral = () => {
 
             <div className="space-y-4">
               <div>
-                /* Tiền tệ mặc định */
+                {/* Tiền tệ mặc định */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Tiền tệ mặc định
                 </label>
@@ -405,7 +404,7 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                /* Múi giờ */
+                {/* Múi giờ */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Múi giờ
                 </label>
@@ -414,7 +413,7 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                /* Ngôn ngữ hệ thống */
+                {/* Ngôn ngữ hệ thống */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Ngôn ngữ hệ thống
                 </label>
@@ -423,7 +422,7 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                /* Định dạng ngày tháng */
+                {/* Định dạng ngày tháng */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Định dạng ngày tháng
                 </label>
@@ -549,7 +548,7 @@ const SettingsGeneral = () => {
 
             <div className="space-y-4">
               <div>
-                /* Logo cửa hàng */
+                {/* Logo cửa hàng */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                   Logo cửa hàng
                 </label>
@@ -579,7 +578,7 @@ const SettingsGeneral = () => {
               </div>
 
               <div>
-                /* Màu sắc thương hiệu */
+                {/* Màu sắc thương hiệu */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                   Màu sắc thương hiệu
                 </label>
@@ -645,13 +644,13 @@ const SettingsGeneral = () => {
 };
 
 /**
- * 💡 ĐOẠN NÀY ĐỂ ĐỌC QUYỀN VÀ KHÓA CHẶT ROUTE GỐC
+ * 💡 Component Guard phân quyền Admin
  */
 const AdminModuleGuard = ({ moduleName, children }) => {
   const userRole = localStorage.getItem("adminRole") || "";
   const adminInfo = JSON.parse(localStorage.getItem("adminInfo") || "{}");
 
-  if (userRole === "Admin") return children;
+  if (userRole === "Admin" || userRole === "ADMIN") return children;
 
   let permissions = [];
   try {
@@ -664,7 +663,7 @@ const AdminModuleGuard = ({ moduleName, children }) => {
 
   const hasAccess = permissions.some(
     (p) =>
-      (p.module === moduleName || p.name === moduleName) &&
+      (p.module === moduleName || p.name === moduleName || String(p.id).toLowerCase() === String(moduleName).toLowerCase()) &&
       (p.view === true || p.view === "true"),
   );
 
@@ -692,9 +691,9 @@ const MainLayout = () => {
           onClose={() => setIsSidebarOpen(false)}
         />
         <div className="flex-1 flex flex-col min-w-0 border-l border-gray-100 bg-white">
-          <main className="flex-1 overflow-x-hidden bg-white">
+          <div className="flex-1 overflow-x-hidden bg-white">
             <Outlet />
-          </main>
+          </div>
           <Footer />
         </div>
       </div>
@@ -787,7 +786,7 @@ const AppRoutes = () => (
       <Route
         path="dashboard"
         element={
-          <AdminModuleGuard moduleName="Bảng điều khiển (Dashboard)">
+          <AdminModuleGuard moduleName="dashboard">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -802,7 +801,7 @@ const AppRoutes = () => (
       <Route
         path="products"
         element={
-          <AdminModuleGuard moduleName="Danh sách sản phẩm">
+          <AdminModuleGuard moduleName="products">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -822,32 +821,32 @@ const AppRoutes = () => (
         />
         <Route path="parent-categories" element={<ParentCategories />} />
         <Route
-          path="/admin/products/parent-categories/create"
+          path="parent-categories/create"
           element={<ParentCategoryForm />}
         />
         <Route
-          path="/admin/products/parent-categories/edit/:id"
+          path="parent-categories/edit/:id"
           element={<ParentCategoryForm />}
         />
         <Route path="child-categories" element={<ChildCategories />} />
         <Route
-          path="/admin/products/child-categories/create"
+          path="child-categories/create"
           element={<ChildCategoryForm />}
         />
         <Route
-          path="/admin/products/child-categories/edit/:id"
+          path="child-categories/edit/:id"
           element={<ChildCategoryForm />}
         />
         <Route path="units" element={<Units />} />
-        <Route path="/admin/products/units/create" element={<UnitForm />} />
-        <Route path="/admin/products/units/edit/:id" element={<UnitForm />} />
+        <Route path="units/create" element={<UnitForm />} />
+        <Route path="units/edit/:id" element={<UnitForm />} />
       </Route>
 
       {/* Quản Lý Khuyến Mãi (Promotion & Flash Sale) */}
       <Route
         path="promotions"
         element={
-          <AdminModuleGuard moduleName="Quản lý khuyến mãi">
+          <AdminModuleGuard moduleName="promotions">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -862,7 +861,7 @@ const AppRoutes = () => (
       <Route
         path="nations"
         element={
-          <AdminModuleGuard moduleName="Quốc Gia">
+          <AdminModuleGuard moduleName="settings">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -877,7 +876,7 @@ const AppRoutes = () => (
       <Route
         path="Donhang"
         element={
-          <AdminModuleGuard moduleName="Đơn Hàng">
+          <AdminModuleGuard moduleName="orders">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -891,7 +890,7 @@ const AppRoutes = () => (
       <Route
         path="inventory"
         element={
-          <AdminModuleGuard moduleName="Kho Hàng">
+          <AdminModuleGuard moduleName="inventory">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -911,7 +910,7 @@ const AppRoutes = () => (
       <Route
         path="customers"
         element={
-          <AdminModuleGuard moduleName="Khách Hàng">
+          <AdminModuleGuard moduleName="customers">
             <Outlet />
           </AdminModuleGuard>
         }
@@ -925,13 +924,13 @@ const AppRoutes = () => (
       <Route
         path="settings"
         element={
-          <AdminModuleGuard moduleName="Tài khoản & Phân quyền">
+          <AdminModuleGuard moduleName="settings">
             <Outlet />
           </AdminModuleGuard>
         }
       >
-        <Route index element={<Navigate to="general" replace />} />
-        <Route path="general" element={<SettingsGeneral />} />
+        <Route index element={<Navigate to="generalsettings" replace />} />
+        <Route path="generalsettings" element={<SettingsGeneral />} />
         <Route path="quanlynoibo">
           <Route index element={<Navigate to="danhsachnoibo" replace />} />
           <Route path="danhsachnoibo" element={<Danhsachnoibo />} />

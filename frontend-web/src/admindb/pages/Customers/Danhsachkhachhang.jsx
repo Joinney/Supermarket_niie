@@ -175,7 +175,12 @@ const Danhsachkhachhang = () => {
               placeholder="Tìm kiếm..."
               className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none transition-all font-medium placeholder-gray-400 text-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
             />
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+            {/* 🔄 Thay thế icon kính lúp emoji 🔍 */}
+            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.604 10.604Z" />
+              </svg>
+            </span>
           </div>
         </div>
         
@@ -280,7 +285,11 @@ const Danhsachkhachhang = () => {
                         className="text-slate-400 hover:text-emerald-600 transition p-1.5 hover:bg-slate-50 rounded-lg"
                         title="Xem chi tiết khách hàng"
                       >
-                        👁️
+                        {/* 🔄 Thay thế icon con mắt xem chi tiết emoji 👁️ */}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
                       </button>
 
                       <button 
@@ -335,8 +344,19 @@ const Danhsachkhachhang = () => {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full p-6 animate-scaleUp text-left">
             <div className="flex justify-between items-center pb-3 border-b border-gray-100 mb-4">
-              <h3 className="text-base font-bold text-slate-800">📝 Cập nhật thông tin khách hàng</h3>
-              <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              {/* 🔄 Thay thế icon bút viết emoji 📝 */}
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-emerald-600">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                </svg>
+                Cập nhật thông tin khách hàng
+              </h3>
+              {/* 🔄 Thay thế icon nút hủy đóng emoji ✕ */}
+              <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
             
             <form onSubmit={handleSaveEdit} className="space-y-4">
@@ -412,7 +432,12 @@ const Danhsachkhachhang = () => {
       {deletingUserId && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-sm w-full p-6 animate-scaleUp text-center">
-            <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center text-xl mx-auto mb-3 font-bold">⚠️</div>
+            {/* 🔄 Thay thế icon cảnh báo tam giác emoji ⚠️ */}
+            <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.008v.008H12v-.008Z" />
+              </svg>
+            </div>
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Xác nhận xóa tài khoản</h3>
             <p className="text-xs text-gray-500 mt-2 leading-relaxed">
               Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản khách hàng này khỏi hệ thống Demi Mart? Hành động này không thể hoàn tác.
