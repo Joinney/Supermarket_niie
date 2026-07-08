@@ -1,6 +1,8 @@
 import * as Order from '../models/orderModel.js';
 import axios from 'axios';
 import db from '../configs/database.js';
+import fs from 'fs';
+import path from 'path';
 
 // ========================================================
 // 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN
@@ -55,6 +57,51 @@ const calculateGhnShippingCost = async (toDistrictId, toWardCode, weightGrams = 
 };
 
 // ========================================================
+// 🌟 HELPER 2: THUẬT TOÁN REGEX SIÊU TỐC TRÍCH XUẤT THÔ FILE KML 
+// ========================================================
+const parseKmlWithRegex = (kmlContent) => {
+  const stations = [];
+  const placemarkRegex = /<Placemark>([\s\S]*?)<\/Placemark>/g;
+  let match;
+  let index = 0;
+
+  while ((match = placemarkRegex.exec(kmlContent)) !== null) {
+    const block = match[1];
+
+    const coordMatch = block.match(/<coordinates>([\s\S]*?)<\/coordinates>/);
+    if (!coordMatch) continue;
+    
+    const [lng, lat] = coordMatch[1].trim().split(',').map(num => parseFloat(num.trim()));
+    if (!lat || !lng || lat === 0) continue;
+
+    const extractDataField = (fieldName) => {
+      const regex = new RegExp(`<Data\\s+name="${fieldName}">\\s*<value>([\\s\\S]*?)<\/value>\\s*<\/Data>`, "i");
+      const fieldMatch = block.match(regex);
+      return fieldMatch ? fieldMatch[1].trim() : "";
+    };
+
+    const districtName = extractDataField("Quận/huyện");
+    const wardName = extractDataField("Phường/xã");
+    const street = extractDataField("Số nhà, đường");
+    const maVanHanh = extractDataField("Mã vận hành");
+
+    if (districtName === "(blank)" || districtName === "") continue;
+
+    stations.push({
+      index,
+      id: maVanHanh && maVanHanh !== "(blank)" ? maVanHanh : `STATION_${index}`,
+      name: maVanHanh && maVanHanh !== "(blank)" ? `Bưu cục GHN ${maVanHanh} (${wardName || 'Chi nhánh'})` : "Bưu cục Giao Hàng Nhanh",
+      address: street && street !== "(blank)" ? street : `${wardName}, ${districtName}`,
+      districtName,
+      wardName,
+      location: { lat, lng }
+    });
+    index++;
+  }
+  return stations;
+};
+
+// ========================================================
 // 🛃 CONTROLLER INTERFACE
 // ========================================================
 
@@ -86,9 +133,7 @@ const placeOrder = async (req, res) => {
       tong_tien_hang, 
       danh_sach_san_pham,
       phuong_thuc_thanh_toan,
-      thong_tin_giao_hang,
-      coupon_code,        // 🌟 BỔ SUNG: Nhận mã Coupon từ Frontend
-      so_tien_giam_gia    // 🌟 BỔ SUNG: Nhận số tiền được giảm
+      thong_tin_giao_hang 
     } = req.body;
     
     if (!to_district_id || !to_ward_code || !danh_sach_san_pham || !Array.isArray(danh_sach_san_pham) || danh_sach_san_pham.length === 0) {
@@ -145,7 +190,9 @@ const placeOrder = async (req, res) => {
       await axios.post(`${productServiceUrl}/api/products/internal/deduct-stock`, {
         items: normalizedItems
       });
+      console.log("✅ Đã gọi sang Product Service trừ kho thành công!");
     } catch (apiError) {
+      console.error("❌ Lỗi trừ kho từ Product Service:", apiError.response?.data?.message || apiError.message);
       return res.status(400).json({ 
         success: false, 
         message: apiError.response?.data?.message || "Sản phẩm trong giỏ hàng đã hết hoặc không đủ số lượng!" 
@@ -153,29 +200,29 @@ const placeOrder = async (req, res) => {
     }
 
     const promotionServiceUrl = process.env.INTERNAL_PROMOTION_URL || 'http://demi_promotion_service:5007'; 
-    
     try {
         const itemsToPromotion = normalizedItems.map(item => ({
             ma_bien_the: item.variant_id,
             so_luong: item.quantity
         }));
+
         await axios.post(`${promotionServiceUrl}/api/promotions/internal/update-sold`, {
             items: itemsToPromotion
         });
+        console.log("✅ Đã gọi sang Promotion Service đồng bộ số lượng bán thành công!");
     } catch (promoErr) {
         console.warn("⚠️ Cảnh báo: Lỗi khi đồng bộ số lượng đã bán với Promotion Service:", promoErr.message);
     }
 
-    // 🚀 BƯỚC C: CHỐT CHI PHÍ GIAO HÀNG VÀ TỔNG TIỀN
+    // 🚀 BƯỚC C: CHỐT CHI PHÍ GIAO HÀNG
     const clientShippingFee = Number(req.body.phi_van_chuyen);
     const validShippingCost = (!isNaN(clientShippingFee) && clientShippingFee >= 0) ? clientShippingFee : 25000;
 
     req.body.phi_van_chuyen = validShippingCost;
     req.body.don_vi_van_chuyen = req.body.don_vi_van_chuyen || 'Siêu thị DemiMart Express';
     
-    // Tổng tiền = Tiền hàng + Phí Ship - Mã Giảm Giá
-    let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(so_tien_giam_gia || 0);
-    if (isNaN(finalTotal) || finalTotal < 0) {
+    let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(req.body.so_tien_giam_gia || 0);
+    if (isNaN(finalTotal) || finalTotal < 5000) {
       finalTotal = 50000; 
     }
     req.body.tong_thanh_toan = finalTotal;
@@ -193,25 +240,11 @@ const placeOrder = async (req, res) => {
 
     // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU
     const order = await Order.create(userId, normalizedOrder);
+    console.log("✅ Đơn hàng đã tạo thành công tại Order-Service với ID:", order.id);
 
     // ========================================================
-    // 🌟 🚀 BƯỚC E: ÁP DỤNG VÀ TRỪ LƯỢT MÃ COUPON
+    // 🌟 SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD)
     // ========================================================
-    if (coupon_code && Number(so_tien_giam_gia) > 0) {
-      try {
-          await axios.post(`${promotionServiceUrl}/api/coupons/apply`, {
-              code: coupon_code,
-              user_id: userId,
-              ma_don_hang: order.ma_don_hang,
-              discount_applied: Number(so_tien_giam_gia)
-          });
-          console.log(`🎟️ [COUPON APPLIED]: Đã khóa 1 lượt dùng mã ${coupon_code} cho đơn ${order.ma_don_hang}`);
-      } catch (couponErr) {
-          console.error("⚠️ Cảnh báo: Lỗi khi chốt trừ mã Coupon:", couponErr.response?.data?.message || couponErr.message);
-      }
-    }
-
-    // 🚀 BƯỚC F: SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD)
     const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
     
     if (methodUpper !== 'COD' && methodUpper !== '') {
@@ -233,6 +266,7 @@ const placeOrder = async (req, res) => {
         };
 
         await axios.post('http://demi_payment_service:5004/api/paypal-capture', sharePayload);
+        console.log(`🔒 [MICROSERVICES SHARE]: Đã chia sẻ đơn ${order.ma_don_hang} (${methodUpper}) sang Payment-Service!`);
       } catch (syncErr) {
         console.error("⚠️ Cảnh báo: Lỗi share dữ liệu nội bộ Docker sang Payment:", syncErr.message);
       }
@@ -243,7 +277,7 @@ const placeOrder = async (req, res) => {
       ma_don_hang: order.ma_don_hang, 
       tong_thanh_toan: finalTotal,
       phuong_thuc_thanh_toan: phuong_thuc_thanh_toan,
-      message: "Đặt hàng thành công! Thông tin đang được xử lý." 
+      message: "Đặt hàng thành công! Thông tin thanh toán đang được xử lý đối soát nội bộ." 
     });
 
   } catch (err) {
@@ -261,12 +295,7 @@ const updateInternalOrderStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: "Thiếu thông tin đồng bộ trạng thái đơn hàng!" });
     }
 
-    const sqlQuery = `
-      UPDATE public.orders 
-      SET trang_thai_thanh_toan = $1 
-      WHERE ma_don_hang = $2
-    `;
-    
+    const sqlQuery = `UPDATE public.orders SET trang_thai_thanh_toan = $1 WHERE ma_don_hang = $2`;
     if (db.query) {
       await db.query(sqlQuery, [trang_thai_thanh_toan, ma_don_hang]);
     } else {
@@ -286,75 +315,64 @@ const updateInternalOrderStatus = async (req, res) => {
 // 📊 CONTROLLER 4: THỐNG KÊ ĐƠN HÀNG CHO ADMIN DASHBOARD
 // ========================================================
 const getOrderStatistics = async (req, res) => {
-    try {
-        // 1. Thống kê các con số tổng quan 
-        // 🌟 NÂNG CẤP: Dùng COALESCE để bắt lỗi NULL và TRIM để xóa khoảng trắng thừa
-        const statsQuery = `
-            SELECT 
-                COUNT(*) as total_orders,
-                
-                SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') THEN 1 ELSE 0 END) as delivered_orders,
-                
-                -- Đơn chờ xử lý: Bắt cả những đơn có trạng thái 'pending', 'chờ xử lý' hoặc mới tạo bị rỗng (NULL)
-                SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('pending', 'cho_xu_ly', 'chờ xử lý', 'dang_xu_ly', '') THEN 1 ELSE 0 END) as pending_orders,
-                
-                SUM(CASE WHEN DATE(ngay_tao) = CURRENT_DATE THEN 1 ELSE 0 END) as today_orders,
-                
-                -- Doanh thu: Cộng tiền khi ĐÃ THANH TOÁN (Online) HOẶC ĐÃ GIAO HÀNG THÀNH CÔNG (COD)
-                SUM(CASE 
-                    WHEN LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'đã thanh toán', 'success') 
-                    OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') 
-                    THEN CAST(tong_thanh_toan AS numeric) 
-                    ELSE 0 
-                END) as total_revenue
-            FROM public.orders
-        `;
-        const statsRes = db.query ? await db.query(statsQuery) : await db.execute(statsQuery);
-        const stats = statsRes.rows ? statsRes.rows[0] : statsRes[0];
+  try {
+    const statsQuery = `
+        SELECT 
+            COUNT(*) as total_orders,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') THEN 1 ELSE 0 END) as delivered_orders,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('pending', 'cho_xu_ly', 'chờ xử lý', 'dang_xu_ly', '') THEN 1 ELSE 0 END) as pending_orders,
+            SUM(CASE WHEN DATE(ngay_tao) = CURRENT_DATE THEN 1 ELSE 0 END) as today_orders,
+            SUM(CASE 
+                WHEN LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'đã thanh toán', 'success') 
+                OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') 
+                THEN CAST(tong_thanh_toan AS numeric) 
+                ELSE 0 
+            END) as total_revenue
+        FROM public.orders
+    `;
+    const statsRes = db.query ? await db.query(statsQuery) : await db.execute(statsQuery);
+    const stats = statsRes.rows ? statsRes.rows[0] : statsRes[0];
 
-        // 2. Lấy danh sách 5 đơn hàng mới nhất
-        const recentOrdersQuery = `
-            SELECT ma_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, ngay_tao
-            FROM public.orders
-            ORDER BY ngay_tao DESC
-            LIMIT 5
-        `;
-        const recentRes = db.query ? await db.query(recentOrdersQuery) : await db.execute(recentOrdersQuery);
-        const recentOrders = recentRes.rows ? recentRes.rows : recentRes;
+    const recentOrdersQuery = `
+        SELECT ma_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, ngay_tao
+        FROM public.orders
+        ORDER BY ngay_tao DESC
+        LIMIT 5
+    `;
+    const recentRes = db.query ? await db.query(recentOrdersQuery) : await db.execute(recentOrdersQuery);
+    const recentOrders = recentRes.rows ? recentRes.rows : recentRes;
 
-        // Tính toán Giá trị trung bình
-        const totalOrdersCount = Number(stats.total_orders || 0);
-        const totalRevenueAmount = Number(stats.total_revenue || 0);
-        const averageOrderValue = totalOrdersCount > 0 ? (totalRevenueAmount / totalOrdersCount) : 0;
+    const totalOrdersCount = Number(stats.total_orders || 0);
+    const totalRevenueAmount = Number(stats.total_revenue || 0);
+    const averageOrderValue = totalOrdersCount > 0 ? (totalRevenueAmount / totalOrdersCount) : 0;
 
-        // 🌟 Chuẩn hóa lại mảng danh sách cho Frontend hiển thị
-        const formattedRecentOrders = recentOrders.map(item => ({
-            id: item.ma_don_hang || "N/A",
-            customer: "Khách hàng Demi", 
-            date: new Date(item.ngay_tao).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-            total: Number(item.tong_thanh_toan),
-            status: item.trang_thai_don_hang || "Chờ xử lý"
-        }));
+    const formattedRecentOrders = recentOrders.map(item => ({
+        id: item.ma_don_hang || "N/A",
+        customer: "Khách hàng Demi", 
+        date: new Date(item.ngay_tao).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        total: Number(item.tong_thanh_toan),
+        status: item.trang_thai_don_hang || "Chờ xử lý"
+    }));
 
-        return res.status(200).json({
-            success: true,
-            data: {
-                overview: {
-                    total_orders: totalOrdersCount,
-                    delivered_orders: Number(stats.delivered_orders || 0),
-                    pending_orders: Number(stats.pending_orders || 0),
-                    today_orders: Number(stats.today_orders || 0),
-                    total_revenue: totalRevenueAmount,
-                    avg_order_value: Math.round(averageOrderValue)
-                },
-                recent_orders: formattedRecentOrders
-            }
-        });
+    return res.status(200).json({
+        success: true,
+        data: {
+            overview: {
+                total_orders: totalOrdersCount,
+                delivered_orders: Number(stats.delivered_orders || 0),
+                pending_orders: Number(stats.pending_orders || 0),
+                today_orders: Number(stats.today_orders || 0),
+                total_revenue: totalRevenueAmount,
+                avg_order_value: Math.round(averageOrderValue)
+            },
+            recent_orders: formattedRecentOrders
+        }
+    });
 
-    } catch (err) {
-        console.error("🔥 Lỗi API getOrderStatistics:", err.message);
-        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê đơn hàng." });
-    }
+  } catch (err) {
+      console.error("🔥 Lỗi API getOrderStatistics:", err.message);
+      return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê đơn hàng." });
+  }
 };
 
 // ========================================================
@@ -366,8 +384,6 @@ const getAllOrdersAdmin = async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
-    
-    // 🌟 Nhận thêm 2 tham số lọc từ Frontend
     const status = req.query.status || '';
     const payment = req.query.payment || '';
 
@@ -375,21 +391,18 @@ const getAllOrdersAdmin = async (req, res) => {
     const queryParams = [];
     let pIdx = 1;
 
-    // Lọc theo từ khóa tìm kiếm
     if (search.trim() !== '') {
       whereClause += ` AND (o.ma_don_hang ILIKE $${pIdx} OR o.phuong_thuc_thanh_toan ILIKE $${pIdx})`;
       queryParams.push(`%${search.trim()}%`);
       pIdx++;
     }
 
-    // 🌟 Lọc theo trạng thái đơn hàng
     if (status.trim() !== '') {
       whereClause += ` AND o.trang_thai_don_hang ILIKE $${pIdx}`;
       queryParams.push(status.trim());
       pIdx++;
     }
 
-    // 🌟 Lọc theo trạng thái thanh toán
     if (payment.trim() !== '') {
       whereClause += ` AND o.trang_thai_thanh_toan ILIKE $${pIdx}`;
       queryParams.push(payment.trim());
@@ -436,7 +449,7 @@ const getAllOrdersAdmin = async (req, res) => {
 };
 
 // ========================================================
-// 🛒 API 6: API LẤY ĐƠN HÀNG CHO NGƯỜI DÙNG ĐĂNG NHẬP
+// 🛒 API 6: LẤY DANH SÁCH ĐƠN HÀNG CHO NGƯỜI DÙNG ĐĂNG NHẬP
 // ========================================================
 const getMyOrders = async (req, res) => {
   try {
@@ -474,13 +487,10 @@ const getOrderDetailAdmin = async (req, res) => {
 
     if (!order) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng!" });
 
-    // Lấy trực tiếp trường sku được lưu giữ cẩn thận trong order_items
     const itemsSql = `SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku FROM public.order_items WHERE order_id = $1;`;
     const itemsResult = db.query ? await db.query(itemsSql, [order.id]) : await db.execute(itemsSql, [order.id]);
     
     order.danh_sach_san_pham = itemsResult.rows ? itemsResult.rows : itemsResult;
-
-    // Khởi tạo thông tin người mua mặc định
     order.user_info = { full_name: "Khách mua hàng (Ẩn danh)", phone_number: "Chưa cập nhật SĐT", email: "Chưa cập nhật Email" };
 
     if (order.user_id) {
@@ -501,188 +511,215 @@ const getOrderDetailAdmin = async (req, res) => {
 };
 
 // =========================================================================
-// API 8: TÍNH TỔNG CHI TIÊU CỦA USER (INTERNAL API CHUYÊN DÙNG CHO CHECK VIP)
-// =========================================================================
-const getUserTotalSpent = async (req, res) => {
-    try {
-        const { userId } = req.params;
-
-        if (!userId) {
-            return res.status(400).json({ success: false, message: "Thiếu ID người dùng." });
-        }
-
-        const sqlQuery = `
-            SELECT SUM(tong_thanh_toan) as total_spent 
-            FROM public.orders 
-            WHERE user_id = $1 
-              AND (
-                  LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'success') 
-                  OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao')
-              )
-        `;
-
-        const result = db.query ? await db.query(sqlQuery, [userId]) : await db.execute(sqlQuery, [userId]);
-        const spentData = result.rows ? result.rows[0] : result[0];
-        const totalSpent = Number(spentData?.total_spent || 0);
-
-        return res.status(200).json({ success: true, total_spent: totalSpent });
-    } catch (err) {
-        console.error("🔥 Lỗi API getUserTotalSpent:", err.message);
-        return res.status(500).json({ success: false, message: "Lỗi tính toán tổng chi tiêu của user." });
-    }
-};
-
-// =========================================================================
-// 🚀 API 9: HỦY ĐƠN HÀNG VÀ HOÀN LẠI KHO (CỘNG KHO SẢN PHẨM)
+// 🚀 API 8: HỦY ĐƠN HÀNG VÀ HOÀN LẠI KHO (CỘNG KHO SẢN PHẨM)
 // =========================================================================
 const cancelOrder = async (req, res) => {
-    try {
-        const { ma_don_hang } = req.params;
+  try {
+    const { ma_don_hang } = req.params;
+    if (!ma_don_hang) return res.status(400).json({ success: false, message: "Thiếu mã đơn hàng cần hủy." });
 
-        if (!ma_don_hang) {
-            return res.status(400).json({ success: false, message: "Thiếu mã đơn hàng cần hủy." });
-        }
+    const checkOrderQuery = `SELECT id, trang_thai_don_hang, user_id FROM public.orders WHERE ma_don_hang = $1`;
+    const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
+    const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
 
-        // 1. Kiểm tra đơn hàng
-        const checkOrderQuery = `SELECT id, trang_thai_don_hang, user_id FROM public.orders WHERE ma_don_hang = $1`;
-        const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
-        const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
+    if (!orderInfo) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
 
-        if (!orderInfo) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
-        }
-
-        // 2. Cấm hủy nếu đơn đã đi giao
-        if (orderInfo.trang_thai_don_hang !== 'Chờ xử lý' && orderInfo.trang_thai_don_hang !== 'pending') {
-            return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang chờ xử lý." });
-        }
-
-        // 3. Lấy sản phẩm để hoàn kho
-        const itemsQuery = `SELECT variant_id, quantity FROM public.order_items WHERE order_id = $1`;
-        const itemsRes = db.query ? await db.query(itemsQuery, [orderInfo.id]) : await db.execute(itemsQuery, [orderInfo.id]);
-        const orderItems = itemsRes.rows ? itemsRes.rows : itemsRes;
-
-        if (orderItems.length > 0) {
-            // GỌI SANG PRODUCT-SERVICE ĐỂ HOÀN LẠI KHO
-            const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
-            try {
-                await axios.post(`${productServiceUrl}/api/products/internal/restore-stock`, {
-                    items: orderItems
-                });
-                console.log(`✅ Đã hoàn kho thành công cho đơn hàng ${ma_don_hang}`);
-            } catch (apiError) {
-                console.error("❌ Lỗi khi hoàn kho qua Product Service:", apiError.message);
-                return res.status(500).json({ success: false, message: "Lỗi hệ thống: Không thể kết nối để hoàn kho." });
-            }
-        }
-
-        // 4. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG THÀNH "ĐÃ HỦY"
-        const updateQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Đã hủy' WHERE ma_don_hang = $1`;
-        if (db.query) {
-            await db.query(updateQuery, [ma_don_hang]);
-        } else {
-            await db.execute(updateQuery, [ma_don_hang]);
-        }
-
-        return res.status(200).json({ success: true, message: "Hủy đơn hàng thành công, số lượng đã được hoàn lại kho." });
-
-    } catch (err) {
-        console.error("🔥 Lỗi hủy đơn hàng:", err.message);
-        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi hủy đơn hàng." });
+    if (orderInfo.trang_thai_don_hang !== 'Chờ xử lý' && orderInfo.trang_thai_don_hang !== 'pending') {
+        return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang chờ xử lý." });
     }
+
+    const itemsQuery = `SELECT variant_id, quantity FROM public.order_items WHERE order_id = $1`;
+    const itemsRes = db.query ? await db.query(itemsQuery, [orderInfo.id]) : await db.execute(itemsQuery, [orderInfo.id]);
+    const orderItems = itemsRes.rows ? itemsRes.rows : itemsRes;
+
+    if (orderItems.length > 0) {
+        const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
+        try {
+            await axios.post(`${productServiceUrl}/api/products/internal/restore-stock`, { items: orderItems });
+            console.log(`✅ Đã hoàn kho thành công cho đơn hàng ${ma_don_hang}`);
+        } catch (apiError) {
+            console.error("❌ Lỗi khi hoàn kho qua Product Service:", apiError.message);
+            return res.status(500).json({ success: false, message: "Lỗi hệ thống: Không thể kết nối để hoàn kho." });
+        }
+    }
+
+    const updateQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Đã hủy' WHERE ma_don_hang = $1`;
+    db.query ? await db.query(updateQuery, [ma_don_hang]) : await db.execute(updateQuery, [ma_don_hang]);
+
+    return res.status(200).json({ success: true, message: "Hủy đơn hàng thành công, số lượng đã được hoàn lại kho." });
+
+  } catch (err) {
+      console.error("🔥 Lỗi hủy đơn hàng:", err.message);
+      return res.status(500).json({ success: false, message: "Lỗi máy chủ khi hủy đơn hàng." });
+  }
 };
 
-// =========================================================================
-// 🌟 API 10 (INTERNAL): LẤY DANH SÁCH ĐƠN HÀNG THÔ CỦA USER (Phục vụ Admin xem chi tiết)
-// =========================================================================
-const getUserOrdersInternal = async (req, res) => {
-    try {
-        const { userId } = req.params;
-        if (!userId) {
-            return res.status(400).json({ success: false, message: "Thiếu ID người dùng." });
-        }
-
-        const sqlQuery = `
-            SELECT ma_don_hang, ngay_tao, trang_thai_thanh_toan, tong_thanh_toan 
-            FROM public.orders 
-            WHERE user_id = $1 
-            ORDER BY ngay_tao DESC;
-        `;
-        const result = db.query ? await db.query(sqlQuery, [userId]) : await db.execute(sqlQuery, [userId]);
-        const orders = result.rows ? result.rows : result[0];
-
-        return res.status(200).json({ success: true, data: orders });
-    } catch (err) {
-        console.error("🔥 Lỗi API getUserOrdersInternal:", err.message);
-        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi lấy danh sách đơn hàng nội bộ." });
+// ========================================================
+// 🎯 API 9: LẤY DANH SÁCH BƯU CỤC CHO MAP (XỬ LÝ DỮ LIỆU ĐỘNG CHUẨN TOÀN QUỐC)
+// ========================================================
+const getPostOffices = async (req, res) => {
+  try {
+    const { district_id, district_name, province_name, userLat, userLng } = req.body;
+    
+    const kmlPath = path.resolve(new URL('.', import.meta.url).pathname, 'danh_sach_bc.kml');
+    if (!fs.existsSync(kmlPath)) {
+      return res.status(200).json({ success: true, data: [] });
     }
+
+    const kmlContent = fs.readFileSync(kmlPath, 'utf-8');
+    const allStations = parseKmlWithRegex(kmlContent); 
+
+    const searchProvince = province_name ? String(province_name).trim().toLowerCase() : "";
+    const searchDistrict = district_name ? String(district_name).trim().toLowerCase() : "";
+
+    const targetLat = parseFloat(userLat || 0);
+    const targetLng = parseFloat(userLng || 0);
+
+    // 🌟 ĐỒNG BỘ ĐỘNG TOÀN DIỆN CHỐNG GHIM SAI VÙNG:
+    // Lọc theo ký tự văn bản nếu có khớp từ khóa tỉnh thành
+    let filteredStations = allStations.filter(station => {
+      const fullAddress = station.address.toLowerCase();
+      const distName = station.districtName.toLowerCase();
+      const wardName = station.wardName.toLowerCase();
+      
+      if (searchProvince !== "") {
+        return fullAddress.includes(searchProvince) || distName.includes(searchProvince);
+      }
+      return true;
+    });
+
+    // Nếu lọc theo tên tỉnh thành công, tiếp tục co gọn lọc sâu xuống Quận/Huyện nhận đơn
+    if (searchDistrict !== "" && filteredStations.length > 0) {
+      const districtMatch = filteredStations.filter(station => {
+        const cleanGhnDist = station.districtName.toLowerCase();
+        return cleanGhnDist.includes(searchDistrict) || searchDistrict.includes(cleanGhnDist);
+      });
+      if (districtMatch.length > 0) {
+        filteredStations = districtMatch;
+      }
+    }
+
+    // 🎯 TẦNG DỰ PHÒNG CHỐNG TRỐNG: Nếu dữ liệu text bị rỗng hoặc lỗi lệch GPS, tự động quét bán kính hình học gần nhà khách nhất
+    if (filteredStations.length === 0 && targetLat > 0 && targetLng > 0) {
+      filteredStations = [...allStations].sort((a, b) => {
+        const distA = ((a.location.lat - targetLat) ** 2) + ((a.location.lng - targetLng) ** 2);
+        const distB = ((b.location.lat - targetLat) ** 2) + ((b.location.lng - targetLng) ** 2);
+        return distA - distB;
+      });
+    }
+
+    // Giới hạn số lượng bưu cục đổ về Frontend để tối ưu dung lượng mạng
+    const finalResult = filteredStations.slice(0, 40);
+
+    console.log(`[✅ KML LOGISTICS DONE] Đã xuất thành công ${finalResult.length} bưu cục động theo khu vực đơn hàng.`);
+    return res.status(200).json({ success: true, data: finalResult });
+
+  } catch (err) {
+    console.error("🔥 Lỗi API getPostOffices:", err.message);
+    return res.status(200).json({ success: true, data: [] });
+  }
 };
 
-// =========================================================================
-//  API 11 (INTERNAL): TÍNH TOÁN THỐNG KÊ MUA SẮM & TOP SPENDERS (Phục vụ Auth Service)
-// =========================================================================
-const getCustomerStatsInternal = async (req, res) => {
-    try {
-        // A. Tính tỷ lệ quay lại (Khách có >= 2 đơn hàng trong 30 ngày gần nhất)
-        const retentionQuery = `
-            WITH CustomerOrders AS (
-                SELECT user_id, COUNT(*) as order_count
-                FROM public.orders
-                WHERE ngay_tao >= NOW() - INTERVAL '30 days' AND user_id IS NOT NULL
-                GROUP BY user_id
-            )
-            SELECT 
-                COUNT(*) as total_buying_customers,
-                SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) as returning_customers
-            FROM CustomerOrders;
-        `;
-        const retentionResult = db.query ? await db.query(retentionQuery) : await db.execute(retentionQuery);
-        const rData = retentionResult.rows ? retentionResult.rows[0] : retentionResult[0];
-        
-        let returnRate = "0.0";
-        if (rData && parseInt(rData.total_buying_customers) > 0) {
-            returnRate = ((parseInt(rData.returning_customers) / parseInt(rData.total_buying_customers)) * 100).toFixed(1);
-        }
+// ========================================================
+// 🔍 API 10: ENDPOINT TEST POSTMAN KML (TRẢ VỀ TOÀN BỘ TOÀN QUỐC KHI KHÔNG TRUYỀN BIẾN)
+// ========================================================
+const testReadKml = async (req, res) => {
+  try {
+    const { district_name, province_name } = req.body;
+    const kmlPath = path.resolve(new URL('.', import.meta.url).pathname, 'danh_sach_bc.kml');
 
-        // B. Lấy TOP 5 Khách hàng chi tiêu cao nhất để ép hạng VIP
-        const topSpendersQuery = `
-            SELECT 
-                user_id,
-                COUNT(ma_don_hang) as total_orders,
-                SUM(tong_thanh_toan) as total_spent
-            FROM public.orders
-            WHERE user_id IS NOT NULL 
-              AND (
-                  LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'success') 
-                  OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao')
-              )
-            GROUP BY user_id
-            ORDER BY total_spent DESC
-            LIMIT 5;
-        `;
-        const topSpendersResult = db.query ? await db.query(topSpendersQuery) : await db.execute(topSpendersQuery);
-        const topSpenders = topSpendersResult.rows ? topSpendersResult.rows : topSpendersResult[0];
-
-        return res.status(200).json({
-            success: true,
-            return_rate: returnRate,
-            top_spenders: topSpenders
-        });
-    } catch (err) {
-        console.error("🔥 Lỗi API getCustomerStatsInternal:", err.message);
-        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi trích xuất số liệu mua sắm nội bộ." });
+    if (!fs.existsSync(kmlPath)) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy file danh_sach_bc.kml." });
     }
+
+    const kmlContent = fs.readFileSync(kmlPath, 'utf-8');
+    const allStations = parseKmlWithRegex(kmlContent); 
+
+    let finalData = [...allStations];
+
+    const searchProvince = province_name ? String(province_name).trim().toLowerCase() : "";
+    const searchKey = district_name ? String(district_name).trim().toLowerCase() : "";
+
+    if (searchProvince !== "") {
+      finalData = finalData.filter(station => 
+        station.address.toLowerCase().includes(searchProvince) || 
+        station.districtName.toLowerCase().includes(searchProvince)
+      );
+    }
+
+    if (searchKey !== "") {
+      finalData = finalData.filter(station => {
+        const cleanGhnDist = station.districtName.toLowerCase();
+        return cleanGhnDist.includes(searchKey) || searchKey.includes(cleanGhnDist);
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      total_found: finalData.length,
+      total_all_file: allStations.length, 
+      data: finalData
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 };
+
+// ========================================================
+// ⚡ HÀM 11: TÍNH TOÁN CỰC CẬN ĐỊA LÝ CỬA HÀNG HOẠT ĐỘNG VÀ CHI PHÍ
+// ========================================================
+const calculateShipping = async (req, res) => {
+  try {
+    const { userLat, userLng } = req.body;
+
+    if (!userLat || !userLng) {
+      return res.status(400).json({ success: false, message: "Địa chỉ này chưa có tọa độ bản đồ!" });
+    }
+
+    const storeLat = 10.792622;
+    const storeLng = 106.680172;
+    const distanceKm = calcHaversine(parseFloat(userLat), parseFloat(userLng), storeLat, storeLng);
+
+    const estimatedMinutes = Math.round((distanceKm / 30) * 60) + 15;
+    const shippingFee = distanceKm <= 2 ? 0 : Math.round((distanceKm - 2) * 5000);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        nearestStore: { id: "DEMIMART_HQ_01", name: "Trụ sở chính Express", lat: storeLat, lng: storeLng },
+        distanceKm: Number(distanceKm.toFixed(1)),
+        estimatedMinutes,
+        shippingFee
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+function calcHaversine(lat1, lon1, lat2, lon2) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
+
+// ========================================================
+// ✅ KHỐI EXPORT TẬP TRUNG CHÍNH XÁC NHẤT CHO MODULE ROUTER
+// ========================================================
 export { 
-    getShippingFee, 
-    placeOrder, 
-    updateInternalOrderStatus, 
-    getOrderStatistics, 
-    getAllOrdersAdmin, 
-    getMyOrders, 
-    getOrderDetailAdmin, 
-    cancelOrder, 
-    getUserTotalSpent, 
-    getUserOrdersInternal, 
-    getCustomerStatsInternal 
+  getShippingFee, 
+  placeOrder, 
+  updateInternalOrderStatus, 
+  getOrderStatistics, 
+  getAllOrdersAdmin, 
+  getMyOrders, 
+  getOrderDetailAdmin, 
+  cancelOrder,
+  getPostOffices,
+  testReadKml,
+  calculateShipping 
 };

@@ -4,45 +4,68 @@ import {
   placeOrder, 
   updateInternalOrderStatus, 
   getOrderStatistics, 
-  getAllOrdersAdmin,
-  getMyOrders,
-  getOrderDetailAdmin,
+  getAllOrdersAdmin, 
+  getMyOrders, 
+  getOrderDetailAdmin, 
   cancelOrder,
-  getUserTotalSpent,
-  getUserOrdersInternal,
-  getCustomerStatsInternal
+  getPostOffices,
+  testReadKml,
+  calculateShipping 
 } from '../controllers/orderController.js';
-import { protect } from '../middlewares/authMiddleware.js';
-import { calculateShipping } from '../controllers/storeController.js';
+import { protect } from '../middlewares/authMiddleware.js'; // 👈 ĐỔI VỀ: Dùng đúng middleware 'protect' gốc của ông
 
 const router = express.Router();
 
 // ========================================================
-// 1. CÁC TUYẾN ĐƯỜNG XỬ LÝ (POST / PUT)
+// 🛒 ROUTE DÀNH CHO KHÁCH HÀNG (CUSTOMER ENDPOINTS)
 // ========================================================
+
+// 1. Tính cước phí giao nhận vận chuyển dự phòng (GHN)
 router.post('/shipping-fee', protect, getShippingFee);
+
+// 2. Tính toán cự cận địa lý cửa hàng hoạt động và chi phí dựa trên tọa độ
+router.post('/calculate-shipping', calculateShipping);
+
+// 3. Lấy danh sách bưu cục GHN cho bản đồ (Xử lý dữ liệu KML động)
+router.post('/post-offices', getPostOffices);
+
+// 4. Tiếp nhận đặt hàng (Hỗ trợ Microservices trừ kho & đồng bộ thanh toán)
 router.post('/place-order', protect, placeOrder);
-router.post('/internal/update-status', updateInternalOrderStatus); // API gọi nội bộ giữa các Service, thường không cần protect user
-router.post('/shipping/calc', calculateShipping);
+
+// 5. Lấy danh sách lịch sử đơn hàng cá nhân của người dùng đang đăng nhập
+router.get('/my-orders', protect, getMyOrders);
+
 
 // ========================================================
-// 2. CÁC TUYẾN ĐƯỜNG TRUY VẤN DỮ LIỆU (GET)
+// 🔒 ROUTE ĐỒNG BỘ NỘI BỘ (INTERNAL SERVICE ENDPOINTS)
 // ========================================================
-router.get('/admin/statistics', protect, getOrderStatistics);
 
-// protect bảo mật dữ liệu đơn hàng cho Admin
-router.get('/', protect, getAllOrdersAdmin); 
+// 6. Tiếp nhận đồng bộ trạng thái thanh toán từ Payment-Service (Gọi nội bộ Docker)
+router.post('/internal/update-status', updateInternalOrderStatus);
 
-router.get('/my-orders', protect, getMyOrders); 
-
-router.get('/:id', protect, getOrderDetailAdmin);
-
-router.put('/cancel/:ma_don_hang', protect, cancelOrder); 
 
 // ========================================================
-// 3. CÁC TUYẾN ĐƯỜNG NỘI BỘ (INTERNAL SERVER-TO-SERVER)
+// 📊 ROUTE DÀNH CHO QUẢN TRỊ VIÊN (ADMIN ENDPOINTS)
 // ========================================================
-router.get('/internal/user-spent/:userId', getUserTotalSpent);
-router.get('/internal/user-orders/:userId', getUserOrdersInternal);
-router.get('/internal/customer-stats', getCustomerStatsInternal);
+
+// 7. Thống kê số liệu đơn hàng cho Admin Dashboard (Tổng doanh thu, đơn trong ngày...)
+router.get('/admin/statistics', protect, getOrderStatistics); // 👈 Tạm thời bọc bảo vệ bằng protect
+
+// 8. Lấy danh sách toàn bộ đơn hàng phân trang, tìm kiếm và lọc cho Admin
+router.get('/admin/all-orders', protect, getAllOrdersAdmin); // 👈 Tạm thời bọc bảo vệ bằng protect
+
+// 9. Lấy chi tiết 1 đơn hàng kèm danh sách sản phẩm và thông tin khách hàng (Auth-Service)
+router.get('/admin/orders/:id', protect, getOrderDetailAdmin); // 👈 Tạm thời bọc bảo vệ bằng protect
+
+// 10. Hủy đơn hàng đang chờ xử lý và kích hoạt hoàn lại số lượng vào kho sản phẩm
+router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder); // 👈 Tạm thời bọc bảo vệ bằng protect
+
+
+// ========================================================
+// 🔍 ROUTE KIỂM THỬ (TESTING ENDPOINTS)
+// ========================================================
+
+// 11. Endpoint Test Postman đọc file KML toàn quốc hoặc lọc theo khu vực
+router.post('/test/read-kml', testReadKml);
+
 export default router;
