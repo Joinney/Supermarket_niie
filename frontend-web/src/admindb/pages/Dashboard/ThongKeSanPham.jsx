@@ -147,8 +147,23 @@ export default function Dashboard() {
               )}
 
               <div className="flex items-center gap-2 border border-slate-200 bg-white px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 shadow-sm cursor-default">
+                {/* 🔄 Thay thế icon lịch emoji 📅 */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-3.5 h-3.5 text-slate-400"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008ZM16.5 13.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z"
+                  />
+                </svg>
                 <span>
-                  📅 {currentTime.toLocaleTimeString("vi-VN")} -{" "}
+                  {currentTime.toLocaleTimeString("vi-VN")} -{" "}
                   {currentTime.toLocaleDateString("vi-VN")}
                 </span>
               </div>
@@ -179,7 +194,22 @@ export default function Dashboard() {
                 onClick={handleExportPDF}
                 className="px-4 py-1.5 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition shadow-sm flex items-center gap-1.5 cursor-pointer"
               >
-                🖨️ Xuất báo cáo PDF
+                {/* 🔄 Thay thế icon máy in emoji 🖨️ */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-3.5 h-3.5 text-slate-500"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.617 0-1.11-.51-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-14.326 0C3.768 7.441 3 8.376 3 9.456v6.294a2.25 2.25 0 0 0 2.25 2.25h1.091M5.25 9.75h13.5M9 21h6"
+                  />
+                </svg>
+                Xuất báo cáo PDF
               </button>
             </div>
           </div>
@@ -261,9 +291,23 @@ export default function Dashboard() {
                       e.stopPropagation();
                       setOpenMenu(openMenu === "topProd" ? null : "topProd");
                     }}
-                    className="text-slate-400 hover:text-slate-600 font-bold text-xs p-1"
+                    className="text-slate-400 hover:text-slate-600 p-1 flex items-center justify-center cursor-pointer rounded-lg hover:bg-slate-50 transition"
                   >
-                    •••
+                    {/* 🔄 Thay thế nút menu ba chấm emoji ••• */}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2.5}
+                      stroke="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"
+                      />
+                    </svg>
                   </button>
                   {openMenu === "topProd" && (
                     <div className="absolute right-0 top-6 mt-1 w-36 bg-white border border-slate-100 rounded-xl shadow-lg overflow-hidden z-10 text-xs font-bold text-slate-600">
@@ -391,9 +435,23 @@ export default function Dashboard() {
                     e.stopPropagation();
                     setOpenMenu(openMenu === "topValue" ? null : "topValue");
                   }}
-                  className="text-slate-400 hover:text-slate-600 font-bold text-xs p-1"
+                  className="text-slate-400 hover:text-slate-600 p-1 flex items-center justify-center cursor-pointer rounded-lg hover:bg-slate-50 transition"
                 >
-                  •••
+                  {/* 🔄 Thay thế nút menu ba chấm emoji ••• */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM18.75 12a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"
+                    />
+                  </svg>
                 </button>
                 {openMenu === "topValue" && (
                   <div className="absolute right-0 top-6 mt-1 w-36 bg-white border border-slate-100 rounded-xl shadow-lg overflow-hidden z-10 text-xs font-bold text-slate-600">

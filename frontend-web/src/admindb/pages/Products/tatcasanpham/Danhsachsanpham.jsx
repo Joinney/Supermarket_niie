@@ -203,15 +203,16 @@ export default function ProductList() {
           <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-1">
             <span>Tổng hành dinh</span>
             <span>❯</span>
-            <span className="text-emerald-700 font-bold">Danh sách sản phẩm</span>
+            <span className="text-[#006c49] font-bold">Danh sách sản phẩm</span>
           </div>
         </div>
 
+        {/* 🌟 ĐỒNG BỘ CHUẨN: Màu sắc, kích thước padding, gap và hiệu ứng transform */}
         <button
           onClick={() => navigate("/admin/products/create")}
-          className="flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer"
+          className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer whitespace-nowrap"
         >
-          <svg xmlns="http://www.w3.org/2000/xl" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+          <svg xmlns="http://www.w3.org/2000/xl" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
           Thêm sản phẩm mới
@@ -222,8 +223,8 @@ export default function ProductList() {
       <div className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6 relative">
         
         {loading && (
-          <div className="absolute top-4 right-6 text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+          <div className="absolute top-4 right-6 text-xs font-bold text-[#006c49] flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-[#006c49]"></span>
             Đang đồng bộ cơ sở dữ liệu...
           </div>
         )}
@@ -243,7 +244,7 @@ export default function ProductList() {
                 placeholder="Tìm theo tên sản phẩm hoặc mã định danh..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition text-slate-800"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-[#006c49] focus:ring-2 focus:ring-emerald-50 transition text-slate-800"
               />
               <span className="absolute left-3 top-2.5 text-slate-400">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -259,9 +260,10 @@ export default function ProductList() {
               >
                 Làm mới
               </button>
+              {/* 🌟 ĐỒNG BỘ CHUẨN: Màu nền active của bộ lọc */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-1.5 px-4 py-2 border rounded-xl text-xs font-bold transition cursor-pointer bg-white shadow-2xs ${showFilters ? "bg-emerald-700 text-white border-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                className={`flex items-center gap-1.5 px-4 py-2 border rounded-xl text-xs font-bold transition cursor-pointer bg-white shadow-2xs ${showFilters ? "bg-[#006c49] text-white border-[#006c49] hover:bg-[#005237]" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
               >
                 Bộ lọc chuyên sâu {showFilters ? "▲" : "▼"}
               </button>
@@ -304,7 +306,7 @@ export default function ProductList() {
                   <select
                     value={filters.sort}
                     onChange={(e) => handleFilterChange("sort", e.target.value)}
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49] cursor-pointer"
                   >
                     <option value="newest">Sản phẩm mới nhất</option>
                     <option value="oldest">Sản phẩm cũ nhất</option>
@@ -318,7 +320,7 @@ export default function ProductList() {
                   <select
                     value={filters.market}
                     onChange={(e) => handleFilterChange("market", e.target.value)}
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49] cursor-pointer"
                   >
                     <option value="all">Tất cả quốc gia</option>
                     {countries.map((c) => (
@@ -334,7 +336,7 @@ export default function ProductList() {
                   <select
                     value={filters.type}
                     onChange={(e) => handleFilterChange("type", e.target.value)}
-                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49] cursor-pointer"
                   >
                     <option value="all">Mọi loại hình cấu trúc</option>
                     <option value="single">Sản phẩm độc lập (Đơn)</option>
@@ -356,7 +358,7 @@ export default function ProductList() {
                     type="checkbox"
                     checked={isAllSelected}
                     onChange={handleSelectAll}
-                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-700"
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-[#006c49]"
                   />
                 </th>
                 <th className="py-3.5 px-4">Thông tin sản phẩm</th>
@@ -381,7 +383,7 @@ export default function ProductList() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) => handleSelectOne(item.ma_san_pham, e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-700"
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-[#006c49]"
                       />
                     </td>
 
@@ -395,7 +397,7 @@ export default function ProductList() {
                         <div className="flex flex-col justify-center min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p
-                              className="text-xs font-bold text-slate-900 truncate hover:text-emerald-700 cursor-pointer transition"
+                              className="text-xs font-bold text-slate-900 truncate hover:text-[#006c49] cursor-pointer transition"
                               onClick={() => navigate(`/admin/products/detail/${item.ma_san_pham}`)}
                               title={item.ten_san_pham}
                             >
@@ -452,10 +454,11 @@ export default function ProductList() {
                     </td>
 
                     <td className="py-4 px-4 text-center">
+                      {/* 🌟 ĐỒNG BỘ CHUẨN: Toggle switch màu nền active */}
                       <button
                         onClick={() => handleToggleStatus(item.ma_san_pham, item.trang_thai)}
                         className={`w-10 h-5 rounded-full relative transition-colors duration-200 focus:outline-none shadow-xs cursor-pointer ${
-                          item.trang_thai ? "bg-emerald-700" : "bg-slate-300"
+                          item.trang_thai ? "bg-[#006c49]" : "bg-slate-300"
                         }`}
                         title={item.trang_thai ? "Bật (Click ẩn)" : "Tắt (Click mở)"}
                       >
@@ -483,7 +486,7 @@ export default function ProductList() {
                         <button
                           type="button"
                           onClick={() => navigate(`/admin/products/edit/${item.ma_san_pham}`)}
-                          className="p-1.5 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                          className="p-1.5 hover:text-[#006c49] hover:bg-slate-100 rounded-lg transition cursor-pointer"
                           title="Chỉnh sửa thông tin"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -522,7 +525,7 @@ export default function ProductList() {
           <div>
             Hiển thị <span className="text-slate-800 font-extrabold">{startItem}</span> -{" "}
             <span className="text-slate-800 font-extrabold">{endItem}</span> trong tổng số{" "}
-            <span className="text-emerald-700 font-extrabold">{totalItems}</span> sản phẩm dữ liệu
+            <span className="text-[#006c49] font-extrabold">{totalItems}</span> sản phẩm dữ liệu
           </div>
 
           <div className="flex items-center gap-4">

@@ -13,50 +13,45 @@ const NhapKhoForm = () => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
-  // ========================================================
-  // 🔄 GỌI API LẤY DANH SÁCH KHO HÀNG THỰC TẾ
-  // ========================================================
-  // 📁 Cập nhật lại duy nhất hàm useEffect này trong NhapKhoForm.jsx:
-useEffect(() => {
-  let isMounted = true;
-  setLoading(true);
+  // ==========================================
+  // KHỞI TẠO DỮ LIỆU QUA PRODUCTAPI INTERCEPTOR
+  // ==========================================
+  const fetchUnits = async () => {
+    setLoading(true);
+    warehouseApi.get("/warehouses")
+      .then((response) => {
+        console.log("=== KIỂM TRA PHẢN HỒI AXIOS ===");
+        console.log("Gốc (response):", response);
 
-  warehouseApi.get("/warehouses")
-    .then((response) => {
-      if (!isMounted) return;
+        // 🌟 TỰ ĐỘNG NHẬN DIỆN TẦNG DỮ LIỆU CHỐNG LỖI INTERCEPTOR
+        let finalData = [];
+        
+        if (response && Array.isArray(response)) {
+          // Trường hợp 1: Axios Interceptor đã bóc sẵn response thành mảng dữ liệu
+          finalData = response;
+        } else if (response && response.data && Array.isArray(response.data)) {
+          // Trường hợp 2: Axios trả về Object Response nguyên bản, chứa mảng trong .data
+          finalData = response.data;
+        } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
+          // Trường hợp 3: Dữ liệu bị bọc sâu trong response.data.data
+          finalData = response.data.data;
+        }
 
-      console.log("=== KIỂM TRA PHẢN HỒI AXIOS ===");
-      console.log("Gốc (response):", response);
-
-      // 🌟 TỰ ĐỘNG NHẬN DIỆN TẦNG DỮ LIỆU CHỐNG LỖI INTERCEPTOR
-      let finalData = [];
-      
-      if (response && Array.isArray(response)) {
-        // Trường hợp 1: Axios Interceptor đã bóc sẵn response thành mảng dữ liệu
-        finalData = response;
-      } else if (response && response.data && Array.isArray(response.data)) {
-        // Trường hợp 2: Axios trả về Object Response nguyên bản, chứa mảng trong .data
-        finalData = response.data;
-      } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
-        // Trường hợp 3: Dữ liệu bị bọc sâu trong response.data.data
-        finalData = response.data.data;
-      }
-
-      console.log("Mảng dữ liệu sau khi lọc tầng:", finalData);
-      setWarehouseData(finalData);
-      setLoading(false);
-    })
-    .catch((error) => {
-      if (isMounted) {
+        console.log("Mảng dữ liệu sau khi lọc tầng:", finalData);
+        setWarehouseData(finalData);
+      })
+      .catch((error) => {
         console.error("❌ Lỗi kết nối API kho hàng:", error);
+      })
+      .finally(() => {
         setLoading(false);
-      }
-    });
-
-  return () => {
-    isMounted = false;
+      });
   };
-}, []);
+
+  useEffect(() => {
+    fetchUnits();
+  }, []);
+
   // Hàm xử lý xóa nhanh bộ lọc (Reset)
   const handleResetFilters = () => {
     setSearch("");
@@ -75,12 +70,12 @@ useEffect(() => {
           </nav>
         </div>
 
-        {/* Nút thêm kho dẫn sang Route tạo kho riêng biệt */}
+        {/* 🌟 ĐỒNG BỘ CHUẨN: Màu sắc, kích thước padding (px-4 py-2), gap-1.5, text-xs font-bold và hiệu ứng active */}
         <button 
           onClick={() => navigate("/admin/inventory/create-warehouse")}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-sm font-bold rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
+          className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer whitespace-nowrap"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
           Thêm kho
@@ -97,7 +92,7 @@ useEffect(() => {
               placeholder="Tìm theo mã kho, tên kho..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-500 transition-all placeholder-gray-400 font-medium"
+              className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#006c49] transition-all placeholder-gray-400 font-medium"
             />
             <span className="absolute inset-y-0 right-3 flex items-center text-gray-400">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -110,7 +105,7 @@ useEffect(() => {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none min-w-[150px] font-bold cursor-pointer"
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none min-w-[150px] font-bold cursor-pointer focus:border-[#006c49]"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="active">Hoạt động</option>
@@ -152,14 +147,14 @@ useEffect(() => {
             </thead>
             <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
               {loading ? (
-                // Hiển thị trạng thái đang tải dữ liệu từ API
                 <tr>
-                  <td colSpan="6" className="py-10 text-center text-sm text-gray-400 font-medium">
-                    <span className="inline-block animate-pulse">Đang tải dữ liệu từ hệ thống kho...</span>
+                  <td colSpan="6" className="py-10 text-center text-sm text-[#006c49] font-bold">
+                    <div className="flex items-center justify-center gap-2 animate-pulse">
+                      <span>Đang tải dữ liệu từ hệ thống kho...</span>
+                    </div>
                   </td>
                 </tr>
               ) : !Array.isArray(warehouseData) || warehouseData.length === 0 ? (
-                // Hiển thị nếu cơ sở dữ liệu trống hoặc không tìm thấy dữ liệu
                 <tr>
                   <td colSpan="6" className="py-10 text-center text-sm text-gray-400 font-medium">
                     Không có thông tin kho hàng nào được tìm thấy.
@@ -168,7 +163,6 @@ useEffect(() => {
               ) : (
                 warehouseData
                   .filter((row) => {
-                    // Phòng vệ gán chuỗi rỗng đề phòng trường hợp trả về có field rỗng ngầm
                     const tenKho = row.ten_kho || "";
                     const maKho = row.ma_kho || "";
                     const trangThai = row.trang_thai || "";
@@ -244,7 +238,6 @@ useEffect(() => {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -67,15 +67,16 @@ export default function DanhSachPhieuNhap() {
         <div>
           <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Danh sách phiếu nhập</h1>
           <nav className="text-sm text-gray-400 mt-1">
-            Dashboard &gt; <span className="text-emerald-600 font-medium">Danh sách phiếu nhập</span>
+            Dashboard &gt; <span className="text-[#006c49] font-medium">Danh sách phiếu nhập</span>
           </nav>
         </div>
         
+        {/* 🌟 ĐỒNG BỘ: Cập nhật màu sắc, padding (px-4 py-2), gap-1.5, text-xs font-bold và hiệu ứng active scale */}
         <button 
           onClick={() => navigate("/admin/inventory/create-import-ticket")}
-          className="bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer"
+          className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer whitespace-nowrap"
         >
-          <span className="text-base">+</span> Tạo Phiếu nhập
+          <span className="text-sm font-bold">+</span> Tạo Phiếu nhập
         </button>
       </div>
 
@@ -88,14 +89,14 @@ export default function DanhSachPhieuNhap() {
               placeholder="Tìm kiếm theo mã phiếu nhập..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-3 pr-9 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-500 transition-all placeholder-gray-400 font-medium"
+              className="w-full pl-3 pr-9 py-2 text-xs border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-[#006c49] focus:ring-2 focus:ring-emerald-50 transition-all placeholder-gray-400 font-medium text-slate-800"
             />
           </div>
 
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none min-w-[150px] font-bold cursor-pointer"
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none min-w-[150px] font-bold cursor-pointer focus:border-[#006c49]"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="completed">Hoàn thành</option>
@@ -127,7 +128,7 @@ export default function DanhSachPhieuNhap() {
             <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="py-10 text-center text-xs text-gray-400 font-bold uppercase tracking-widest animate-pulse">
+                  <td colSpan="8" className="py-10 text-center text-xs text-[#006c49] font-bold uppercase tracking-widest animate-pulse">
                     🔄 Đang đồng bộ chứng từ kho Demi Mart...
                   </td>
                 </tr>
@@ -148,7 +149,7 @@ export default function DanhSachPhieuNhap() {
                     <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
                       <td 
                         onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
-                        className="py-4 px-6 text-blue-500 font-bold hover:underline cursor-pointer"
+                        className="py-4 px-6 text-[#006c49] font-bold hover:underline cursor-pointer font-mono"
                       >
                         {row.id}
                       </td>
@@ -169,12 +170,17 @@ export default function DanhSachPhieuNhap() {
                         {row.debt > 0 ? formatCurrency(row.debt) : "0 đ"}
                       </td>
                       <td className="py-4 px-6 text-center">
+                        {/* 🌟 ĐỒNG BỘ: Loại bỏ emoji mắt, thay thế bằng SVG Line icon gọn gàng đồng bộ */}
                         <button
                           type="button"
                           onClick={() => navigate(`/admin/inventory/import-detail/${row.id}`)}
-                          className="text-gray-400 hover:text-emerald-600 font-bold text-xs bg-slate-50 hover:bg-emerald-50 px-2.5 py-1 rounded transition-all border border-gray-100 cursor-pointer"
+                          className="flex items-center gap-1 mx-auto text-gray-400 hover:text-[#006c49] font-bold text-xs bg-slate-50 hover:bg-emerald-50 px-2.5 py-1 rounded transition-all border border-gray-100 cursor-pointer"
                         >
-                          👁 Xem chi tiết
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                          </svg>
+                          Xem chi tiết
                         </button>
                       </td>
                     </tr>

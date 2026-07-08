@@ -37,18 +37,19 @@ const Dieuchuyenkho = () => {
     <div className="w-full min-h-screen bg-[#fafafa] font-sans text-gray-800 antialiased p-1">
       
       {/* ---------------- TIÊU ĐỀ & NÚT TẠO PHIẾU ---------------- */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Danh sách điều chuyển kho</h1>
           <nav className="text-sm text-gray-400 mt-1">
-            Dashboard &gt; <span className="text-emerald-600 font-medium">Danh sách điều chuyển kho</span>
+            Dashboard &gt; <span className="text-[#006c49] font-medium">Danh sách điều chuyển kho</span>
           </nav>
         </div>
+        {/* 🌟 ĐỒNG BỘ: Tinh chỉnh padding (px-4 py-2), gap-1.5, text-xs font-bold, active scale và mã màu thương hiệu mới */}
         <button 
           onClick={() => setIsCreating(true)}
-          className="bg-[#16a34a] hover:bg-[#15803d] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer"
+          className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer whitespace-nowrap"
         >
-          <span className="text-base">+</span> Tạo Phiếu Điều Chuyển
+          <span className="text-sm font-bold">+</span> Tạo Phiếu Điều Chuyển
         </button>
       </div>
 
@@ -61,14 +62,14 @@ const Dieuchuyenkho = () => {
               placeholder="Tìm mã phiếu điều chuyển..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-500 placeholder-gray-400 transition-all"
+              className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-[#006c49] placeholder-gray-400 transition-all font-medium text-slate-800"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none min-w-[160px] font-medium cursor-pointer"
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none min-w-[160px] font-medium cursor-pointer focus:border-[#006c49]"
           >
             <option value="">Tất cả trạng thái</option>
             <option value="pending">Chờ xét duyệt</option>
@@ -118,7 +119,7 @@ const Dieuchuyenkho = () => {
                 })
                 .map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-4 px-6 text-center text-emerald-600 font-bold">{row.id}</td>
+                    <td className="py-4 px-6 text-center text-[#006c49] font-bold font-mono">{row.id}</td>
                     <td className="py-4 px-6 text-gray-700">
                       <div className="flex items-center gap-2">
                         <span className="text-rose-400">
@@ -145,7 +146,7 @@ const Dieuchuyenkho = () => {
                           Chờ xét duyệt
                         </span>
                       ) : (
-                        <span className="inline-block px-2.5 py-1 text-xs font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-100">
+                        <span className="inline-block px-2.5 py-1 text-xs font-bold rounded bg-emerald-50 text-[#006c49] border border-emerald-100">
                           Đã hoàn thành
                         </span>
                       )}
@@ -156,7 +157,7 @@ const Dieuchuyenkho = () => {
                       <span className="text-gray-400 font-normal text-xs">{row.creator.split(" ").slice(1).join(" ")}</span>
                     </td>
                   </tr>
-              ))}
+                ))}
             </tbody>
           </table>
         </div>
@@ -164,7 +165,7 @@ const Dieuchuyenkho = () => {
         {/* PHÂN TRANG */}
         <div className="p-4 bg-white border-t border-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium select-none">
           <div>1 - 10 of 13 Pages</div>
-          <div className="flex items-center gap-2 text-gray-500">
+          <div className="flex items-center gap-4 text-gray-500">
             <span>The page on</span>
             <select className="border border-gray-200 rounded px-2 py-1 bg-white text-gray-700 outline-none font-bold">
               <option>1</option>
