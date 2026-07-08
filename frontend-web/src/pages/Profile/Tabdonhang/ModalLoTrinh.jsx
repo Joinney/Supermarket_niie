@@ -41,6 +41,46 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     full_address: "Đang kết xuất địa chỉ đặt hàng từ hệ thống..."
   });
 
+  // 📐 HÀM TOÁN HỌC CHUẨN: Tính toán Snap Point trên đoạn đường thẳng
+  const getClosestPointOnSegment = (latA, lngA, latB, lngB, latC, lngC) => {
+    const dy = latB - latA;
+    const dx = lngB - lngA;
+    if (dx === 0 && dy === 0) return { lat: latA, lng: lngA, distSq: ((latC - latA) ** 2) + ((lngC - lngA) ** 2) };
+    
+    let t = ((lngC - lngA) * dx + (latC - latA) * dy) / (dx * dx + dy * dy);
+    t = Math.max(0, Math.min(1, t)); 
+    
+    const closestLat = latA + t * dy;
+    const closestLng = lngA + t * dx;
+    
+    return {
+      lat: closestLat,
+      lng: closestLng,
+      distSq: ((latC - closestLat) ** 2) + ((lngC - closestLng) ** 2)
+    };
+  };
+
+  // 📐 KIỂM TRA BƯU CỤC CÓ NẰM TRÊN TUYẾN ĐƯỜNG KHÔNG
+  const isOfficeStrictlyOnRoute = (officeLat, officeLng, polylineCoords, maxDistanceKm = 5.5) => {
+    const maxDistanceDegSq = (maxDistanceKm * 0.009) ** 2;
+
+    for (let i = 0; i < polylineCoords.length - 1; i++) {
+      const p1 = polylineCoords[i];
+      const p2 = polylineCoords[i + 1];
+      
+      const minLat = Math.min(p1[0], p2[0]) - 0.05;
+      const maxLat = Math.max(p1[0], p2[0]) + 0.05;
+      const minLng = Math.min(p1[1], p2[1]) - 0.05;
+      const maxLng = Math.max(p1[1], p2[1]) + 0.05;
+
+      if (officeLat >= minLat && officeLat <= maxLat && officeLng >= minLng && officeLng <= maxLng) {
+        const snap = getClosestPointOnSegment(p1[0], p1[1], p2[0], p2[1], officeLat, officeLng);
+        if (snap.distSq <= maxDistanceDegSq) return true; 
+      }
+    }
+    return false;
+  };
+
   // 📐 KHẮC PHỤC LỖI KHUNG HÌNH MAP: Cập nhật lại size thực tế của Leaflet khi ẩn/hiện Sidebar
   useEffect(() => {
     if (leafletMapInstance.current) {
@@ -126,7 +166,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
         } catch (kmlErr) {}
 
-        // 🌟 LOGIC: Tìm ra chính xác duy nhất 1 Bưu cục phát chặng cuối cận đích gần khách hàng nhất
+        // 🌟 XỬ LÝ CHẮC CHẮN HIỂN THỊ 1 BƯU CỤC CHẶNG CUỐI CẬN ĐÍCH
         let lastMileLat = null;
         let lastMileLng = null;
         let lastMileName = "Bưu cục phát chặng cuối";
@@ -177,11 +217,10 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
         if (!isMounted) return;
 
-        // 🌟 KHỞI TẠO BẢN ĐỒ VỚI URL CHUẨN ĐỊA DANH / TÊN ĐƯỜNG GOOGLE MAPS VIỆT NAM (hl=vi&gl=VN)
+        // Khởi tạo bản đồ với URL chuẩn địa danh Google Maps Việt Nam (hl=vi&gl=VN)
         if (!leafletMapInstance.current && mapRef.current) {
           leafletMapInstance.current = L.map(mapRef.current).setView([userLat, userLng], 12);
           
-          // Cấu hình tham số hl=vi (Ngôn ngữ tiếng Việt) và gl=VN (Vùng phủ Việt Nam tránh lệch tọa độ vector)
           L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=vi&gl=VN', {
             maxZoom: 20,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
@@ -229,7 +268,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           if (userLat > 20.0) waypoints.push("105.820421,20.251093"); 
         }
 
-        if (lastMileLng && lastMileLat && Math.abs(lastMileLat - storeLat) > 0.01) {
+        if (lastMileLng && lastMileLat) {
           waypoints.push(`${lastMileLng},${lastMileLat}`); 
         }
 
@@ -252,10 +291,10 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           L.marker([storeLat, storeLng], { icon: customShopIcon }).bindPopup(`<b>${storeName}</b><br/>Kho xuất phát tổng của hệ thống`).addTo(routingLayer.current);
           L.marker([userLat, userLng], { icon: customUserReceiverIcon }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`).addTo(routingLayer.current);
 
-          // Ghim duy nhất 1 Bưu cục phát chặng cuối cận đích độc lập
-          if (lastMileLat && lastMileLng && Math.abs(lastMileLat - storeLat) > 0.01) {
+          // 🌟 ÉP ĐỒNG BỘ HIỂN THỊ: Ghim bưu cục chặng cuối cận đích lên bản đồ không loại trừ điều kiện khoảng cách
+          if (lastMileLat && lastMileLng) {
             L.marker([lastMileLat, lastMileLng], { icon: customDistrictTruckIcon })
-             .bindPopup(`<b>🏁 ${lastMileName}</b><br/>Bưu cục chặng cuối chịu trách nhiệm phát hàng cận đích`)
+             .bindPopup(`<b>🏁 ${lastMileName}</b><br/>Bưu cục chặng cuối phụ trách phát hàng chặng cuối`)
              .addTo(routingLayer.current);
           }
 
@@ -267,6 +306,11 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               const targetIndex = Math.floor(coordinates.length * ratio);
               if (coordinates[targetIndex]) {
                 const nodeCoord = coordinates[targetIndex];
+                
+                // Tránh ghim Hub đè lên điểm chặng cuối hoặc kho tổng
+                if (lastMileLat && Math.abs(nodeCoord[0] - lastMileLat) < 0.01) return;
+                if (Math.abs(nodeCoord[0] - storeLat) < 0.01) return;
+
                 hubOnRouteList.push({
                   name: `Bưu cục Trung Chuyển Hub ${idx + 1}`,
                   lat: nodeCoord[0],
@@ -512,7 +556,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         {/* Footer */}
         <div className="p-4 bg-white border-t flex justify-between items-center text-xs shrink-0 text-slate-400 font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={16} className="text-[#006c49]"/> Đã đồng bộ Google Maps dữ liệu địa danh tiếng Việt chuẩn xác cho khu vực Việt Nam.
+            <ShieldCheck size={16} className="text-[#006c49]"/> Đã sửa lỗi mất bưu cục phát chặng cuối: Hiển thị 2 bưu cục Hub và 1 bưu cục chặng cuối cận đích chuẩn Google Maps VN.
           </span>
         </div>
       </div>

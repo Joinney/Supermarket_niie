@@ -12,7 +12,7 @@ import {
   testReadKml,
   calculateShipping 
 } from '../controllers/orderController.js';
-import { protect } from '../middlewares/authMiddleware.js'; // 👈 ĐỔI VỀ: Dùng đúng middleware 'protect' gốc của ông
+import { protect } from '../middlewares/authMiddleware.js'; 
 
 const router = express.Router();
 
@@ -24,7 +24,7 @@ const router = express.Router();
 router.post('/shipping-fee', protect, getShippingFee);
 
 // 2. Tính toán cự cận địa lý cửa hàng hoạt động và chi phí dựa trên tọa độ
-router.post('/calculate-shipping', calculateShipping);
+router.post('/shipping/calc', calculateShipping);
 
 // 3. Lấy danh sách bưu cục GHN cho bản đồ (Xử lý dữ liệu KML động)
 router.post('/post-offices', getPostOffices);
@@ -49,23 +49,23 @@ router.post('/internal/update-status', updateInternalOrderStatus);
 // ========================================================
 
 // 7. Thống kê số liệu đơn hàng cho Admin Dashboard (Tổng doanh thu, đơn trong ngày...)
-router.get('/admin/statistics', protect, getOrderStatistics); // 👈 Tạm thời bọc bảo vệ bằng protect
+router.get('/admin/statistics', protect, getOrderStatistics); 
 
 // 8. Lấy danh sách toàn bộ đơn hàng phân trang, tìm kiếm và lọc cho Admin
-router.get('/admin/all-orders', protect, getAllOrdersAdmin); // 👈 Tạm thời bọc bảo vệ bằng protect
+router.get('/admin/all-orders', protect, getAllOrdersAdmin); 
 
 // 9. Lấy chi tiết 1 đơn hàng kèm danh sách sản phẩm và thông tin khách hàng (Auth-Service)
-router.get('/admin/orders/:id', protect, getOrderDetailAdmin); // 👈 Tạm thời bọc bảo vệ bằng protect
+router.get('/admin/orders/:id', protect, getOrderDetailAdmin); 
 
 // 10. Hủy đơn hàng đang chờ xử lý và kích hoạt hoàn lại số lượng vào kho sản phẩm
-router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder); // 👈 Tạm thời bọc bảo vệ bằng protect
+router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder); 
 
 
 // ========================================================
-// 🔍 ROUTE KIỂM THỬ (TESTING ENDPOINTS)
+// 🔍 ROUTE KIỂM THỬ VÀ ĐỊNH TUYẾN LOGISTICS (LOGISTICS ENDPOINTS)
 // ========================================================
 
-// 11. Endpoint Test Postman đọc file KML toàn quốc hoặc lọc theo khu vực
-router.post('/test/read-kml', testReadKml);
+// 11. 🌟 ĐÃ VÁ LỖI 404: Khớp nối 100% với Postman và API định tuyến chặng cuối chặng trục của Frontend
+router.post('/test-kml', testReadKml);
 
 export default router;
