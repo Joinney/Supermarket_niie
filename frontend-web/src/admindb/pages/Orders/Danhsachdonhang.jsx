@@ -96,7 +96,7 @@ export default function Danhsachdonhang() {
   };
 
   const handleViewOrderDetail = (order) => {
-    navigate("/admin/Donhang/Chitietdonhang", {
+    navigate(`/admin/Donhang/Chitietdonhang/${order.ma_don_hang}`, {
       state: {
         orderId: order.id || order.ma_don_hang,
         maDonHang: order.ma_don_hang,

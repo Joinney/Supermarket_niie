@@ -104,14 +104,12 @@ export default function Sidebar() {
     return modulePerm.view === true || modulePerm.view === "true";
   };
 
-  // 🌟 FIX LỖI: Set mặc định state dựa trên URL hiện tại thay vì gắn cứng
   const [activeItem, setActiveItem] = useState(location.pathname);
 
-  // BỔ SUNG STATE khuyenMai VÀO ĐÂY
   const [openDropdowns, setOpenDropdowns] = useState({
     dashboard: location.pathname.includes("/admin/dashboard"),
     sanPham: location.pathname.includes("/admin/products"),
-    khuyenMai: location.pathname.includes("/admin/promotions"), // 🌟 NEW
+    khuyenMai: location.pathname.includes("/admin/promotions"),
     donHang: location.pathname.includes("/admin/Donhang"),
     khoHang: location.pathname.includes("/admin/inventory"),
     khachHang: location.pathname.includes("/admin/customers"),
@@ -132,7 +130,7 @@ export default function Sidebar() {
       sanPham: currentPath.includes("/admin/products") ? true : prev.sanPham,
       khuyenMai: currentPath.includes("/admin/promotions")
         ? true
-        : prev.khuyenMai, // 🌟 NEW
+        : prev.khuyenMai,
       donHang: currentPath.includes("/admin/Donhang") ? true : prev.donHang,
       khoHang: currentPath.includes("/admin/inventory") ? true : prev.khoHang,
       khachHang: currentPath.includes("/admin/customers")
@@ -151,13 +149,11 @@ export default function Sidebar() {
       setIsCollapsed(false);
     }
 
-    // Toggle menu
     setOpenDropdowns((prev) => ({
       ...prev,
       [menuKey]: !prev[menuKey],
     }));
 
-    // Tự động active mục con đầu tiên dựa trên phân quyền cấu trúc mới
     if (menuKey === "dashboard" && hasAccess("dashboard")) {
       navigate("/admin/dashboard/thongkesanpham");
     } else if (menuKey === "khuyenMai" && hasAccess("promotions")) {
@@ -186,7 +182,6 @@ export default function Sidebar() {
     navigate("/admin/login");
   };
 
-  // BỔ SUNG CẬP NHẬT KIỂM TRA ĐƯỜNG DẪN Ở ĐÂY
   const getMainMenuStyle = (path) => {
     if (
       activeItem === path ||
@@ -194,7 +189,7 @@ export default function Sidebar() {
         activeItem.includes("/admin/dashboard")) ||
       (path === "/admin/products" && activeItem.includes("/admin/products")) ||
       (path === "/admin/promotions" &&
-        activeItem.includes("/admin/promotions")) || // 🌟 NEW
+        activeItem.includes("/admin/promotions")) ||
       (path === "/admin/Donhang" && activeItem.includes("/admin/Donhang")) ||
       (path === "/admin/inventory" &&
         activeItem.includes("/admin/inventory")) ||
@@ -202,7 +197,8 @@ export default function Sidebar() {
         activeItem.includes("/admin/customers")) ||
       (path === "/admin/settings-auth" &&
         (activeItem.includes("/admin/settings/quanlynoibo") ||
-          activeItem.includes("/admin/settings/quanlyvaitro")))
+          activeItem.includes("/admin/settings/quanlyvaitro") ||
+          activeItem.includes("/admin/settings/vip"))) // 🌟 Bổ sung active cho VIP
     ) {
       return "bg-[#006c49] text-white font-bold shadow-sm";
     }
@@ -210,7 +206,6 @@ export default function Sidebar() {
   };
 
   const getSubMenuStyle = (path) => {
-    // Check xem URL hiện tại có chứa path của submenu không (giúp bao quát các trang con như detail, edit)
     if (activeItem.includes(path) || activeItem === path) {
       return "bg-[#e6f0ed] font-bold text-[#006c49]";
     }
@@ -223,7 +218,6 @@ export default function Sidebar() {
     >
       {/* KHỐI 1: CỐ ĐỊNH Ở TRÊN (Logo & Search) */}
       <div className="shrink-0 bg-white z-10">
-        {/* LOGO AREA */}
         <div
           className={`h-20 flex items-center ${isCollapsed ? "justify-center px-2" : "justify-between px-6"} gap-3 shrink-0 relative`}
         >
@@ -247,8 +241,6 @@ export default function Sidebar() {
               />
             )}
           </Link>
-
-          {/* NÚT THU GỌN SIDEBAR */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
             className={`w-5 h-5 border border-gray-100 bg-white rounded-full shadow-sm flex items-center justify-center text-gray-400 text-[9px] hover:text-gray-600 transition-all z-50 absolute ${isCollapsed ? "right-[-10px] top-7" : "right-6"}`}
@@ -257,7 +249,6 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* SEARCH INTERNAL */}
         {!isCollapsed && (
           <div className="px-4 mb-4 shrink-0 animate-fadeIn">
             <div className="relative group">
@@ -348,7 +339,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Thống kê sản phẩm</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/dashboard/thongkedonhang")
@@ -360,7 +350,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Thống kê đơn hàng</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/dashboard/thongkekhachhang")
@@ -418,7 +407,6 @@ export default function Sidebar() {
                   )}
                 </button>
 
-                {/* KHU VỰC MENU CON (SUB-MENU) */}
                 {openDropdowns.sanPham && !isCollapsed && (
                   <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
                     <button
@@ -432,7 +420,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Tất cả sản phẩm</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/products/parent-categories")
@@ -444,7 +431,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Danh mục cha</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/products/child-categories")
@@ -456,7 +442,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Danh mục con</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/products/units")
@@ -468,23 +453,13 @@ export default function Sidebar() {
                       ></span>
                       <span>Đóng gói</span>
                     </button>
-
-                    <button
-                      onClick={() => handleSubMenuClick("/admin/nations/list")}
-                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/nations/list")}`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/nations/list") ? "bg-[#006c49]" : "bg-gray-300"}`}
-                      ></span>
-                      <span>Thị trường quốc gia</span>
-                    </button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* 🌟 NEW: MODULE KHUYẾN MÃI (PROMOTIONS) */}
-            {hasAccess("promotions") && ( // Hoặc bạn có thể tự đổi mã id của module nếu cần
+            {/* MODULE KHUYẾN MÃI (PROMOTIONS) */}
+            {hasAccess("promotions") && (
               <div>
                 <button
                   onClick={() =>
@@ -497,7 +472,6 @@ export default function Sidebar() {
                   title={isCollapsed ? "Khuyến Mãi" : ""}
                 >
                   <div className="flex items-center gap-3">
-                    {/* Icon đốm lửa (Flame) */}
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
@@ -538,16 +512,36 @@ export default function Sidebar() {
                       }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/promotions/danh-sach")}`}
                     >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/promotions/danh-sach") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
                       <span>Danh sách Khuyến mãi</span>
                     </button>
 
+                    {/* Nút 1: Tạo Flash Sale */}
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/promotions/tao-moi")
                       }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/promotions/tao-moi")}`}
                     >
-                      <span>Chiến dịch Khuyến mãi</span>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/promotions/tao-moi") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
+                      <span>Tạo Flash Sale</span>
+                    </button>
+
+                    {/* 🌟 Nút 2: Phát hành Mã Coupon */}
+                    <button
+                      onClick={() =>
+                        handleSubMenuClick("/admin/promotions/tao-coupon")
+                      }
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/promotions/tao-coupon")}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/promotions/tao-coupon") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
+                      <span>Phát hành Mã Coupon</span>
                     </button>
                   </div>
                 )}
@@ -659,9 +653,8 @@ export default function Sidebar() {
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/create-import") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
-                      <span> Danh sách kho hàng </span>{" "}
+                      <span> Danh sách kho hàng </span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/inventory/import-list")
@@ -671,9 +664,8 @@ export default function Sidebar() {
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/import-list") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
-                      <span>Danh sách phiếu nhập</span>{" "}
+                      <span>Danh sách phiếu nhập</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/inventory/batches")
@@ -685,7 +677,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Lô hàng</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/inventory/stock")
@@ -697,7 +688,6 @@ export default function Sidebar() {
                       ></span>
                       <span>Tồn kho</span>
                     </button>
-
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/inventory/transfer")
@@ -809,7 +799,7 @@ export default function Sidebar() {
                         </svg>
                         {!isCollapsed && (
                           <span className="animate-fadeIn">
-                            Tài khoản & Phân quyền
+                            Tài khoản & Hệ thống
                           </span>
                         )}
                       </div>
@@ -851,6 +841,19 @@ export default function Sidebar() {
                             className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/settings/quanlyvaitro") ? "bg-[#006c49]" : "bg-gray-300"}`}
                           ></span>
                           <span>Danh sách vai trò</span>
+                        </button>
+
+                        {/* 🌟 NÚT MỚI: CẤU HÌNH HẠNG VIP */}
+                        <button
+                          onClick={() =>
+                            handleSubMenuClick("/admin/settings/vip-tiers")
+                          }
+                          className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/settings/vip-tiers")}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/settings/vip-tiers") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                          ></span>
+                          <span>Cấu hình Hạng VIP</span>
                         </button>
                       </div>
                     )}

@@ -1,6 +1,11 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import pool, { orderPool, paymentPool } from '../configs/database.js';
+import pool from '../configs/database.js'; 
+import axios from 'axios';
+
+// 🌐 ĐỊA CHỈ KẾT NỐI MICROSERVICES (Dùng trong Docker network hoặc Localhost)
+const ORDER_SERVICE_URL = process.env.INTERNAL_ORDER_URL || 'http://localhost:5005';
+const PAYMENT_SERVICE_URL = process.env.INTERNAL_PAYMENT_URL || 'http://localhost:5004';
 
 // --- HÀM TẠO TOKEN ---
 const generateTokens = (user) => {
@@ -27,7 +32,6 @@ export const signup = async (req, res) => {
     const username = req.body.username || email.split("@")[0];
     const address = req.body.address || req.body.department || "Hệ thống Demi Mart";
 
-    // 🎯 ĐỌC URL ẢNH TỪ CLOUDINARY
     const avatar_url = req.file ? req.file.path : (req.body.avatarUrl || "");
 
     let rawRole = req.body.role ? String(req.body.role).trim().toUpperCase() : "STAFF";
@@ -38,28 +42,28 @@ export const signup = async (req, res) => {
     try {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
+        const membershipTier = rawRole.toLowerCase() === 'buyer' ? 'BẠC' : null;
 
         const query = `
-            INSERT INTO public.users (username, password_hash, email, full_name, role, address, status, avatar_url, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
+            INSERT INTO public.users (username, password_hash, email, full_name, role, address, status, avatar_url, membership_tier, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8, NOW(), NOW())
             RETURNING user_id, username, email, role, avatar_url;
         `;
         
-        const result = await pool.query(query, [username, hashedPassword, email, ho_ten, rawRole, address, avatar_url]);
-        res.status(201).json({ success: true, message: "Cấp tài khoản nhân sự mới thành công!", data: result.rows[0] });
+        const result = await pool.query(query, [username, hashedPassword, email, ho_ten, rawRole, address, avatar_url, membershipTier]);
+        res.status(201).json({ success: true, message: "Cấp tài khoản mới thành công!", data: result.rows[0] });
     } catch (error) {
-        console.error("❌ Lỗi khi thêm nhân sự:", error.message);
-        res.status(500).json({ success: false, error: "Không thể thêm nhân sự mới vào CSDL." });
+        console.error("❌ Lỗi khi đăng ký/thêm nhân sự:", error.message);
+        res.status(500).json({ success: false, error: "Không thể thêm mới vào CSDL." });
     }
 };
-
 
 // --- 2. ĐĂNG NHẬP (SIGNIN) - BẢN ĐỒNG BỘ IP TRỰC TIẾP TỪ TRÌNH DUYỆT ---
 export const signin = async (req, res) => {
     const { username, password } = req.body;
     try {
         const userResult = await pool.query(
-            'SELECT user_id, username, password_hash, email, role, full_name, avatar_url, custom_permissions FROM users WHERE username = $1 OR email = $1', 
+            'SELECT user_id, username, password_hash, email, role, full_name, avatar_url, custom_permissions, membership_tier FROM users WHERE username = $1 OR email = $1', 
             [username]
         );
         
@@ -71,29 +75,22 @@ export const signin = async (req, res) => {
 
         const { accessToken, refreshToken } = generateTokens(user);
 
-        // 🎯 GOM KHỐI ĐỌC THÔNG TIN TRÌNH DUYỆT VÀ IP CHUẨN HOÁ
         const userAgent = req.headers['user-agent'] || 'Unknown Browser';
-        
         let clientIp = req.body.browser_ip || req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-
         let browserName = "Thiết bị khác";
+        
         if (userAgent.includes("Edg")) browserName = "Edge";
         else if (userAgent.includes("Chrome")) browserName = "Chrome";
         else if (userAgent.includes("Safari")) browserName = "Safari";
         else if (userAgent.includes("Firefox")) browserName = "Firefox";
 
-        if (clientIp.includes(',')) {
-            clientIp = clientIp.split(',')[0].trim();
-        }
+        if (clientIp.includes(',')) clientIp = clientIp.split(',')[0].trim();
         clientIp = clientIp.replace('::ffff:', '');
 
-        // 🎯 LUỒNG XỬ LÝ NHẬN DIỆN IP THẬT THEO TÀI KHOẢN (ĐÁNH BẠI DOCKER NAT)
         if (clientIp === '127.0.0.1' || clientIp === 'localhost' || clientIp.startsWith('172.')) {
-            // Khớp chuẩn nick chính của Thuận hoặc admin hệ thống -> Hiện đúng IP Public thực tế mạng của bạn
             if (user.user_id === 1 || user.email === 'thugoodcat@gmail.com') {
                 clientIp = '171.224.114.20'; 
             } else {
-                // Các tài khoản khác / máy khác đăng nhập -> Tự động nhảy sang dải IP Public khác để phân biệt
                 const dynamicEnd = (user.user_id * 29) % 250 + 10;
                 clientIp = `113.161.45.${dynamicEnd}`;
             }
@@ -101,21 +98,15 @@ export const signin = async (req, res) => {
 
         const deviceString = `${browserName} (IP: ${clientIp})`;
 
-        // 🎯 LƯU TRỰC TIẾP CHUỖI THIẾT BỊ VÀ IP SẠCH VÀO POSTGRESQL
         try {
             await pool.query(
-                `UPDATE public.users 
-                 SET refresh_token = $1, 
-                     last_login = NOW(), 
-                     last_login_device = $2 
-                 WHERE user_id = $3`, 
+                `UPDATE public.users SET refresh_token = $1, last_login = NOW(), last_login_device = $2 WHERE user_id = $3`, 
                 [refreshToken, deviceString, user.user_id]
             );
         } catch (dbError) {
             console.error("❌ Lỗi khi cập nhật IP/Device vào CSDL:", dbError.message);
         }
 
-        // Gửi Refresh Token qua Cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production', 
@@ -128,13 +119,8 @@ export const signin = async (req, res) => {
             token: accessToken,
             refreshToken: refreshToken,
             user: {
-                id: user.user_id,
-                username: user.username,
-                email: user.email,
-                role: user.role,
-                full_name: user.full_name,
-                avatar_url: user.avatar_url,
-                custom_permissions: user.custom_permissions
+                id: user.user_id, username: user.username, email: user.email, role: user.role, 
+                full_name: user.full_name, avatar_url: user.avatar_url, custom_permissions: user.custom_permissions, membership_tier: user.membership_tier
             }
         });
     } catch (error) {
@@ -146,7 +132,6 @@ export const signin = async (req, res) => {
 // --- 3. LÀM MỚI TOKEN ---
 export const refreshToken = async (req, res) => {
     const token = req.cookies.refreshToken || req.body.refreshToken;
-
     if (!token) return res.status(401).json({ message: "Phiên làm việc hết hạn!" });
 
     try {
@@ -163,7 +148,6 @@ export const refreshToken = async (req, res) => {
                 process.env.JWT_ACCESS_SECRET || 'vdt_secret_2026',
                 { expiresIn: '15m' }
             );
-
             res.json({ token: newAccessToken });
         });
     } catch (error) {
@@ -175,20 +159,36 @@ export const refreshToken = async (req, res) => {
 export const logout = async (req, res) => {
     try {
         const token = req.cookies.refreshToken || req.body.refreshToken;
-
-        if (token) {
-            await pool.query('UPDATE users SET refresh_token = NULL WHERE refresh_token = $1', [token]);
-        }
+        if (token) await pool.query('UPDATE users SET refresh_token = NULL WHERE refresh_token = $1', [token]);
 
         res.clearCookie("refreshToken", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+            httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
         });
-        
         res.status(200).json({ message: "Đã đăng xuất thành công. Hẹn gặp lại Demi!" });
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+};
+
+// ========================================================
+// 🌟 4B. LẤY HỒ SƠ CÁ NHÂN (GET PROFILE HO SO)
+// ========================================================
+export const getProfileHoSo = async (req, res) => {
+    try {
+        const userId = req.user?.id; 
+        if (!userId) return res.status(401).json({ success: false, message: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn!" });
+
+        const query = `
+            SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, avatar_url, role, status, membership_tier 
+            FROM public.users WHERE user_id = $1 LIMIT 1;
+        `;
+        const { rows } = await pool.query(query, [userId]);
+        
+        if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản người dùng trong hệ thống!" });
+        return res.status(200).json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error("❌ Lỗi nghiêm trọng tại API getProfileHoSo:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi máy chủ phân hệ Auth khi nạp hồ sơ cá nhân." });
     }
 };
 
@@ -196,24 +196,8 @@ export const logout = async (req, res) => {
 export const getAllInternalUsers = async (req, res) => {
     try {
         const query = `
-            SELECT 
-                user_id, 
-                username, 
-                email, 
-                full_name, 
-                phone_number, 
-                address, 
-                gender, 
-                birthday, 
-                role, 
-                status, 
-                avatar_url,
-                custom_permissions,
-                last_login,
-                last_login_device 
-            FROM public.users 
-            WHERE LOWER(role) <> 'buyer'
-            ORDER BY user_id ASC;
+            SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url, custom_permissions, last_login, last_login_device 
+            FROM public.users WHERE LOWER(role) <> 'buyer' ORDER BY user_id ASC;
         `;
         const { rows } = await pool.query(query);
         res.status(200).json(rows);
@@ -232,9 +216,8 @@ export const getAllBuyers = async (req, res) => {
         const offset = (page - 1) * limit;
 
         let queryArgs = [];
-        let whereClauses = [`LOWER(role) = 'buyer'`]; // 🎯 ÉP CHẶT: Chỉ lấy tài khoản Buyer
+        let whereClauses = [`LOWER(role) = 'buyer'`]; 
 
-        // Xử lý bộ lọc tìm kiếm động (nếu có)
         if (search.trim() !== "") {
             queryArgs.push(`%${search.trim()}%`);
             whereClauses.push(`(full_name ILIKE $${queryArgs.length} OR email ILIKE $${queryArgs.length} OR username ILIKE $${queryArgs.length})`);
@@ -242,125 +225,79 @@ export const getAllBuyers = async (req, res) => {
 
         const whereStatement = whereClauses.join(" AND ");
 
-        // 1. Lấy tổng số lượng để tính phân trang
         const totalQuery = `SELECT COUNT(*) FROM public.users WHERE ${whereStatement};`;
         const totalResult = await pool.query(totalQuery, queryArgs);
         const totalItems = parseInt(totalResult.rows[0].count);
         const totalPages = Math.ceil(totalItems / limit);
 
-        // 2. Lấy dữ liệu trang hiện tại
         queryArgs.push(limit, offset);
         const dataQuery = `
-            SELECT 
-                user_id, 
-                username, 
-                email, 
-                full_name, 
-                phone_number, 
-                address, 
-                gender, 
-                birthday, 
-                role, 
-                status, 
-                avatar_url,
-                last_login,
-                created_at
-            FROM public.users 
-            WHERE ${whereStatement}
-            ORDER BY user_id DESC
-            LIMIT $${queryArgs.length - 1} OFFSET $${queryArgs.length};
+            SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url, last_login, created_at, membership_tier
+            FROM public.users WHERE ${whereStatement} ORDER BY user_id DESC LIMIT $${queryArgs.length - 1} OFFSET $${queryArgs.length};
         `;
         
         const { rows } = await pool.query(dataQuery, queryArgs);
 
-        // Trả về cấu trúc phân trang chuẩn để Frontend khớp dữ liệu
-        res.status(200).json({
-            users: rows,
-            totalPages,
-            totalItems,
-            currentPage: page
-        });
+        res.status(200).json({ users: rows, totalPages, totalItems, currentPage: page });
     } catch (error) {
         console.error("❌ Lỗi CSDL tại getAllBuyers:", error.message);
         res.status(500).json({ success: false, error: "Lỗi kết nối CSDL khi lấy danh sách Buyer" });
     }
 };
 
-// --- 6. LẤY CHI TIẾT 1 KHÁCH HÀNG (KẾT NỐI ĐA DATABASE THỰC TẾ) ---
+// --- 6. LẤY CHI TIẾT 1 KHÁCH HÀNG (SỬ DỤNG GIAO TIẾP HTTP CHUẨN MICROSERVICES) ---
 export const getUserDetail = async (req, res) => {
     const { id } = req.params;
     try {
-        // 1. Lấy thông tin khách hàng từ demi_auth_db
-        const query = `SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url FROM public.users WHERE user_id = $1;`;
+        const query = `SELECT user_id, username, email, full_name, phone_number, address, gender, birthday, role, status, avatar_url, membership_tier FROM public.users WHERE user_id = $1;`;
         const { rows } = await pool.query(query, [id]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy user" });
         
         const userData = rows[0];
-
         let orders = [];
         let payments = [];
 
-        // 2. 🌟 TRUY VẤN ĐƠN HÀNG từ orderPool (demi_order_db)
+        // 🌟 GỌI API SANG ORDER SERVICE THAY VÌ QUERY TRỰC TIẾP
         try {
-            const ordersResult = await orderPool.query(`
-                SELECT ma_don_hang, ngay_tao, trang_thai_thanh_toan, tong_thanh_toan 
-                FROM public.orders 
-                WHERE user_id = $1 
-                ORDER BY ngay_tao DESC
-            `, [id]);
-
-            orders = ordersResult.rows.map(order => ({
-                id: order.ma_don_hang,
-                date: order.ngay_tao ? new Date(order.ngay_tao).toLocaleDateString('vi-VN') : "",
-                status: order.trang_thai_thanh_toan || "PROCESSING", 
-                amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.tong_thanh_toan || 0).replace(/\s?₫/, ' VND')
-            }));
-        } catch (orderError) {
-            console.error("❌ Lỗi kết nối demi_order_db:", orderError.message);
-        }
-
-        // 3. 🌟 TRUY VẤN THANH TOÁN từ paymentPool (demi_payment_db)
-        try {
-            // Lấy danh sách mã đơn hàng thực tế đã gom được ở Bước 2
-            const danhSachMaDonHang = orders.map(o => o.id);
-
-            if (danhSachMaDonHang.length > 0) {
-                // Truy vấn trực tiếp bằng mảng mã đơn hàng, không dùng subquery chéo DB nữa
-                const paymentsResult = await paymentPool.query(`
-                    SELECT id, phuong_thuc, ma_don_hang, so_tien, trang_thai, gateway_transaction_id, created_at
-                    FROM public.payment_transactions 
-                    WHERE ma_don_hang = ANY($1)
-                    ORDER BY created_at DESC
-                `, [danhSachMaDonHang]);
-
-                payments = paymentsResult.rows.map(pay => {
-                    // Chuẩn hóa trạng thái thanh toán để khớp với màu sắc/logic hiển thị của Frontend
-                    let statusFormatted = "THANH TOÁN LỖI";
-                    const rawStatus = String(pay.trang_thai).toUpperCase();
-                    if (rawStatus === 'SUCCESS' || rawStatus === 'THÀNH CÔNG' || rawStatus === 'COMPLETED') {
-                        statusFormatted = "THÀNH CÔNG";
+            const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/user-orders/${id}`);
+            if (orderRes.data && orderRes.data.success) {
+                const rawOrders = orderRes.data.data || [];
+                orders = rawOrders.map(order => ({
+                    id: order.ma_don_hang,
+                    date: order.ngay_tao ? new Date(order.ngay_tao).toLocaleDateString('vi-VN') : "",
+                    status: order.trang_thai_thanh_toan || "PROCESSING", 
+                    amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.tong_thanh_toan || 0).replace(/\s?₫/, ' VND')
+                }));
+                
+                // Nếu có mã đơn hàng, gọi tiếp sang Payment Service
+                const danhSachMaDonHang = rawOrders.map(o => o.ma_don_hang);
+                if (danhSachMaDonHang.length > 0) {
+                    try {
+                        const paymentRes = await axios.post(`${PAYMENT_SERVICE_URL}/api/payments/internal/get-by-orders`, { orderIds: danhSachMaDonHang });
+                        if (paymentRes.data && paymentRes.data.success) {
+                            payments = (paymentRes.data.data || []).map(pay => {
+                                let statusFormatted = "THANH TOÁN LỖI";
+                                const rawStatus = String(pay.trang_thai).toUpperCase();
+                                if (rawStatus === 'SUCCESS' || rawStatus === 'THÀNH CÔNG' || rawStatus === 'COMPLETED') statusFormatted = "THÀNH CÔNG";
+                                return {
+                                    id: pay.gateway_transaction_id || `TX-${pay.ma_don_hang || pay.id}`,
+                                    date: pay.created_at ? new Date(pay.created_at).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN'),
+                                    method: pay.phuong_thuc || "Tiền mặt",
+                                    status: statusFormatted,
+                                    amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pay.so_tien || 0).replace(/\s?₫/, ' VND')
+                                };
+                            });
+                        }
+                    } catch (paymentErr) {
+                        console.error("⚠️ Lỗi kết nối Payment Service khi lấy chi tiết:", paymentErr.message);
                     }
-
-                    return {
-                        id: pay.gateway_transaction_id || `TX-${pay.ma_don_hang || pay.id}`,
-                        date: pay.created_at ? new Date(pay.created_at).toLocaleDateString('vi-VN') : new Date().toLocaleDateString('vi-VN'),
-                        method: pay.phuong_thuc || "Tiền mặt",
-                        status: statusFormatted,
-                        amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pay.so_tien || 0).replace(/\s?₫/, ' VND')
-                    };
-                });
+                }
             }
-        } catch (paymentError) {
-            console.error("❌ Lỗi kết nối hoặc truy vấn demi_payment_db:", paymentError.message);
+        } catch (orderErr) {
+            console.error("⚠️ Lỗi kết nối Order Service khi lấy chi tiết:", orderErr.message);
         }
 
-        // 4. Trả kết quả tổng hợp về cho React Frontend
-        res.status(200).json({
-            ...userData,
-            orders: orders,
-            payments: payments
-        });
-
+        res.status(200).json({ ...userData, orders, payments });
     } catch (error) {
         console.error("❌ Lỗi hệ thống tại getUserDetail:", error.message);
         res.status(500).json({ success: false, error: "Lỗi đồng bộ dữ liệu lịch sử khách hàng" });
@@ -374,13 +311,11 @@ export const getUserRoleGroup = async (req, res) => {
         const query = `
             SELECT user_id, username, email, full_name, address, role, avatar_url 
             FROM public.users 
-            WHERE role = (SELECT role FROM public.users WHERE user_id = $1)
-              AND user_id <> $1;
+            WHERE role = (SELECT role FROM public.users WHERE user_id = $1) AND user_id <> $1;
         `;
         const { rows } = await pool.query(query, [id]);
         res.status(200).json(rows);
     } catch (error) {
-        console.error("❌ Lỗi tại getUserRoleGroup:", error.message);
         res.status(500).json({ success: false, error: "Lỗi lấy danh sách nhóm quyền" });
     }
 };
@@ -388,10 +323,7 @@ export const getUserRoleGroup = async (req, res) => {
 // --- 8. CẬP NHẬT THÔNG TIN VÀ MA TRẬN PHÂN QUYỀN  ---
 export const updateUserDetail = async (req, res) => {
     const { id } = req.params;
-    
-    if (!id || id === "undefined") {
-        return res.status(400).json({ success: false, message: "ID nhân sự không hợp lệ!" });
-    }
+    if (!id || id === "undefined") return res.status(400).json({ success: false, message: "ID nhân sự không hợp lệ!" });
 
     const fullName = req.body.full_name !== undefined ? req.body.full_name : req.body.fullName;
     const phoneNumber = req.body.phone_number !== undefined ? req.body.phone_number : req.body.phoneNumber;
@@ -399,9 +331,7 @@ export const updateUserDetail = async (req, res) => {
     const gender = req.body.gender;
     const birthday = req.body.birthday;
     const status = req.body.status || 'active';
-    
     const avatarUrl = req.file ? req.file.path : (req.body.avatar_url || req.body.avatarUrl);
-    
     const customPermissions = req.body.custom_permissions !== undefined ? req.body.custom_permissions : req.body.customPermissions;
 
     let rawRole = req.body.role ? String(req.body.role).trim().toUpperCase() : "STAFF";
@@ -412,62 +342,34 @@ export const updateUserDetail = async (req, res) => {
     try {
         const query = `
             UPDATE public.users
-            SET 
-                full_name = $1,
-                phone_number = $2,
-                address = $3,
-                gender = $4,
-                birthday = $5,
-                role = $6,
-                status = $7,
-                avatar_url = $8,
-                custom_permissions = $9,
-                updated_at = NOW()
+            SET full_name = $1, phone_number = $2, address = $3, gender = $4, birthday = $5, role = $6, status = $7, avatar_url = $8, custom_permissions = $9, updated_at = NOW()
             WHERE user_id = $10
             RETURNING user_id, username, email, full_name, role, status, avatar_url, custom_permissions;
         `;
-        
         const { rows } = await pool.query(query, [
-            fullName || null,
-            phoneNumber || null,
-            address || null,
-            gender || null,
+            fullName || null, phoneNumber || null, address || null, gender || null,
             birthday && birthday !== "" ? birthday : null,
-            rawRole,
-            status,
-            avatarUrl || null,
-            customPermissions ? (typeof customPermissions === "string" ? customPermissions : JSON.stringify(customPermissions)) : null,
-            id
+            rawRole, status, avatarUrl || null,
+            customPermissions ? (typeof customPermissions === "string" ? customPermissions : JSON.stringify(customPermissions)) : null, id
         ]);
 
-        if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy nhân sự để cập nhật!" });
-        }
+        if (rows.length === 0) return res.status(404).json({ success: false, message: "Không tìm thấy nhân sự để cập nhật!" });
         
-        if (global._io) {
-            global._io.to(`user_room_${id}`).emit('permission_matrix_changed', rows[0].custom_permissions);
-        }
-
+        if (global._io) global._io.to(`user_room_${id}`).emit('permission_matrix_changed', rows[0].custom_permissions);
         res.status(200).json({ success: true, message: "Cập nhật PostgreSQL thành công!", data: rows[0] });
     } catch (error) {
-        console.error("❌ Lỗi tại updateUserDetail:", error.message);
         res.status(500).json({ success: false, error: "Lỗi hệ thống khi cập nhật CSDL." });
     }
 };
 
 // ========================================================
-// 📊 API 9: THỐNG KÊ KHÁCH HÀNG CHO ADMIN DASHBOARD
+// 🌟 API 9: THỐNG KÊ KHÁCH HÀNG (SỬ DỤNG GIAO TIẾP HTTP CHUẨN)
 // ========================================================
 export const getCustomerStatistics = async (req, res) => {
     try {
-        // --- 1. Lấy dữ liệu tổng quan từ demi_auth_db ---
         const authStatsQuery = `
-            SELECT 
-                COUNT(*) as total_customers,
-                SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END) as active_customers,
-                SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END) as new_customers_7d
-            FROM public.users 
-            WHERE LOWER(role) = 'buyer'
+            SELECT COUNT(*) as total_customers, SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END) as active_customers, SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END) as new_customers_7d
+            FROM public.users WHERE LOWER(role) = 'buyer'
         `;
         const authResult = await pool.query(authStatsQuery);
         const authStats = authResult.rows[0];
@@ -475,99 +377,38 @@ export const getCustomerStatistics = async (req, res) => {
         let returnRate = "0.0";
         let topCustomers = [];
 
-        // --- 2. Lấy dữ liệu hành vi mua sắm từ demi_order_db ---
+        // 🌟 GỌI API SANG ORDER SERVICE THAY VÌ QUERY TRỰC TIẾP
         try {
-            // A. Tính tỷ lệ quay lại (Khách có >= 2 đơn hàng / Tổng khách có đơn hàng trong 30 ngày)
-            const retentionQuery = `
-                WITH CustomerOrders AS (
-                    SELECT user_id, COUNT(*) as order_count
-                    FROM public.orders
-                    WHERE ngay_tao >= NOW() - INTERVAL '30 days' AND user_id IS NOT NULL
-                    GROUP BY user_id
-                )
-                SELECT 
-                    COUNT(*) as total_buying_customers,
-                    SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) as returning_customers
-                FROM CustomerOrders
-            `;
-            const retentionResult = await orderPool.query(retentionQuery);
-            const rData = retentionResult.rows[0];
-            
-            if (rData && parseInt(rData.total_buying_customers) > 0) {
-                returnRate = ((parseInt(rData.returning_customers) / parseInt(rData.total_buying_customers)) * 100).toFixed(1);
-            }
+            const orderStatsRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/customer-stats`);
+            if (orderStatsRes.data && orderStatsRes.data.success) {
+                returnRate = orderStatsRes.data.return_rate;
+                const topSpenderData = orderStatsRes.data.top_spenders || [];
 
-            // B. Lấy TOP 5 Khách hàng chi tiêu cao nhất
-            // Chỉ tính những đơn Đã thanh toán (Online) hoặc Đã giao hàng (COD)
-            const topSpendersQuery = `
-                SELECT 
-                    user_id,
-                    COUNT(ma_don_hang) as total_orders,
-                    SUM(tong_thanh_toan) as total_spent
-                FROM public.orders
-                WHERE user_id IS NOT NULL 
-                  AND (
-                      LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'đã thanh toán', 'success') 
-                      OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao')
-                  )
-                GROUP BY user_id
-                ORDER BY total_spent DESC
-                LIMIT 5
-            `;
-            const topSpendersResult = await orderPool.query(topSpendersQuery);
-            const topSpenderData = topSpendersResult.rows;
+                if (topSpenderData.length > 0) {
+                    const userIds = topSpenderData.map(u => u.user_id);
+                    const userNameQuery = `SELECT user_id, full_name, username, membership_tier FROM public.users WHERE user_id = ANY($1)`;
+                    const userNameResult = await pool.query(userNameQuery, [userIds]);
+                    const userMap = {};
+                    userNameResult.rows.forEach(u => {
+                        userMap[u.user_id] = { name: u.full_name || u.username || "Khách hàng Demi", tier: u.membership_tier || "BẠC" };
+                    });
 
-            if (topSpenderData.length > 0) {
-                // Trích xuất mảng user_id để query tên bên bảng users
-                const userIds = topSpenderData.map(u => u.user_id);
-                
-                // Móc tên từ bảng users (demi_auth_db)
-                const userNameQuery = `SELECT user_id, full_name, username FROM public.users WHERE user_id = ANY($1)`;
-                const userNameResult = await pool.query(userNameQuery, [userIds]);
-                const userMap = {};
-                userNameResult.rows.forEach(u => {
-                    userMap[u.user_id] = u.full_name || u.username || "Khách hàng Demi";
-                });
-
-                // Gắn tên vào dữ liệu xếp hạng
-                topCustomers = topSpenderData.map((spender, index) => {
-                    const spentAmount = Number(spender.total_spent);
-                    // Phân hạng vui vui cho đẹp giao diện
-                    let rankBadge = "BẠC";
-                    if (spentAmount >= 10000000) rankBadge = "KIM CƯƠNG";
-                    else if (spentAmount >= 5000000) rankBadge = "VÀNG";
-
-                    return {
-                        id: spender.user_id,
-                        rank: `#${index + 1}`,
-                        name: userMap[spender.user_id] || "Tài khoản bị xóa",
-                        orders: `${spender.total_orders} đơn`,
-                        spent: spentAmount,
-                        badge: rankBadge
-                    };
-                });
+                    topCustomers = topSpenderData.map((spender, index) => ({
+                        id: spender.user_id, rank: `#${index + 1}`, name: userMap[spender.user_id]?.name || "Tài khoản bị xóa",
+                        orders: `${spender.total_orders} đơn`, spent: Number(spender.total_spent), badge: userMap[spender.user_id]?.tier || "BẠC"
+                    }));
+                }
             }
         } catch (orderErr) {
-            console.error("⚠️ Lỗi truy xuất orderPool khi thống kê khách hàng:", orderErr.message);
+            console.warn("⚠️ Không thể kết nối Order Service để lấy thống kê khách hàng:", orderErr.message);
         }
 
-        // --- 3. Đánh giá (Tạm thời Mock vì chưa có module Rating) ---
-        const reviewStats = {
-            rating: "4.8",
-            positive_percent: "92%"
-        };
-
-        // --- 4. Trả kết quả ---
         return res.status(200).json({
             success: true,
             data: {
                 overview: {
-                    total_customers: parseInt(authStats.total_customers || 0),
-                    active_customers: parseInt(authStats.active_customers || 0),
-                    new_customers_7d: parseInt(authStats.new_customers_7d || 0),
-                    retention_rate: returnRate,
-                    review_rating: reviewStats.rating,
-                    review_positive_percent: reviewStats.positive_percent
+                    total_customers: parseInt(authStats.total_customers || 0), active_customers: parseInt(authStats.active_customers || 0), new_customers_7d: parseInt(authStats.new_customers_7d || 0),
+                    retention_rate: returnRate, review_rating: "4.8", review_positive_percent: "92%"
                 },
                 top_customers: topCustomers
             }
@@ -576,5 +417,99 @@ export const getCustomerStatistics = async (req, res) => {
     } catch (err) {
         console.error("🔥 Lỗi API getCustomerStatistics:", err.message);
         return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê khách hàng." });
+    }
+};
+
+// ========================================================
+// 🌟 API 10: TỰ ĐỘNG THĂNG HẠNG VIP ĐỘNG (ĐÃ NÂNG CẤP ĐỌC TỪ DB)
+// ========================================================
+export const syncMembershipTier = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const userCheck = await pool.query(`SELECT role, membership_tier FROM public.users WHERE user_id = $1`, [id]);
+        if (userCheck.rows.length === 0 || String(userCheck.rows[0].role).toLowerCase() !== 'buyer') {
+            return res.status(200).json({ success: true, message: "Không phải Buyer, bỏ qua thăng hạng." });
+        }
+
+        // 1. Lấy tổng chi tiêu của Khách từ Order Service
+        let spent = 0;
+        try {
+            const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/user-spent/${id}`);
+            if (orderRes.data && orderRes.data.success) {
+                spent = Number(orderRes.data.total_spent || 0);
+            }
+        } catch (err) {
+            console.error(`⚠️ Lỗi lấy tổng chi tiêu từ Order Service cho User ${id}:`, err.message);
+            return res.status(500).json({ success: false, message: "Không kết nối được với hệ thống Đơn hàng để kiểm tra tổng chi tiêu." });
+        }
+
+        let thresholdVang = 5000000;     
+        let thresholdKimCuong = 10000000; 
+        
+        try {
+            const settingRes = await pool.query(`SELECT value FROM public.system_settings WHERE key = 'vip_threshold'`);
+            if (settingRes.rows.length > 0) {
+                thresholdVang = Number(settingRes.rows[0].value.vang);
+                thresholdKimCuong = Number(settingRes.rows[0].value.kimcuong);
+            }
+        } catch (setErr) {
+            console.warn("⚠️ Lỗi đọc bảng cấu hình VIP, dùng giá trị mặc định dự phòng.");
+        }
+
+        let newTier = 'BẠC';
+        if (spent >= thresholdKimCuong) newTier = 'KIM CƯƠNG';
+        else if (spent >= thresholdVang) newTier = 'VÀNG';
+
+        // 4. Nếu có thay đổi so với hạng cũ thì mới UPDATE vào Database
+        if (userCheck.rows[0].membership_tier !== newTier) {
+            await pool.query(`UPDATE public.users SET membership_tier = $1 WHERE user_id = $2`, [newTier, id]);
+            console.log(`🎉 [VIP UPDATE] Khách hàng ${id} vừa thăng hạng lên: ${newTier} (Tổng chi tiêu: ${spent}đ)`);
+        }
+
+        res.status(200).json({ success: true, tier: newTier, total_spent: spent });
+    } catch (error) {
+        console.error("❌ Lỗi đồng bộ hạng VIP:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống đồng bộ VIP" });
+    }
+};
+
+// ========================================================
+// ⚙️ API 11: LẤY CẤU HÌNH HẠNG MỨC VIP (Dành cho Admin)
+// ========================================================
+export const getVipSettings = async (req, res) => {
+    try {
+        const query = `SELECT value FROM public.system_settings WHERE key = 'vip_threshold'`;
+        const { rows } = await pool.query(query);
+        if (rows.length === 0) {
+            return res.status(200).json({ success: true, data: { vang: 5000000, kimcuong: 10000000 } });
+        }
+        res.status(200).json({ success: true, data: rows[0].value });
+    } catch (error) {
+        console.error("❌ Lỗi lấy cấu hình VIP:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải cấu hình VIP." });
+    }
+};
+
+// ========================================================
+// ⚙️ API 12: CẬP NHẬT CẤU HÌNH HẠNG MỨC VIP (Dành cho Admin)
+// ========================================================
+export const updateVipSettings = async (req, res) => {
+    try {
+        const { vang, kimcuong } = req.body;
+        if (isNaN(vang) || isNaN(kimcuong) || Number(vang) >= Number(kimcuong)) {
+            return res.status(400).json({ success: false, message: "Cấu hình không hợp lệ. Mức Kim Cương phải lớn hơn mức Vàng!" });
+        }
+
+        const query = `
+            INSERT INTO public.system_settings (key, value, updated_at) 
+            VALUES ('vip_threshold', $1, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        `;
+        await pool.query(query, [JSON.stringify({ vang: Number(vang), kimcuong: Number(kimcuong) })]);
+        
+        res.status(200).json({ success: true, message: "Đã cập nhật hệ thống tiêu chuẩn VIP mới!" });
+    } catch (error) {
+        console.error("❌ Lỗi cập nhật cấu hình VIP:", error.message);
+        res.status(500).json({ success: false, message: "Lỗi hệ thống khi lưu cấu hình." });
     }
 };

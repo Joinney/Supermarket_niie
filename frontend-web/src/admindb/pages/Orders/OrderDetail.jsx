@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { orderApi } from "../../../api/axios";
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 const OrderDetail = () => {
+  const { id: maDonHang } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -26,17 +27,14 @@ const OrderDetail = () => {
 
   useEffect(() => {
     const fetchOrderDetail = async () => {
-      if (!orderId) {
+      if (!maDonHang) {
         setLoading(false);
         return;
       }
       try {
         const adminToken = localStorage.getItem("adminToken");
-
-        const response = await orderApi.get(`/orders/${orderId}`, {
-          headers: {
-            Authorization: adminToken ? `Bearer ${adminToken}` : "",
-          },
+        const response = await orderApi.get(`/orders/${maDonHang}`, {
+          headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
         });
 
         if (response.data && response.data.success) {

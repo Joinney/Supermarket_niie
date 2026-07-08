@@ -1,7 +1,16 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../../context/CartContext";
-import { MapPin, Truck, Tag, CreditCard, Loader2 } from "lucide-react";
+import { AuthContext } from "../../context/AuthContext";
+import {
+  MapPin,
+  Truck,
+  Tag,
+  CreditCard,
+  Loader2,
+  X,
+  Ticket,
+} from "lucide-react";
 import { useOrder } from "../../context/OrderContext";
 import { authApi, orderApi, paymentApi } from "../../api/axios";
 import AddressModal from "../Checkout/AddressModal";
@@ -16,10 +25,23 @@ import VietQRButton from "./VietQRButton";
 export default function Checkout() {
   const { cart: contextCart, clearCart, clearPurchasedItems } = useCart();
   const { placeOrder, loading: orderContextLoading } = useOrder();
+  const { getMembershipTier } = useContext(AuthContext);
+  const tier = getMembershipTier ? getMembershipTier() : "BẠC";
   const navigate = useNavigate();
 
   const [checkoutCart, setCheckoutCart] = useState([]);
   const [isPlacing, setIsPlacing] = useState(false);
+
+  // 🌟 KHỞI TẠO STATE QUẢN LÝ COUPON
+  const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponMessage, setCouponMessage] = useState({ text: "", type: "" });
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+
+  // 🌟 STATE CHO POPUP CHỌN VOUCHER
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+  const [availableVouchers, setAvailableVouchers] = useState([]);
+  const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
 
   const mockCart = [
     {
@@ -49,9 +71,8 @@ export default function Checkout() {
     if (!url)
       return "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200";
     let cleanUrl = url.split("?")[0];
-    if (cleanUrl.includes("cloudinary.com")) {
+    if (cleanUrl.includes("cloudinary.com"))
       return `${cleanUrl}?t=${Date.now()}`;
-    }
     return cleanUrl;
   };
 
@@ -81,7 +102,6 @@ export default function Checkout() {
   const [selectedShipping, setSelectedShipping] = useState(null);
   const [isShippingModalOpen, setIsShippingModalOpen] = useState(false);
 
-  // 🎯 QUẢN LÝ TRẠNG THÁI POPUP THANH TOÁN
   const [selectedPayment, setSelectedPayment] = useState("COD");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -94,7 +114,15 @@ export default function Checkout() {
     loading: false,
   });
 
-  // 🚀 LUỒNG DUY NHẤT: TÍNH PHÍ VẬN CHUYỂN QUA GPS VÀ ĐỒNG BỘ 2 BÊN GIAO DIỆN
+  const itemTotal = checkoutCart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
+  const shippingFee = shippingInfo.fee;
+
+  const discountAmount = appliedCoupon ? appliedCoupon.discount_amount : 0;
+  const finalTotal = Math.max(0, itemTotal + shippingFee - discountAmount);
+
   useEffect(() => {
     const fetchDistanceShipping = async () => {
       if (!address || !address.latitude || !address.longitude) return;
@@ -109,11 +137,9 @@ export default function Checkout() {
         if (response.data && response.data.success) {
           const { shippingFee, estimatedMinutes, distanceKm, nearestStore } =
             response.data.data;
-
           const timeStr = `${estimatedMinutes} phút (${distanceKm}km)`;
           const storeNameStr = nearestStore?.name || "Siêu thị DemiMart";
 
-          // 1. Cập nhật state tổng tiền bên cột phải
           setShippingInfo({
             fee: shippingFee,
             timeText: timeStr,
@@ -123,7 +149,6 @@ export default function Checkout() {
             loading: false,
           });
 
-          // 2. Tạo object gói cước để đồng bộ vào Section giữa trang
           const demiExpressOption = {
             id: "demi-store-express",
             name: `🚀 Giao từ: ${storeNameStr}`,
@@ -136,11 +161,9 @@ export default function Checkout() {
           setSelectedShipping(demiExpressOption);
         }
       } catch (error) {
-        console.error("Lỗi API tính cước vận chuyển:", error);
         setShippingInfo((prev) => ({ ...prev, loading: false }));
       }
     };
-
     fetchDistanceShipping();
   }, [address]);
 
@@ -162,13 +185,85 @@ export default function Checkout() {
     fetchAddresses();
   }, []);
 
-  const itemTotal = checkoutCart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
-  const shippingFee = shippingInfo.fee;
-  const xuDiscount = 500;
-  const finalTotal = itemTotal + shippingFee - xuDiscount;
+  // 🌟 LẤY DANH SÁCH VOUCHER KHI MỞ POPUP
+  useEffect(() => {
+    if (showVoucherModal && availableVouchers.length === 0) {
+      const fetchVouchers = async () => {
+        setIsLoadingVouchers(true);
+        try {
+          const res = await authApi.get("http://localhost:5007/api/coupons");
+          if (res.data.success) {
+            // Chỉ lấy các mã đang active
+            setAvailableVouchers(res.data.data.filter((c) => c.is_active));
+          }
+        } catch (err) {
+          console.error("Lỗi tải voucher:", err);
+        } finally {
+          setIsLoadingVouchers(false);
+        }
+      };
+      fetchVouchers();
+    }
+  }, [showVoucherModal, availableVouchers.length]);
+
+  // 🌟 HÀM KIỂM TRA & ÁP DỤNG MÃ (Hỗ trợ áp dụng tự động)
+  const handleApplyCoupon = async (codeToApply = couponCodeInput) => {
+    const finalCode =
+      typeof codeToApply === "string"
+        ? codeToApply.trim()
+        : couponCodeInput.trim();
+
+    if (!finalCode) {
+      setCouponMessage({
+        text: "Vui lòng chọn hoặc nhập mã khuyến mãi",
+        type: "error",
+      });
+      return;
+    }
+
+    setCouponCodeInput(finalCode);
+    setIsValidatingCoupon(true);
+    setCouponMessage({ text: "", type: "" });
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await authApi.post(
+        "http://localhost:5007/api/coupons/validate",
+        {
+          code: finalCode,
+          order_amount: itemTotal,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (res.data.success) {
+        setAppliedCoupon(res.data.data);
+        setCouponMessage({
+          text: res.data.message || "Áp dụng mã thành công!",
+          type: "success",
+        });
+        setShowVoucherModal(false); // Ẩn modal nếu đang mở
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponMessage({
+        text: err.response?.data?.message || "Mã không hợp lệ hoặc đã hết hạn",
+        type: "error",
+      });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCodeInput("");
+    setCouponMessage({ text: "", type: "" });
+  };
 
   const finalizeOrderCleanup = async () => {
     const boughtVariantIds = checkoutCart.map(
@@ -204,19 +299,26 @@ export default function Checkout() {
       to_district_id: Number(targetDistrictId || 1454),
       to_ward_code: String(targetWardCode || "21211"),
       weight: 1000,
+      danh_sach_san_pham: checkoutCart.map((item) => {
+        const vId = String(
+          item.variant_id ||
+            item.variantId ||
+            item.ma_bien_the ||
+            item.productId ||
+            item.ma_san_pham ||
+            "",
+        );
 
-      danh_sach_san_pham: checkoutCart.map((item) => ({
-        variant_id: String(item.variantId || item.variant_id),
-        quantity: Number(item.quantity),
-        price: Number(item.price),
-        name: String(
-          item.name || item.productName || "Sản phẩm cấp lập Demi Mart",
-        ),
-        variant_name: String(item.variantName || item.variant_name || ""),
-        image: String(item.image || item.imageUrl || item.image_url || ""),
-        ma_san_pham: String(item.productId || item.ma_san_pham || ""),
-      })),
-
+        return {
+          variant_id: vId,
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          name: String(item.name || item.productName || "Sản phẩm Demi Mart"),
+          variant_name: String(item.variantName || item.variant_name || ""),
+          image: String(item.image || item.imageUrl || item.image_url || ""),
+          ma_san_pham: String(item.ma_san_pham || item.productId || ""),
+        };
+      }),
       don_vi_van_chuyen: shippingInfo.storeName
         ? `Siêu thị ${shippingInfo.storeName}`
         : "Siêu thị DemiMart Express",
@@ -227,13 +329,20 @@ export default function Checkout() {
       tong_thoi_gian_du_kien_phut: shippingInfo.estimatedMinutes || 0,
       tong_tien_hang: itemTotal,
       phi_van_chuyen: shippingFee,
-      so_tien_giam_gia: xuDiscount,
+
+      so_tien_giam_gia: discountAmount,
+      coupon_code: appliedCoupon ? appliedCoupon.code : null,
       tong_thanh_toan: finalTotal,
+
       phuong_thuc_thanh_toan: selectedPayment,
       ...extraPaymentInfo,
     };
 
     try {
+      console.log(
+        "Đang kiểm tra giỏ hàng gửi đi:",
+        orderData.danh_sach_san_pham,
+      );
       const result = placeOrder
         ? await placeOrder(orderData)
         : await orderApi.post("/orders/place-order", orderData);
@@ -252,13 +361,11 @@ export default function Checkout() {
             "vnpay_pending_variants",
             JSON.stringify(boughtVariantIds),
           );
-
           const paymentRes = await paymentApi.post("/create-transaction", {
             ma_don_hang: maDonHangText,
             tong_thanh_toan: tongThanhToanNum,
             phuong_thuc_thanh_toan: "VNPay",
           });
-
           if (paymentRes.data && paymentRes.data.paymentUrl) {
             window.location.href = `${paymentRes.data.paymentUrl}&vnp_BrowserNonce=${new Date().getTime()}`;
             return true;
@@ -308,10 +415,6 @@ export default function Checkout() {
       setIsPlacing(true);
       const transactionId =
         details.purchase_units?.[0]?.payments?.captures?.[0]?.id || details.id;
-      console.log(
-        "🚀 PayPal capture thành công ở Client, tiến hành lưu hóa đơn hệ thống...",
-      );
-
       const maDonHangText = await executePlaceOrder({
         trang_thai_thanh_toan: "completed",
         paypal_transaction_id: String(transactionId),
@@ -330,14 +433,12 @@ export default function Checkout() {
               intent: String(details.intent || "CAPTURE"),
             },
           });
-          console.log("🔒 Đồng bộ sang Payment Service thành công!");
         } catch (syncErr) {
           console.warn(
             "⚠️ Ghi nhận lịch sử payment_transactions chạy ngầm gặp độ trễ:",
             syncErr.response?.data || syncErr.message,
           );
         }
-
         alert(
           `🎉 Đặt hàng thành công! Mã đơn hàng Demi Mart của bạn là: ${maDonHangText}`,
         );
@@ -345,7 +446,6 @@ export default function Checkout() {
         navigate("/profile/orders");
       }
     } catch (err) {
-      console.error("Lỗi callback xử lý hậu PayPal:", err);
       alert(
         "Giao dịch PayPal thành công nhưng ghi nhận lịch sử hệ thống thất bại!",
       );
@@ -381,7 +481,6 @@ export default function Checkout() {
                 Thay đổi
               </button>
             </div>
-
             {isLoadingAddress ? (
               <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
                 <Loader2 className="animate-spin text-[#006c49]" size={16} />{" "}
@@ -427,11 +526,9 @@ export default function Checkout() {
             <h2 className="text-gray-700 font-black text-xs lg:text-sm uppercase tracking-wide border-b border-slate-100 pb-3 mb-2">
               Kiện hàng sản phẩm ({checkoutCart.length} loại phân loại)
             </h2>
-
             <div className="space-y-4">
               {groupedCheckoutCart.map((group) => {
                 const hasMultipleVariants = group.subVariants.length > 1;
-
                 if (!hasMultipleVariants) {
                   const item = group.subVariants[0];
                   return (
@@ -446,7 +543,6 @@ export default function Checkout() {
                           alt={item.name}
                         />
                       </div>
-
                       <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
                         <div className="min-w-0 flex-1 text-left">
                           <span className="font-black text-slate-800 text-sm lg:text-base uppercase truncate italic block">
@@ -475,7 +571,6 @@ export default function Checkout() {
                             )
                           )}
                         </div>
-
                         <div className="flex items-center gap-6 flex-shrink-0 w-full sm:w-auto justify-between sm:justify-end">
                           <div className="text-center">
                             <span className="text-xs text-gray-400 font-bold block">
@@ -506,7 +601,6 @@ export default function Checkout() {
                     </div>
                   );
                 }
-
                 return (
                   <div
                     key={group.productId}
@@ -532,7 +626,6 @@ export default function Checkout() {
                         </p>
                       </div>
                     </div>
-
                     <div className="divide-y divide-slate-100 bg-white">
                       {group.subVariants.map((subItem) => (
                         <div
@@ -546,7 +639,6 @@ export default function Checkout() {
                               className="w-full h-full object-contain"
                             />
                           </div>
-
                           <div className="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
                             <div className="min-w-0 flex-1 text-left">
                               {subItem.thuoc_tinh_hop_nhat &&
@@ -572,7 +664,6 @@ export default function Checkout() {
                                 </span>
                               )}
                             </div>
-
                             <div className="flex items-center gap-6 flex-shrink-0 w-full sm:w-auto justify-between sm:justify-end">
                               <div className="text-center">
                                 <span className="text-xs text-gray-400 font-bold block">
@@ -612,7 +703,7 @@ export default function Checkout() {
             </div>
           </section>
 
-          {/* 3. ĐƠN VỊ VẬN CHUYỂN */}
+          {/* 3. ĐƠN VỊ VẬN CHUYỂN VÀ COUPON */}
           <section className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center font-black text-sm uppercase text-[#006c49] border-b pb-3">
               <div className="flex gap-2">
@@ -665,13 +756,58 @@ export default function Checkout() {
               </p>
             )}
 
-            <div className="border-t pt-4 flex justify-between items-center font-bold">
-              <div className="flex gap-2 text-[#006c49] text-sm uppercase tracking-wider">
-                <Tag size={18} /> Demi Mart Voucher
+            {/* 🌟 KHU VỰC VOUCHER MỚI (CHỌN TỪ POPUP) */}
+            <div className="border-t pt-5 mt-4 flex flex-col gap-3">
+              <div className="flex justify-between items-center font-bold mb-1">
+                <div className="flex gap-2 text-[#006c49] text-sm uppercase tracking-wider">
+                  <Tag size={18} /> Mã Giảm Giá / Voucher
+                </div>
               </div>
-              <button className="border border-[#006c49] text-[#006c49] px-4 py-1.5 rounded-xl hover:bg-emerald-50 text-xs font-black uppercase">
-                Chọn mã giảm
-              </button>
+
+              {!appliedCoupon ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-3 relative group">
+                    <input
+                      type="text"
+                      readOnly // Không cho nhập tay nữa
+                      onClick={() => setShowVoucherModal(true)} // Nhấn vào là mở Modal
+                      placeholder="Nhấn để chọn mã khuyến mãi..."
+                      value={couponCodeInput}
+                      className="border-2 border-slate-200 rounded-xl px-4 py-2 flex-1 outline-none font-bold text-slate-700 uppercase cursor-pointer group-hover:border-[#006c49]/50 transition-colors bg-white"
+                    />
+                    <button
+                      onClick={() => setShowVoucherModal(true)}
+                      className="bg-[#006c49] text-white px-5 py-2 rounded-xl font-black uppercase text-xs hover:bg-[#005237] transition-all flex items-center gap-2"
+                    >
+                      <Ticket size={16} /> Chọn Mã
+                    </button>
+                  </div>
+                  {couponMessage.text && (
+                    <p
+                      className={`text-xs font-bold ${couponMessage.type === "error" ? "text-red-500" : "text-[#006c49]"}`}
+                    >
+                      {couponMessage.text}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-emerald-50 border border-[#006c49] rounded-xl p-3 flex justify-between items-center">
+                  <div className="flex flex-col">
+                    <span className="text-[#006c49] font-black uppercase text-sm">
+                      Đã áp dụng mã: {appliedCoupon.code}
+                    </span>
+                    <span className="text-emerald-700 text-xs font-bold">
+                      Giảm ngay {discountAmount.toLocaleString()}đ
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleRemoveCoupon}
+                    className="text-red-500 hover:text-red-600 bg-white p-1.5 rounded-lg border border-red-100 shadow-sm transition-transform active:scale-95"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           </section>
 
@@ -688,7 +824,6 @@ export default function Checkout() {
                 Thay đổi
               </button>
             </div>
-
             <div className="px-5 py-2.5 rounded-xl border-2 border-[#006c49] bg-emerald-50/50 text-[#006c49] text-xs font-black uppercase tracking-wider inline-block">
               {getPaymentName(selectedPayment)}
             </div>
@@ -708,7 +843,6 @@ export default function Checkout() {
                   {itemTotal.toLocaleString()}đ
                 </span>
               </div>
-
               <div className="flex flex-col gap-1 border-b border-slate-100 pb-2">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-600 font-bold">
@@ -729,10 +863,15 @@ export default function Checkout() {
                   </span>
                 )}
               </div>
-              <div className="flex justify-between text-red-500">
-                <span>Shopee Xu ưu đãi</span>{" "}
-                <span>-{xuDiscount.toLocaleString()}đ</span>
-              </div>
+
+              {/* 🌟 HIỂN THỊ SỐ TIỀN COUPON ĐƯỢC GIẢM */}
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                  <span>Mã Giảm Giá</span>{" "}
+                  <span>-{discountAmount.toLocaleString()}đ</span>
+                </div>
+              )}
+
               <div className="flex justify-between text-lg font-black text-[#006c49] border-t pt-3">
                 <span>TỔNG ĐƠN</span>{" "}
                 <span>{finalTotal.toLocaleString()}đ</span>
@@ -748,14 +887,9 @@ export default function Checkout() {
                 <PayPalButton
                   amount={finalTotal}
                   onSuccess={handlePayPalSuccess}
-                  onError={() =>
-                    alert(
-                      "Giao dịch PayPal bị gián đoạn, Demi vui lòng kiểm tra lại cấu hình hệ thống nhé!",
-                    )
-                  }
+                  onError={() => alert("Giao dịch PayPal bị gián đoạn!")}
                 />
               )}
-
               {selectedPayment === "VNPay" && (
                 <VNPAYButton
                   amount={finalTotal}
@@ -768,15 +902,10 @@ export default function Checkout() {
                   }
                 />
               )}
-
               {selectedPayment === "MoMo" && (
                 <MoMoButton
                   amount={finalTotal}
-                  onClick={() =>
-                    alert(
-                      "Chức năng thanh toán qua MoMo đang cấu hình SIT thử nghiệm!",
-                    )
-                  }
+                  onClick={() => alert("Chức năng đang bảo trì")}
                   disabled={
                     isGlobalLoading ||
                     shippingInfo.loading ||
@@ -785,15 +914,10 @@ export default function Checkout() {
                   }
                 />
               )}
-
               {selectedPayment === "Banking" && (
                 <VietQRButton
                   amount={finalTotal}
-                  onClick={() =>
-                    alert(
-                      "Hệ thống đang tạo cổng quét mã VietQR động theo Đơn hàng!",
-                    )
-                  }
+                  onClick={() => alert("Chức năng đang bảo trì")}
                   disabled={
                     isGlobalLoading ||
                     shippingInfo.loading ||
@@ -802,7 +926,6 @@ export default function Checkout() {
                   }
                 />
               )}
-
               {selectedPayment === "COD" && (
                 <CODButton
                   amount={finalTotal}
@@ -835,13 +958,131 @@ export default function Checkout() {
         shippingMethods={shippingMethods}
         selectedMethodId={selectedShipping?.id}
       />
-
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         onSelect={(methodId) => setSelectedPayment(methodId)}
         selectedMethod={selectedPayment}
       />
+
+      {/* 🌟 MODAL CHỌN VOUCHER HIỂN THỊ KHI ĐƯỢC KÍCH HOẠT */}
+      {showVoucherModal && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fadeIn">
+            {/* Header Modal */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+              <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                <Ticket className="text-[#006c49]" /> Chọn Mã Khuyến Mãi
+              </h3>
+              <button
+                onClick={() => setShowVoucherModal(false)}
+                className="text-gray-400 hover:text-red-500"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Body Danh sách Voucher */}
+            <div className="p-4 max-h-[60vh] min-h-[300px] overflow-y-auto bg-gray-50/80 space-y-3">
+              {isLoadingVouchers ? (
+                <div className="text-center py-10 flex flex-col items-center gap-2">
+                  <Loader2 className="animate-spin text-[#006c49]" size={28} />
+                  <span className="text-sm font-bold text-gray-400">
+                    Đang tìm mã phù hợp...
+                  </span>
+                </div>
+              ) : availableVouchers.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 font-bold">
+                  Hiện không có mã giảm giá nào đang chạy.
+                </div>
+              ) : (
+                availableVouchers.map((coupon) => {
+                  // 1. TÍNH TOÁN ĐIỀU KIỆN
+                  const reqSpent = Number(coupon.min_lifetime_spent);
+                  const reqOrderValue = Number(coupon.min_order_value);
+
+                  // Kiểm tra Hạng (KIM CƯƠNG, VÀNG, hoặc mã 0đ)
+                  const isTierEligible =
+                    tier === "KIM CƯƠNG" ||
+                    reqSpent === 0 ||
+                    (tier === "VÀNG" && reqSpent <= 5000000);
+
+                  // Kiểm tra Giá trị đơn hàng tối thiểu
+                  const isValueEligible = itemTotal >= reqOrderValue;
+
+                  // Phải thỏa mãn cả 2 điều kiện
+                  const isEligible = isTierEligible && isValueEligible;
+
+                  // 2. TẠO CÂU THÔNG BÁO LÝ DO BỊ KHÓA
+                  let disableReason = "";
+                  if (!isTierEligible) disableReason = "Cần hạng cao hơn";
+                  else if (!isValueEligible)
+                    disableReason = `Mua thêm ${(reqOrderValue - itemTotal).toLocaleString()}đ`;
+
+                  return (
+                    <div
+                      key={coupon.id}
+                      className={`border-2 p-4 rounded-xl flex items-center justify-between relative overflow-hidden transition-all duration-300 ${
+                        isEligible
+                          ? "bg-white border-emerald-100 cursor-pointer hover:border-[#006c49] group shadow-sm"
+                          : "bg-slate-50 border-slate-200 opacity-60 grayscale-[50%] pointer-events-none" // Hiệu ứng mờ và cấm bấm
+                      }`}
+                    >
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-2 ${isEligible ? "bg-[#006c49]" : "bg-slate-400"}`}
+                      ></div>
+
+                      <div className="pl-2 flex-1">
+                        <div
+                          className={`font-black text-lg ${isEligible ? "text-[#006c49]" : "text-slate-500"}`}
+                        >
+                          {coupon.code}
+                        </div>
+                        <div className="text-sm font-bold text-gray-700 mt-0.5 line-clamp-1">
+                          {coupon.description ||
+                            `Giảm ${Number(coupon.discount_value).toLocaleString()}đ`}
+                        </div>
+                        <div
+                          className={`text-[11px] font-bold mt-1 ${!isValueEligible && isTierEligible ? "text-red-500" : "text-gray-400"}`}
+                        >
+                          Đơn tối thiểu{" "}
+                          {Number(coupon.min_order_value).toLocaleString()}đ
+                        </div>
+                      </div>
+
+                      {/* 3. HIỂN THỊ NÚT HOẶC CẢNH BÁO */}
+                      {isEligible ? (
+                        <button
+                          onClick={() => handleApplyCoupon(coupon.code)}
+                          disabled={isValidatingCoupon}
+                          className="bg-[#006c49] text-white px-4 py-1.5 rounded-lg text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity active:scale-95 disabled:opacity-50 shrink-0"
+                        >
+                          {isValidatingCoupon && couponCodeInput === coupon.code
+                            ? "..."
+                            : "Dùng Ngay"}
+                        </button>
+                      ) : (
+                        <div className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1.5 rounded-lg border border-amber-100 text-right shrink-0">
+                          {disableReason}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-100 bg-white text-center">
+              <button
+                onClick={() => setShowVoucherModal(false)}
+                className="text-sm font-bold text-gray-400 hover:text-gray-600"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,7 +29,8 @@ const AUTH_BASE_URL = isLocalhost
   : "https://authservice-sz4p.onrender.com";
 
 export default function Header({ onOpenMenu }) {
-  const { user: authUser, logout } = useContext(AuthContext);
+  // 🌟 CẬP NHẬT: Lấy thêm getMembershipTier từ AuthContext
+  const { user: authUser, logout, getMembershipTier } = useContext(AuthContext);
   const { cart } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,13 +38,13 @@ export default function Header({ onOpenMenu }) {
 
   // State cho Tìm kiếm
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [suggestions, setSuggestions] = useState([]); // Sản phẩm (>= 3 ký tự)
-  const [categorySuggestions, setCategorySuggestions] = useState([]); // Danh mục (1-2 ký tự)
+  const [suggestions, setSuggestions] = useState([]);
+  const [categorySuggestions, setCategorySuggestions] = useState([]);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
   const suggestRef = useRef(null);
   const suggestTimer = useRef(null);
 
-  // Dữ liệu Tìm kiếm phổ biến (Hardcode theo yêu cầu)
+  // Dữ liệu Tìm kiếm phổ biến
   const popularSearches = [
     { text: "nước mắm", hot: true },
     { text: "rau", hot: true },
@@ -114,7 +115,6 @@ export default function Header({ onOpenMenu }) {
     setIsLangOpen(false);
   };
 
-  // Hàm xử lý khi click vào nút "Tìm kiếm phổ biến"
   const handlePopularSearchClick = (keyword) => {
     setSearchKeyword(keyword);
     setIsSuggestOpen(false);
@@ -244,6 +244,33 @@ export default function Header({ onOpenMenu }) {
   const isAuthPage = ["/login", "/signup", "/forgot-password"].includes(
     location.pathname,
   );
+
+  // 🌟 THÊM: HÀM RENDER HUY HIỆU VIP TRÊN HEADER
+  const renderHeaderTierBadge = () => {
+    const tier = getMembershipTier();
+    if (!tier) return null; // Ẩn nếu là Admin/Staff hoặc chưa có hạng
+
+    const name = String(tier).toUpperCase();
+    if (name === "KIM CƯƠNG") {
+      return (
+        <span className="bg-indigo-50 text-indigo-600 border border-indigo-200 text-[8px] font-black px-1.5 py-[1px] rounded-full uppercase tracking-wider shadow-sm flex items-center gap-0.5 mt-0.5 w-max leading-none">
+          💎 {name}
+        </span>
+      );
+    }
+    if (name === "VÀNG") {
+      return (
+        <span className="bg-amber-50 text-amber-600 border border-amber-200 text-[8px] font-black px-1.5 py-[1px] rounded-full uppercase tracking-wider shadow-sm flex items-center gap-0.5 mt-0.5 w-max leading-none">
+          👑 {name}
+        </span>
+      );
+    }
+    return (
+      <span className="bg-slate-50 text-slate-500 border border-slate-200 text-[8px] font-black px-1.5 py-[1px] rounded-full uppercase tracking-wider shadow-sm flex items-center gap-0.5 mt-0.5 w-max leading-none">
+        🥈 BẠC
+      </span>
+    );
+  };
 
   return (
     <header
@@ -468,7 +495,7 @@ export default function Header({ onOpenMenu }) {
                                 `/${country}/product/${category}/${s.ma_san_pham}`,
                               );
                               setIsSuggestOpen(false);
-                              setSearchKeyword("");
+                              SearchKeyword("");
                             }}
                             className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f8fafc] transition-colors text-left border border-transparent hover:border-slate-100"
                           >
@@ -530,7 +557,7 @@ export default function Header({ onOpenMenu }) {
                   return (
                     <button
                       key={store.code}
-                      type="button" // Thêm type để tránh submit form nhầm
+                      type="button"
                       onClick={() => handleLanguageChange(langCode, store.code)}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                         currentLanguage.code === langCode
@@ -566,10 +593,12 @@ export default function Header({ onOpenMenu }) {
                     }}
                   />
                 </Link>
-                <div className="hidden lg:block text-left overflow-hidden">
-                  <p className="text-[11px] font-black text-slate-900 leading-tight truncate max-w-[80px]">
+                {/* 🌟 CẬP NHẬT CHỖ NÀY: Hiển thị Tên và Huy hiệu VIP */}
+                <div className="hidden lg:flex flex-col justify-center text-left overflow-hidden min-w-[70px]">
+                  <p className="text-[11px] font-black text-slate-900 leading-tight truncate max-w-[90px]">
                     {displayUser.full_name}
                   </p>
+                  {renderHeaderTierBadge()}
                 </div>
                 <button
                   onClick={handleLogout}

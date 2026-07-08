@@ -76,10 +76,12 @@ import Chitietkhachhang from "./admindb/pages/Customers/Chitietkhachhang";
 import Danhsachnoibo from "./admindb/pages/settings/Quanlynoibo/Danhsachnoibo.jsx";
 import Chitietnoibo from "./admindb/pages/settings/Quanlynoibo/Chitietnoibo.jsx";
 import Danhsachvaitro from "./admindb/pages/settings/Quanlyvaitro/Danhsachvaitro.jsx";
+import VipSettings from "./admindb/pages/Settings/VipSettings";
 
 // --- 🌟 IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI TIẾNG VIỆT CHUẨN CẤU TRÚC 🌟 ---
 import DanhSachGiamGia from "./admindb/pages/Promotions/DanhSachGiamGia.jsx";
 import TaoGiamGia from "./admindb/pages/Promotions/TaoGiamGia.jsx";
+import CreateCoupon from "./admindb/pages/Promotions/CreateCoupon.jsx";
 
 /**
  * 🎯 ĐÃ THAY THẾ: Component Giao Diện Cấu hình chung (General Settings) thực tế theo hình mẫu
@@ -843,7 +845,7 @@ const AppRoutes = () => (
         <Route path="/admin/products/units/edit/:id" element={<UnitForm />} />
       </Route>
 
-      {/* Quản Lý Khuyến Mãi (Promotion & Flash Sale) */}
+      {/* Quản Lý Khuyến Mãi (Promotion & Flash Sale & Coupon) */}
       <Route
         path="promotions"
         element={
@@ -853,9 +855,19 @@ const AppRoutes = () => (
         }
       >
         <Route index element={<Navigate to="danh-sach" replace />} />
+
+        {/* Trang danh sách tổng hợp */}
         <Route path="danh-sach" element={<DanhSachGiamGia />} />
+
+        {/* 1. Flash Sale */}
         <Route path="tao-moi" element={<TaoGiamGia />} />
-        <Route path="flash-sale/edit/:id" element={<TaoGiamGia />} />
+        {/* Edit Flash Sale */}
+        <Route path="sua-flashsale/:id" element={<TaoGiamGia />} />
+
+        {/* Mã Coupon/Voucher */}
+        <Route path="tao-coupon" element={<CreateCoupon />} />
+        {/* Edit Coupon */}
+        <Route path="sua-coupon/:id" element={<CreateCoupon />} />
       </Route>
 
       {/* 🌍 Bọc Quản Lý Cửa Hàng / Quốc Gia */}
@@ -884,7 +896,7 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="Danhsachdonhang" replace />} />
         <Route path="Danhsachdonhang" element={<Danhsachdonhang />} />
-        <Route path="Chitietdonhang" element={<Chitietdonhang />} />
+        <Route path="Chitietdonhang/:id" element={<Chitietdonhang />} />
       </Route>
 
       {/* 📦 Bọc Kho Hàng */}
@@ -918,7 +930,10 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="list" replace />} />
         <Route path="list" element={<Danhsachkhachhang />} />
-        <Route path="list/Chitietkhachhang" element={<Chitietkhachhang />} />
+        <Route
+          path="list/Chitietkhachhang/:id"
+          element={<Chitietkhachhang />}
+        />{" "}
       </Route>
 
       {/* 🛡️ Bọc Tài khoản & Phân quyền */}
@@ -932,6 +947,7 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to="general" replace />} />
         <Route path="general" element={<SettingsGeneral />} />
+        <Route path="vip-tiers" element={<VipSettings />} />
         <Route path="quanlynoibo">
           <Route index element={<Navigate to="danhsachnoibo" replace />} />
           <Route path="danhsachnoibo" element={<Danhsachnoibo />} />

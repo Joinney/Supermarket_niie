@@ -5,8 +5,9 @@ export const getHoso = async (req, res) => {
     try {
         const userId = req.user.id; 
         
+        // 🌟 CẬP NHẬT: Select thêm role và membership_tier
         const query = `
-            SELECT user_id, username, email, full_name, phone_number, gender, birthday, avatar_url 
+            SELECT user_id, username, email, full_name, phone_number, gender, birthday, avatar_url, role, membership_tier 
             FROM users 
             WHERE user_id = $1
         `;
@@ -29,11 +30,12 @@ export const updateHoso = async (req, res) => {
         const userId = req.user.id;
         const { full_name, phone_number, gender, birthday } = req.body;
 
+        // 🌟 CẬP NHẬT: Trả về thêm role và membership_tier để Frontend tự đồng bộ State
         const query = `
             UPDATE users 
             SET full_name = $1, phone_number = $2, gender = $3, birthday = $4
             WHERE user_id = $5 
-            RETURNING user_id, username, email, full_name, avatar_url
+            RETURNING user_id, username, email, full_name, avatar_url, role, membership_tier
         `;
         const result = await pool.query(query, [full_name, phone_number, gender, birthday, userId]);
 
@@ -72,7 +74,7 @@ export const uploadAvatar = async (req, res) => {
         // Đường dẫn URL tuyệt đối từ Cloudinary (do multer-storage-cloudinary cung cấp)
         const avatarUrl = req.file.path; 
 
-        // Lưu URL vào Database
+        // 🌟 CẬP NHẬT: Trả về avatar_url mới kèm theo role và membership_tier nếu cần thiết (Tùy chọn)
         const result = await pool.query(
             'UPDATE users SET avatar_url = $1 WHERE user_id = $2 RETURNING avatar_url', 
             [avatarUrl, userId]

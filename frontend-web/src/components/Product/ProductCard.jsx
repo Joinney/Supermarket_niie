@@ -76,20 +76,27 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
   const country = String(rawCountryCode).toLowerCase();
   const category = categorySlug || p.slug_danh_muc || "san-pham";
 
-  const checkIsLoggedIn = () => {
-    const token = localStorage.getItem("token");
-    return !!token;
-  };
+  const linkUrl =
+    targetVariantId && targetVariantId !== p.ma_san_pham
+      ? `/${country}/product/${category}/${p.ma_san_pham}/${targetVariantId}`
+      : `/${country}/product/${category}/${p.ma_san_pham}`;
 
   const handleQuickAddCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!checkIsLoggedIn()) {
-      const confirmLogin = window.confirm(
-        "Bạn cần đăng nhập để thêm sản phẩm. Đi tới trang đăng nhập?",
-      );
-      if (confirmLogin) navigate("/login");
+    // =====================================================================
+    //  1. BỘ LỌC CHẶN TRIỆT ĐỂ SẢN PHẨM MẸ (BIẾN THỂ NHÓM)
+    // =====================================================================
+    const isGroupedProduct =
+      p.co_bien_the === true ||
+      p.co_bien_the === "true" ||
+      Number(p.co_bien_the) === 1 ||
+      p.phan_loai_cau_truc === "Sản phẩm nhiều biến thể" ||
+      (p.ma_bien_the_mac_dinh && !p.ten_bien_the && !p.chi_tiet_bien_the);
+
+    if (isGroupedProduct && !isFlashSale) {
+      navigate(linkUrl, { state: { categoryName, categorySlug } });
       return;
     }
 
@@ -98,20 +105,35 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       return;
     }
 
+    // =====================================================================
+    //  2. LOGIC THÊM VÀO GIỎ (CHỈ CHẠY VỚI SẢN PHẨM ĐƠN - KHÔNG BIẾN THỂ)
+    // =====================================================================
     const tuyChonObj = p.chi_tiet_bien_the?.[0]?.tuy_chon || p.tuy_chon || {};
     const cleanEAVArray = Object.entries(tuyChonObj).map(([key, val]) => ({
       ten_thuoc_tinh: String(key).trim(),
       gia_tri: String(val).trim(),
     }));
 
-    let targetVariantName =
+    let finalVariantName =
       p.ten_bien_the || p.chi_tiet_bien_the?.[0]?.ten_bien_the || "Mặc định";
     if (cleanEAVArray.length > 0) {
-      targetVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
+      finalVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
+    }
+
+    // Lấy mã biến thể an toàn cho sản phẩm đơn
+    let safeVariantId =
+      targetVariantId ||
+      p.chi_tiet_bien_the?.[0]?.ma_bien_the ||
+      p.ma_bien_the_mac_dinh;
+
+    // Chốt chặn cuối cùng kiểm tra tính hợp lệ của biến thể
+    if (!safeVariantId || String(safeVariantId).startsWith("MSP")) {
+      navigate(linkUrl, { state: { categoryName, categorySlug } });
+      return;
     }
 
     const itemToCart = {
-      variantId: targetVariantId || p.ma_san_pham,
+      variantId: safeVariantId,
       name: p.ten_san_pham,
       price: currentPrice,
       quantity: 1,
@@ -120,11 +142,13 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       productId: p.ma_san_pham,
       categorySlug: category,
       countryCode: country,
-      variantName: targetVariantName || "Mặc định",
+      variantName: finalVariantName,
       thuoc_tinh_hop_nhat: cleanEAVArray,
     };
+
     addToCart(itemToCart);
 
+    // Hiệu ứng bay vào giỏ hàng
     const startX = e.clientX;
     const startY = e.clientY;
     const cartIcon = document.getElementById("cart-icon");
@@ -161,12 +185,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
   };
-
-  // 🌟 NÂNG CẤP ĐƯỜNG LINK: NẾU CÓ VARIANT ID THÌ TRỎ ĐÚNG VÀO NÓ
-  const linkUrl =
-    targetVariantId && targetVariantId !== p.ma_san_pham
-      ? `/${country}/product/${category}/${p.ma_san_pham}/${targetVariantId}`
-      : `/${country}/product/${category}/${p.ma_san_pham}`;
 
   return (
     <Link

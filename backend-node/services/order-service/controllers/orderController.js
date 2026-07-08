@@ -86,19 +86,20 @@ const placeOrder = async (req, res) => {
       tong_tien_hang, 
       danh_sach_san_pham,
       phuong_thuc_thanh_toan,
-      thong_tin_giao_hang 
+      thong_tin_giao_hang,
+      coupon_code,        // 🌟 BỔ SUNG: Nhận mã Coupon từ Frontend
+      so_tien_giam_gia    // 🌟 BỔ SUNG: Nhận số tiền được giảm
     } = req.body;
     
     if (!to_district_id || !to_ward_code || !danh_sach_san_pham || !Array.isArray(danh_sach_san_pham) || danh_sach_san_pham.length === 0) {
       return res.status(400).json({ success: false, message: "Dữ liệu đơn hàng không hợp lệ hoặc bị thiếu!" });
     }
 
-// 🚀 BƯỚC A: CHUẨN HÓA MẢNG SẢN PHẨM & TỰ ĐỘNG NẠP SKU XỊN TỪ PRODUCT-SERVICE
+    // 🚀 BƯỚC A: CHUẨN HÓA MẢNG SẢN PHẨM & TỰ ĐỘNG NẠP SKU XỊN TỪ PRODUCT-SERVICE
     const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
     let databaseVariants = [];
     
     try {
-      // Gọi API lấy danh sách sản phẩm tổng quát (nơi chứa dữ liệu thô ổn định)
       const prodApiRes = await axios.get(`${productServiceUrl}/api/products`);
       databaseVariants = Array.isArray(prodApiRes.data) ? prodApiRes.data : prodApiRes.data?.products || [];
     } catch (err) {
@@ -110,18 +111,15 @@ const placeOrder = async (req, res) => {
       const pName = item.name || item.product_name || "Sản phẩm Demi Mart";
       
       let finalSku = item.sku || null;
-      // 1. Ưu tiên lấy mã sản phẩm từ Frontend gửi lên trước
       let finalMaSanPham = item.ma_san_pham || item.productId || null; 
 
       if (databaseVariants.length > 0) {
-        // 2. TÌM KIẾM CHÍNH XÁC: Chỉ match bằng ID biến thể (bỏ match bằng tên để chống lỗi ghi đè)
         const found = databaseVariants.find(p => 
           String(p.ma_bien_the) === vId || String(p.ma_bien_the_mac_dinh) === vId
         );
         
         if (found) {
           if (!finalSku) finalSku = found.sku || found.sku_code || `VN-${String(found.ma_san_pham).replace("MSP", "")}-001`;
-          
           if (!finalMaSanPham) finalMaSanPham = found.ma_san_pham; 
         }
       }
@@ -133,9 +131,7 @@ const placeOrder = async (req, res) => {
         product_name: pName,
         variant_name: item.variantName || item.variant_name || item.phan_loai || item.variantNameFrontend || "Mặc định",
         image_url: item.image || item.image_url || "",
-        
         ma_san_pham: finalMaSanPham, 
-        
         sku: finalSku 
       };
     }).filter(i => i.variant_id && i.quantity > 0);
@@ -149,9 +145,7 @@ const placeOrder = async (req, res) => {
       await axios.post(`${productServiceUrl}/api/products/internal/deduct-stock`, {
         items: normalizedItems
       });
-      console.log("✅ Đã gọi sang Product Service trừ kho thành công!");
     } catch (apiError) {
-      console.error("❌ Lỗi trừ kho từ Product Service:", apiError.response?.data?.message || apiError.message);
       return res.status(400).json({ 
         success: false, 
         message: apiError.response?.data?.message || "Sản phẩm trong giỏ hàng đã hết hoặc không đủ số lượng!" 
@@ -161,31 +155,27 @@ const placeOrder = async (req, res) => {
     const promotionServiceUrl = process.env.INTERNAL_PROMOTION_URL || 'http://demi_promotion_service:5007'; 
     
     try {
-        // Gom danh sách mã biến thể và số lượng để gửi sang Promotion
         const itemsToPromotion = normalizedItems.map(item => ({
             ma_bien_the: item.variant_id,
             so_luong: item.quantity
         }));
-
-        // Gọi sang API mà chúng ta vừa tạo ở bước trước
         await axios.post(`${promotionServiceUrl}/api/promotions/internal/update-sold`, {
             items: itemsToPromotion
         });
-        console.log("✅ Đã gọi sang Promotion Service đồng bộ số lượng bán thành công!");
     } catch (promoErr) {
-        // Lỗi này không nên làm hỏng quá trình tạo đơn hàng, chỉ cảnh báo thôi
         console.warn("⚠️ Cảnh báo: Lỗi khi đồng bộ số lượng đã bán với Promotion Service:", promoErr.message);
     }
 
-    // 🚀 BƯỚC C: CHỐT CHI PHÍ GIAO HÀNG
+    // 🚀 BƯỚC C: CHỐT CHI PHÍ GIAO HÀNG VÀ TỔNG TIỀN
     const clientShippingFee = Number(req.body.phi_van_chuyen);
     const validShippingCost = (!isNaN(clientShippingFee) && clientShippingFee >= 0) ? clientShippingFee : 25000;
 
     req.body.phi_van_chuyen = validShippingCost;
     req.body.don_vi_van_chuyen = req.body.don_vi_van_chuyen || 'Siêu thị DemiMart Express';
     
-    let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(req.body.so_tien_giam_gia || 0);
-    if (isNaN(finalTotal) || finalTotal < 5000) {
+    // Tổng tiền = Tiền hàng + Phí Ship - Mã Giảm Giá
+    let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(so_tien_giam_gia || 0);
+    if (isNaN(finalTotal) || finalTotal < 0) {
       finalTotal = 50000; 
     }
     req.body.tong_thanh_toan = finalTotal;
@@ -195,7 +185,6 @@ const placeOrder = async (req, res) => {
         danh_sach_san_pham: normalizedItems,
         paypal_transaction_id: req.body.paypal_transaction_id || null, 
         paypal_order_id: req.body.paypal_order_id || null,
-
         to_lat: req.body.to_lat || null,
         to_lng: req.body.to_lng || null,
         tong_khoang_cach_km: req.body.tong_khoang_cach_km || 0,
@@ -204,11 +193,25 @@ const placeOrder = async (req, res) => {
 
     // 🚀 BƯỚC D: LƯU HÓA ĐƠN VÀO CƠ SỞ DỮ LIỆU
     const order = await Order.create(userId, normalizedOrder);
-    console.log("✅ Đơn hàng đã tạo thành công tại Order-Service với ID:", order.id);
 
     // ========================================================
-    // 🌟 🚀 CƠ CHẾ SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD)
+    // 🌟 🚀 BƯỚC E: ÁP DỤNG VÀ TRỪ LƯỢT MÃ COUPON
     // ========================================================
+    if (coupon_code && Number(so_tien_giam_gia) > 0) {
+      try {
+          await axios.post(`${promotionServiceUrl}/api/coupons/apply`, {
+              code: coupon_code,
+              user_id: userId,
+              ma_don_hang: order.ma_don_hang,
+              discount_applied: Number(so_tien_giam_gia)
+          });
+          console.log(`🎟️ [COUPON APPLIED]: Đã khóa 1 lượt dùng mã ${coupon_code} cho đơn ${order.ma_don_hang}`);
+      } catch (couponErr) {
+          console.error("⚠️ Cảnh báo: Lỗi khi chốt trừ mã Coupon:", couponErr.response?.data?.message || couponErr.message);
+      }
+    }
+
+    // 🚀 BƯỚC F: SHARE DỮ LIỆU SANG PAYMENT (CHỈ ÁP DỤNG NON-COD)
     const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
     
     if (methodUpper !== 'COD' && methodUpper !== '') {
@@ -221,7 +224,6 @@ const placeOrder = async (req, res) => {
           so_tien: Number(finalTotal),
           phuong_thuc_thanh_toan: methodUpper,
           trang_thai_thanh_toan: String(req.body.trang_thai_thanh_toan || 'PENDING'),
-          
           paypal_order_id: String(safeOrderId),
           capture_data: {
             status: 'COMPLETED',
@@ -231,7 +233,6 @@ const placeOrder = async (req, res) => {
         };
 
         await axios.post('http://demi_payment_service:5004/api/paypal-capture', sharePayload);
-        console.log(`🔒 [MICROSERVICES SHARE]: Đã chia sẻ đơn ${order.ma_don_hang} (${methodUpper}) sang Payment-Service!`);
       } catch (syncErr) {
         console.error("⚠️ Cảnh báo: Lỗi share dữ liệu nội bộ Docker sang Payment:", syncErr.message);
       }
@@ -242,7 +243,7 @@ const placeOrder = async (req, res) => {
       ma_don_hang: order.ma_don_hang, 
       tong_thanh_toan: finalTotal,
       phuong_thuc_thanh_toan: phuong_thuc_thanh_toan,
-      message: "Đặt hàng thành công! Thông tin thanh toán đang được xử lý đối soát nội bộ." 
+      message: "Đặt hàng thành công! Thông tin đang được xử lý." 
     });
 
   } catch (err) {
@@ -435,7 +436,7 @@ const getAllOrdersAdmin = async (req, res) => {
 };
 
 // ========================================================
-// 🛒 🛠️ ĐÃ BỔ SUNG: API LẤY ĐƠN HÀNG CHO NGƯỜI DÙNG ĐĂNG NHẬP
+// 🛒 API 6: API LẤY ĐƠN HÀNG CHO NGƯỜI DÙNG ĐĂNG NHẬP
 // ========================================================
 const getMyOrders = async (req, res) => {
   try {
@@ -451,7 +452,7 @@ const getMyOrders = async (req, res) => {
 };
 
 // ========================================================
-// 🎯 API: LẤY CHI TIẾT 1 ĐƠN HÀNG KÈM DANH SÁCH SẢN PHẨM THỰC TẾ
+// 🎯 API 7: LẤY CHI TIẾT 1 ĐƠN HÀNG KÈM DANH SÁCH SẢN PHẨM THỰC TẾ
 // ========================================================
 const getOrderDetailAdmin = async (req, res) => {
   try {
@@ -500,7 +501,39 @@ const getOrderDetailAdmin = async (req, res) => {
 };
 
 // =========================================================================
-// 🚀 API MỚI: HỦY ĐƠN HÀNG VÀ HOÀN LẠI KHO (CỘNG KHO SẢN PHẨM)
+// API 8: TÍNH TỔNG CHI TIÊU CỦA USER (INTERNAL API CHUYÊN DÙNG CHO CHECK VIP)
+// =========================================================================
+const getUserTotalSpent = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "Thiếu ID người dùng." });
+        }
+
+        const sqlQuery = `
+            SELECT SUM(tong_thanh_toan) as total_spent 
+            FROM public.orders 
+            WHERE user_id = $1 
+              AND (
+                  LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'success') 
+                  OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao')
+              )
+        `;
+
+        const result = db.query ? await db.query(sqlQuery, [userId]) : await db.execute(sqlQuery, [userId]);
+        const spentData = result.rows ? result.rows[0] : result[0];
+        const totalSpent = Number(spentData?.total_spent || 0);
+
+        return res.status(200).json({ success: true, total_spent: totalSpent });
+    } catch (err) {
+        console.error("🔥 Lỗi API getUserTotalSpent:", err.message);
+        return res.status(500).json({ success: false, message: "Lỗi tính toán tổng chi tiêu của user." });
+    }
+};
+
+// =========================================================================
+// 🚀 API 9: HỦY ĐƠN HÀNG VÀ HOÀN LẠI KHO (CỘNG KHO SẢN PHẨM)
 // =========================================================================
 const cancelOrder = async (req, res) => {
     try {
@@ -559,4 +592,97 @@ const cancelOrder = async (req, res) => {
     }
 };
 
-export { getShippingFee, placeOrder, updateInternalOrderStatus, getOrderStatistics, getAllOrdersAdmin, getMyOrders, getOrderDetailAdmin, cancelOrder };
+// =========================================================================
+// 🌟 API 10 (INTERNAL): LẤY DANH SÁCH ĐƠN HÀNG THÔ CỦA USER (Phục vụ Admin xem chi tiết)
+// =========================================================================
+const getUserOrdersInternal = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "Thiếu ID người dùng." });
+        }
+
+        const sqlQuery = `
+            SELECT ma_don_hang, ngay_tao, trang_thai_thanh_toan, tong_thanh_toan 
+            FROM public.orders 
+            WHERE user_id = $1 
+            ORDER BY ngay_tao DESC;
+        `;
+        const result = db.query ? await db.query(sqlQuery, [userId]) : await db.execute(sqlQuery, [userId]);
+        const orders = result.rows ? result.rows : result[0];
+
+        return res.status(200).json({ success: true, data: orders });
+    } catch (err) {
+        console.error("🔥 Lỗi API getUserOrdersInternal:", err.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi lấy danh sách đơn hàng nội bộ." });
+    }
+};
+
+// =========================================================================
+//  API 11 (INTERNAL): TÍNH TOÁN THỐNG KÊ MUA SẮM & TOP SPENDERS (Phục vụ Auth Service)
+// =========================================================================
+const getCustomerStatsInternal = async (req, res) => {
+    try {
+        // A. Tính tỷ lệ quay lại (Khách có >= 2 đơn hàng trong 30 ngày gần nhất)
+        const retentionQuery = `
+            WITH CustomerOrders AS (
+                SELECT user_id, COUNT(*) as order_count
+                FROM public.orders
+                WHERE ngay_tao >= NOW() - INTERVAL '30 days' AND user_id IS NOT NULL
+                GROUP BY user_id
+            )
+            SELECT 
+                COUNT(*) as total_buying_customers,
+                SUM(CASE WHEN order_count >= 2 THEN 1 ELSE 0 END) as returning_customers
+            FROM CustomerOrders;
+        `;
+        const retentionResult = db.query ? await db.query(retentionQuery) : await db.execute(retentionQuery);
+        const rData = retentionResult.rows ? retentionResult.rows[0] : retentionResult[0];
+        
+        let returnRate = "0.0";
+        if (rData && parseInt(rData.total_buying_customers) > 0) {
+            returnRate = ((parseInt(rData.returning_customers) / parseInt(rData.total_buying_customers)) * 100).toFixed(1);
+        }
+
+        // B. Lấy TOP 5 Khách hàng chi tiêu cao nhất để ép hạng VIP
+        const topSpendersQuery = `
+            SELECT 
+                user_id,
+                COUNT(ma_don_hang) as total_orders,
+                SUM(tong_thanh_toan) as total_spent
+            FROM public.orders
+            WHERE user_id IS NOT NULL 
+              AND (
+                  LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'success') 
+                  OR LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao')
+              )
+            GROUP BY user_id
+            ORDER BY total_spent DESC
+            LIMIT 5;
+        `;
+        const topSpendersResult = db.query ? await db.query(topSpendersQuery) : await db.execute(topSpendersQuery);
+        const topSpenders = topSpendersResult.rows ? topSpendersResult.rows : topSpendersResult[0];
+
+        return res.status(200).json({
+            success: true,
+            return_rate: returnRate,
+            top_spenders: topSpenders
+        });
+    } catch (err) {
+        console.error("🔥 Lỗi API getCustomerStatsInternal:", err.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi trích xuất số liệu mua sắm nội bộ." });
+    }
+};
+export { 
+    getShippingFee, 
+    placeOrder, 
+    updateInternalOrderStatus, 
+    getOrderStatistics, 
+    getAllOrdersAdmin, 
+    getMyOrders, 
+    getOrderDetailAdmin, 
+    cancelOrder, 
+    getUserTotalSpent, 
+    getUserOrdersInternal, 
+    getCustomerStatsInternal 
+};

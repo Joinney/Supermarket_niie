@@ -7,7 +7,10 @@ import {
   getAllOrdersAdmin,
   getMyOrders,
   getOrderDetailAdmin,
-  cancelOrder
+  cancelOrder,
+  getUserTotalSpent,
+  getUserOrdersInternal,
+  getCustomerStatsInternal
 } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { calculateShipping } from '../controllers/storeController.js';
@@ -36,4 +39,10 @@ router.get('/:id', protect, getOrderDetailAdmin);
 
 router.put('/cancel/:ma_don_hang', protect, cancelOrder); 
 
+// ========================================================
+// 3. CÁC TUYẾN ĐƯỜNG NỘI BỘ (INTERNAL SERVER-TO-SERVER)
+// ========================================================
+router.get('/internal/user-spent/:userId', getUserTotalSpent);
+router.get('/internal/user-orders/:userId', getUserOrdersInternal);
+router.get('/internal/customer-stats', getCustomerStatsInternal);
 export default router;

@@ -22,12 +22,13 @@ const removeVietnameseTones = (str) => {
   str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
   str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
   str = str.replace(/đ/g, "d");
-  return str.toLowerCase(); // Chuyển luôn về chữ thường cho dễ tìm kiếm
+  return str.toLowerCase();
 };
 
 export default function TaoGiamGia() {
   const navigate = useNavigate();
   const { id } = useParams();
+  // 🌟 NẾU CÓ TRUYỀN ID TRÊN URL, THÌ ĐÂY LÀ CHẾ ĐỘ CHỈNH SỬA
   const isEditMode = !!id;
 
   const [loading, setLoading] = useState(false);
@@ -41,11 +42,11 @@ export default function TaoGiamGia() {
   });
 
   const [availableProducts, setAvailableProducts] = useState([]);
-  const [busyVariants, setBusyVariants] = useState(new Set()); // Lưu các mã biến thể đang dính Flash Sale khác
+  const [busyVariants, setBusyVariants] = useState(new Set());
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedItems, setSelectedItems] = useState([]);
 
-  // 🌟 Biến cờ kiểm tra lỗi giá để Disable nút Lưu
+  // Biến cờ kiểm tra lỗi giá để Disable nút Lưu
   const hasPriceError = selectedItems.some(
     (item) =>
       item.gia_khuyen_mai !== "" &&
@@ -175,7 +176,7 @@ export default function TaoGiamGia() {
       const allProducts = await fetchProductsForSelection();
       setAvailableProducts(allProducts);
 
-      // 🌟 YÊU CẦU 1: Lấy danh sách các biến thể đang có Sale để CHẶN (Block)
+      // YÊU CẦU 1: Lấy danh sách các biến thể đang có Sale để CHẶN (Block)
       try {
         const activeRes = await promotionApi.get("/client/flash-sale/active");
         if (activeRes.data.success) {
@@ -183,7 +184,7 @@ export default function TaoGiamGia() {
           const busySet = new Set();
 
           activePromos.forEach((promo) => {
-            // Nếu đang Edit, bỏ qua việc chặn các sản phẩm thuộc CHÍNH đợt sale này (để còn sửa chứ)
+            // 🌟 QUAN TRỌNG: NẾU ĐANG Ở CHẾ ĐỘ EDIT, THÌ KHÔNG BLOCK CÁC SẢN PHẨM CỦA CHÍNH ĐỢT SALE NÀY!
             if (isEditMode && promo.chuong_trinh.ma_khuyen_mai === id) return;
 
             promo.products.forEach((p) => {
@@ -196,6 +197,7 @@ export default function TaoGiamGia() {
         console.warn("Không lấy được danh sách Sale đang chạy", e);
       }
 
+      // 🌟 NẾU LÀ CHẾ ĐỘ CHỈNH SỬA, LẤY DỮ LIỆU CŨ TỪ BACKEND ĐỔ VÀO FORM
       if (isEditMode) {
         try {
           const res = await promotionApi.get(`/admin/flash-sale/${id}`);
@@ -220,8 +222,9 @@ export default function TaoGiamGia() {
             if (products && products.length > 0) {
               const oldSelectedItems = products.map((item) => {
                 const productBase =
-                  allProducts.find((p) => p.ma_bien_the === item.ma_bien_the) ||
-                  {};
+                  allProducts.find(
+                    (p) => String(p.ma_bien_the) === String(item.ma_bien_the),
+                  ) || {};
                 return {
                   ma_san_pham: item.ma_san_pham,
                   ten_san_pham:
@@ -254,7 +257,6 @@ export default function TaoGiamGia() {
   }, [id, isEditMode, navigate]);
 
   const handleAddItem = (variant) => {
-    // 🌟 Kiểm tra chặn thêm nếu đang bận Sale khác
     if (busyVariants.has(variant.ma_bien_the)) {
       alert(
         "Sản phẩm này đang tham gia một chương trình khuyến mãi khác. Vui lòng chọn sản phẩm khác!",
@@ -340,7 +342,7 @@ export default function TaoGiamGia() {
       return;
     }
 
-    // 🌟 YÊU CẦU 2: Validate cứng trước khi gửi API
+    // YÊU CẦU 2: Validate cứng trước khi gửi API
     if (hasPriceError) {
       alert(
         "Có sản phẩm đang set giá Khuyến mãi LỚN HƠN hoặc BẰNG giá gốc. Vui lòng kiểm tra lại (được bôi đỏ).",
@@ -358,16 +360,32 @@ export default function TaoGiamGia() {
         so_luong_gioi_han: item.so_luong_gioi_han,
       }));
 
+      // 🌟 TẠO PAYLOAD RIÊNG ĐỂ ÉP MÚI GIỜ CHO CHIẾN DỊCH
+      const payloadCampaign = {
+        ...campaignInfo,
+        thoi_gian_bat_dau: new Date(
+          campaignInfo.thoi_gian_bat_dau,
+        ).toISOString(),
+        thoi_gian_ket_thuc: new Date(
+          campaignInfo.thoi_gian_ket_thuc,
+        ).toISOString(),
+      };
+
+      // NẾU ĐANG Ở CHẾ ĐỘ CHỈNH SỬA -> GỌI API PUT
       if (isEditMode) {
-        await promotionApi.put(`/admin/flash-sale/${id}`, campaignInfo);
+        // Dùng payloadCampaign thay vì campaignInfo
+        await promotionApi.put(`/admin/flash-sale/${id}`, payloadCampaign);
         await promotionApi.post(`/admin/flash-sale/${id}/items`, {
           items: itemsPayload,
         });
         alert("Cập nhật chương trình giảm giá thành công!");
-      } else {
+      }
+      // NẾU TẠO MỚI -> GỌI API POST
+      else {
+        // Dùng payloadCampaign thay vì campaignInfo
         const createRes = await promotionApi.post(
           "/admin/flash-sale",
-          campaignInfo,
+          payloadCampaign,
         );
         if (createRes.data.success) {
           const newPromoId = createRes.data.data.ma_khuyen_mai;
@@ -378,7 +396,7 @@ export default function TaoGiamGia() {
         }
       }
 
-      navigate("/admin/promotions/danh-sach");
+      navigate("/admin/promotions");
     } catch (error) {
       console.error(error);
       alert(
@@ -413,7 +431,7 @@ export default function TaoGiamGia() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            to="/admin/promotions/danh-sach"
+            to="/admin/promotions"
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
             <ArrowLeft size={20} className="text-gray-500" />
@@ -423,7 +441,9 @@ export default function TaoGiamGia() {
               {isEditMode ? "Chỉnh Sửa Chiến Dịch" : "Tạo Chiến Dịch Mới"}
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Thiết lập thông tin và chọn sản phẩm áp dụng giảm giá.
+              {isEditMode
+                ? "Cập nhật thông tin và danh sách sản phẩm."
+                : "Thiết lập thông tin và chọn sản phẩm áp dụng giảm giá."}
             </p>
           </div>
         </div>
@@ -457,7 +477,7 @@ export default function TaoGiamGia() {
                   type="text"
                   required
                   placeholder="VD: Siêu Sale Giữa Tháng..."
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-[#007A5A] focus:outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-[#007A5A] focus:outline-none font-bold"
                   value={campaignInfo.ten_chuong_trinh}
                   onChange={(e) =>
                     setCampaignInfo({
@@ -474,7 +494,7 @@ export default function TaoGiamGia() {
                 <textarea
                   rows="3"
                   placeholder="Nhập mô tả ngắn gọn..."
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-[#007A5A] focus:outline-none resize-none"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-[#007A5A] focus:outline-none resize-none font-medium text-gray-600"
                   value={campaignInfo.mo_ta}
                   onChange={(e) =>
                     setCampaignInfo({ ...campaignInfo, mo_ta: e.target.value })
@@ -497,7 +517,7 @@ export default function TaoGiamGia() {
                 <input
                   type="datetime-local"
                   required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-[#007A5A] focus:outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-[#007A5A] focus:outline-none font-medium"
                   value={campaignInfo.thoi_gian_bat_dau}
                   onChange={(e) =>
                     setCampaignInfo({
@@ -514,7 +534,7 @@ export default function TaoGiamGia() {
                 <input
                   type="datetime-local"
                   required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-[#007A5A] focus:outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-[#007A5A] focus:outline-none font-medium"
                   value={campaignInfo.thoi_gian_ket_thuc}
                   onChange={(e) =>
                     setCampaignInfo({
@@ -655,7 +675,6 @@ export default function TaoGiamGia() {
                   </thead>
                   <tbody>
                     {selectedItems.map((item, index) => {
-                      // 🌟 KIỂM TRA LỖI GIÁ: NẾU GIÁ KHUYẾN MÃI >= GIÁ GỐC THÌ BÔI ĐỎ
                       const isPriceError =
                         item.gia_khuyen_mai !== "" &&
                         Number(item.gia_khuyen_mai) >= Number(item.gia_goc);
@@ -683,7 +702,7 @@ export default function TaoGiamGia() {
                               </span>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-right text-gray-400 line-through text-[12px]">
+                          <td className="px-3 py-3 text-right text-gray-400 line-through text-[12px] font-bold">
                             {Number(item.gia_goc).toLocaleString()}
                           </td>
                           <td className="px-3 py-3 text-center">
@@ -756,8 +775,8 @@ export default function TaoGiamGia() {
                                   )
                                 }
                               />
-                              <span className="text-[9px] text-gray-400 mt-0.5">
-                                Tồn: {item.ton_kho_goc}
+                              <span className="text-[9px] text-gray-400 mt-0.5 font-bold">
+                                Tồn gốc: {item.ton_kho_goc}
                               </span>
                             </div>
                           </td>

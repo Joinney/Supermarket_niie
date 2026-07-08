@@ -1997,20 +1997,32 @@ export const deductStockInternal = async (req, res) => {
 
             // 3.1 Khóa (Lock) dòng dữ liệu này lại. Bất cứ khách nào đang định mua SP này sẽ phải đứng chờ.
             const lockQuery = `
-                SELECT ten_bien_the, so_luong_ton 
-                FROM public.bien_the_san_pham 
-                WHERE ma_bien_the = $1 
-                FOR UPDATE;
+                SELECT s.trang_thai, s.da_xoa, b.ten_bien_the, b.so_luong_ton 
+                FROM public.bien_the_san_pham b
+                JOIN public.san_pham s ON b.ma_san_pham = s.ma_san_pham
+                WHERE b.ma_bien_the = $1 
+                FOR UPDATE OF b; 
             `;
             const lockRes = await client.query(lockQuery, [vId]);
 
             // Nếu biến thể không tồn tại
             if (lockRes.rows.length === 0) {
-                throw new Error(`Sản phẩm mã ${vId} không còn tồn tại hoặc đã bị khóa bán.`);
+                throw new Error(`Sản phẩm mã ${vId} không còn tồn tại.`);
             }
 
-            const currentStock = Number(lockRes.rows[0].so_luong_ton);
-            const variantName = lockRes.rows[0].ten_bien_the || vId;
+            const row = lockRes.rows[0];
+            const isProductActive = row.trang_thai === true;
+            const isProductDeleted = row.da_xoa === true;    
+            const currentStock = Number(row.so_luong_ton);
+            const variantName = row.ten_bien_the || vId;
+
+            // 🌟 Kiểm tra trạng thái cha theo đúng Schema thực tế
+            if (isProductDeleted) {
+                throw new Error(`Sản phẩm "${variantName}" đã bị xóa.`);
+            }
+            if (!isProductActive) {
+                throw new Error(`Sản phẩm "${variantName}" hiện đã bị khóa bán.`);
+            }
 
             // 3.2 Kiểm tra khắt khe tồn kho thực tế (Tránh Frontend gửi láo)
             if (currentStock < qtyToBuy) {

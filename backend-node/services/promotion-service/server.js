@@ -5,7 +5,10 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
+
+// IMPORT CÁC ĐỊNH TUYẾN
 import promotionRoutes from './routes/promotionRoutes.js';
+import couponRoutes from './routes/couponRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,7 +57,7 @@ const swaggerOptions = {
         info: { 
             title: 'Demi Mart - Promotion Service', 
             version: '1.0.0',
-            description: 'API Khuyến mãi' 
+            description: 'API Khuyến mãi và Mã giảm giá' 
         },
         servers: [{ url: `http://localhost:${PORT}` }]
     },
@@ -62,14 +65,17 @@ const swaggerOptions = {
 };
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+// 🌟 KHAI BÁO CÁC ENDPOINT CHO SERVER
 app.use('/api/promotions', promotionRoutes);
+app.use('/api/coupons', couponRoutes); // 🌟 THÊM KHAI BÁO NÀY
 
 // 5. Health Check
 app.get('/', (req, res) => {
     res.status(200).send(`
         <div style="text-align: center; margin-top: 50px; font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
             <h1 style="color: #006c49; font-size: 2.5rem;">Demi Mart Promotion Service</h1>
-            <p style="color: #64748b; font-size: 1.2rem;">Hệ thống Khuyến mãi đang hoạt động xanh mướt! 🚀</p>
+            <p style="color: #64748b; font-size: 1.2rem;">Hệ thống Khuyến mãi và Coupon đang hoạt động xanh mướt! 🚀</p>
             <div style="margin-top: 20px;">
                 <a href="/api-docs" style="background-color: #006c49; color: white; padding: 12px 24px; border-radius: 10px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(0, 108, 73, 0.2);">Vào Swagger xem API →</a>
             </div>

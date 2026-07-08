@@ -23,7 +23,8 @@ import RecommendedProducts from "./RecommendedProducts";
 
 const getYouTubeEmbedUrl = (url) => {
   if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const regExp =
+    /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = url.match(regExp);
   return match && match[2].length === 11
     ? `https://www.youtube.com/embed/${match[2]}?autoplay=0`
@@ -77,7 +78,7 @@ export default function ProductDetail() {
   useEffect(() => {
     const apiBaseUrl = productApi.defaults.baseURL || "";
     // Tự động bóc tách và gỡ bỏ hậu tố '/api' để lấy domain gốc cho Socket.IO
-    const socketUrl = apiBaseUrl.replace(/\/api$/, '');
+    const socketUrl = apiBaseUrl.replace(/\/api$/, "");
     const socket = io(socketUrl);
 
     return () => {
@@ -107,7 +108,8 @@ export default function ProductDetail() {
             return;
           }
 
-          const bienTheList = productData.bien_the || productData.variants || [];
+          const bienTheList =
+            productData.bien_the || productData.variants || [];
           productData.bien_the = bienTheList.map((bt) => {
             if (
               Array.isArray(bt.thuoc_tinh_hop_nhat) &&
@@ -142,7 +144,8 @@ export default function ProductDetail() {
             setSelectedAttributes(initialVariant.thuoc_tinh || {});
 
             const variantMedia = productData.media?.find(
-              (m) => String(m.ma_bien_the) === String(initialVariant.ma_bien_the),
+              (m) =>
+                String(m.ma_bien_the) === String(initialVariant.ma_bien_the),
             );
             setMainMedia(
               variantMedia ||
@@ -298,7 +301,8 @@ export default function ProductDetail() {
   // Lấy số lượng tồn kho (Ưu tiên số tồn kho Flash sale)
   const stockCount = isFlashSale
     ? Number(
-        (activeSaleItem?.so_luong_gioi_han || 0) - (activeSaleItem?.da_ban || 0) ||
+        (activeSaleItem?.so_luong_gioi_han || 0) -
+          (activeSaleItem?.da_ban || 0) ||
           selectedVariant?.thong_tin_sale?.ton_kho_sale ||
           selectedVariant?.so_luong_ton ||
           0,
@@ -307,11 +311,13 @@ export default function ProductDetail() {
 
   const isOutOfStock = !selectedVariant || stockCount <= 0;
 
+  // Hàm kiểm tra đăng nhập DÀNH RIÊNG CHO NÚT MUA NGAY
   const checkIsLoggedIn = () => {
     const token = localStorage.getItem("token");
     return !!token;
   };
 
+  // NÚT MUA NGAY: CẦN ĐĂNG NHẬP ĐỂ ĐẾN TRANG THANH TOÁN
   const handleBuyNow = () => {
     if (!checkIsLoggedIn()) {
       const confirmLogin = window.confirm(
@@ -371,15 +377,9 @@ export default function ProductDetail() {
     navigate("/checkout");
   };
 
+  // NÚT THÊM VÀO GIỎ HÀNG: THOẢI MÁI, KHÔNG CẦN ĐĂNG NHẬP
   const handleAddToCart = (e) => {
-    if (!checkIsLoggedIn()) {
-      const confirmLogin = window.confirm(
-        "Bạn cần đăng nhập để thêm sản phẩm vào giỏ hàng. Đi tới trang đăng nhập?",
-      );
-      if (confirmLogin) navigate("/login");
-      return;
-    }
-
+    // Đã xóa checkIsLoggedIn ở đây
     if (!product || !selectedVariant || isOutOfStock) return;
 
     let cleanEAVArray = [];
@@ -403,7 +403,8 @@ export default function ProductDetail() {
       );
     }
 
-    let targetVariantName = selectedVariant.ten_bien_the || product.ten_san_pham;
+    let targetVariantName =
+      selectedVariant.ten_bien_the || product.ten_san_pham;
     if (cleanEAVArray.length > 0) {
       targetVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
     }
@@ -499,17 +500,23 @@ export default function ProductDetail() {
 
   const isMultiTier = Object.keys(nhomPhanLoai).length > 0;
   const displayCategoryName =
-    location.state?.categoryName || product?.ten_dm_con || product?.ten_danh_muc;
+    location.state?.categoryName ||
+    product?.ten_dm_con ||
+    product?.ten_danh_muc;
   const displayCategorySlug =
-    location.state?.categorySlug || product?.slug_danh_muc || product?.ma_dm_con;
+    location.state?.categorySlug ||
+    product?.slug_danh_muc ||
+    product?.ma_dm_con;
 
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16 text-left">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10">
-        
         {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
-          <Link to={`/${country}`} className="hover:text-slate-900 flex-shrink-0 transition-colors">
+          <Link
+            to={`/${country}`}
+            className="hover:text-slate-900 flex-shrink-0 transition-colors"
+          >
             Home
           </Link>
           <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
@@ -521,7 +528,10 @@ export default function ProductDetail() {
               >
                 {displayCategoryName}
               </Link>
-              <ChevronRight size={10} className="text-slate-300 flex-shrink-0" />
+              <ChevronRight
+                size={10}
+                className="text-slate-300 flex-shrink-0"
+              />
             </>
           )}
           <span className="text-[#006c49] truncate font-black italic">
@@ -530,7 +540,6 @@ export default function ProductDetail() {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
-          
           {/* MEDIA SECTION */}
           <div className="lg:col-span-6 xl:col-span-7 flex flex-col-reverse sm:flex-row gap-2 lg:gap-4">
             <div className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto thumb-scrollbar py-1 sm:max-h-[280px] 2xl:max-h-[350px] pr-1">
@@ -549,7 +558,11 @@ export default function ProductDetail() {
                       VIDEO
                     </div>
                   ) : (
-                    <img src={m.duong_dan_url} className="w-full h-full object-cover rounded-md" alt="thumb" />
+                    <img
+                      src={m.duong_dan_url}
+                      className="w-full h-full object-cover rounded-md"
+                      alt="thumb"
+                    />
                   )}
                 </button>
               ))}
@@ -577,7 +590,8 @@ export default function ProductDetail() {
                   className="w-full h-full object-contain p-4 transition-transform duration-500 hover:scale-105"
                   alt={product.ten_san_pham}
                   onError={(e) => {
-                    e.target.src = "https://placehold.co/600x600?text=Demi+Mart";
+                    e.target.src =
+                      "https://placehold.co/600x600?text=Demi+Mart";
                   }}
                 />
               )}
@@ -598,11 +612,13 @@ export default function ProductDetail() {
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>
-              {isMultiTier && selectedVariant && selectedVariant.ten_bien_the && (
-                <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
-                  Phân loại: {selectedVariant.ten_bien_the}
-                </h2>
-              )}
+              {isMultiTier &&
+                selectedVariant &&
+                selectedVariant.ten_bien_the && (
+                  <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
+                    Phân loại: {selectedVariant.ten_bien_the}
+                  </h2>
+                )}
             </div>
 
             {/* Price section */}
@@ -610,7 +626,10 @@ export default function ProductDetail() {
               {selectedVariant ? (
                 <div className="flex flex-col">
                   {originalPrice && (
-                    <span className="text-xs 2xl:text-sm text-slate-400 line-through font-bold mb-[-4px]" translate="no">
+                    <span
+                      className="text-xs 2xl:text-sm text-slate-400 line-through font-bold mb-[-4px]"
+                      translate="no"
+                    >
                       {formatPrice(originalPrice)}
                     </span>
                   )}
@@ -643,40 +662,49 @@ export default function ProductDetail() {
 
               <div className="pt-2 space-y-4">
                 {isMultiTier ? (
-                  Object.entries(nhomPhanLoai).map(([tenThuocTinh, danhSachGiaTri]) => (
-                    <div key={tenThuocTinh} className="space-y-2">
-                      <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-                        {tenThuocTinh}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {danhSachGiaTri.map((giaTri) => {
-                          const isSelected =
-                            typeof selectedAttributes[tenThuocTinh] === "string" && typeof giaTri === "string"
-                              ? selectedAttributes[tenThuocTinh].trim().toLowerCase() === giaTri.trim().toLowerCase()
-                              : selectedAttributes[tenThuocTinh] === giaTri;
-                          const isValid = isOptionValid(tenThuocTinh, giaTri);
+                  Object.entries(nhomPhanLoai).map(
+                    ([tenThuocTinh, danhSachGiaTri]) => (
+                      <div key={tenThuocTinh} className="space-y-2">
+                        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                          {tenThuocTinh}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {danhSachGiaTri.map((giaTri) => {
+                            const isSelected =
+                              typeof selectedAttributes[tenThuocTinh] ===
+                                "string" && typeof giaTri === "string"
+                                ? selectedAttributes[tenThuocTinh]
+                                    .trim()
+                                    .toLowerCase() ===
+                                  giaTri.trim().toLowerCase()
+                                : selectedAttributes[tenThuocTinh] === giaTri;
+                            const isValid = isOptionValid(tenThuocTinh, giaTri);
 
-                          return (
-                            <button
-                              type="button"
-                              key={giaTri}
-                              onClick={() => isValid && handleAttributeSelect(tenThuocTinh, giaTri)}
-                              disabled={!isValid}
-                              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 cursor-pointer ${
-                                isSelected
-                                  ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
-                                  : isValid
-                                    ? "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
-                                    : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-50"
-                              }`}
-                            >
-                              {giaTri}
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button
+                                type="button"
+                                key={giaTri}
+                                onClick={() =>
+                                  isValid &&
+                                  handleAttributeSelect(tenThuocTinh, giaTri)
+                                }
+                                disabled={!isValid}
+                                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 cursor-pointer ${
+                                  isSelected
+                                    ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
+                                    : isValid
+                                      ? "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
+                                      : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-50"
+                                }`}
+                              >
+                                {giaTri}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ),
+                  )
                 ) : product.bien_the?.length > 1 ? (
                   <div className="flex flex-wrap gap-1.5 lg:gap-2">
                     {product.bien_the?.map((v, i) => (
@@ -686,13 +714,18 @@ export default function ProductDetail() {
                         onClick={() => {
                           setSelectedVariant(v);
                           const vMedia = product.media?.find(
-                            (m) => String(m.ma_bien_the) === String(v.ma_bien_the),
+                            (m) =>
+                              String(m.ma_bien_the) === String(v.ma_bien_the),
                           );
                           if (vMedia) setMainMedia(vMedia);
-                          navigate(`/${country}/product/${category_slug}/${id}/${v.ma_bien_the}`, { replace: true });
+                          navigate(
+                            `/${country}/product/${category_slug}/${id}/${v.ma_bien_the}`,
+                            { replace: true },
+                          );
                         }}
                         className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all border-2 cursor-pointer ${
-                          String(selectedVariant?.ma_bien_the) === String(v.ma_bien_the)
+                          String(selectedVariant?.ma_bien_the) ===
+                          String(v.ma_bien_the)
                             ? "border-[#006c49] bg-[#006c49] text-white shadow-md"
                             : "border-slate-100 bg-[#fcfcfc] text-slate-400 hover:border-slate-200"
                         }`}
@@ -733,7 +766,8 @@ export default function ProductDetail() {
                       type="button"
                       onClick={() => {
                         if (quantity < stockCount) setQuantity(quantity + 1);
-                        else alert(`Kho chỉ còn tối đa ${stockCount} sản phẩm!`);
+                        else
+                          alert(`Kho chỉ còn tối đa ${stockCount} sản phẩm!`);
                       }}
                       disabled={isOutOfStock || quantity >= stockCount}
                       className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
@@ -743,11 +777,19 @@ export default function ProductDetail() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest" translate="no">
+                  <p
+                    className="text-[9px] font-black text-slate-400 uppercase tracking-widest"
+                    translate="no"
+                  >
                     Tạm tính
                   </p>
-                  <p className="text-xl lg:text-3xl font-black text-[#1a1a1a] tracking-tighter" translate="no">
-                    {!isOutOfStock ? formatPrice(currentPrice * quantity) : formatPrice(0)}
+                  <p
+                    className="text-xl lg:text-3xl font-black text-[#1a1a1a] tracking-tighter"
+                    translate="no"
+                  >
+                    {!isOutOfStock
+                      ? formatPrice(currentPrice * quantity)
+                      : formatPrice(0)}
                   </p>
                 </div>
               </div>
@@ -780,7 +822,6 @@ export default function ProductDetail() {
                 <ShieldCheck size={16} /> Bảo hành chính hãng
               </div>
             </div>
-
           </div>
         </div>
 
