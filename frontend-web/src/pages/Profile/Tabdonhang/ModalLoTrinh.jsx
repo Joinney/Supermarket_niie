@@ -107,7 +107,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
       const userLat = parseFloat(order.to_lat || order.latitude || order.user_lat || 10.762622);
       const userLng = parseFloat(order.to_lng || order.longitude || order.user_lng || 106.660172);
 
-      // Định vị điểm xuất phát (Kho xuất phát gốc tổng)
+      // Định vị điểm xuất phát (Kho xuất phát gốc tổng - TP.HCM)
       const storeLat = 10.792622;
       const storeLng = 106.680172;
       const storeName = "Kho Xuất Phát Tổng DemiMart"; 
@@ -115,6 +115,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
       let apiCalcDistance = 0;
       let apiCalcDuration = 0;
       let rawPostOffices = [];
+      let optimalLastMileOffice = null;
 
       try {
         // [1] Gọi API đồng bộ Address từ Auth-Service độc lập
@@ -187,7 +188,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
 
           let minDistanceToClient = Infinity;
-          let optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
+          optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
 
           clientZoneOffices.forEach(office => {
             const oLat = parseFloat(office.location?.lat || office.latitude || 0);
@@ -251,23 +252,25 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28]
         });
 
-        // Thiết lập các điểm Waypoints truyền sang OSRM
-        let waypoints = [`${storeLng},${storeLat}`]; 
+        // 🌟 ÉP ĐỒNG BỘ LỘ TRÌNH ĐƯỜNG BỘ: Tạo danh sách trạm trục bám sát Quốc lộ 1A từ Nam ra Bắc tuần tự
+        let waypoints = [`${storeLng},${storeLat}`]; // Điểm xuất phát (TP.HCM)
         const isTayNguyenZone = userLng < 108.2 && userLat > 11.5 && userLat < 15.0;
 
         if (isTayNguyenZone) {
           waypoints.push("106.883412,11.521093"); 
           waypoints.push("107.684125,12.001254"); 
         } else if (userLat > 11.2) {
-          waypoints.push("107.234125,10.938512"); 
-          waypoints.push("108.106943,10.933391"); 
-          if (userLat > 12.0) waypoints.push("109.196749,12.245071"); 
-          if (userLat > 13.5) waypoints.push("109.219515,13.774697"); 
-          if (userLat > 16.0) waypoints.push("108.221464,16.059541"); 
-          if (userLat > 18.0) waypoints.push("105.681123,18.673412"); 
-          if (userLat > 20.0) waypoints.push("105.820421,20.251093"); 
+          // Khách ở miền Trung/Bắc $\rightarrow$ Bắt buộc đẩy trạm trung chuyển uốn theo trục biển duyên hải dọc QL1A
+          waypoints.push("107.234125,10.938512"); // Mốc Bình Thuận
+          waypoints.push("108.106943,10.933391"); // Mốc Nha Trang / Khánh Hòa
+          if (userLat > 12.0) waypoints.push("109.196749,12.245071"); // Quy Nhơn / Bình Định
+          if (userLat > 13.5) waypoints.push("109.219515,13.774697"); // Quảng Ngãi
+          if (userLat > 16.0) waypoints.push("108.221464,16.059541"); // Đà Nẵng / Huế
+          if (userLat > 18.0) waypoints.push("105.681123,18.673412"); // Vinh / Nghệ An
+          if (userLat > 20.0) waypoints.push("105.820421,20.251093"); // Hà Nội
         }
 
+        // Đẩy bưu cục chặng phát cuối chốt cận đích vào trước nhà khách hàng
         if (lastMileLng && lastMileLat) {
           waypoints.push(`${lastMileLng},${lastMileLat}`); 
         }
@@ -284,21 +287,21 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           const route = routeData.routes[0];
           const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
           
-          // Vẽ đường Line bản đồ lộ trình màu xanh nổi bật trên Google Maps
+          // Vẽ đường Line bản đồ lộ trình màu xanh nổi bật bám sát đường bộ
           L.polyline(coordinates, { color: '#006c49', weight: 5, opacity: 0.9, lineJoin: 'round', lineCap: 'round' }).addTo(routingLayer.current);
 
           // Ghim điểm đầu Kho tổng và điểm đích khách hàng
           L.marker([storeLat, storeLng], { icon: customShopIcon }).bindPopup(`<b>${storeName}</b><br/>Kho xuất phát tổng của hệ thống`).addTo(routingLayer.current);
           L.marker([userLat, userLng], { icon: customUserReceiverIcon }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`).addTo(routingLayer.current);
 
-          // 🌟 ÉP ĐỒNG BỘ HIỂN THỊ: Ghim bưu cục chặng cuối cận đích lên bản đồ không loại trừ điều kiện khoảng cách
+          // Ghim bưu cục chặng cuối cận đích lên bản đồ
           if (lastMileLat && lastMileLng) {
             L.marker([lastMileLat, lastMileLng], { icon: customDistrictTruckIcon })
-             .bindPopup(`<b>🏁 ${lastMileName}</b><br/>Bưu cục chặng cuối phụ trách phát hàng chặng cuối`)
+             .bindPopup(`<b>🏁 ${lastMileName}</b><br/>Bưu cục chặng cuối phụ trách phát hàng`)
              .addTo(routingLayer.current);
           }
 
-          // Lấy chính xác 2 mốc bưu cục trục (Hub) hành trình ở khoảng 33% và 66% chặng giữa để bản đồ gọn gàng
+          // Lấy chính xác bưu cục trục (Hub) chặng giữa theo tỷ lệ uốn lượn thực tế
           let hubOnRouteList = [];
           if (coordinates.length > 15) {
             const distributionRatios = [0.33, 0.66]; 
@@ -307,12 +310,11 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               if (coordinates[targetIndex]) {
                 const nodeCoord = coordinates[targetIndex];
                 
-                // Tránh ghim Hub đè lên điểm chặng cuối hoặc kho tổng
-                if (lastMileLat && Math.abs(nodeCoord[0] - lastMileLat) < 0.01) return;
-                if (Math.abs(nodeCoord[0] - storeLat) < 0.01) return;
+                if (lastMileLat && Math.abs(nodeCoord[0] - lastMileLat) < 0.05) return;
+                if (Math.abs(nodeCoord[0] - storeLat) < 0.05) return;
 
                 hubOnRouteList.push({
-                  name: `Bưu cục Trung Chuyển Hub ${idx + 1}`,
+                  name: `Bưu cục Trung Chuyển Hub (${idx + 1})`,
                   lat: nodeCoord[0],
                   lng: nodeCoord[1]
                 });
@@ -320,14 +322,79 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             });
           }
 
-          // Ghim đúng 2 bưu cục Hub hành trình chặng giữa
+          // Ghim đúng các bưu cục Hub hành trình chặng giữa
           hubOnRouteList.forEach(hub => {
             L.marker([hub.lat, hub.lng], { icon: customRouteStationIcon })
-             .bindPopup(`<b>🏢 ${hub.name}</b><br/>Trạm trục xử lý phân phối phân loại chặng giữa`)
+             .bindPopup(`<b>🏢 ${hub.name}</b><br/>Trạm trục xử lý phân phối chặng trục`)
              .addTo(routingLayer.current);
           });
 
-          // Trả về dữ liệu thông tin tuyến đường thực tế sạch lỗi
+          // =========================================================================
+          // 📥 LOGIC ĐỒNG BỘ: TỰ ĐỘNG GỬI MẢNG BƯU CỤC ĐƯỜNG BỘ ĐÃ LỌC VỀ BACKEND ĐỂ LƯU
+          // =========================================================================
+          try {
+            const stationsToSave = [];
+
+            // 1. Gộp trạm trung chuyển Hub chặng giữa kèm tìm bưu cục KML gần nhất
+            hubOnRouteList.forEach((hub, idx) => {
+              let nearestKmlToHub = null;
+              let minDistanceSq = Infinity;
+
+              if (rawPostOffices.length > 0) {
+                rawPostOffices.forEach(office => {
+                  const oLat = parseFloat(office.location?.lat || office.latitude || 0);
+                  const oLng = parseFloat(office.location?.lng || office.longitude || 0);
+                  const distSq = ((oLat - hub.lat) ** 2) + ((oLng - hub.lng) ** 2);
+                  if (distSq < minDistanceSq) {
+                    minDistanceSq = distSq;
+                    nearestKmlToHub = office;
+                  }
+                });
+              }
+
+              stationsToSave.push({
+                station_id: `HUB_${order?.ma_don_hang || Date.now()}_${idx + 1}`,
+                name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
+                lat: hub.lat,
+                lng: hub.lng,
+                type: 'HUB',
+                tinh_thanh: nearestKmlToHub?.provinceName || '',
+                quan_huyen: nearestKmlToHub?.districtName || '',
+                phuong_xa: nearestKmlToHub?.wardName || '',
+                so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || ''
+              });
+            });
+
+            // 2. Gộp bưu cục Last Mile chuẩn xác tên từ file KML
+            if (lastMileLat && lastMileLng) {
+              stationsToSave.push({
+                station_id: optimalLastMileOffice?.id || 'LAST_MILE_GEN',
+                name: String(optimalLastMileOffice?.name || lastMileName),
+                lat: lastMileLat,
+                lng: lastMileLng,
+                type: 'LAST_MILE',
+                tinh_thanh: optimalLastMileOffice?.provinceName || '',
+                quan_huyen: optimalLastMileOffice?.districtName || '',
+                phuong_xa: optimalLastMileOffice?.wardName || '',
+                so_nha_duong: optimalLastMileOffice?.street || optimalLastMileOffice?.address || ''
+              });
+            }
+
+            // 3. Đẩy lên API lưu vào Database
+            const currentOrderId = order?.id || order?._id;
+            if (stationsToSave.length > 0 && currentOrderId) {
+              await orderApi.post('/orders/shipping/save-route-stations', {
+                order_id: currentOrderId,
+                ma_don_hang: order.ma_don_hang,
+                stations: stationsToSave
+              });
+              console.log("📥 Đã tự động lưu lộ trình chuẩn bám đường bộ vào bảng logs.");
+            }
+          } catch (saveErr) {
+            console.error("Lỗi đồng bộ trạm bưu cục:", saveErr);
+          }
+          // =========================================================================
+
           setRouteInfo({
             distanceKm: apiCalcDistance > 0 ? apiCalcDistance : parseFloat((route.distance / 1000).toFixed(1)),
             durationMin: apiCalcDuration > 0 ? apiCalcDuration : Math.ceil(route.duration / 60),
@@ -556,7 +623,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         {/* Footer */}
         <div className="p-4 bg-white border-t flex justify-between items-center text-xs shrink-0 text-slate-400 font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={16} className="text-[#006c49]"/> Đã sửa lỗi mất bưu cục phát chặng cuối: Hiển thị 2 bưu cục Hub và 1 bưu cục chặng cuối cận đích chuẩn Google Maps VN.
+            <ShieldCheck size={16} className="text-[#006c49]"/> Đã sửa lỗi mất bưu cục phát chặng cuối: Hiển thị bưu cục Hub chặng và bưu cục phát chuẩn xác uốn lượn Quốc lộ VN.
           </span>
         </div>
       </div>
