@@ -153,13 +153,16 @@ export default function ProductDetail() {
                 productData.media?.[0],
             );
 
+            const realSlug =
+              productData.slug_danh_muc || productData.ma_dm_con || "san-pham";
+
             if (
               !variantId ||
-              String(variantId) !== String(initialVariant.ma_bien_the)
+              String(variantId) !== String(initialVariant.ma_bien_the) ||
+              category_slug !== realSlug
             ) {
-              const cSlug = category_slug || productData.slug_danh_muc || "all";
               navigate(
-                `/${currentCountry}/product/${cSlug}/${id}/${initialVariant.ma_bien_the}`,
+                `/${currentCountry}/product/${realSlug}/${id}/${initialVariant.ma_bien_the}`,
                 { replace: true },
               );
             }
@@ -252,8 +255,11 @@ export default function ProductDetail() {
         (m) => String(m.ma_bien_the) === String(matchedVariant.ma_bien_the),
       );
       if (vMedia) setMainMedia(vMedia);
+
+      const realSlug =
+        product?.slug_danh_muc || product?.ma_dm_con || "san-pham";
       navigate(
-        `/${country}/product/${category_slug}/${id}/${matchedVariant.ma_bien_the}`,
+        `/${country}/product/${realSlug}/${id}/${matchedVariant.ma_bien_the}`,
         { replace: true },
       );
     } else {
@@ -261,7 +267,9 @@ export default function ProductDetail() {
     }
   };
 
-  // LOGIC FLASH SALE
+  // =========================================================================
+  // 🚨 LOGIC FLASH SALE & TÍNH GIÁ (ĐÃ VÁ LỖ HỔNG)
+  // =========================================================================
   const activeSaleItem = useMemo(() => {
     if (!selectedVariant || !activeFlashSales.length) return null;
     for (const promo of activeFlashSales) {
@@ -274,11 +282,29 @@ export default function ProductDetail() {
     return null;
   }, [selectedVariant, activeFlashSales]);
 
-  const isFlashSale =
-    !!activeSaleItem ||
-    !!selectedVariant?.thong_tin_sale ||
-    !!selectedVariant?.is_flash_sale;
+  // 1. Tính toán suất Sale CÒN LẠI
+  const remainingSaleQuantity = activeSaleItem
+    ? Math.max(
+        0,
+        Number(activeSaleItem.so_luong_gioi_han || 0) -
+          Number(activeSaleItem.da_ban || 0),
+      )
+    : selectedVariant?.thong_tin_sale
+      ? Math.max(
+          0,
+          Number(selectedVariant.thong_tin_sale.so_luong_gioi_han || 0) -
+            Number(selectedVariant.thong_tin_sale.da_ban || 0),
+        )
+      : 0;
 
+  // 2. CHỐT CHẶN: Chỉ được tính là Flash Sale nếu VẪN CÒN SUẤT
+  const isFlashSale =
+    (!!activeSaleItem ||
+      !!selectedVariant?.thong_tin_sale ||
+      !!selectedVariant?.is_flash_sale) &&
+    remainingSaleQuantity > 0;
+
+  // 3. Tính Giá Bán (Hết suất tự động trả về giá gốc)
   const currentPrice = isFlashSale
     ? Number(
         activeSaleItem?.gia_khuyen_mai ||
@@ -289,6 +315,7 @@ export default function ProductDetail() {
       )
     : Number(selectedVariant?.gia_ban_le || product?.gia_ban_thap_nhat || 0);
 
+  // 4. Tính Giá Gốc (Dùng để hiển thị gạch ngang)
   const rawOriginalPrice = Number(
     selectedVariant?.gia_goc ||
       selectedVariant?.gia_ban_le ||
@@ -298,16 +325,11 @@ export default function ProductDetail() {
   const originalPrice =
     isFlashSale && rawOriginalPrice > currentPrice ? rawOriginalPrice : null;
 
-  // Lấy số lượng tồn kho (Ưu tiên số tồn kho Flash sale)
+  // 5. Lấy số lượng tồn kho hiển thị (Ưu tiên suất Flash sale, nếu hết lấy tồn kho thực để bán giá gốc)
+  const rawStock = Number(selectedVariant?.so_luong_ton || 0);
   const stockCount = isFlashSale
-    ? Number(
-        (activeSaleItem?.so_luong_gioi_han || 0) -
-          (activeSaleItem?.da_ban || 0) ||
-          selectedVariant?.thong_tin_sale?.ton_kho_sale ||
-          selectedVariant?.so_luong_ton ||
-          0,
-      )
-    : Number(selectedVariant?.so_luong_ton || 0);
+    ? Math.min(remainingSaleQuantity, rawStock) // Không cho vượt quá tồn kho thực tế
+    : rawStock;
 
   const isOutOfStock = !selectedVariant || stockCount <= 0;
 
@@ -329,7 +351,7 @@ export default function ProductDetail() {
 
     if (!product || !selectedVariant || isOutOfStock) return;
 
-    // 1. TẠO TÊN PHÂN LOẠI CHUẨN (Giống hệt handleAddToCart)
+    // 1. TẠO TÊN PHÂN LOẠI CHUẨN
     let cleanEAVArray = [];
     if (
       Array.isArray(selectedVariant.thuoc_tinh_hop_nhat) &&
@@ -370,16 +392,15 @@ export default function ProductDetail() {
         "",
     };
 
-    // 3. LƯU VÀO LOCALSTORAGE BẰNG ĐÚNG KEY "checkoutItems"
+    // 3. LƯU VÀO LOCALSTORAGE
     localStorage.setItem("checkoutItems", JSON.stringify([itemToCheckout]));
 
-    // 4. CHUYỂN HƯỚNG MÀ KHÔNG CẦN TRUYỀN STATE NỮA
+    // 4. CHUYỂN HƯỚNG
     navigate("/checkout");
   };
 
   // NÚT THÊM VÀO GIỎ HÀNG: THOẢI MÁI, KHÔNG CẦN ĐĂNG NHẬP
   const handleAddToCart = (e) => {
-    // Đã xóa checkIsLoggedIn ở đây
     if (!product || !selectedVariant || isOutOfStock) return;
 
     let cleanEAVArray = [];
@@ -426,12 +447,11 @@ export default function ProductDetail() {
       variantName: targetVariantName,
       ten_don_vi: selectedVariant.ten_don_vi || product.ten_don_vi || "Gói",
       thuoc_tinh_hop_nhat: cleanEAVArray,
-      isFlashSale: !!selectedVariant.is_flash_sale,
+      isFlashSale: isFlashSale,
       originalPrice: selectedVariant.gia_goc || selectedVariant.gia_ban_le,
     };
 
     addToCart(itemToCart);
-
     // Hiệu ứng Flying Dot
     const startX = e.clientX;
     const startY = e.clientY;
@@ -718,8 +738,13 @@ export default function ProductDetail() {
                               String(m.ma_bien_the) === String(v.ma_bien_the),
                           );
                           if (vMedia) setMainMedia(vMedia);
+
+                          const realSlug =
+                            product?.slug_danh_muc ||
+                            product?.ma_dm_con ||
+                            "san-pham";
                           navigate(
-                            `/${country}/product/${category_slug}/${id}/${v.ma_bien_the}`,
+                            `/${country}/product/${realSlug}/${id}/${v.ma_bien_the}`,
                             { replace: true },
                           );
                         }}
