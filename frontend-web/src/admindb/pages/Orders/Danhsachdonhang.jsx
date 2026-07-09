@@ -27,10 +27,10 @@ export default function Danhsachdonhang() {
     setError(null);
     try {
       const adminToken = localStorage.getItem("adminToken");
-      const apiUrl =
-        import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
+      const apiUrl = import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
 
-      const response = await axios.get(`${apiUrl}/api/orders`, {
+      // 🌟 ĐÃ SỬA: Thay đổi endpoint từ '/api/orders' sang '/api/orders/admin/all-orders' để khớp với Back-end Admin Route
+      const response = await axios.get(`${apiUrl}/api/orders/admin/all-orders`, {
         params: {
           page: currentPage,
           limit: limit,
