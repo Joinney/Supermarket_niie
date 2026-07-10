@@ -31,7 +31,7 @@ L.Icon.Default.mergeOptions({
 // =================================================================
 // CONFIGURATION: ĐƯỜNG DẪN CÁC ICON TRÊN BẢN ĐỒ (QUẢN LÝ TẬP TRUNG)
 // =================================================================
-const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/7542/7542670.png"; // Icon xe tải chặng cuối
+const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2654/2654162.png"; // Icon xe tải chặng cuối
 const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/5643764.png"; // Icon điều phối màn hình chặng đầu
 const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; // Icon kho tổng xuất phát
 const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; // Icon Hub trung chuyển liên tỉnh

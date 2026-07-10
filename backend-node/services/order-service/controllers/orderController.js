@@ -124,7 +124,7 @@ const getShippingFee = async (req, res) => {
   }
 };
 
-// 2. Tiếp nhận đặt hàng (Tự động cấy lưu vết logs lộ trình chặng đơn hướng)
+// 2. Tiếp nhận đặt hàng (Tự động hóa cấy lộ trình bưu cục đa trạm vào DB)
 const placeOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -211,37 +211,63 @@ const placeOrder = async (req, res) => {
 
     // --- LUỒNG TỰ ĐỘNG HÓA TÍNH CHẶNG VÀ ĐỒNG BỘ TRẠM VÀO DATABASE ---
     try {
-      const storeLat = 10.792622;
-      const storeLng = 106.680172;
+      const storeLat = 10.771963; // Tọa độ Kho tổng Quận 1
+      const storeLng = 106.697194;
 
-      const kmlPath = path.resolve(new URL('.', import.meta.url).pathname, 'danh_sach_bc.kml');
-      let rawPostOffices = [];
-      if (fs.existsSync(kmlPath)) {
-        const kmlContent = fs.readFileSync(kmlPath, 'utf-8');
-        rawPostOffices = parseKmlWithRegex(kmlContent);
-      }
+      // 🌟 RÀNG BUỘC PHÂN LOẠI THEO TỈNH: Tính khoảng cách thực tế từ Kho tổng đến khách hàng
+      const directDistanceToStore = calcHaversine(userLatNum, userLngNum, storeLat, storeLng);
+      
+      let stationsToSave = [];
+
+      // 🌟 NẾU KHÁCH HÀNG Ở CÙNG TỈNH/THÀNH PHỐ (BÁN KÍNH NỘI THÀNH NỘI TỈNH <= 32.0 KM) -> GIAO THẲNG KHÔNG QUA BƯU CỤC TRUNG GIAN
+      if (directDistanceToStore <= 32.0) {
+        console.log(`[🚀 NỘI TỈNH - GIAO THẲNG]: Khách hàng thuộc cùng khu vực tỉnh/thành phố (~${directDistanceToStore.toFixed(2)} km). Kích hoạt luồng vận chuyển giao thẳng.`);
+        
+        stationsToSave.push({
+          station_id: `DIRECT_STORE_HQ`,
+          station_name: `Tổng Kho Điều Phối Siêu Tốc DemiMart`,
+          tinh_thanh: `Thành phố Hồ Chí Minh`,
+          quan_huyen: `Quận 1`,
+          phuong_xa: `Bến Thành`,
+          so_nha_duong: `Khu vực phân phối cự ly gần`,
+          station_lat: storeLat,
+          station_lng: storeLng,
+          station_type: 'FIRST_MILE', // Để Frontend render icon bưu cục nhận chặng đầu
+          action_type: 'GIAO_THANG_TRỰC_TIEP',
+          trang_thai_hien_thi: 'Đơn hàng nội tỉnh - Hệ thống xuất kho giao trực tiếp siêu tốc đến bạn'
+        });
+      } else {
+        // 🌟 KHÁC TỈNH TRONG MẠNG LƯỚI TOÀN QUỐC (KHI ĐƠN ĐI XA > 32.0 KM) -> BẮT BUỘC ĐI QUA CÁC BƯU CỤC NHƯ CŨ
+        console.log(`[🚛 NGOẠI TỈNH - LIÊN TRẠM TRỤC]: Khách hàng ở ngoại tỉnh chặng xa (${directDistanceToStore.toFixed(2)} km). Chuyển tiếp luồng vận tải đa điểm đa trạm.`);
+        
+        const kmlPath = path.resolve(new URL('.', import.meta.url).pathname, 'danh_sach_bc.kml');
+        let rawPostOffices = [];
+        if (fs.existsSync(kmlPath)) {
+          const kmlContent = fs.readFileSync(kmlPath, 'utf-8');
+          rawPostOffices = parseKmlWithRegex(kmlContent);
+        }
 
       let optimalFirstMileOffice = null;
       let optimalLastMileOffice = null;
       let lastMileLat = userLatNum;
       let lastMileLng = userLngNum;
 
-      if (rawPostOffices.length > 0) {
-        // [A] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC GOM CHẶNG ĐẦU (GẦN KHO TỔNG NHẤT)
-        let minDistanceToStore = Infinity;
-        rawPostOffices.forEach(office => {
-          const distToStoreSq = ((office.location.lat - storeLat) ** 2) + ((office.location.lng - storeLng) ** 2);
-          if (distToStoreSq < minDistanceToStore) {
-            minDistanceToStore = distToStoreSq;
-            optimalFirstMileOffice = office;
-          }
-        });
+        if (rawPostOffices.length > 0) {
+          // [A] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC GOM CHẶNG ĐẦU (GẦN KHO TỔNG NHẤT)
+          let minDistanceToStore = Infinity;
+          rawPostOffices.forEach(office => {
+            const distToStoreSq = ((office.location.lat - storeLat) ** 2) + ((office.location.lng - storeLng) ** 2);
+            if (distToStoreSq < minDistanceToStore) {
+              minDistanceToStore = distToStoreSq;
+              optimalFirstMileOffice = office;
+            }
+          });
 
-        // [B] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC PHÁT CHẶNG CUỐI (GẦN KHÁCH HÀNG NHẤT)
-        let clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 0.6 && Math.abs(o.location.lng - userLngNum) < 0.6);
-        if (clientZoneOffices.length === 0) {
-          clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 1.5 && Math.abs(o.location.lng - userLngNum) < 1.5);
-        }
+          // [B] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC PHÁT CHẶNG CUỐI (GẦN KHÁCH HÀNG NHẤT)
+          let clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 0.6 && Math.abs(o.location.lng - userLngNum) < 0.6);
+          if (clientZoneOffices.length === 0) {
+            clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 1.5 && Math.abs(o.location.lng - userLngNum) < 1.5);
+          }
 
         let minDistanceToClient = Infinity;
         optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
@@ -258,12 +284,11 @@ const placeOrder = async (req, res) => {
         lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || userLngNum);
       }
 
-      let waypoints = [`${storeLng},${storeLat}`];
+        let waypoints = [`${storeLng},${storeLat}`];
 
-      // Nếu tìm được bưu cục đầu nhận và khoảng cách hợp lý, đưa vào waypoint OSRM
-      if (optimalFirstMileOffice) {
-        waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
-      }
+        if (optimalFirstMileOffice) {
+          waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
+        }
 
       const isTayNguyenZone = userLngNum < 108.2 && userLatNum > 11.5 && userLatNum < 15.0;
 
@@ -292,24 +317,22 @@ const placeOrder = async (req, res) => {
         const routeGeo = routeRes.data.routes[0];
         const coordinates = routeGeo.geometry.coordinates;
 
-        let stationsToSave = [];
-
-        // 🌟 [1] THÊM BƯU CỤC GOM HÀNG CHẶNG ĐẦU VÀO LOGS
-        if (optimalFirstMileOffice) {
-          stationsToSave.push({
-            station_id: String(optimalFirstMileOffice.id),
-            station_name: String(optimalFirstMileOffice.name),
-            tinh_thanh: String(optimalFirstMileOffice.provinceName || ''),
-            quan_huyen: String(optimalFirstMileOffice.districtName || ''),
-            phuong_xa: String(optimalFirstMileOffice.wardName || ''),
-            so_nha_duong: String(optimalFirstMileOffice.street || optimalFirstMileOffice.address || ''),
-            station_lat: parseFloat(optimalFirstMileOffice.location.lat),
-            station_lng: parseFloat(optimalFirstMileOffice.location.lng),
-            station_type: 'FIRST_MILE',
-            action_type: 'GOM_HANG_DIEU_PHOI',
-            trang_thai_hien_thi: 'Đã tiếp nhận hàng tại bưu cục điều phối chặng đầu'
-          });
-        }
+          // 1. Thêm bưu cục gom hàng chặng đầu vào logs
+          if (optimalFirstMileOffice) {
+            stationsToSave.push({
+              station_id: String(optimalFirstMileOffice.id),
+              station_name: String(optimalFirstMileOffice.name),
+              tinh_thanh: String(optimalFirstMileOffice.provinceName || ''),
+              quan_huyen: String(optimalFirstMileOffice.districtName || ''),
+              phuong_xa: String(optimalFirstMileOffice.wardName || ''),
+              so_nha_duong: String(optimalFirstMileOffice.street || optimalFirstMileOffice.address || ''),
+              station_lat: parseFloat(optimalFirstMileOffice.location.lat),
+              station_lng: parseFloat(optimalFirstMileOffice.location.lng),
+              station_type: 'FIRST_MILE',
+              action_type: 'GOM_HANG_DIEU_PHOI',
+              trang_thai_hien_thi: 'Đã tiếp nhận hàng tại bưu cục điều phối chặng đầu'
+            });
+          }
 
         // [2] THÊM CÁC HUB TRUNG CHUYỂN DỌC ĐƯỜNG LIÊN TỈNH
         if (coordinates.length > 15) {
@@ -363,38 +386,39 @@ const placeOrder = async (req, res) => {
           });
         }
 
-        const insertLogQuery = `
-          INSERT INTO public.order_tracking_logs (
-            order_id, ma_don_hang, station_id, station_name, 
-            tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
-            station_lat, station_lng, station_type, action_type, 
-            trang_thai_hien_thi, ngay_tao
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-        `;
+      // Lưu mảng logs hành trình vào PostgreSQL công khai
+      const insertLogQuery = `
+        INSERT INTO public.order_tracking_logs (
+          order_id, ma_don_hang, station_id, station_name, 
+          tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
+          station_lat, station_lng, station_type, action_type, 
+          trang_thai_hien_thi, ngay_tao
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      `;
 
-        for (const station of stationsToSave) {
-          const queryParams = [
-            Number(order.id),
-            String(order.ma_don_hang),
-            station.station_id,
-            station.station_name,
-            station.tinh_thanh,
-            station.quan_huyen,
-            station.phuong_xa,
-            station.so_nha_duong,
-            parseFloat(station.station_lat),
-            parseFloat(station.station_lng),
-            station.station_type,
-            station.action_type,
-            station.trang_thai_hien_thi
-          ];
-          if (db.query) await db.query(insertLogQuery, queryParams);
-          else await db.execute(insertLogQuery, queryParams);
-        }
-        console.log(`[🚀 AUTOMATION ENGINE]: Đã tự động cấy lưu ${stationsToSave.length} trạm logistics (Bao gồm bưu cục chặng đầu).`);
+      for (const station of stationsToSave) {
+        const queryParams = [
+          Number(order.id),
+          String(order.ma_don_hang),
+          station.station_id,
+          station.station_name,
+          station.tinh_thanh,
+          station.quan_huyen,
+          station.phuong_xa,
+          station.so_nha_duong,
+          parseFloat(station.station_lat),
+          parseFloat(station.station_lng),
+          station.station_type,
+          station.action_type,
+          station.trang_thai_hien_thi
+        ];
+        if (db.query) await db.query(insertLogQuery, queryParams);
+        else await db.execute(insertLogQuery, queryParams);
       }
+      console.log(`[🚀 AUTOMATION ENGINE]: Phân loại vùng bưu cục hoàn tất (${stationsToSave.length} điểm mốc được ghi nhận).`);
+
     } catch (logisticsErr) {
-      console.error("⚠️ Cảnh báo lỗi cấu trúc:", logisticsErr.message);
+      console.error("⚠️ Cảnh báo lỗi cấu trúc hành trình:", logisticsErr.message);
     }
 
     const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();

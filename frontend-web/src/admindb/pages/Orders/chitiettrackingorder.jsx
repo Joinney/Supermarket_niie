@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   MapContainer,
@@ -9,9 +9,9 @@ import {
   Popup,
 } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import "leaflet/dist/leaflet.css"; 
 import { orderApi } from "../../../api/axios";
-import { Loader2 } from "lucide-react";
+import { Loader2, Navigation, Clock, Zap, FastForward, Compass } from "lucide-react";
 
 // --- KHẮC PHỤC LỖI MẤT ASSET ICON MARKER CỦA LEAFLET KHI BUILD VITE ---
 import iconMarker from "leaflet/dist/images/marker-icon.png";
@@ -25,27 +25,42 @@ L.Icon.Default.mergeOptions({
   shadowUrl: iconShadow,
 });
 
-// --- COMPONENT TỰ ĐỘNG ZOOM/PAN THEO TOÀN BỘ ĐƯỜNG ĐI CHẶNG TRỤC ---
+// =================================================================
+// CONFIGURATION: ĐƯỜNG DẪN CÁC ICON TRÊN BẢN ĐỒ (QUẢN LÝ TẬP TRUNG)
+// =================================================================
+const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/7542/7542670.png"; // Icon xe tải chặng cuối
+const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/5643764.png"; // Icon điều phối màn hình chặng đầu
+const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; // Icon kho tổng xuất phát
+const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; // Icon Hub trung chuyển liên tỉnh
+// =================================================================
+
 function ChangeMapView({ bounds }) {
   const map = useMap();
   useEffect(() => {
     if (bounds && typeof bounds.isValid === "function" && bounds.isValid()) {
       map.fitBounds(bounds, { padding: [40, 40] });
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 300);
+      setTimeout(() => { map.invalidateSize(); }, 300);
     }
   }, [bounds, map]);
   return null;
 }
 
-function UpdateMapLayer({ coords }) {
+function MapFocusController({ focusLocation }) {
   const map = useMap();
   useEffect(() => {
-    if (coords && coords.length > 0) {
-      map.invalidateSize();
+    if (focusLocation) {
+      map.setView(focusLocation, map.getZoom() < 12 ? 12 : map.getZoom(), {
+        animate: true,
+        duration: 0.3, 
+      });
     }
-  }, [coords, map]);
+  }, [focusLocation, map]);
+  return null;
+}
+
+function UpdateMapLayer({ coords }) {
+  const map = useMap();
+  useEffect(() => { if (coords && coords.length > 0) map.invalidateSize(); }, [coords, map]);
   return null;
 }
 
@@ -81,17 +96,15 @@ export default function Chitiettrackingorder() {
   const [routeCoords, setRouteCoordinates] = useState([]);
   const [stations, setStations] = useState([]);
   const [mapBounds, setMapBounds] = useState(null);
+  
+  // Tọa độ Kho tổng mặc định chuẩn GPS Quận 1 giống ModalLoTrinh
   const [currentStationPosition, setCurrentStationPosition] = useState([
     10.771963, 106.697194,
   ]);
 
   // State quản lý tọa độ nhà nhận toàn cục để hiển thị Marker chuẩn xác
   const [customerTarget, setCustomerTarget] = useState([10.771963, 106.660172]);
-
-  // State lưu chuỗi ảnh Avatar người dùng bốc từ Database
-  const [userAvatarUrl, setUserAvatarUrl] = useState(
-    "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-  );
+  const [userAvatarUrl, setUserAvatarUrl] = useState("https://cdn-icons-png.flaticon.com/512/149/149071.png");
 
   const [routeInfo, setRouteInfo] = useState({
     distanceKm: 0,
@@ -101,7 +114,100 @@ export default function Chitiettrackingorder() {
     isDirectDelivery: false
   });
 
-  // HÀM RENDER LOGO ICON SẠCH (KHÔNG CÓ CHỮ DƯỚI CHÂN ICON)
+  const [truckPosition, setTruckPosition] = useState(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [isArrivedAtStation, setIsArrivedAtStation] = useState(false);
+  const [currentStationIndex, setCurrentStationIndex] = useState(-1);
+  
+  const [visibleLogs, setVisibleLogs] = useState([]);
+  const [isFullyDelivered, setIsFullyDelivered] = useState(false); 
+  const [deliveredTime, setDeliveredTime] = useState("");
+
+  // STATE QUẢN LÝ LOẠI XE ĐANG ĐƯỢC CHẠY TRÊN BẢN ĐỒ (TRUE = XE TẢI, FALSE = XE MÁY SHIPPER)
+  const [isTruckVehicleMode, setIsTruckVehicleMode] = useState(true);
+
+  // STATES QUẢN LÝ CHẾ ĐỘ TỐC ĐỘ DI CHUYỂN
+  const [speedMode, setSpeedMode] = useState("optimized"); 
+
+  const animationIndexRef = useRef(0);
+  const simulationIntervalRef = useRef(null);
+
+  const getSpeedStep = () => {
+    if (speedMode === "fast") return 6;      
+    return 3;                                
+  };
+
+  const jumpToNextStation = () => {
+    if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
+
+    // 🌟 NẾU ĐƠN TRONG TỈNH (GIAO THẲNG): Nhảy một phát tới thẳng nhà khách luôn
+    if (routeInfo.isDirectDelivery) {
+      const now = new Date();
+      animationIndexRef.current = routeCoords.length - 1;
+      setTruckPosition(routeCoords[routeCoords.length - 1]);
+      setFocusLocation(routeCoords[routeCoords.length - 1]);
+      
+      if (isSimulating) {
+        clearInterval(simulationIntervalRef.current);
+        setIsSimulating(false);
+      }
+      setIsFullyDelivered(true);
+      setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
+      return;
+    }
+
+    const nextStationIdx = currentStationIndex + 1;
+    
+    if (nextStationIdx < stations.length) {
+      const targetStation = stations[nextStationIdx];
+      const sLat = parseFloat(targetStation.station_lat);
+      const sLng = parseFloat(targetStation.station_lng);
+
+      let bestMatchIndex = animationIndexRef.current;
+      let minDistance = Infinity;
+
+      for (let i = animationIndexRef.current; i < routeCoords.length; i++) {
+        const diff = Math.abs(routeCoords[i][0] - sLat) + Math.abs(routeCoords[i][1] - sLng);
+        if (diff < minDistance) {
+          minDistance = diff;
+          bestMatchIndex = i;
+        }
+      }
+
+      animationIndexRef.current = bestMatchIndex;
+      setTruckPosition(routeCoords[bestMatchIndex]);
+      setFocusLocation(routeCoords[bestMatchIndex]);
+
+      if (isSimulating) {
+        clearInterval(simulationIntervalRef.current);
+        setIsSimulating(false);
+      }
+      setIsArrivedAtStation(true);
+      setCurrentStationIndex(nextStationIdx);
+
+      setVisibleLogs(prev => {
+        if (prev.some(log => log.station_id === targetStation.station_id)) return prev;
+        return [...prev, {
+          ...targetStation,
+          scanTime: new Date().toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' }),
+          scanDate: new Date().toLocaleDateString("vi-VN")
+            }];
+          });
+    } else {
+      const now = new Date();
+      animationIndexRef.current = routeCoords.length - 1;
+      setTruckPosition(routeCoords[routeCoords.length - 1]);
+      setFocusLocation(routeCoords[routeCoords.length - 1]);
+      
+      if (isSimulating) {
+        clearInterval(simulationIntervalRef.current);
+        setIsSimulating(false);
+      }
+      setIsFullyDelivered(true);
+      setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
+    }
+  };
+
   const createStationTextLabelIcon = (iconUrl, labelText, size = 36) => {
     return L.divIcon({
       html: `
@@ -115,23 +221,30 @@ export default function Chitiettrackingorder() {
     });
   };
 
-  // KHỞI TẠO ĐỘNG DIV_ICON CHỨA ẢNH NGƯỜI DÙNG THẬT TRÒN VIỀN TRẮNG ĐÈ TRÊN NỀN BẢN ĐỒ
+  const createLiveTruckIcon = (widthPx = 64, heightPx = 64) => {
+    // 🌟 ĐÃ CẬP NHẬT: Tự động đổi asset ảnh dựa trên chế độ xe (Xe tải hoặc Xe máy Shipper)
+    const currentVehicleImg = isTruckVehicleMode ? LIVE_ANIMATION_TRUCK_URL : LIVE_SHIPPER_MOTOR_URL;
+    
+    return L.divIcon({
+      html: `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; position: relative;">
+          <div style="background: ${isArrivedAtStation ? '#b91c1c' : '#006c49'}; color: white; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap; margin-bottom: 4px; border: 1px solid #cbd5e1;">
+            ${isFullyDelivered ? "🎉 Đã giao xong" : isArrivedAtStation ? "⚠️ Đã đến bưu cục" : isTruckVehicleMode ? "Đang trung chuyển" : "Shipper đang giao hỏa tốc"}
+          </div>
+          <div style="width: ${widthPx}px; height: ${heightPx}px; display: flex; align-items: center; justify-content: center;">
+            <img src="${currentVehicleImg}" style="width: 100%; height: 100%; object-fit: contain;" />
+          </div>
+        </div>
+      `,
+      className: "custom-live-truck-marker-clean",
+      iconSize: [120, 90],
+      iconAnchor: [60, 82],
+    });
+  };
+
   const createCustomerAvatarIcon = (url) => {
     return L.divIcon({
-      html: `<div style="
-        width: 42px; 
-        height: 42px; 
-        border-radius: 50%; 
-        border: 3px solid #006c49; 
-        box-shadow: 0 3px 8px rgba(0,0,0,0.35); 
-        overflow: hidden; 
-        background-color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" />
-      </div>`,
+      html: `<div style="width: 42px; height: 42px; border-radius: 50%; border: 3px solid #006c49; box-shadow: 0 3px 8px rgba(0,0,0,0.35); overflow: hidden; background-color: #ffffff; display: flex; align-items: center; justify-content: center;"><img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" /></div>`,
       className: "custom-customer-avatar-marker",
       iconSize: [42, 42],
       iconAnchor: [21, 42],
@@ -139,19 +252,93 @@ export default function Chitiettrackingorder() {
     });
   };
 
+  useEffect(() => {
+    if (isSimulating) {
+      clearInterval(simulationIntervalRef.current);
+      startTruckSimulation();
+    }
+  }, [speedMode]);
+
+  const startTruckSimulation = () => {
+    if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
+    
+    setIsSimulating(true);
+    const stepSize = getSpeedStep(); 
+    
+    simulationIntervalRef.current = setInterval(() => {
+      let currentIndex = animationIndexRef.current;
+
+      if (currentIndex < routeCoords.length) {
+        const currentCoord = routeCoords[currentIndex];
+        setTruckPosition(currentCoord);
+        setFocusLocation(currentCoord);
+
+        // 🌟 LOGIC ĐỔI XE THÔNG MINH: Nếu đơn hàng trong tỉnh thì dùng luôn xe máy shipper ngay từ đầu
+        if (routeInfo.isDirectDelivery) {
+          setIsTruckVehicleMode(false); 
+        } else if (currentStationIndex >= stations.length - 1 && stations.length > 0) {
+          setIsTruckVehicleMode(false); // Đơn ngoại tỉnh chuyển sang xe máy khi qua bưu cục phát chặng cuối
+        } else {
+          setIsTruckVehicleMode(true);  // Xe tải chạy đường trục chặng dài liên tỉnh
+        }
+
+        let foundStationIdx = -1;
+        for (let i = 0; i < stations.length; i++) {
+          if (i <= currentStationIndex) continue; 
+          
+          const sLat = parseFloat(stations[i].station_lat);
+          const sLng = parseFloat(stations[i].station_lng);
+          
+          if (Math.abs(currentCoord[0] - sLat) < 0.004 && Math.abs(currentCoord[1] - sLng) < 0.004) {
+            foundStationIdx = i;
+            break;
+          }
+        }
+
+        if (foundStationIdx !== -1) {
+          clearInterval(simulationIntervalRef.current);
+          setIsSimulating(false);
+          setIsArrivedAtStation(true);
+          setCurrentStationIndex(foundStationIdx);
+
+          const targetStationLog = stations[foundStationIdx];
+          setVisibleLogs(prev => {
+            if (prev.some(log => log.station_id === targetStationLog.station_id)) return prev;
+            return [...prev, {
+              ...targetStationLog,
+              scanTime: new Date().toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' }),
+              scanDate: new Date().toLocaleDateString("vi-VN")
+            }];
+          });
+          return;
+        }
+
+        animationIndexRef.current += 3; 
+      } else {
+        const now = new Date();
+        setTruckPosition(routeCoords[routeCoords.length - 1]);
+        setIsSimulating(false);
+        setIsFullyDelivered(true);
+        setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
+        clearInterval(simulationIntervalRef.current);
+      }
+    }, 25);
+  };
+
+  const handleConfirmArrival = () => {
+    setIsArrivedAtStation(false); 
+    animationIndexRef.current += 5; 
+    startTruckSimulation(); 
+  };
+
   const fetchTrackingDetail = async () => {
     setLoading(true);
     setError(null);
     try {
       let adminToken = localStorage.getItem("adminToken");
-      if (adminToken) {
-        adminToken = adminToken.replace(/^"|"$/g, "").trim();
-      }
+      if (adminToken) adminToken = adminToken.replace(/^"|"$/g, "").trim();
 
-      const requestConfig = {
-        headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
-      };
-
+      const requestConfig = { headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" } };
       const orderRes = await orderApi.get(`/admin/orders/${id}`, requestConfig);
       let orderMainData = null;
 
@@ -159,16 +346,6 @@ export default function Chitiettrackingorder() {
         orderMainData = orderRes.data.data;
         setOrderDetail(orderMainData);
 
-        console.log("=== [DEBUG] ĐƠN HÀNG LOGISTICS GỐC ===", orderMainData);
-        if (orderMainData?.user_info) {
-          console.log(
-            "=== [DEBUG] ĐỐI TƯỢNG USER_INFO BÊN TRONG ===",
-            orderMainData.user_info,
-          );
-        }
-
-        // 🌟 BỘ THUẬT TOÁN DÒ TÌM AVATAR DỰ PHÒNG THÔNG MINH (DEEP SCAN) 🌟
-        // Tự động kiểm tra tất cả các trường có khả năng chứa link ảnh đại diện khách hàng
         let finalAvatar = null;
         if (orderMainData?.user_info) {
           finalAvatar =
@@ -194,27 +371,17 @@ export default function Chitiettrackingorder() {
         throw new Error("Không lấy được dữ liệu cấu trúc gốc của đơn hàng.");
       }
 
-      const realOrderId = orderMainData?.id || id;
+      const logRes = await orderApi.get(`/orders/tracking-logs/${orderMainData?.id || id}`, requestConfig);
+      let rawLogs = logRes.data?.success ? logRes.data.data || [] : [];
 
-      const logRes = await orderApi.get(
-        `/orders/tracking-logs/${realOrderId}`,
-        requestConfig,
-      );
-      let rawLogs = [];
-      if (logRes.data?.success) {
-        rawLogs = logRes.data.data || [];
-      }
-
-      // Tọa độ Kho tổng cố định (HCM)
-      const storeLat = 10.792622;
-      const storeLng = 106.680172;
+      const storeLat = 10.771963;
+      const storeLng = 106.697194;
 
       const userLat = parseFloat(orderMainData?.to_lat || orderMainData?.latitude || orderMainData?.toLat || 10.762622);
       const userLng = parseFloat(orderMainData?.to_lng || orderMainData?.longitude || orderMainData?.toLng || 106.660172);
 
       setCustomerTarget([userLat, userLng]);
 
-      // Tạo bản sao mảng an toàn và sắp xếp tuần tiến theo chuỗi thời gian quét (Cũ xếp trước -> Mới xếp sau)
       const sortedLogs = [...rawLogs].sort(
         (a, b) => new Date(a.ngay_tao) - new Date(b.ngay_tao),
       );
@@ -222,22 +389,15 @@ export default function Chitiettrackingorder() {
       const hasDirectLog = sortedLogs.some(log => log.station_id === "DIRECT_STORE_HQ");
 
       let uniqueStations = [];
-      
       if (hasDirectLog) {
         uniqueStations = sortedLogs;
       } else {
         sortedLogs.forEach((log) => {
-          const lat = parseFloat(log.station_lat);
-          const lng = parseFloat(log.station_lng);
+          const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
           if (!lat || !lng) return;
 
-        if (
-          Math.abs(lat - storeLat) < 0.002 &&
-          Math.abs(lng - storeLng) < 0.002
-        )
-          return;
-        if (Math.abs(lat - userLat) < 0.002 && Math.abs(lng - userLng) < 0.002)
-          return;
+          if (Math.abs(lat - storeLat) < 0.002 && Math.abs(lng - storeLng) < 0.002) return;
+          if (Math.abs(lat - userLat) < 0.002 && Math.abs(lng - userLng) < 0.002) return;
 
           const isExist = uniqueStations.some(
             (s) =>
@@ -250,205 +410,218 @@ export default function Chitiettrackingorder() {
           }
         });
       }
-
       setStations(uniqueStations);
 
       let waypoints = [`${storeLng},${storeLat}`];
-      uniqueStations.forEach((log) => {
-        waypoints.push(
-          `${parseFloat(log.station_lng)},${parseFloat(log.station_lat)}`,
-        );
-      });
+      
+      if (!hasDirectLog) {
+        uniqueStations.forEach((log) => {
+          waypoints.push(`${parseFloat(log.station_lng)},${parseFloat(log.station_lat)}`);
+        });
+      }
       waypoints.push(`${userLng},${userLat}`);
 
       const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(";")}?overview=full&geometries=geojson&continue_straight=true`;
-
       const routeRes = await fetch(osrmUrl);
       const routeData = await routeRes.json();
 
-      if (routeData.code === "Ok" && routeData.routes && routeData.routes.length > 0) {
-        const route = routeData.routes[0];
-        const coordinates = route.geometry.coordinates.map((coord) => [coord[1], coord[0]]);
-
+      if (routeData.code === "Ok" && routeData.routes?.length > 0) {
+        const coordinates = routeData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
         setRouteCoordinates(coordinates);
+        setTruckPosition(coordinates[0]);
+        animationIndexRef.current = 0;
 
         const bounds = L.latLngBounds([[storeLat, storeLng], [userLat, userLng]]);
-        coordinates.forEach((pt) => {
-          if (Array.isArray(pt) && pt.length === 2) bounds.extend(pt);
-        });
+        coordinates.forEach((pt) => bounds.extend(pt));
         setMapBounds(bounds);
 
-        if (uniqueStations.length > 0 && !hasDirectLog) {
-          const lastLog = uniqueStations[uniqueStations.length - 1];
-          setCurrentStationPosition([
-            parseFloat(lastLog.station_lat),
-            parseFloat(lastLog.station_lng),
-          ]);
+        // 🌟 ĐÃ CẬP NHẬT TRẠNG THÁI XE BAN ĐẦU: Nếu là đơn trong tỉnh thì ép hiển thị Xe máy Shipper ngay từ đầu
+        if (hasDirectLog) {
+          setIsTruckVehicleMode(false);
         } else {
-          setCurrentStationPosition([storeLat, storeLng]);
+          setIsTruckVehicleMode(true);
         }
 
         setRouteInfo({
           distanceKm: parseFloat((route.distance / 1000).toFixed(1)),
           durationMin: Math.ceil(route.duration / 60),
-          storeName:
-            uniqueStations.find((s) => s.station_type === "LAST_MILE")
-              ?.station_name || "Bưu cục phát chặng cuối",
-          totalOfficesOnRoute: uniqueStations.filter(
-            (s) => s.station_type === "HUB",
-          ).length,
+          storeName: hasDirectLog ? "Giao thẳng từ Kho tổng" : (uniqueStations.find((s) => s.station_type === "LAST_MILE")?.station_name || "Bưu cục phát chặng cuối"),
+          totalOfficesOnRoute: uniqueStations.filter((s) => s.station_type === "HUB").length,
+          isDirectDelivery: hasDirectLog
         });
       }
     } catch (err) {
-      console.error("🔥 Lỗi thiết lập hành trình đường bộ:", err);
-      setError("Không thể nạp thông tin vận hành chặng trục uốn lượn đường bộ của đơn hàng.");
+      setError("Không thể nạp thông tin trục hành trình đường bộ OSRM.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (id) {
-      fetchTrackingDetail();
-    }
+  useEffect(() => { 
+    if (id) fetchTrackingDetail(); 
+    return () => { if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current); };
   }, [id]);
 
   if (loading) {
     return (
       <div className="w-full min-h-screen flex flex-col items-center justify-center gap-2 bg-[#fafafa] text-[#006c49]">
         <Loader2 className="animate-spin w-9 h-9 stroke-[3]" />
-        <span className="text-xs font-black uppercase tracking-widest">
-          Đang kết xuất liên thông thực địa OSRM...
-        </span>
-      </div>
-    );
-  }
-
-  if (error || !orderDetail) {
-    return (
-      <div className="w-full min-h-screen p-10 bg-[#fafafa] text-center font-bold text-rose-500 text-xs">
-        {"⚠️ "}{error || "Không tìm thấy thông tin vận đơn khớp trong cơ sở dữ liệu."}
-        <div className="mt-4">
-          <Link to="/admin/Donhang/DanhsachTrackingorder" className="text-[#006c49] underline">
-            Quay lại danh sách
-          </Link>
-        </div>
+        <span className="text-xs font-black uppercase tracking-widest">Đang khởi tạo thực địa...</span>
       </div>
     );
   }
 
   return (
     <div className="w-full bg-[#fafafa] font-sans antialiased text-slate-800 text-left min-h-screen pb-10 p-6">
-      {/* BREADCRUMB HEADER AREA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-            <Link to="/admin/Donhang/DanhsachTrackingorder" className="hover:text-[#006c49] transition-colors">
-              Shipments
-            </Link>
-            <span>❯</span>
-            <span className="text-slate-600">#{orderDetail.ma_don_hang}</span>
+            <Link to="/admin/Donhang/DanhsachTrackingorder" className="hover:text-[#006c49]">Shipments</Link>
+            <span>❯</span> <span className="text-slate-600">#{orderDetail.ma_don_hang}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black tracking-tight text-slate-900">
-              Vận đơn: {orderDetail.ma_don_hang}
-            </h1>
-            <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-emerald-50 text-[#006c49] border border-emerald-100">
-              {orderDetail.trang_thai_don_hang || "IN TRANSIT"}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
-          >
-            🖨️ In vận đơn
-          </button>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">Vận đơn: {orderDetail.ma_don_hang}</h1>
         </div>
       </div>
 
-      {/* COMPONENT LAYOUT SPLIT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
-          {/* LỊCH TRÌNH QUÉT TRẠM TIMELINE */}
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-base font-black text-slate-900">
-                Lịch trình quét trạm hệ thống
-              </h2>
-              <span className="text-xs text-slate-400 font-bold">
-                Tổng hành trình chặng: {routeInfo.distanceKm} km
-              </span>
+              <h2 className="text-base font-black text-slate-900">Lịch trình quét trạm hệ thống</h2>
+              <span className="text-xs text-slate-400 font-bold">Tổng hành trình: {routeInfo.distanceKm} km</span>
             </div>
 
-            <div className="relative border-l-2 border-dashed border-slate-200 ml-3 space-y-8 pb-2">
-              <div className="relative pl-6">
-                <span className="absolute -left-[7px] top-1 flex h-3 w-3 items-center justify-center rounded-full bg-[#006c49] ring-4 ring-emerald-50"></span>
-                <h4 className="text-sm font-black text-slate-900">
-                  Kho tổng xuất phát Store2Door (TP.HCM)
-                </h4>
-                <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                  {routeInfo.isDirectDelivery 
-                    ? "Phát hiện vị trí đích ở cự ly gần - Kiện hàng kích hoạt luồng bàn giao shipper giao thẳng."
-                    : "Đã đóng gói và bốc xếp phân phối lên thùng xe tải trục liên bưu cục."}
-                </p>
+            <div className="relative border-l-2 border-dashed border-slate-200 ml-3 space-y-8 pb-4">
+              <div className="relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <span className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#006c49] ring-4 ring-emerald-50"></span>
+                <div className="flex-1">
+                  <h4 className="text-sm font-black text-slate-900">Đã tiếp nhận đơn hàng</h4>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Kho tổng Store2Door - TP. Hồ Chí Minh</p>
+                  <div className="mt-1"><span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-[#006c49] text-[9px] font-black rounded uppercase border border-blue-100 tracking-wider">📦 Đã rời kho xuất phát</span></div>
+                </div>
+                <div className="text-right shrink-0 text-[11px] text-slate-400 font-bold whitespace-nowrap">
+                  {new Date(orderDetail.ngay_tao).toLocaleDateString("vi-VN")} - 08:30
+                </div>
               </div>
 
-              {stations.map((log, index) => (
-                <div key={log.id || index} className="relative pl-6">
-                  <span
-                    className={`absolute -left-[7px] top-1 flex h-3 w-3 items-center justify-center rounded-full ${index === stations.length - 1 ? "bg-amber-500 ring-4 ring-amber-50 animate-pulse" : "bg-[#006c49] ring-4 ring-emerald-50"}`}
-                  ></span>
+              {routeInfo.isDirectDelivery ? (
+                <div className="relative pl-6">
+                  <span className="absolute -left-[7px] top-1 flex h-3 w-3 items-center justify-center rounded-full bg-amber-500 ring-4 ring-amber-50 animate-pulse"></span>
                   <div className="flex justify-between items-start gap-4">
                     <div>
                       <h4 className="text-sm font-black text-slate-900">
-                        {log.station_name}
+                        Luồng điều phối: Giao trực tiếp siêu tốc
                       </h4>
                       <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                        Khu vực: {log.phuong_xa} • {log.quan_huyen} •{" "}
-                        {log.tinh_thanh}
+                        Trạng thái: Khách hàng nằm trong bán kính gần cửa hàng, bỏ qua các bưu cục gom hàng trung gian.
                       </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-[#006c49] text-[9px] font-black rounded uppercase border tracking-wider">
-                          {log.trang_thai_hien_thi}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-[11px] text-slate-400 font-bold block">
-                        {new Date(log.ngay_tao).toLocaleDateString("vi-VN")}
-                      </span>
                     </div>
                   </div>
                 </div>
-              ))}
+              ) : (
+                stations.map((log, index) => (
+                  <div key={log.id || index} className="relative pl-6">
+                    <span
+                      className={`absolute -left-[7px] top-1 flex h-3 w-3 items-center justify-center rounded-full ${index === stations.length - 1 ? "bg-amber-500 ring-4 ring-amber-50 animate-pulse" : "bg-[#006c49] ring-4 ring-emerald-50"}`}
+                    ></span>
+                    <div className="flex justify-between items-start gap-4">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900">
+                          {log.station_name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                          Khu vực: {log.phuong_xa} • {log.quan_huyen} • {log.tinh_thanh}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-[#006c49] text-[9px] font-black rounded uppercase border tracking-wider">
+                            {log.trang_thai_hien_thi}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[11px] text-slate-400 font-bold block">
+                          {new Date(log.ngay_tao).toLocaleDateString("vi-VN")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          {/* BẢN ĐỒ MAP LEAFLET TUYẾN TÍNH ĐỘC ĐẠO */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 relative overflow-hidden">
-            <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono bg-slate-50 p-2 rounded-lg border border-dashed mb-3">
-              <span>Trục hành trình bám sát đường bộ huyết mạch Việt Nam:</span>
-              <span className="font-bold text-[#006c49]">
-                {routeInfo.isDirectDelivery ? "STATUS: INSTANT DIRECT ROUTE" : "STATUS: OSRM TRIP COMPLIANT"}
-              </span>
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full border-b border-slate-50 pb-4">
+              <div>
+                <h4 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                  🚚 Phân hệ điều phối xe giao hàng <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-widest">OSRM</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">Bấm khởi hành để kích hoạt hệ thống bám vết xe di chuyển thực địa</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {isArrivedAtStation ? (
+                  <button 
+                    onClick={handleConfirmArrival}
+                    className="px-4 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-black rounded-md shadow animate-bounce cursor-pointer"
+                  >
+                    ✓ Xác nhận đã tới bưu cục (Bấm để đi tiếp)
+                  </button>
+                ) : (
+                  <button 
+                    onClick={startTruckSimulation}
+                    disabled={isSimulating || isFullyDelivered}
+                    className="px-4 py-1.5 bg-[#0a2540] hover:bg-[#1e3a5f] text-white text-[11px] font-black rounded-md shadow flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                  >
+                    {isFullyDelivered ? "✓ Hành trình đã hoàn tất" : animationIndexRef.current === 0 ? "▷ Khởi hành chuyến xe" : "▷ Tiếp tục chặng kế tiếp"}
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="w-full h-[410px] rounded-2xl overflow-hidden border relative z-10 mt-1">
-              {mapBounds ? (
-                <MapContainer
-                  center={[14.0, 108.0]}
-                  zoom={6}
-                  scrollWheelZoom={false}
-                  className="w-full h-full outline-none"
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+              <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                🕹️ Cấu hình tốc độ mô phỏng vận tải:
+              </span>
+              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200/60 shadow-xs">
+                <button
+                  onClick={jumpToNextStation}
+                  disabled={isArrivedAtStation || isFullyDelivered}
+                  className="flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-black bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 transition-all cursor-pointer disabled:opacity-30"
                 >
-                  <TileLayer
-                    attribution="&copy; Google Maps"
-                    url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=vi&gl=VN"
-                    subdomains={["mt0", "mt1", "mt2", "mt3"]}
-                  />
+                  <FastForward size={12} /> {routeInfo.isDirectDelivery ? "Tới thẳng nhà khách" : "Tới bưu cục kế (Nhảy trạm)"}
+                </button>
 
+                <button
+                  onClick={() => setSpeedMode("optimized")}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    speedMode === "optimized" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <Compass size={12} /> Tối ưu
+                </button>
+
+                <button
+                  onClick={() => setSpeedMode("fast")}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                    speedMode === "fast" ? "bg-amber-600 text-white shadow-sm animate-pulse" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <Zap size={12} /> Nhanh siêu tốc
+                </button>
+              </div>
+            </div>
+            
+            <div>
+              <button onClick={() => setFocusLocation(truckPosition)} className="flex items-center gap-1 px-3 py-1 bg-[#1a365d] text-white text-[10px] font-bold rounded cursor-pointer"><Navigation size={10} className="rotate-45" /> Theo dõi vị trí xe</button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 relative overflow-hidden">
+            <div className="w-full h-[410px] rounded-2xl overflow-hidden border relative z-10 border-slate-100">
+              {mapBounds ? (
+                <MapContainer center={[14.0, 108.0]} zoom={6} scrollWheelZoom={false} className="w-full h-full outline-none">
+                  <TileLayer url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=vi&gl=VN" subdomains={["mt0", "mt1", "mt2", "mt3"]} />
                   <ChangeMapView bounds={mapBounds} />
                   <UpdateMapLayer coords={routeCoords} />
 
@@ -464,17 +637,11 @@ export default function Chitiettrackingorder() {
                     />
                   )}
 
-                  {/* Ghim vị trí điểm đầu Kho tổng */}
+                  {/* Ghim vị trí điểm đầu Kho tổng tại Quận 1 */}
                   <Marker
-                    position={[10.792622, 106.680172]}
-                    icon={storeStartIcon}
-                  >
-                    <Popup>
-                      <span className="text-xs font-bold">
-                        📍 Kho xuất phát tổng DemiMart TP.HCM
-                      </span>
-                    </Popup>
-                  </Marker>
+                    position={[10.771963, 106.697194]}
+                    icon={createStationTextLabelIcon(SHOP_ICON_URL, "Kho Xuất Phát Tổng DemiMart", 34)}
+                  />
 
                   {/* Duyệt ghim động bưu cục trung gian */}
                   {!routeInfo.isDirectDelivery && stations.map((station) => {
@@ -482,23 +649,25 @@ export default function Chitiettrackingorder() {
                     const lng = parseFloat(station.station_lng);
                     if (!lat || !lng) return null;
 
-                    const isLastMile = station.station_type === "LAST_MILE";
+                    let targetIconUrl = ROUTE_STATION_ICON_URL;
+                    let iconSizePx = 30;
+
+                    if (station.station_type === "FIRST_MILE") {
+                      targetIconUrl = COORDINATOR_ICON_URL;
+                      iconSizePx = 38;
+                    } else if (station.station_type === "LAST_MILE") {
+                      targetIconUrl = TRUCK_ICON_URL;
+                      iconSizePx = 38;
+                    }
+
+                    const dynamicTextLabelIcon = createStationTextLabelIcon(targetIconUrl, station.station_name, iconSizePx);
 
                     return (
                       <Marker
                         key={station.id || station.station_id}
                         position={[lat, lng]}
-                        icon={isLastMile ? lastMileOfficeIcon : warehouseIcon}
-                      >
-                        <Popup>
-                          <div className="text-xs">
-                            <b className="text-[#006c49] block mb-0.5">
-                              {station.station_name}
-                            </b>
-                            <span>Phân loại trạm: {station.station_type}</span>
-                          </div>
-                        </Popup>
-                      </Marker>
+                        icon={dynamicTextLabelIcon}
+                      />
                     );
                   })}
 
@@ -515,10 +684,7 @@ export default function Chitiettrackingorder() {
                   </Marker>
                 </MapContainer>
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-xs font-bold text-slate-400 bg-slate-50 gap-2">
-                  <Loader2 className="animate-spin text-[#006c49] w-6 h-6" />
-                  Đang khởi tạo trục nơ định tuyến đường bộ...
-                </div>
+                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-400 bg-slate-50">Đang nạp bản đồ nền...</div>
               )}
             </div>
           </div>
@@ -545,43 +711,21 @@ export default function Chitiettrackingorder() {
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-              {/* 🌟 ĐÃ FIX: Không sử dụng dấu huyền (backtick) lỗi cú pháp gây sập trang nữa */}
               <h3 className="text-sm font-black text-slate-900 border-b border-slate-50 pb-3 mb-4 flex items-center gap-2">
                 💳 Chi phí đối soát dịch vụ
               </h3>
               <div className="space-y-2.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">
-                    Tiền hàng gốc:
-                  </span>
-                  <span className="font-bold text-slate-700">
-                    {(Number(orderDetail.tong_tien_hang) || 0).toLocaleString(
-                      "vi-VN",
-                    )}{" "}
-                    đ
-                  </span>
+                  <span className="text-slate-400 font-bold">Tiền hàng gốc:</span>
+                  <span className="font-bold text-slate-700">{(Number(orderDetail.tong_tien_hang) || 0).toLocaleString("vi-VN")} đ</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">
-                    Phí cấu trúc đường bộ:
-                  </span>
-                  <span className="font-bold text-slate-700">
-                    {(Number(orderDetail.phi_van_chuyen) || 0).toLocaleString(
-                      "vi-VN",
-                    )}{" "}
-                    đ
-                  </span>
+                  <span className="text-slate-400 font-bold">Phí cấu trúc đường bộ:</span>
+                  <span className="font-bold text-slate-700">{(Number(orderDetail.phi_van_chuyen) || 0).toLocaleString("vi-VN")} đ</span>
                 </div>
                 <div className="flex justify-between border-t border-dashed border-slate-100 pt-2.5 text-sm">
-                  <span className="text-slate-800 font-black">
-                    Tổng thu khách (COD):
-                  </span>
-                  <span className="font-black text-[#006c49]">
-                    {(Number(orderDetail.tong_thanh_toan) || 0).toLocaleString(
-                      "vi-VN",
-                    )}{" "}
-                    đ
-                  </span>
+                  <span className="text-slate-800 font-black">Tổng thu khách (COD):</span>
+                  <span className="font-black text-[#006c49]">{(Number(orderDetail.tong_thanh_toan) || 0).toLocaleString("vi-VN")} đ</span>
                 </div>
               </div>
             </div>
@@ -593,14 +737,8 @@ export default function Chitiettrackingorder() {
             <h3 className="text-xs font-black uppercase tracking-wider text-emerald-200 mb-4">Trạng thái ví đơn hàng</h3>
             <div className="flex items-center gap-4">
               <div>
-                <h4 className="text-sm font-black tracking-tight">
-                  Cơ chế:{" "}
-                  {orderDetail.phuong_thuc_thanh_toan || "Ví liên thông App"}
-                </h4>
-                <p className="text-[11px] text-emerald-100 font-bold mt-1">
-                  Trạng thái ví:{" "}
-                  {orderDetail.trang_thai_thanh_toan || "PENDING"}
-                </p>
+                <h4 className="text-sm font-black tracking-tight">Cơ chế: {orderDetail.phuong_thuc_thanh_toan || "Ví liên thông App"}</h4>
+                <p className="text-[11px] text-emerald-100 font-bold mt-1">Trạng thái ví: {orderDetail.trang_thai_thanh_toan || "PENDING"}</p>
               </div>
             </div>
           </div>
