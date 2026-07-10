@@ -8,21 +8,21 @@ const createInstance = (baseURL) => {
 
     // --- INTERCEPTOR REQUEST: Gửi kèm token lên nếu có ---
     instance.interceptors.request.use((config) => {
-        let token = localStorage.getItem("token");
-        if (token) {
-            token = token.replace(/^"|"$/g, '');
-            config.headers.Authorization = `Bearer ${token}`;
-        }
+        let token = localStorage.getItem("adminToken") || localStorage.getItem("token");
+    
+    if (token) {
+        token = token.replace(/^"|"$/g, ''); // Xóa dấu nháy nếu có
+        config.headers.Authorization = `Bearer ${token}`;
+    }
 
-        // 🚀 KHẮC PHỤC LỖI "typer.test is not a function" TẠI ĐÂY:
-        if (config.data && !(config.data instanceof FormData)) {
-            config.headers['Content-Type'] = 'application/json';
-        }
+    if (config.data && !(config.data instanceof FormData)) {
+        config.headers['Content-Type'] = 'application/json';
+    }
 
-        return config;
-    }, (error) => {
-        return Promise.reject(error);
-    });
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
 
     // --- INTERCEPTOR RESPONSE: Xử lý kết quả và chặn đứng lỗi đá văng ---
     instance.interceptors.response.use(
@@ -105,7 +105,7 @@ export const cartApi = createInstance(
 
 // Order Service
 export const orderApi = createInstance(
-    isLocal ? 'http://localhost:5005/api' : 'https://orderservice-n0z1.onrender.com/api'
+    isLocal ? 'http://localhost:5005/api/v1' : 'https://orderservice-n0z1.onrender.com/api/v1'
 );
     
 // Payment Service (Ruby)

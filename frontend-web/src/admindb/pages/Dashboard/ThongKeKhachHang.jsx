@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import axios from "axios";
+import { authApi } from "../../../api/axios";
 import {
   Users,
   UserPlus,
@@ -35,17 +35,7 @@ export default function ThongKeKhachHang() {
         setLoading(true);
         setError("");
         const token = localStorage.getItem("adminToken");
-
-        // 🎯 Gọi API từ Auth Service (Cổng 5001)
-        const apiUrl =
-          import.meta.env.VITE_API_AUTH_URL || "http://localhost:5001";
-
-        const response = await axios.get(
-          `${apiUrl}/api/auth/admin/statistics/customers`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const response = await authApi.get("/auth/admin/statistics/customers");
 
         if (response.data?.success) {
           setStats(response.data.data);
@@ -53,11 +43,9 @@ export default function ThongKeKhachHang() {
       } catch (err) {
         console.error("Lỗi tải thống kê khách hàng:", err);
         if (err.response?.status === 401 || err.response?.status === 403) {
-          setError(
-            "Phiên đăng nhập hết hạn hoặc bạn không có quyền truy cập dữ liệu (401/403).",
-          );
+          setError("Phiên đăng nhập hết hạn hoặc bạn không có quyền truy cập.");
         } else {
-          setError("Không thể kết nối đến máy chủ Auth Service (5001).");
+          setError("Không thể kết nối đến máy chủ Auth Service.");
         }
       } finally {
         setLoading(false);

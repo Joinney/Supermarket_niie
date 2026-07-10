@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios";
-// 🌟 ĐÃ XÓA SẠCH html2canvas và jspdf
+import { productApi } from "../../../api/axios";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -38,20 +37,13 @@ export default function Dashboard() {
       setLoading(true);
       setError("");
       const token = localStorage.getItem("adminToken");
-      const apiUrl =
-        import.meta.env.VITE_API_PRODUCT_URL || "http://localhost:5002";
-
-      const response = await axios.get(
-        `${apiUrl}/api/products/admin/statistics`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const response = await productApi.get("/products/admin/statistics");
 
       if (response.data?.success) {
         setStats(response.data.data);
       }
     } catch (err) {
+      console.error("Lỗi fetch statistics:", err);
       setError("Không thể nạp dữ liệu thống kê từ máy chủ!");
     } finally {
       setLoading(false);

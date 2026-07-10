@@ -34,8 +34,8 @@ const OrderDetail = () => {
       try {
         const adminToken = localStorage.getItem("adminToken");
         //  Đoạn code mới đã bổ sung đúng cấu trúc Admin Route của Back-end
-  //  Đường dẫn mới giúp Axios nối chuỗi chính xác thành: /api/orders/admin/orders/...
-        const response = await orderApi.get(`/orders/admin/orders/${maDonHang}`, {
+        //  Đường dẫn mới giúp Axios nối chuỗi chính xác thành: /api/orders/admin/orders/...
+        const response = await orderApi.get(`/admin/orders/${maDonHang}`, {
           headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
         });
 
@@ -61,7 +61,7 @@ const OrderDetail = () => {
     };
 
     fetchOrderDetail();
-}, [maDonHang]);
+  }, [maDonHang]);
 
   // 🌟 THUẬT TOÁN GOM NHÓM SẢN PHẨM CHUẨN MICROSERVICES
   const groupedProducts = useMemo(() => {

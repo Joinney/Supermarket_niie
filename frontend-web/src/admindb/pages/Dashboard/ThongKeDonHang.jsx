@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import axios from "axios";
+import { orderApi } from "../../../api/axios";
 import { Link } from "react-router-dom";
 import {
   BarChart3,
@@ -32,16 +32,9 @@ export default function ThongKeDonHang() {
       try {
         setLoading(true);
         setError("");
-        const token = localStorage.getItem("adminToken");
-        const apiUrl =
-          import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
 
-        const response = await axios.get(
-          `${apiUrl}/api/orders/admin/statistics`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+        const token = localStorage.getItem("adminToken");
+        const response = await orderApi.get("/admin/statistics");
 
         if (response.data?.success) {
           setStats(response.data.data);

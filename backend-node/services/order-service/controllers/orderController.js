@@ -147,7 +147,7 @@ const placeOrder = async (req, res) => {
     const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
     let databaseVariants = [];
     try {
-      const prodApiRes = await axios.get(`${productServiceUrl}/api/products`);
+      const prodApiRes = await axios.get(`${productServiceUrl}/api/v1/products`);
       databaseVariants = Array.isArray(prodApiRes.data) ? prodApiRes.data : prodApiRes.data?.products || [];
     } catch (err) {
       console.warn("⚠️ Không thể kết nối Product-Service để đồng bộ SKU gốc khi đặt hàng.");
@@ -180,7 +180,7 @@ const placeOrder = async (req, res) => {
     }).filter(i => i.variant_id && i.quantity > 0);
 
     try {
-      await axios.post(`${productServiceUrl}/api/products/internal/deduct-stock`, { items: normalizedItems });
+      await axios.post(`${productServiceUrl}/api/v1/products/internal/deduct-stock`, { items: normalizedItems });
     } catch (apiError) {
       return res.status(400).json({ success: false, message: "Sản phẩm trong giỏ hàng đã hết hoặc không đủ số lượng!" });
     }
@@ -367,7 +367,7 @@ const placeOrder = async (req, res) => {
       try {
         const safeOrderId = req.body.paypal_order_id || `GATEWAY_${order.ma_don_hang}`;
         const safeTxnId = req.body.paypal_transaction_id || `TXN_${Date.now()}`;
-        await axios.post('http://demi_payment_service:5004/api/paypal-capture', {
+        await axios.post('http://demi_payment_service:5004/api/v1/paypal-capture', {
           ma_don_hang: String(order.ma_don_hang),
           so_tien: Number(finalTotal),
           phuong_thuc_thanh_toan: methodUpper,
@@ -566,7 +566,7 @@ const getOrderDetailAdmin = async (req, res) => {
 
     if (order.user_id) {
       try {
-        const authResponse = await axios.get(`http://demi_auth_service:5001/api/auth/internal/users/${order.user_id}`);
+        const authResponse = await axios.get(`http://demi_auth_service:5001/api/v1/auth/internal/users/${order.user_id}`);
         if (authResponse.data) order.user_info = authResponse.data; 
       } catch (authErr) {}
     }
@@ -596,7 +596,7 @@ const cancelOrder = async (req, res) => {
     if (orderItems.length > 0) {
         const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
         try {
-            await axios.post(`${productServiceUrl}/api/products/internal/restore-stock`, { items: orderItems });
+            await axios.post(`${productServiceUrl}/api/v1/products/internal/restore-stock`, { items: orderItems });
         } catch (apiError) {
             return res.status(500).json({ success: false, message: "Lỗi hệ thống: Không thể kết nối để hoàn kho." });
         }

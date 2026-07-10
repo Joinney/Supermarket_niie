@@ -12,7 +12,7 @@ import {
   Ticket,
   CheckCircle2,
 } from "lucide-react";
-import { promotionApi, authApi } from "../../../api/axios.js"; // 🌟 Import authApi để gọi cổng 5007
+import { promotionApi, couponApi, authApi } from "../../../api/axios.js";
 
 const removeVietnameseTones = (str) => {
   if (!str) return "";
@@ -92,7 +92,7 @@ export default function FlashSaleList() {
   const fetchCoupons = async () => {
     try {
       setLoadingCoupon(true);
-      const response = await authApi.get("http://localhost:5007/api/coupons");
+      const response = await couponApi.get("/");
       if (response.data.success) setCoupons(response.data.data);
     } catch (err) {
       setErrorCoupon("Không thể tải danh sách Mã giảm giá.");
@@ -103,10 +103,9 @@ export default function FlashSaleList() {
 
   const toggleStatusCoupon = async (id, currentStatus) => {
     try {
-      const response = await authApi.put(
-        `http://localhost:5007/api/coupons/toggle/${id}`,
-        { is_active: !currentStatus },
-      );
+      const response = await couponApi.put(`/toggle/${id}`, {
+        is_active: !currentStatus,
+      });
       if (response.data.success) fetchCoupons();
     } catch (err) {
       alert("Lỗi khi cập nhật trạng thái Coupon!");
@@ -116,9 +115,7 @@ export default function FlashSaleList() {
   const handleDeleteCoupon = async (id) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa vĩnh viễn mã Voucher này?")) {
       try {
-        const response = await authApi.delete(
-          `http://localhost:5007/api/coupons/${id}`,
-        );
+        const response = await couponApi.delete(`/${id}`);
         if (response.data.success) fetchCoupons();
       } catch (err) {
         alert("Lỗi khi xóa Voucher!");

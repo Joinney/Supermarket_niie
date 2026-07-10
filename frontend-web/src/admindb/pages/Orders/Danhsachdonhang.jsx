@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import { orderApi } from "../../../api/axios";
 
 export default function Danhsachdonhang() {
   const navigate = useNavigate();
@@ -26,19 +26,15 @@ export default function Danhsachdonhang() {
     setLoading(true);
     setError(null);
     try {
-      const adminToken = localStorage.getItem("adminToken");
-      const apiUrl = import.meta.env.VITE_API_ORDER_URL || "http://localhost:5005";
-
-      // 🌟 ĐÃ SỬA: Thay đổi endpoint từ '/api/orders' sang '/api/orders/admin/all-orders' để khớp với Back-end Admin Route
-      const response = await axios.get(`${apiUrl}/api/orders/admin/all-orders`, {
+      const token = localStorage.getItem("adminToken");
+      const response = await orderApi.get("/admin/all-orders", {
         params: {
           page: currentPage,
           limit: limit,
           search: searchTerm || undefined,
-          status: filterStatus || undefined, // 🌟 Truyền trạng thái lọc xuống
-          payment: filterPayment || undefined, // 🌟 Truyền trạng thái thanh toán xuống
+          status: filterStatus || undefined,
+          payment: filterPayment || undefined,
         },
-        headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
       });
 
       if (response.data && response.data.orders) {
@@ -49,12 +45,11 @@ export default function Danhsachdonhang() {
         setOrders([]);
       }
     } catch (err) {
+      console.error("Lỗi fetch đơn hàng:", err);
       if (err.response?.status === 401) {
-        setError(
-          "Phiên đăng nhập Admin đã hết hạn (401). Vui lòng đăng nhập lại!",
-        );
+        setError("Phiên đăng nhập hết hạn (401). Vui lòng đăng nhập lại!");
       } else {
-        setError("Không thể kết nối đến phân hệ Order Service (5005)!");
+        setError("Không thể kết nối đến phân hệ Order Service!");
       }
     } finally {
       setLoading(false);

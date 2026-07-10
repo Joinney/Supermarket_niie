@@ -33,22 +33,21 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // 🌟 Bổ sung PATCH và OPTIONS phòng khi có Preflight Request nâng cao
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// 🚀 PHÒNG THỦ CHẮC CHẮN: Đánh chặn và phản hồi trạng thái 200 OK ngay lập tức cho các request OPTIONS 
-app.options('*', cors());
+// 🚨 ĐÃ XÓA app.options('*', cors()) Ở ĐÂY ĐỂ TRÁNH LỖI CRASH DOCKER 🚨
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// === 📝 CẤU HÌNH SWAGGER ĐỊNH NGHĨA TRỰC TIẾP ===
+// === 📝 CẤU HÌNH SWAGGER ĐỊNH NGHĨA TRỰC TIẾP (CẬP NHẬT CHUẨN v1) ===
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Demi Mart - Order Service API',
+      title: 'Demi Mart - Order Service API (v1)',
       version: '1.0.0',
       description: 'Hệ thống Microservice xử lý tính cước vận chuyển GHN và quản lý trạng thái Đơn hàng.',
     },
@@ -68,7 +67,7 @@ const swaggerOptions = {
       },
     },
     paths: {
-      '/api/orders/shipping-fee': {
+      '/api/v1/orders/shipping-fee': {
         post: {
           summary: 'Tính cước phí vận chuyển qua GHN',
           description: 'Tiếp nhận thông tin địa chỉ để tính toán phí ship từ hệ thống Giao Hàng Nhanh.',
@@ -95,7 +94,7 @@ const swaggerOptions = {
           }
         }
       },
-      '/api/orders/place-order': {
+      '/api/v1/orders/place-order': {
         post: {
           summary: 'Khởi tạo đặt hàng (Place Order)',
           description: 'Tạo một đơn hàng mới trong trạng thái chờ xử lý, lưu thông tin vận chuyển và các mặt hàng chọn mua.',
@@ -145,13 +144,24 @@ const swaggerUiOptions = {
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, swaggerUiOptions));
 
-// === 🚀 ĐĂNG KÝ CÁC LUỒNG ĐỊNH TUYẾN ===
-app.use('/api/orders', orderRoutes);
+// =========================================================================
+// 🌟 ĐĂNG KÝ MODULE ROUTE THEO CHUẨN VERSIONING (v1)
+// =========================================================================
+const v1Router = express.Router();
+// Mount order routes directly under /api/v1 so frontend requests to
+// /api/v1/admin/... match the backend endpoints (frontend expects that prefix).
+v1Router.use('/', orderRoutes);
+
+// Bọc toàn bộ các endpoint của Order vào tiền tố /api/v1
+app.use('/api/v1', v1Router);
+// Đồng bộ thêm alias để chấp nhận frontend cũ hoặc đường dẫn có hậu tố `/orders`
+// (ví dụ: `/api/v1/orders/admin/all-orders`) — giữ tương thích ngược.
+app.use('/api/v1/orders', orderRoutes);
 
 app.get('/', (req, res) => {
   res.status(200).send(`
     <div style="text-align: center; margin-top: 50px; font-family: sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px; max-width: 600px; margin-left: auto; margin-right: auto; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);">
-        <h1 style="color: #006c49; font-size: 2.5rem; margin-bottom: 10px;">Demi Mart Order Service</h1>
+        <h1 style="color: #006c49; font-size: 2.5rem; margin-bottom: 10px;">Demi Mart Order Service (v1)</h1>
         <p style="color: #64748b; font-size: 1.2rem; margin-bottom: 30px;">Hệ thống Đơn hàng đang hoạt động xanh mướt! 🚀📦</p>
         <div style="margin-top: 20px;">
             <a href="/api-docs" style="background-color: #006c49; color: white; padding: 14px 28px; border-radius: 12px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 14px rgba(0, 108, 73, 0.3); display: inline-block;">Vào Swagger xem API Đơn Hàng →</a>
@@ -161,21 +171,35 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Order Service is running' });
+  res.json({ status: 'OK', message: 'Order Service is running smoothly on v1' });
+});
+
+// =========================================================================
+// 🚨 XỬ LÝ LỖI 404 & 500 TẬP TRUNG
+// =========================================================================
+app.use((req, res) => {
+  res.status(404).json({ 
+      success: false, 
+      message: `Route '${req.originalUrl}' không tồn tại trên Demi Order Service (v1)!` 
+  });
 });
 
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
+  console.error(`🔥 LỖI HỆ THỐNG TẠI ROUTE '${req.originalUrl}':`, err);
+  res.status(err.status || 500).json({ 
+    success: false, 
+    message: err.message || 'Internal server error' 
+  });
 });
 
 const PORT = process.env.PORT || 5005;
 
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => { // Đảm bảo bind IP 0.0.0.0 cho Docker
     console.log(`\n=========================================`);
     console.log(`✅ Order Service Live: http://localhost:${PORT}`);
-    console.log(`📝 Swagger Docs:       http://localhost:${PORT}/api-docs`);
+    console.log(`🔗 API V1 URL:       http://localhost:${PORT}/api/v1`);
+    console.log(`📝 Swagger Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`=========================================\n`);
   });
 });

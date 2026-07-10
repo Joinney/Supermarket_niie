@@ -12,7 +12,7 @@ import {
   Ticket,
 } from "lucide-react";
 import { useOrder } from "../../context/OrderContext";
-import { authApi, orderApi, paymentApi } from "../../api/axios";
+import { authApi, orderApi, paymentApi, couponApi } from "../../api/axios";
 import AddressModal from "../Checkout/AddressModal";
 import ShippingModal from "../Checkout/ShippingModal";
 import PaymentModal from "../Checkout/PaymentModal";
@@ -191,7 +191,7 @@ export default function Checkout() {
       const fetchVouchers = async () => {
         setIsLoadingVouchers(true);
         try {
-          const res = await authApi.get("http://localhost:5007/api/coupons");
+          const res = await couponApi.get("/");
           if (res.data.success) {
             // Chỉ lấy các mã đang active
             setAvailableVouchers(res.data.data.filter((c) => c.is_active));
@@ -206,7 +206,7 @@ export default function Checkout() {
     }
   }, [showVoucherModal, availableVouchers.length]);
 
-  // 🌟 HÀM KIỂM TRA & ÁP DỤNG MÃ (Hỗ trợ áp dụng tự động)
+  // 🌟 HÀM KIỂM TRA & ÁP DỤNG MÃ (ĐÃ SỬA CHUẨN V1)
   const handleApplyCoupon = async (codeToApply = couponCodeInput) => {
     const finalCode =
       typeof codeToApply === "string"
@@ -226,19 +226,10 @@ export default function Checkout() {
     setCouponMessage({ text: "", type: "" });
 
     try {
-      const token = localStorage.getItem("token");
-      const res = await authApi.post(
-        "http://localhost:5007/api/coupons/validate",
-        {
-          code: finalCode,
-          order_amount: itemTotal,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const res = await couponApi.post("/validate", {
+        code: finalCode,
+        order_amount: itemTotal,
+      });
 
       if (res.data.success) {
         setAppliedCoupon(res.data.data);
@@ -246,7 +237,7 @@ export default function Checkout() {
           text: res.data.message || "Áp dụng mã thành công!",
           type: "success",
         });
-        setShowVoucherModal(false); // Ẩn modal nếu đang mở
+        setShowVoucherModal(false);
       }
     } catch (err) {
       setAppliedCoupon(null);
