@@ -221,12 +221,23 @@ const placeOrder = async (req, res) => {
         rawPostOffices = parseKmlWithRegex(kmlContent);
       }
 
+      let optimalFirstMileOffice = null;
       let optimalLastMileOffice = null;
       let lastMileLat = userLatNum;
       let lastMileLng = userLngNum;
-      let lastMileName = "Bưu cục chặng cuối DemiMart Express";
 
       if (rawPostOffices.length > 0) {
+        // [A] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC GOM CHẶNG ĐẦU (GẦN KHO TỔNG NHẤT)
+        let minDistanceToStore = Infinity;
+        rawPostOffices.forEach(office => {
+          const distToStoreSq = ((office.location.lat - storeLat) ** 2) + ((office.location.lng - storeLng) ** 2);
+          if (distToStoreSq < minDistanceToStore) {
+            minDistanceToStore = distToStoreSq;
+            optimalFirstMileOffice = office;
+          }
+        });
+
+        // [B] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC PHÁT CHẶNG CUỐI (GẦN KHÁCH HÀNG NHẤT)
         let clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 0.6 && Math.abs(o.location.lng - userLngNum) < 0.6);
         if (clientZoneOffices.length === 0) {
           clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 1.5 && Math.abs(o.location.lng - userLngNum) < 1.5);
@@ -245,10 +256,15 @@ const placeOrder = async (req, res) => {
 
         lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || userLatNum);
         lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || userLngNum);
-        lastMileName = optimalLastMileOffice.name || "Bưu cục chặng cuối DemiMart Express";
       }
 
       let waypoints = [`${storeLng},${storeLat}`];
+
+      // Nếu tìm được bưu cục đầu nhận và khoảng cách hợp lý, đưa vào waypoint OSRM
+      if (optimalFirstMileOffice) {
+        waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
+      }
+
       const isTayNguyenZone = userLngNum < 108.2 && userLatNum > 11.5 && userLatNum < 15.0;
 
       if (isTayNguyenZone) {
@@ -278,6 +294,24 @@ const placeOrder = async (req, res) => {
 
         let stationsToSave = [];
 
+        // 🌟 [1] THÊM BƯU CỤC GOM HÀNG CHẶNG ĐẦU VÀO LOGS
+        if (optimalFirstMileOffice) {
+          stationsToSave.push({
+            station_id: String(optimalFirstMileOffice.id),
+            station_name: String(optimalFirstMileOffice.name),
+            tinh_thanh: String(optimalFirstMileOffice.provinceName || ''),
+            quan_huyen: String(optimalFirstMileOffice.districtName || ''),
+            phuong_xa: String(optimalFirstMileOffice.wardName || ''),
+            so_nha_duong: String(optimalFirstMileOffice.street || optimalFirstMileOffice.address || ''),
+            station_lat: parseFloat(optimalFirstMileOffice.location.lat),
+            station_lng: parseFloat(optimalFirstMileOffice.location.lng),
+            station_type: 'FIRST_MILE',
+            action_type: 'GOM_HANG_DIEU_PHOI',
+            trang_thai_hien_thi: 'Đã tiếp nhận hàng tại bưu cục điều phối chặng đầu'
+          });
+        }
+
+        // [2] THÊM CÁC HUB TRUNG CHUYỂN DỌC ĐƯỜNG LIÊN TỈNH
         if (coordinates.length > 15) {
           const distributionRatios = [0.33, 0.66];
           distributionRatios.forEach((ratio, idx) => {
@@ -312,6 +346,7 @@ const placeOrder = async (req, res) => {
           });
         }
 
+        // [3] THÊM BƯU CỤC PHÁT CHẶNG CUỐI
         if (optimalLastMileOffice) {
           stationsToSave.push({
             station_id: String(optimalLastMileOffice.id),
@@ -356,7 +391,7 @@ const placeOrder = async (req, res) => {
           if (db.query) await db.query(insertLogQuery, queryParams);
           else await db.execute(insertLogQuery, queryParams);
         }
-        console.log(`[🚀 AUTOMATION ENGINE]: Đã tự động cấy lưu ${stationsToSave.length} trạm logistics.`);
+        console.log(`[🚀 AUTOMATION ENGINE]: Đã tự động cấy lưu ${stationsToSave.length} trạm logistics (Bao gồm bưu cục chặng đầu).`);
       }
     } catch (logisticsErr) {
       console.error("⚠️ Cảnh báo lỗi cấu trúc:", logisticsErr.message);
@@ -543,13 +578,12 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-// 7. Lấy chi tiết đơn hàng cho Admin (🌟 ĐÃ SỬA: Đã select thêm to_lat, to_lng từ Database)
+// 7. Lấy chi tiết đơn hàng cho Admin
 const getOrderDetailAdmin = async (req, res) => {
   try {
     const { id } = req.params;
     const isNumber = /^\d+$/.test(id); 
     
-    // 🌟 KHẮC PHỤC LỖI CHÍ MẠNG: Đã chèn thêm o.to_lat, o.to_lng vào câu lệnh SELECT SQL
     let orderSql = isNumber 
       ? `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE id = $1 LIMIT 1;`
       : `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE ma_don_hang = $1 LIMIT 1;`;
@@ -708,14 +742,12 @@ const getOrderTrackingLogs = async (req, res) => {
       });
     }
 
-    // Kiểm tra xem orderId truyền lên là mã đơn dạng chuỗi chữ (DMxxx) hay là ID số tăng dần (188)
     const isMaDonHangStr = /^[A-Za-z]/.test(String(orderId).trim());
 
     let selectQuery = "";
     let queryParam = null;
 
     if (isMaDonHangStr) {
-      // Nếu là chuỗi chữ (DM1783624998963), tìm theo cột ma_don_hang
       selectQuery = `
         SELECT 
           id, order_id, ma_don_hang, station_id, station_name, 
@@ -728,7 +760,6 @@ const getOrderTrackingLogs = async (req, res) => {
       `;
       queryParam = String(orderId).trim();
     } else {
-      // Nếu là số thuần túy (188), tìm theo cột order_id để tránh ép sai kiểu dữ liệu (Data Type Mismatch)
       selectQuery = `
         SELECT 
           id, order_id, ma_don_hang, station_id, station_name, 

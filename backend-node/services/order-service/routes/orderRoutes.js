@@ -66,10 +66,13 @@ router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder);
 // 🏁 ROUTE ĐỊNH TUYẾN LOGISTICS VÀ KIỂM THỬ (LOGISTICS ENDPOINTS)
 // ========================================================
 
-// 11. TRUY VẤN LOGISTICS: Kết xuất mảng lộ trình bưu cục chặng giữa và chặng phát cuối từ DB lên bản đồ
+// 11. TRUY VẤN LOGISTICS CHUẨN: Khớp 100% với đường dẫn Axios Frontend gọi (`/orders/tracking-logs/:orderId`)
+router.get('/tracking-logs/:orderId', getOrderTrackingLogs);
+
+// 12. Dự phòng: Giữ lại route cũ nếu bạn hoặc các service khác đang dùng để test
 router.get('/shipping/logs/:orderId', getOrderTrackingLogs);
 
-// 12. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
+// 13. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
 router.post('/test-kml', testReadKml);
 
 export default router;
