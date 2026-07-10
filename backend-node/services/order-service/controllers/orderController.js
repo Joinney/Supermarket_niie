@@ -591,7 +591,7 @@ const getOrdersByUserAdmin = async (req, res) => {
   }
 };
 
-// 7. Lấy chi tiết đơn hàng cho Admin (🌟 ĐÃ SỬA: Đã select thêm to_lat, to_lng từ Database)
+// 7. Lấy chi tiết đơn hàng cho Admin
 const getOrderDetailAdmin = async (req, res) => {
   try {
     const { id } = req.params;

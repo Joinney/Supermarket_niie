@@ -25,15 +25,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: iconShadow,
 });
 
-// =================================================================
-// CONFIGURATION: ĐƯỜNG DẪN CÁC ICON TRÊN BẢN ĐỒ (QUẢN LÝ TẬP TRUNG)
-// =================================================================
-const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2654/2654162.png"; // Icon xe tải chặng cuối
-const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/5643764.png"; // Icon điều phối màn hình chặng đầu
-const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; // Icon kho tổng xuất phát
-const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; // Icon Hub trung chuyển liên tỉnh
-// =================================================================
-
 // --- COMPONENT TỰ ĐỘNG ZOOM/PAN THEO TOÀN BỘ ĐƯỜNG ĐI CHẶNG TRỤC ---
 function ChangeMapView({ bounds }) {
   const map = useMap();
@@ -60,28 +51,21 @@ function UpdateMapLayer({ coords }) {
 
 // --- LOGISTICS CUSTOM ICONS PHÂN HỆ ĐỘC LẬP ---
 const warehouseIcon = new L.Icon({
-  iconUrl: ROUTE_STATION_ICON_URL, // Hub chặng giữa
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/2271/2271068.png", // Hub chặng giữa
   iconSize: [30, 30],
   iconAnchor: [15, 30],
   popupAnchor: [0, -28],
 });
 
-const firstMileOfficeIcon = new L.Icon({
-  iconUrl: COORDINATOR_ICON_URL, // Bưu cục gom hàng & điều phối chặng đầu
-  iconSize: [38, 38],
-  iconAnchor: [19, 38],
-  popupAnchor: [0, -34],
-});
-
 const lastMileOfficeIcon = new L.Icon({
-  iconUrl: TRUCK_ICON_URL, // Bưu cục phát chặng cuối
-  iconSize: [38, 38],
-  iconAnchor: [19, 38],
-  popupAnchor: [0, -34],
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/2654/2654162.png", // Bưu cục phát chặng cuối
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+  popupAnchor: [0, -32],
 });
 
 const storeStartIcon = new L.Icon({
-  iconUrl: SHOP_ICON_URL, // Kho tổng xuất phát
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/869/869636.png", // Kho tổng xuất phát
   iconSize: [34, 34],
   iconAnchor: [17, 34],
   popupAnchor: [0, -32],
@@ -97,8 +81,6 @@ export default function Chitiettrackingorder() {
   const [routeCoords, setRouteCoordinates] = useState([]);
   const [stations, setStations] = useState([]);
   const [mapBounds, setMapBounds] = useState(null);
-  
-  // 🌟 ĐÃ ĐỒNG BỘ: Cập nhật tọa độ Live hiện thời mặc định của Kho tổng theo GPS chuẩn Quận 1
   const [currentStationPosition, setCurrentStationPosition] = useState([
     10.771963, 106.697194,
   ]);
@@ -116,7 +98,46 @@ export default function Chitiettrackingorder() {
     durationMin: 0,
     storeName: "Đang định vị chặng...",
     totalOfficesOnRoute: 0,
+    isDirectDelivery: false
   });
+
+  // HÀM RENDER LOGO ICON SẠCH (KHÔNG CÓ CHỮ DƯỚI CHÂN ICON)
+  const createStationTextLabelIcon = (iconUrl, labelText, size = 36) => {
+    return L.divIcon({
+      html: `
+        <div style="display: flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px;">
+          <img src="${iconUrl}" style="width: ${size}px; height: ${size}px; object-fit: contain; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));" />
+        </div>
+      `,
+      className: "custom-station-clean-icon-marker",
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size],
+    });
+  };
+
+  // KHỞI TẠO ĐỘNG DIV_ICON CHỨA ẢNH NGƯỜI DÙNG THẬT TRÒN VIỀN TRẮNG ĐÈ TRÊN NỀN BẢN ĐỒ
+  const createCustomerAvatarIcon = (url) => {
+    return L.divIcon({
+      html: `<div style="
+        width: 42px; 
+        height: 42px; 
+        border-radius: 50%; 
+        border: 3px solid #006c49; 
+        box-shadow: 0 3px 8px rgba(0,0,0,0.35); 
+        overflow: hidden; 
+        background-color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" />
+      </div>`,
+      className: "custom-customer-avatar-marker",
+      iconSize: [42, 42],
+      iconAnchor: [21, 42],
+      popupAnchor: [0, -42],
+    });
+  };
 
   const fetchTrackingDetail = async () => {
     setLoading(true);
@@ -131,7 +152,6 @@ export default function Chitiettrackingorder() {
         headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
       };
 
-      // 1. Lấy thông tin đơn hàng gốc từ API cổng 5005
       const orderRes = await orderApi.get(`/admin/orders/${id}`, requestConfig);
       let orderMainData = null;
 
@@ -140,8 +160,15 @@ export default function Chitiettrackingorder() {
         setOrderDetail(orderMainData);
 
         console.log("=== [DEBUG] ĐƠN HÀNG LOGISTICS GỐC ===", orderMainData);
+        if (orderMainData?.user_info) {
+          console.log(
+            "=== [DEBUG] ĐỐI TƯỢNG USER_INFO BÊN TRONG ===",
+            orderMainData.user_info,
+          );
+        }
 
         // 🌟 BỘ THUẬT TOÁN DÒ TÌM AVATAR DỰ PHÒNG THÔNG MINH (DEEP SCAN) 🌟
+        // Tự động kiểm tra tất cả các trường có khả năng chứa link ảnh đại diện khách hàng
         let finalAvatar = null;
         if (orderMainData?.user_info) {
           finalAvatar =
@@ -169,7 +196,6 @@ export default function Chitiettrackingorder() {
 
       const realOrderId = orderMainData?.id || id;
 
-      // 2. Lấy danh sách nhật trình logs quét trạm trung chuyển từ DB
       const logRes = await orderApi.get(
         `/orders/tracking-logs/${realOrderId}`,
         requestConfig,
@@ -179,51 +205,62 @@ export default function Chitiettrackingorder() {
         rawLogs = logRes.data.data || [];
       }
 
-      // 🌟 ĐÃ ĐỒNG BỘ: Tọa độ Kho tổng cố định (HCM) khớp hoàn toàn với cấu trúc hệ thống định vị GPS
-      const storeLat = 10.771963;
-      const storeLng = 106.697194;
+      // Tọa độ Kho tổng cố định (HCM)
+      const storeLat = 10.792622;
+      const storeLng = 106.680172;
 
       const userLat = parseFloat(orderMainData?.to_lat || orderMainData?.latitude || orderMainData?.toLat || 10.762622);
       const userLng = parseFloat(orderMainData?.to_lng || orderMainData?.longitude || orderMainData?.toLng || 106.660172);
 
       setCustomerTarget([userLat, userLng]);
 
-      // Sắp xếp tuần tiến theo chuỗi thời gian quét (Cũ xếp trước -> Mới xếp sau)
+      // Tạo bản sao mảng an toàn và sắp xếp tuần tiến theo chuỗi thời gian quét (Cũ xếp trước -> Mới xếp sau)
       const sortedLogs = [...rawLogs].sort(
         (a, b) => new Date(a.ngay_tao) - new Date(b.ngay_tao),
       );
 
-      // Lọc khử trùng lặp tọa độ toán học nâng cao để chặn OSRM vẽ vòng lặp rác
+      const hasDirectLog = sortedLogs.some(log => log.station_id === "DIRECT_STORE_HQ");
+
       let uniqueStations = [];
-      sortedLogs.forEach((log) => {
-        const lat = parseFloat(log.station_lat);
-        const lng = parseFloat(log.station_lng);
-        if (!lat || !lng) return;
+      
+      if (hasDirectLog) {
+        uniqueStations = sortedLogs;
+      } else {
+        sortedLogs.forEach((log) => {
+          const lat = parseFloat(log.station_lat);
+          const lng = parseFloat(log.station_lng);
+          if (!lat || !lng) return;
 
-        if (Math.abs(lat - storeLat) < 0.002 && Math.abs(lng - storeLng) < 0.002) return;
-        if (Math.abs(lat - userLat) < 0.002 && Math.abs(lng - userLng) < 0.002) return;
+        if (
+          Math.abs(lat - storeLat) < 0.002 &&
+          Math.abs(lng - storeLng) < 0.002
+        )
+          return;
+        if (Math.abs(lat - userLat) < 0.002 && Math.abs(lng - userLng) < 0.002)
+          return;
 
-        const isExist = uniqueStations.some(
-          (s) =>
-            Math.abs(parseFloat(s.station_lat) - lat) < 0.003 &&
-            Math.abs(parseFloat(s.station_lng) - lng) < 0.003,
-        );
+          const isExist = uniqueStations.some(
+            (s) =>
+              Math.abs(parseFloat(s.station_lat) - lat) < 0.003 &&
+              Math.abs(parseFloat(s.station_lng) - lng) < 0.003,
+          );
 
-        if (!isExist) {
-          uniqueStations.push(log);
-        }
-      });
+          if (!isExist) {
+            uniqueStations.push(log);
+          }
+        });
+      }
 
       setStations(uniqueStations);
 
-      // 3. THIẾT LẬP WAYPOINTS THEO TUYẾN CHUẨN ĐỘC ĐẠO
       let waypoints = [`${storeLng},${storeLat}`];
       uniqueStations.forEach((log) => {
-        waypoints.push(`${parseFloat(log.station_lng)},${parseFloat(log.station_lat)}`);
+        waypoints.push(
+          `${parseFloat(log.station_lng)},${parseFloat(log.station_lat)}`,
+        );
       });
       waypoints.push(`${userLng},${userLat}`);
 
-      // 4. GỌI API ROUTE ĐỊNH TUYẾN ĐƠN NHÁNH THEO ĐÚNG TRÌNH TỰ MẢNG ÉP BUỘC
       const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(";")}?overview=full&geometries=geojson&continue_straight=true`;
 
       const routeRes = await fetch(osrmUrl);
@@ -241,8 +278,7 @@ export default function Chitiettrackingorder() {
         });
         setMapBounds(bounds);
 
-        // Đặt vị trí trạm hiện thời live tại bưu cục mới nhất
-        if (uniqueStations.length > 0) {
+        if (uniqueStations.length > 0 && !hasDirectLog) {
           const lastLog = uniqueStations[uniqueStations.length - 1];
           setCurrentStationPosition([
             parseFloat(lastLog.station_lat),
@@ -256,8 +292,11 @@ export default function Chitiettrackingorder() {
           distanceKm: parseFloat((route.distance / 1000).toFixed(1)),
           durationMin: Math.ceil(route.duration / 60),
           storeName:
-            uniqueStations.find((s) => s.station_type === "LAST_MILE")?.station_name || "Bưu cục phát chặng cuối",
-          totalOfficesOnRoute: uniqueStations.filter((s) => s.station_type === "HUB").length,
+            uniqueStations.find((s) => s.station_type === "LAST_MILE")
+              ?.station_name || "Bưu cục phát chặng cuối",
+          totalOfficesOnRoute: uniqueStations.filter(
+            (s) => s.station_type === "HUB",
+          ).length,
         });
       }
     } catch (err) {
@@ -274,30 +313,6 @@ export default function Chitiettrackingorder() {
     }
   }, [id]);
 
-  // KHỞI TẠO ĐỘNG DIV_ICON CHỨA ẢNH NGƯỜI DÙNG THẬT TRÒN VIỀN TRẮNG ĐẸP MẮT ĐÈ TRÊN NỀN BẢN ĐỒ
-  const createCustomerAvatarIcon = (url) => {
-    return L.divIcon({
-      html: `<div style="
-        width: 42px; 
-        height: 42px; 
-        border-radius: 50%; 
-        border: 3px solid #006c49; 
-        box-shadow: 0 3px 8px rgba(0,0,0,0.35); 
-        overflow: hidden; 
-        background-color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" />
-      </div>`,
-      className: "custom-customer-avatar-marker",
-      iconSize: [42, 42],
-      iconAnchor: [21, 42],
-      popupAnchor: [0, -42],
-    });
-  };
-
   if (loading) {
     return (
       <div className="w-full min-h-screen flex flex-col items-center justify-center gap-2 bg-[#fafafa] text-[#006c49]">
@@ -312,8 +327,7 @@ export default function Chitiettrackingorder() {
   if (error || !orderDetail) {
     return (
       <div className="w-full min-h-screen p-10 bg-[#fafafa] text-center font-bold text-rose-500 text-xs">
-        ⚠️{" "}
-        {error || "Không tìm thấy thông tin vận đơn khớp trong cơ sở dữ liệu."}
+        {"⚠️ "}{error || "Không tìm thấy thông tin vận đơn khớp trong cơ sở dữ liệu."}
         <div className="mt-4">
           <Link to="/admin/Donhang/DanhsachTrackingorder" className="text-[#006c49] underline">
             Quay lại danh sách
@@ -356,7 +370,6 @@ export default function Chitiettrackingorder() {
 
       {/* COMPONENT LAYOUT SPLIT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* CỘT TRÁI: TIMELINE VÀ BẢN ĐỒ MAP */}
         <div className="lg:col-span-2 space-y-6">
           {/* LỊCH TRÌNH QUÉT TRẠM TIMELINE */}
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
@@ -365,7 +378,7 @@ export default function Chitiettrackingorder() {
                 Lịch trình quét trạm hệ thống
               </h2>
               <span className="text-xs text-slate-400 font-bold">
-                Tổng hành trình: {routeInfo.distanceKm} km
+                Tổng hành trình chặng: {routeInfo.distanceKm} km
               </span>
             </div>
 
@@ -376,7 +389,9 @@ export default function Chitiettrackingorder() {
                   Kho tổng xuất phát Store2Door (TP.HCM)
                 </h4>
                 <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                  Đã đóng gói và bốc xếp phân phối lên thùng xe tải trục
+                  {routeInfo.isDirectDelivery 
+                    ? "Phát hiện vị trí đích ở cự ly gần - Kiện hàng kích hoạt luồng bàn giao shipper giao thẳng."
+                    : "Đã đóng gói và bốc xếp phân phối lên thùng xe tải trục liên bưu cục."}
                 </p>
               </div>
 
@@ -391,7 +406,8 @@ export default function Chitiettrackingorder() {
                         {log.station_name}
                       </h4>
                       <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                        Khu vực: {log.phuong_xa} • {log.quan_huyen} • {log.tinh_thanh}
+                        Khu vực: {log.phuong_xa} • {log.quan_huyen} •{" "}
+                        {log.tinh_thanh}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-[#006c49] text-[9px] font-black rounded uppercase border tracking-wider">
@@ -415,7 +431,7 @@ export default function Chitiettrackingorder() {
             <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono bg-slate-50 p-2 rounded-lg border border-dashed mb-3">
               <span>Trục hành trình bám sát đường bộ huyết mạch Việt Nam:</span>
               <span className="font-bold text-[#006c49]">
-                STATUS: OSRM TRIP COMPLIANT
+                {routeInfo.isDirectDelivery ? "STATUS: INSTANT DIRECT ROUTE" : "STATUS: OSRM TRIP COMPLIANT"}
               </span>
             </div>
 
@@ -448,9 +464,9 @@ export default function Chitiettrackingorder() {
                     />
                   )}
 
-                  {/* 🌟 ĐÃ ĐỒNG BỘ: Ghim vị trí điểm đầu Kho tổng tại Quận 1 chuẩn xác */}
+                  {/* Ghim vị trí điểm đầu Kho tổng */}
                   <Marker
-                    position={[10.771963, 106.697194]}
+                    position={[10.792622, 106.680172]}
                     icon={storeStartIcon}
                   >
                     <Popup>
@@ -461,20 +477,18 @@ export default function Chitiettrackingorder() {
                   </Marker>
 
                   {/* Duyệt ghim động bưu cục trung gian */}
-                  {stations.map((station) => {
+                  {!routeInfo.isDirectDelivery && stations.map((station) => {
                     const lat = parseFloat(station.station_lat);
                     const lng = parseFloat(station.station_lng);
                     if (!lat || !lng) return null;
 
-                    let dynamicIcon = warehouseIcon; // Mặc định kiểu HUB
-                    if (station.station_type === "FIRST_MILE") dynamicIcon = firstMileOfficeIcon;
-                    else if (station.station_type === "LAST_MILE") dynamicIcon = lastMileOfficeIcon;
+                    const isLastMile = station.station_type === "LAST_MILE";
 
                     return (
                       <Marker
                         key={station.id || station.station_id}
                         position={[lat, lng]}
-                        icon={dynamicIcon}
+                        icon={isLastMile ? lastMileOfficeIcon : warehouseIcon}
                       >
                         <Popup>
                           <div className="text-xs">
@@ -495,25 +509,10 @@ export default function Chitiettrackingorder() {
                   >
                     <Popup>
                       <span className="text-xs font-bold">
-                        🏠 Đích đến giao hàng (Nhà khách hàng:{" "}
-                        {orderDetail?.user_info?.full_name || "Võ Duy Toàn"})
+                        🏠 Đích đến giao hàng (Nhà khách hàng: {orderDetail?.user_info?.full_name || "Võ Duy Toàn"})
                       </span>
                     </Popup>
                   </Marker>
-
-                  {/* Địa điểm bưu cục Live chặng cuối */}
-                  {currentStationPosition && (
-                    <Marker
-                      position={currentStationPosition}
-                      icon={lastMileOfficeIcon}
-                    >
-                      <Popup>
-                        <span className="text-xs font-black text-emerald-600">
-                          🏠 Vị trí Bưu cục phát Live hiện thời
-                        </span>
-                      </Popup>
-                    </Marker>
-                  )}
                 </MapContainer>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-xs font-bold text-slate-400 bg-slate-50 gap-2">
@@ -524,7 +523,6 @@ export default function Chitiettrackingorder() {
             </div>
           </div>
 
-          {/* TÀI CHÍNH VÀ CẤU TRÚC KIỆN HÀNG */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
               <h3 className="text-sm font-black text-slate-900 border-b border-slate-50 pb-3 mb-4 flex items-center gap-2">
@@ -532,25 +530,15 @@ export default function Chitiettrackingorder() {
               </h3>
               <div className="space-y-2.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">
-                    Dịch vụ vận chuyển:
-                  </span>
-                  <span className="font-black text-[#006c49]">
-                    {orderDetail.don_vi_van_chuyen || "DemiMart Express"}
-                  </span>
+                  <span className="text-slate-400 font-bold">Dịch vụ vận chuyển:</span>
+                  <span className="font-black text-[#006c49]">{orderDetail.don_vi_van_chuyen || "DemiMart Express"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">
-                    Thời gian chặng tính toán:
-                  </span>
-                  <span className="font-black text-amber-600">
-                    ~ {routeInfo.durationMin} phút
-                  </span>
+                  <span className="text-slate-400 font-bold">Thời gian chặng tính toán:</span>
+                  <span className="font-black text-amber-600">~ {routeInfo.durationMin} phút</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-bold">
-                    Trọng lượng quy đổi:
-                  </span>
+                  <span className="text-slate-400 font-bold">Trọng lượng quy đổi:</span>
                   <span className="font-black text-slate-700">0.5 kg</span>
                 </div>
               </div>
@@ -567,7 +555,10 @@ export default function Chitiettrackingorder() {
                     Tiền hàng gốc:
                   </span>
                   <span className="font-bold text-slate-700">
-                    {(Number(orderDetail.tong_tien_hang) || 0).toLocaleString("vi-VN")} đ
+                    {(Number(orderDetail.tong_tien_hang) || 0).toLocaleString(
+                      "vi-VN",
+                    )}{" "}
+                    đ
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -575,7 +566,10 @@ export default function Chitiettrackingorder() {
                     Phí cấu trúc đường bộ:
                   </span>
                   <span className="font-bold text-slate-700">
-                    {(Number(orderDetail.phi_van_chuyen) || 0).toLocaleString("vi-VN")} đ
+                    {(Number(orderDetail.phi_van_chuyen) || 0).toLocaleString(
+                      "vi-VN",
+                    )}{" "}
+                    đ
                   </span>
                 </div>
                 <div className="flex justify-between border-t border-dashed border-slate-100 pt-2.5 text-sm">
@@ -583,7 +577,10 @@ export default function Chitiettrackingorder() {
                     Tổng thu khách (COD):
                   </span>
                   <span className="font-black text-[#006c49]">
-                    {(Number(orderDetail.tong_thanh_toan) || 0).toLocaleString("vi-VN")} đ
+                    {(Number(orderDetail.tong_thanh_toan) || 0).toLocaleString(
+                      "vi-VN",
+                    )}{" "}
+                    đ
                   </span>
                 </div>
               </div>
@@ -591,44 +588,33 @@ export default function Chitiettrackingorder() {
           </div>
         </div>
 
-        {/* CỘT PHẢI (SIDEBAR): THANH TOÁN & ĐỊA CHỈ LIÊN THÔNG BẢN QUYỀN */}
         <div className="space-y-6">
           <div className="bg-[#006c49] text-white rounded-3xl p-5 shadow-md relative overflow-hidden">
-            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-200 mb-4">
-              Trạng thái ví đơn hàng
-            </h3>
+            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-200 mb-4">Trạng thái ví đơn hàng</h3>
             <div className="flex items-center gap-4">
               <div>
                 <h4 className="text-sm font-black tracking-tight">
-                  Cơ chế: {orderDetail.phuong_thuc_thanh_toan || "Ví liên thông App"}
+                  Cơ chế:{" "}
+                  {orderDetail.phuong_thuc_thanh_toan || "Ví liên thông App"}
                 </h4>
                 <p className="text-[11px] text-emerald-100 font-bold mt-1">
-                  Trạng thái ví: {orderDetail.trang_thai_thanh_toan || "PENDING"}
+                  Trạng thái ví:{" "}
+                  {orderDetail.trang_thai_thanh_toan || "PENDING"}
                 </p>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 border-b border-slate-50 pb-3 mb-4 flex items-center gap-1.5">
-              👤 Thông tin địa chỉ đối soát
-            </h3>
+            <h3 className="text-sm font-black text-slate-900 border-b border-slate-50 pb-3 mb-4 flex items-center gap-1.5">👤 Thông tin địa chỉ đối soát</h3>
             <div className="space-y-3 text-xs">
               <div>
-                <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">
-                  Mã đơn liên thông
-                </span>
-                <span className="font-black text-[#006c49] text-sm block mt-0.5 font-mono">
-                  #{orderDetail.ma_don_hang}
-                </span>
+                <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">Mã đơn liên thông</span>
+                <span className="font-black text-[#006c49] text-sm block mt-0.5 font-mono">#{orderDetail.ma_don_hang}</span>
               </div>
               <div>
-                <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">
-                  Tọa độ đích thực địa bưu cục phát
-                </span>
-                <span className="font-semibold text-slate-600 block mt-0.5 leading-relaxed font-mono">
-                  Lat: {customerTarget[0]} • Lng: {customerTarget[1]}
-                </span>
+                <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">Tọa độ đích thực địa bưu cục phát</span>
+                <span className="font-semibold text-slate-600 block mt-0.5 leading-relaxed font-mono">Lat: {customerTarget[0]} • Lng: {customerTarget[1]}</span>
               </div>
             </div>
           </div>

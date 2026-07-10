@@ -56,6 +56,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     firstMileOfficeName: "Đang định vị bưu cục nhận...",
     loading: true,
     totalOfficesOnRoute: 0,
+    isDirectDelivery: false,
   });
 
   // STATE QUẢN LÝ ĐỊA CHỈ LIÊN THÔNG BỐC CHUẨT TỪ CƠ SỞ DỮ LIỆU
@@ -74,16 +75,78 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
   const userLat = parseFloat(order?.to_lat || order?.latitude || order?.user_lat || 10.762622);
   const userLng = parseFloat(order?.to_lng || order?.longitude || order?.user_lng || 106.660172);
 
-  // KHẮC PHỤC LỖI KHUNG HÌNH MAP: Cập nhật lại size thực tế của Leaflet khi ẩn/hiện Sidebar hoặc bấm mở Panel trái
+  // 📐 HÀM TOÁN HỌC CHUẨN: Tính toán Snap Point trên đoạn đường thẳng
+  const getClosestPointOnSegment = (latA, lngA, latB, lngB, latC, lngC) => {
+    const dy = latB - latA;
+    const dx = lngB - lngA;
+    if (dx === 0 && dy === 0)
+      return {
+        lat: latA,
+        lng: lngA,
+        distSq: (latC - latA) ** 2 + (lngC - lngA) ** 2,
+      };
+
+    let t = ((lngC - lngA) * dx + (latC - latA) * dy) / (dx * dx + dy * dy);
+    t = Math.max(0, Math.min(1, t));
+
+    const closestLat = latA + t * dy;
+    const closestLng = lngA + t * dx;
+
+    return {
+      lat: closestLat,
+      lng: closestLng,
+      distSq: (latC - closestLat) ** 2 + (lngC - closestLng) ** 2,
+    };
+  };
+
+  // 📐 KIỂM TRA BƯU CỤC CÓ NẰM TRÊN TUYẾN ĐƯỜNG KHÔNG
+  const isOfficeStrictlyOnRoute = (
+    officeLat,
+    officeLng,
+    polylineCoords,
+    maxDistanceKm = 5.5,
+  ) => {
+    const maxDistanceDegSq = (maxDistanceKm * 0.009) ** 2;
+
+    for (let i = 0; i < polylineCoords.length - 1; i++) {
+      const p1 = polylineCoords[i];
+      const p2 = polylineCoords[i + 1];
+
+      const minLat = Math.min(p1[0], p2[0]) - 0.05;
+      const maxLat = Math.max(p1[0], p2[0]) + 0.05;
+      const minLng = Math.min(p1[1], p2[1]) - 0.05;
+      const maxLng = Math.max(p1[1], p2[1]) + 0.05;
+
+      if (
+        officeLat >= minLat &&
+        officeLat <= maxLat &&
+        officeLng >= minLng &&
+        officeLng <= maxLng
+      ) {
+        const snap = getClosestPointOnSegment(
+          p1[0],
+          p1[1],
+          p2[0],
+          p2[1],
+          officeLat,
+          officeLng,
+        );
+        if (snap.distSq <= maxDistanceDegSq) return true;
+      }
+    }
+    return false;
+  };
+
+  // 📐 KHẮC PHỤC LỖI KHUNG HÌNH MAP: Cập nhật lại size thực tế của Leaflet khi ẩn/hiện Sidebar
   useEffect(() => {
     if (leafletMapInstance.current) {
       setTimeout(() => {
         leafletMapInstance.current.invalidateSize();
       }, 310);
     }
-  }, [isSidebarOpen, selectedStation]);
+  }, [isSidebarOpen]);
 
-  // HÀM SINH DIV_ICON AVATAR CHUẨN ĐỘNG
+  // 📐 HÀM SINH DIV_ICON AVATAR CHUẨN ĐỘNG
   const createCustomerAvatarIcon = (url) => {
     return L.divIcon({
       html: `<div style="
@@ -107,7 +170,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     });
   };
 
-  // HIỆU ỨNG THEO DÕI AVATAR DỰ PHÒNG: Tự động vẽ đè lại ghim Khách hàng khi State ảnh thay đổi
+  // 🌟 HIỆU ỨNG THEO DÕI AVATAR DỰ PHÒNG: Tự động vẽ đè lại ghim Khách hàng khi State ảnh thật thay đổi
   useEffect(() => {
     if (leafletMapInstance.current && routingLayer.current && isOpen && liveUserAvatar) {
       if (customerMarkerRef.current) {
@@ -137,9 +200,8 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     const renderRouteMap = async () => {
       setRouteInfo((prev) => ({ ...prev, loading: true }));
 
-      // Tọa độ Kho tổng cố định
-      const storeLat = 10.771963;
-      const storeLng = 106.697194;
+      const storeLat = 10.792622;
+      const storeLng = 106.680172;
       const storeName = "Kho Xuất Phát Tổng DemiMart";
 
       let apiCalcDistance = 0;
@@ -200,7 +262,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
         } catch (apiErr) {}
 
-        // [4] LUỒNG TRUY VẤN LỘ TRÌẾ TỪ CƠ SỞ DỮ LIỆU BACKEND
+        // [4] Gọi API tải danh sách bưu cục mạng lưới (KML) - DÙNG orderApi
         try {
           const targetOrderId = order.id || order.ma_don_hang;
           const trackingRes = await orderApi.get(`/orders/tracking-logs/${targetOrderId}`);
@@ -226,81 +288,48 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           routingLayer.current = L.featureGroup().addTo(leafletMapInstance.current);
         }
 
-        // ĐỊNH NGHĨA PHÂN HỆ MARKER ICONS TIÊU CHUẨN LOẠI HÌNH VẬN TẢI
         const customShopIcon = L.icon({
-          iconUrl: SHOP_ICON_URL,
-          iconSize: [38, 38],
-          iconAnchor: [19, 38],
-          popupAnchor: [0, -34],
-        });
-        const customFirstMileIcon = L.icon({
-          iconUrl: COORDINATOR_ICON_URL,
+          iconUrl: "https://cdn-icons-png.flaticon.com/512/869/869636.png",
           iconSize: [38, 38],
           iconAnchor: [19, 38],
           popupAnchor: [0, -34],
         });
         const customDistrictTruckIcon = L.icon({
-          iconUrl: TRUCK_ICON_URL,
-          iconSize: [38, 38],
-          iconAnchor: [19, 38],
-          popupAnchor: [0, -34],
+          iconUrl: "https://cdn-icons-png.flaticon.com/512/2654/2654162.png",
+          iconSize: [36, 36],
+          iconAnchor: [18, 36],
+          popupAnchor: [0, -32],
         });
         const customRouteStationIcon = L.icon({
-          iconUrl: ROUTE_STATION_ICON_URL,
+          iconUrl: "https://cdn-icons-png.flaticon.com/512/2271/2271068.png",
           iconSize: [30, 30],
           iconAnchor: [15, 30],
           popupAnchor: [0, -28],
         });
 
-        // XÂY DỰNG WAYPOINTS ĐỂ CALL OSRM VẼ ĐƯỜNG DỰA TRÊN DATA TRONG DB
+        // Sắp xếp Waypoints bám trục liên tỉnh một chiều
         let waypoints = [`${storeLng},${storeLat}`];
-        let firstMileName = "Bưu cục gom hàng DemiMart";
-        let lastMileName = "Bưu cục phát chặng cuối DemiMart Express";
-        let totalHubs = 0;
+        const isTayNguyenZone =
+          userLng < 108.2 && userLat > 11.5 && userLat < 15.0;
 
-        // Vòng lặp duyệt mảng Data đổ ra Marker tương ứng kèm sự kiện click ghim ra Sidebar trái
-        databaseTrackingLogs.forEach((log) => {
-          const lat = parseFloat(log.station_lat);
-          const lng = parseFloat(log.station_lng);
-          if (!lat || !lng) return;
+        if (isTayNguyenZone) {
+          waypoints.push("106.883412,11.521093");
+          waypoints.push("107.684125,12.001254");
+        } else if (userLat > 11.2) {
+          waypoints.push("107.234125,10.938512");
+          waypoints.push("108.106943,10.933391");
+          if (userLat > 12.0) waypoints.push("109.196749,12.245071");
+          if (userLat > 13.5) waypoints.push("109.219515,13.774697");
+          if (userLat > 16.0) waypoints.push("108.221464,16.059541");
+          if (userLat > 18.0) waypoints.push("105.681123,18.673412");
+          if (userLat > 20.0) waypoints.push("105.820421,20.251093");
+        }
 
-          waypoints.push(`${lng},${lat}`);
-
-          let markerIcon = customRouteStationIcon;
-          if (log.station_type === "FIRST_MILE") {
-            firstMileName = log.station_name;
-            markerIcon = customFirstMileIcon;
-          } else if (log.station_type === "LAST_MILE") {
-            lastMileName = log.station_name;
-            markerIcon = customDistrictTruckIcon;
-          } else if (log.station_type === "HUB") {
-            totalHubs++;
-            markerIcon = customRouteStationIcon;
-          }
-
-          L.marker([lat, lng], { icon: markerIcon })
-            .on("click", () => {
-              setSelectedStation(log); // Mở Sidebar trái khi nhấn ghim bưu cục
-            })
-            .addTo(routingLayer.current);
-        });
-
-        // Thêm điểm đích cuối cùng nhà khách hàng
+        if (lastMileLng && lastMileLat) {
+          waypoints.push(`${lastMileLng},${lastMileLat}`);
+        }
         waypoints.push(`${userLng},${userLat}`);
 
-        // Vẽ Ghim Kho Tổng Cố Định
-        L.marker([storeLat, storeLng], { icon: customShopIcon })
-          .bindPopup(`<b>${storeName}</b><br/>Kho tổng xuất phát hệ thống`)
-          .addTo(routingLayer.current);
-
-        // Ghim Avatar Khách hàng điểm giao
-        const finalRenderAvatar = targetAvatar || liveUserAvatar;
-        customerMarkerRef.current = L.marker([userLat, userLng], {
-          icon: createCustomerAvatarIcon(finalRenderAvatar),
-        }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`);
-        customerMarkerRef.current.addTo(routingLayer.current);
-
-        // GỌI OSRM ĐỂ NỐI CÁC TRẠM TRỤC TRONG DATA THÀNH TUYẾN ĐƯỜNG TRỰC QUAN
         const coordsString = waypoints.join(";");
         const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&continue_straight=true`;
 
@@ -327,14 +356,12 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             storeName: lastMileName,
             firstMileOfficeName: firstMileName,
             loading: false,
-            totalOfficesOnRoute: totalHubs,
+            totalOfficesOnRoute: hubOnRouteList.length,
           });
 
           if (leafletMapInstance.current && routingLayer.current) {
             leafletMapInstance.current.fitBounds(routingLayer.current.getBounds(), { padding: [50, 50] });
           }
-        } else {
-          setRouteInfo((prev) => ({ ...prev, firstMileOfficeName: firstMileName, storeName: lastMileName, totalOfficesOnRoute: totalHubs, loading: false }));
         }
       } catch (error) {
         console.error("🔥 Lỗi xử lý tải bản đồ lộ trình:", error);
@@ -415,7 +442,9 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             <div>
               <span className="text-[10px] text-slate-400 uppercase block">Trạm trục trung chuyển</span>
               <span className="text-[#e65100] block font-black">
-                {routeInfo.loading ? "..." : `${routeInfo.totalOfficesOnRoute} Hub chặng giữa`}
+                {routeInfo.loading
+                  ? "..."
+                  : `${routeInfo.totalOfficesOnRoute} Hub chặng giữa`}
               </span>
             </div>
             <div>
@@ -435,87 +464,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
         {/* Thân Modal Split Layout */}
         <div className="flex flex-1 flex-row w-full h-full overflow-hidden relative">
-          
-          {/* SIDEBAR TRƯỢT TRÁI HIỂN THỊ CHI TIẾT BƯU CỤC */}
-          <div
-            className={`absolute left-0 top-0 bottom-0 z-[1002] bg-white border-r border-slate-200 flex flex-col shadow-2xl transition-all duration-300 overflow-hidden text-left ${
-              selectedStation ? "w-[340px] opacity-100" : "w-0 opacity-0"
-            }`}
-          >
-            {selectedStation && (
-              <div className="flex flex-col h-full w-full">
-                {/* 🌟 ĐÃ ĐỒNG BỘ: Chuyển màu nền Header Sidebar trái sang xanh thương hiệu #006c49 */}
-                <div className="p-4 bg-[#006c49] text-white flex items-center gap-3 shrink-0 shadow-sm relative">
-                  <button 
-                    onClick={() => setSelectedStation(null)} 
-                    className="p-1 hover:bg-white/20 rounded-full transition-colors declare focus:outline-none cursor-pointer"
-                  >
-                    <ChevronLeft size={20} className="stroke-[3]" />
-                  </button>
-                  <h4 className="font-black text-sm tracking-tight truncate pr-6 flex-1">
-                    {selectedStation.station_name}
-                  </h4>
-                  <div className="absolute right-4 bg-white/20 p-1.5 rounded-lg text-white">
-                    📍
-                  </div>
-                </div>
-
-                {/* Body Content Sidebar Trái */}
-                <div className="p-5 flex flex-col gap-5 overflow-y-auto bg-white flex-1 text-xs">
-                  <div>
-                    <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Tên đơn vị</span>
-                    <span className="font-black text-slate-800 text-sm leading-snug block">{selectedStation.station_name}</span>
-                  </div>
-
-                  <div>
-                    <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Mã vận hành / trạm</span>
-                    <span className="font-mono font-bold text-[#006c49] bg-emerald-50/50 px-2 py-1 rounded border border-emerald-100 block w-fit text-[11px] tracking-wide">
-                      {selectedStation.station_id || "N/A"}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Tỉnh/thành phố</span>
-                    <span className="font-semibold text-slate-700 block">{selectedStation.tinh_thanh || "Chưa cập nhật"}</span>
-                  </div>
-
-                  <div>
-                    <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Quận/huyện</span>
-                    <span className="font-semibold text-slate-700 block">{selectedStation.quan_huyen || "Chưa cập nhật"}</span>
-                  </div>
-
-                  <div>
-                    <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Phường/xã</span>
-                    <span className="font-semibold text-slate-700 block">{selectedStation.phuong_xa || "Chưa cập nhật"}</span>
-                  </div>
-
-                  <div>
-                    <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Số nhà, đường chi tiết</span>
-                    <span className="font-medium text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 leading-relaxed block shadow-xs">
-                      {selectedStation.so_nha_duong || "Chưa có địa chỉ chi tiết tuyến đường"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-dashed border-slate-100">
-                    <div>
-                      <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Vĩ độ (Latitude)</span>
-                      <span className="font-mono text-slate-600 font-bold block">{parseFloat(selectedStation.station_lat).toFixed(6)}</span>
-                    </div>
-                    <div>
-                      <span className="block font-bold text-slate-400 text-[10px] uppercase mb-0.5 tracking-wider">Kinh độ (Longitude)</span>
-                      <span className="font-mono text-slate-600 font-bold block">{parseFloat(selectedStation.station_lng).toFixed(6)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center gap-2 text-[#006c49]">
-                    <span className="text-base">🛡️</span>
-                    <span className="font-bold text-[10px] leading-relaxed uppercase tracking-wider">Trạm logistics hoạt động bình thường trên trục lõi</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* 🗺️ Bên Trái: Bản đồ */}
           <div className="relative flex-1 h-full bg-slate-100 transition-all duration-300">
             {routeInfo.loading && (
@@ -538,7 +486,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             {isSidebarOpen ? <ChevronRight size={16} className="stroke-[3]" /> : <ChevronLeft size={16} className="stroke-[3]" />}
           </button>
 
-          {/* 📄 Bên Phải: Panel hiển thị thông tin chi tiết đơn hàng */}
+          {/* 📄 Bên Phải: Panel hiển gia thông tin đơn hàng */}
           <div
             className={`h-full bg-slate-50 border-l border-slate-200 flex flex-col overflow-y-auto p-5 gap-4 shadow-inner transition-all duration-300 ${
               isSidebarOpen ? "w-[32%] opacity-100 visible" : "w-0 p-0 opacity-0 invisible border-l-0"
@@ -647,6 +595,15 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 bg-white border-t flex justify-between items-center text-xs shrink-0 text-slate-400 font-medium">
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck size={16} className="text-[#006c49]" /> Đã dọn dẹp và
+            đóng gói tinh gọn: Loại bỏ hoàn toàn endpoint save-route-stations dư
+            thừa tại Client.
+          </span>
         </div>
       </div>
     </div>,
