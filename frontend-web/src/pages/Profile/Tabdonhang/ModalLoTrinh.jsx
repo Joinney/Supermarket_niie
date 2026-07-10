@@ -89,15 +89,24 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     return false;
   };
 
+  // 📐 KHẮC PHỤC LỖI KHUNG HÌNH MAP: Cập nhật lại size thực tế của Leaflet khi ẩn/hiện Sidebar
+  useEffect(() => {
+    if (leafletMapInstance.current) {
+      setTimeout(() => {
+        leafletMapInstance.current.invalidateSize();
+      }, 310); 
+    }
+  }, [isSidebarOpen]);
+
   // 📐 HÀM SINH DIV_ICON AVATAR CHUẨN ĐỘNG
   const createCustomerAvatarIcon = (url) => {
     return L.divIcon({
       html: `<div style="
-        width: 44px; 
-        height: 44px; 
+        width: 42px; 
+        height: 42px; 
         border-radius: 50%; 
         border: 3px solid #006c49; 
-        box-shadow: 0 3px 10px rgba(0,0,0,0.35); 
+        box-shadow: 0 3px 8px rgba(0,0,0,0.35); 
         overflow: hidden; 
         background-color: #ffffff;
         display: flex;
@@ -107,13 +116,13 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" />
       </div>`,
       className: "custom-user-avatar-marker-modal",
-      iconSize: [44, 44],
-      iconAnchor: [22, 44],
-      popupAnchor: [0, -44]
+      iconSize: [42, 42],
+      iconAnchor: [21, 42],
+      popupAnchor: [0, -42]
     });
   };
 
-  // 🌟 HIỆU ỨNG THEO DÕI AVATAR DỰ PHÒNG CHỦ ĐỘNG: Cấy đè Marker tức thì khi State nhận ảnh thật từ Auth-Service
+  // 🌟 HIỆU ỨNG THEO DÕI AVATAR DỰ PHÒNG: Tự động vẽ đè lại ghim Khách hàng khi State ảnh thật thay đổi
   useEffect(() => {
     if (leafletMapInstance.current && routingLayer.current && isOpen && liveUserAvatar) {
       if (customerMarkerRef.current) {
@@ -166,7 +175,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
         const requestHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
-        // [1] LUỒNG ĐỒNG BỘ AVATAR KHẨN CẤP (🌟 ĐÃ ĐỒNG BỘ KEY AVATAR_URL TỪ PROFILE PAGE TRÁNH LỖI)
+        // [1] LUỒNG ĐỒNG BỘ AVATAR KHẨN CẤP (Đã tích hợp đồng bộ trường avatar_url)
         let targetAvatar = order?.user_info?.avatar_url || order?.user_info?.avatar || order?.user_info?.image_url || order?.avatar_url;
         
         if (!targetAvatar && order.user_id) {
@@ -310,7 +319,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           // Ghim các mốc cố định
           L.marker([storeLat, storeLng], { icon: customShopIcon }).bindPopup(`<b>${storeName}</b><br/>Kho xuất phát tổng`).addTo(routingLayer.current);
 
-          // 🌟 CHỐT CHẶN TRIỆT ĐỂ BẤT ĐỒNG BỘ: Ép ghim Avatar người dùng có độ ưu tiên key tối đa ngay chặng đầu
+          // Ép ghim Avatar người dùng có độ ưu tiên key tối đa ngay chặng đầu
           const finalRenderAvatar = targetAvatar || liveUserAvatar;
           customerMarkerRef.current = L.marker([userLat, userLng], { icon: createCustomerAvatarIcon(finalRenderAvatar) }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`);
           customerMarkerRef.current.addTo(routingLayer.current);
@@ -346,59 +355,9 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
              .addTo(routingLayer.current);
           });
 
-          // --- LOGIC TỰ ĐỘNG HÓA LƯU TRẠM XUỐNG DATABASE ---
-          try {
-            const stationsToSave = [];
-            hubOnRouteList.forEach((hub, idx) => {
-              let nearestKmlToHub = null;
-              let minDistanceSq = Infinity;
-              if (rawPostOffices.length > 0) {
-                rawPostOffices.forEach(office => {
-                  const oLat = parseFloat(office.location?.lat || office.latitude || 0);
-                  const oLng = parseFloat(office.location?.lng || office.longitude || 0);
-                  const distSq = ((oLat - hub.lat) ** 2) + ((oLng - hub.lng) ** 2);
-                  if (distSq < minDistanceSq) {
-                    minDistanceSq = distSq;
-                    nearestKmlToHub = office;
-                  }
-                });
-              }
-              stationsToSave.push({
-                station_id: `HUB_${order?.ma_don_hang || Date.now()}_${idx + 1}`,
-                name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
-                lat: hub.lat,
-                lng: hub.lng,
-                type: 'HUB',
-                tinh_thanh: nearestKmlToHub?.provinceName || '',
-                quan_huyen: nearestKmlToHub?.districtName || '',
-                phuong_xa: nearestKmlToHub?.wardName || '',
-                so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || ''
-              });
-            });
-
-            if (lastMileLat && lastMileLng) {
-              stationsToSave.push({
-                station_id: optimalLastMileOffice?.id || 'LAST_MILE_GEN',
-                name: String(optimalLastMileOffice?.name || lastMileName),
-                lat: lastMileLat,
-                lng: lastMileLng,
-                type: 'LAST_MILE',
-                tinh_thanh: optimalLastMileOffice?.provinceName || '',
-                quan_huyen: optimalLastMileOffice?.districtName || '',
-                phuong_xa: optimalLastMileOffice?.wardName || '',
-                so_nha_duong: optimalLastMileOffice?.street || optimalLastMileOffice?.address || ''
-              });
-            }
-
-            const currentOrderId = order?.id || order?._id;
-            if (stationsToSave.length > 0 && currentOrderId) {
-              await orderApi.post('/orders/shipping/save-route-stations', {
-                order_id: currentOrderId,
-                ma_don_hang: order.ma_don_hang,
-                stations: stationsToSave
-              });
-            }
-          } catch (saveErr) {}
+          // 🌟 ĐÃ XÓA KHỐI LỆNH `save-route-stations` DƯ THỪA TẠI ĐÂY 🌟
+          // Client (Modal) chỉ đảm nhận chức năng bóc tách Render bản đồ trực quan,
+          // luồng cấy lưu trạm logistics đã được Backend placeOrder xử lý tự động.
 
           setRouteInfo({
             distanceKm: apiCalcDistance > 0 ? apiCalcDistance : parseFloat((route.distance / 1000).toFixed(1)),
@@ -618,7 +577,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         {/* Footer */}
         <div className="p-4 bg-white border-t flex justify-between items-center text-xs shrink-0 text-slate-400 font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={16} className="text-[#006c49]"/> Đã đồng bộ cấu trúc hiển thị ảnh đại diện thật của người dùng tại điểm chốt nhận hàng trên bản đồ số liên thông chốt chặn bất đồng bộ thành công.
+            <ShieldCheck size={16} className="text-[#006c49]"/> Đã dọn dẹp và đóng gói tinh gọn: Loại bỏ hoàn toàn endpoint save-route-stations dư thừa tại Client.
           </span>
         </div>
       </div>
