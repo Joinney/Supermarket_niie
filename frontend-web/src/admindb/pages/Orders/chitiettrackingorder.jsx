@@ -48,9 +48,8 @@ const warehouseIcon = new L.Icon({
   popupAnchor: [0, -28],
 });
 
-// 🌟 THAY ĐỔI THEO Ý BẠN: Thay thế icon xe tải thành biểu tượng Bưu cục phát chặng cuối chuẩn link Flaticon
 const lastMileOfficeIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/2654/2654162.png", 
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/2654/2654162.png", // Bưu cục phát chặng cuối
   iconSize: [36, 36],
   iconAnchor: [18, 36],
   popupAnchor: [0, -32],
@@ -61,13 +60,6 @@ const storeStartIcon = new L.Icon({
   iconSize: [34, 34],
   iconAnchor: [17, 34],
   popupAnchor: [0, -32],
-});
-
-const receiverHomeIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/5693/5693847.png", // Nhà khách hàng
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -34],
 });
 
 export default function Chitiettrackingorder() {
@@ -84,6 +76,9 @@ export default function Chitiettrackingorder() {
   
   // State quản lý tọa độ nhà nhận toàn cục để hiển thị Marker chuẩn xác
   const [customerTarget, setCustomerTarget] = useState([10.762622, 106.660172]);
+
+  // State lưu chuỗi ảnh Avatar người dùng bốc từ Database (Mặc định dùng ảnh đại diện xám nếu chưa tìm thấy key)
+  const [userAvatarUrl, setUserAvatarUrl] = useState("https://cdn-icons-png.flaticon.com/512/149/149071.png");
 
   const [routeInfo, setRouteInfo] = useState({
     distanceKm: 0,
@@ -112,7 +107,39 @@ export default function Chitiettrackingorder() {
       if (orderRes.data?.success) {
         orderMainData = orderRes.data.data;
         setOrderDetail(orderMainData);
-        console.log("=== THỰC THỂ ĐƠN HÀNG LOGISTICS ===", orderMainData);
+        
+        console.log("=== [DEBUG] ĐƠN HÀNG LOGISTICS GỐC ===", orderMainData);
+        if (orderMainData?.user_info) {
+          console.log("=== [DEBUG] ĐỐI TƯỢNG USER_INFO BÊN TRONG ===", orderMainData.user_info);
+        }
+
+        // 🌟 BỘ THUẬT TOÁN DÒ TÌM AVATAR DỰ PHÒNG THÔNG MINH (DEEP SCAN) 🌟
+        // Tự động kiểm tra tất cả các trường có khả năng chứa link ảnh đại diện khách hàng
+        let finalAvatar = null;
+        
+        if (orderMainData?.user_info) {
+          finalAvatar = orderMainData.user_info.avatar || 
+                        orderMainData.user_info.image_url || 
+                        orderMainData.user_info.avatar_url || 
+                        orderMainData.user_info.image ||
+                        orderMainData.user_info.picture;
+        }
+        
+        if (!finalAvatar) {
+          finalAvatar = orderMainData?.avatar || 
+                        orderMainData?.avatar_url || 
+                        orderMainData?.image_url || 
+                        orderMainData?.customer_avatar;
+        }
+
+        // Nếu tìm thấy link ảnh hợp lệ, cập nhật ngay vào bản đồ số
+        if (finalAvatar && typeof finalAvatar === 'string' && finalAvatar.trim() !== '') {
+          console.log("🎯 Đã dò quét trúng link Avatar khách hàng thật:", finalAvatar);
+          setUserAvatarUrl(finalAvatar);
+        } else {
+          console.warn("⚠️ Hệ thống chưa tìm thấy key Avatar hợp lệ trong API. Đang sử dụng ảnh mặc định.");
+        }
+
       } else {
         throw new Error("Không lấy được dữ liệu cấu trúc gốc của đơn hàng.");
       }
@@ -160,7 +187,7 @@ export default function Chitiettrackingorder() {
 
       setStations(uniqueStations);
 
-      // 3. THIẾT LẬP WAYPOINTS THEO TUYẾN CHUẨN ĐỘC ĐẠO (KHO ➔ QUA CÁC TRẠM THEO THỜI GIAN ➔ KHÁCH HÀNG)
+      // 3. THIẾT LẬP WAYPOINTS THEO TUYẾN CHUẨN ĐỘC ĐẠO
       let waypoints = [`${storeLng},${storeLat}`];
       uniqueStations.forEach(log => {
         waypoints.push(`${parseFloat(log.station_lng)},${parseFloat(log.station_lat)}`);
@@ -179,7 +206,6 @@ export default function Chitiettrackingorder() {
         
         setRouteCoordinates(coordinates);
 
-        // Tạo khung giới hạn khung nhìn map bao quát cả nước
         const bounds = L.latLngBounds([[storeLat, storeLng], [userLat, userLng]]);
         coordinates.forEach(pt => {
           if (Array.isArray(pt) && pt.length === 2) bounds.extend(pt);
@@ -216,11 +242,35 @@ export default function Chitiettrackingorder() {
     }
   }, [id]);
 
+  // KHỞI TẠO ĐỘNG DIV_ICON CHỨA ẢNH NGƯỜI DÙNG THẬT TRÒN VIỀN TRẮNG ĐẸP MẮT ĐÈ TRÊN NỀN BẢN ĐỒ
+  const createCustomerAvatarIcon = (url) => {
+    return L.divIcon({
+      html: `<div style="
+        width: 42px; 
+        height: 42px; 
+        border-radius: 50%; 
+        border: 3px solid #006c49; 
+        box-shadow: 0 3px 8px rgba(0,0,0,0.35); 
+        overflow: hidden; 
+        background-color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" />
+      </div>`,
+      className: "custom-customer-avatar-marker",
+      iconSize: [42, 42],
+      iconAnchor: [21, 42],
+      popupAnchor: [0, -42]
+    });
+  };
+
   if (loading) {
     return (
       <div className="w-full min-h-screen flex flex-col items-center justify-center gap-2 bg-[#fafafa] text-[#006c49]">
         <Loader2 className="animate-spin w-9 h-9 stroke-[3]" />
-        <span className="text-xs font-black uppercase tracking-widest">Đang tính toán lại trục phân phối độc đạo...</span>
+        <span className="text-xs font-black uppercase tracking-widest">Đang kết xuất liên thông thực địa OSRM...</span>
       </div>
     );
   }
@@ -305,7 +355,7 @@ export default function Chitiettrackingorder() {
             </div>
           </div>
 
-          {/* KHUNG HIỂN THỊ MAP LEAFLET TUYẾN TÍNH ĐỘC ĐẠO */}
+          {/* BẢN ĐỒ MAP LEAFLET TUYẾN TÍNH ĐỘC ĐẠO */}
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 relative overflow-hidden">
             <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono bg-slate-50 p-2 rounded-lg border border-dashed mb-3">
               <span>Trục hành trình bám sát đường bộ huyết mạch Việt Nam:</span>
@@ -335,7 +385,6 @@ export default function Chitiettrackingorder() {
                     const lng = parseFloat(station.station_lng);
                     if (!lat || !lng) return null;
 
-                    // 🌟 PHÂN LOẠI ICON ĐỘNG: Trạm chặng cuối LastMile hiển thị hình Bưu cục nhà, còn Hub hiển thị hình Trạm kho giữa
                     const isLastMile = station.station_type === 'LAST_MILE';
 
                     return (
@@ -350,12 +399,16 @@ export default function Chitiettrackingorder() {
                     );
                   })}
 
-                  {/* Ghim vị trí đích nhà nhận thực tế giải lập từ State toàn cục */}
-                  <Marker position={customerTarget} icon={receiverHomeIcon}>
-                    <Popup><span className="text-xs font-bold">🏠 Địa chỉ đích giao hàng (Nhà khách hàng)</span></Popup>
+                  {/* 🌟 ĐÃ KHẮC PHỤC CHUẨN XÁC: Render trực tiếp Marker động chứa avatar thật của khách hàng Võ Duy Toàn */}
+                  <Marker position={customerTarget} icon={createCustomerAvatarIcon(userAvatarUrl)}>
+                    <Popup>
+                      <span className="text-xs font-bold">
+                        🏠 Đích đến giao hàng (Nhà khách hàng: {orderDetail?.user_info?.full_name || "Võ Duy Toàn"})
+                      </span>
+                    </Popup>
                   </Marker>
 
-                  {/* ĐỊA CHỈ TRẠM HIỆN THỜI LIVE CỦA THỰC THỂ XE / BƯU CỤC LIVE */}
+                  {/* Địa điểm bưu cục Live chặng cuối */}
                   {currentStationPosition && (
                     <Marker position={currentStationPosition} icon={lastMileOfficeIcon}>
                       <Popup><span className="text-xs font-black text-emerald-600">🏠 Vị trí Bưu cục phát Live hiện thời</span></Popup>

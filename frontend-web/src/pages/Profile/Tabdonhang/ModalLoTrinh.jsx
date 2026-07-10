@@ -22,6 +22,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
   const mapRef = useRef(null);
   const leafletMapInstance = useRef(null);
   const routingLayer = useRef(null);
+  const customerMarkerRef = useRef(null); // Lưu vết Marker điểm đích
 
   // 🌟 STATE QUẢN LÝ ĐÓNG/MỞ SIDEBAR THÔNG TIN ĐƠN HÀNG BÊN PHẢI
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -40,6 +41,13 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     receiver_phone: "Chưa cập nhật SĐT",
     full_address: "Đang kết xuất địa chỉ đặt hàng từ hệ thống..."
   });
+
+  // 🌟 STATE LƯU TRỮ ĐƯỜNG DẪN AVATAR KHÁCH HÀNG LIVE THỰC TẾ
+  const [liveUserAvatar, setLiveUserAvatar] = useState("https://cdn-icons-png.flaticon.com/512/149/149071.png");
+
+  // Tọa độ người nhận cố định bốc từ prop order truyền vào
+  const userLat = parseFloat(order?.to_lat || order?.latitude || order?.user_lat || 10.762622);
+  const userLng = parseFloat(order?.to_lng || order?.longitude || order?.user_lng || 106.660172);
 
   // 📐 HÀM TOÁN HỌC CHUẨN: Tính toán Snap Point trên đoạn đường thẳng
   const getClosestPointOnSegment = (latA, lngA, latB, lngB, latC, lngC) => {
@@ -81,14 +89,43 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     return false;
   };
 
-  // 📐 KHẮC PHỤC LỖI KHUNG HÌNH MAP: Cập nhật lại size thực tế của Leaflet khi ẩn/hiện Sidebar
+  // 📐 HÀM SINH DIV_ICON AVATAR CHUẨN ĐỘNG
+  const createCustomerAvatarIcon = (url) => {
+    return L.divIcon({
+      html: `<div style="
+        width: 44px; 
+        height: 44px; 
+        border-radius: 50%; 
+        border: 3px solid #006c49; 
+        box-shadow: 0 3px 10px rgba(0,0,0,0.35); 
+        overflow: hidden; 
+        background-color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <img src="${url}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'" />
+      </div>`,
+      className: "custom-user-avatar-marker-modal",
+      iconSize: [44, 44],
+      iconAnchor: [22, 44],
+      popupAnchor: [0, -44]
+    });
+  };
+
+  // 🌟 HIỆU ỨNG THEO DÕI AVATAR DỰ PHÒNG CHỦ ĐỘNG: Cấy đè Marker tức thì khi State nhận ảnh thật từ Auth-Service
   useEffect(() => {
-    if (leafletMapInstance.current) {
-      setTimeout(() => {
-        leafletMapInstance.current.invalidateSize();
-      }, 310); 
+    if (leafletMapInstance.current && routingLayer.current && isOpen && liveUserAvatar) {
+      if (customerMarkerRef.current) {
+        routingLayer.current.removeLayer(customerMarkerRef.current);
+      }
+      customerMarkerRef.current = L.marker([userLat, userLng], {
+        icon: createCustomerAvatarIcon(liveUserAvatar)
+      }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`);
+      
+      customerMarkerRef.current.addTo(routingLayer.current);
     }
-  }, [isSidebarOpen]);
+  }, [liveUserAvatar, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !order) return;
@@ -99,15 +136,12 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
       leafletMapInstance.current.remove();
       leafletMapInstance.current = null;
       routingLayer.current = null;
+      customerMarkerRef.current = null;
     }
 
     const renderRouteMap = async () => {
       setRouteInfo(prev => ({ ...prev, loading: true }));
 
-      const userLat = parseFloat(order.to_lat || order.latitude || order.user_lat || 10.762622);
-      const userLng = parseFloat(order.to_lng || order.longitude || order.user_lng || 106.660172);
-
-      // Định vị điểm xuất phát (Kho xuất phát gốc tổng - TP.HCM)
       const storeLat = 10.792622;
       const storeLng = 106.680172;
       const storeName = "Kho Xuất Phát Tổng DemiMart"; 
@@ -117,21 +151,42 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
       let rawPostOffices = [];
       let optimalLastMileOffice = null;
 
-      try {
-        // [1] Gọi API đồng bộ Address từ Auth-Service độc lập
-        try {
-          const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          const authBaseUrl = isLocalHost ? 'http://localhost:5001/api' : 'https://authservice-sz4p.onrender.com/api';
-          
-          let authToken = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
-          if (authToken) {
-            authToken = authToken.replace(/^"|"$/g, '');
-          }
+      let lastMileLat = userLat;
+      let lastMileLng = userLng;
+      let lastMileName = "Bưu cục chặng cuối DemiMart Express";
 
-          const addrRes = await axios.get(`${authBaseUrl}/addresses`, {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
-          });
-          
+      try {
+        const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const authBaseUrl = isLocalHost ? 'http://localhost:5001/api' : 'https://authservice-sz4p.onrender.com/api';
+        
+        let authToken = localStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("adminToken") || "";
+        if (authToken) {
+          authToken = authToken.replace(/^"|"$/g, '').trim();
+        }
+
+        const requestHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
+        // [1] LUỒNG ĐỒNG BỘ AVATAR KHẨN CẤP (🌟 ĐÃ ĐỒNG BỘ KEY AVATAR_URL TỪ PROFILE PAGE TRÁNH LỖI)
+        let targetAvatar = order?.user_info?.avatar_url || order?.user_info?.avatar || order?.user_info?.image_url || order?.avatar_url;
+        
+        if (!targetAvatar && order.user_id) {
+          try {
+            const userProfileRes = await axios.get(`${authBaseUrl}/auth/internal/users/${order.user_id}`, { headers: requestHeaders });
+            if (userProfileRes.data?.avatar_url || userProfileRes.data?.avatar || userProfileRes.data?.image_url) {
+              targetAvatar = userProfileRes.data.avatar_url || userProfileRes.data.avatar || userProfileRes.data.image_url;
+            }
+          } catch (authFetchErr) {
+            console.warn("⚠️ Không thể kéo profile avatar từ Auth Service:", authFetchErr.message);
+          }
+        }
+
+        if (isMounted && targetAvatar && targetAvatar.trim() !== '') {
+          setLiveUserAvatar(targetAvatar);
+        }
+
+        // [2] Gọi API đồng bộ Address từ Auth-Service độc lập
+        try {
+          const addrRes = await axios.get(`${authBaseUrl}/addresses`, { headers: requestHeaders });
           const addrDataList = addrRes.data?.data || addrRes.data || [];
           
           if (Array.isArray(addrDataList) && addrDataList.length > 0) {
@@ -149,7 +204,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
         } catch (addrErr) {}
 
-        // [2] Gọi API lấy tính toán khoảng cách gốc
+        // [3] Gọi API lấy tính toán khoảng cách gốc
         try {
           const res = await orderApi.post('/orders/shipping/calc', { userLat, userLng }); 
           const responseData = res.data?.data;
@@ -159,7 +214,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
         } catch (apiErr) {}
 
-        // [3] Gọi API tải danh sách bưu cục mạng lưới (KML)
+        // [4] Gọi API tải danh sách bưu cục mạng lưới (KML)
         try {
           const postOfficeRes = await orderApi.post('/orders/test-kml', { district_name: "", province_name: "" });
           if (postOfficeRes.data?.success) {
@@ -167,11 +222,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
         } catch (kmlErr) {}
 
-        // 🌟 XỬ LÝ CHẮC CHẮN HIỂN THỊ 1 BƯU CỤC CHẶNG CUỐI CẬN ĐÍCH
-        let lastMileLat = null;
-        let lastMileLng = null;
-        let lastMileName = "Bưu cục phát chặng cuối";
-
+        // XỬ LÝ HIỂN THỊ BƯU CỤC CHẶNG CUỐI CẬN ĐÍCH
         if (rawPostOffices.length > 0) {
           let clientZoneOffices = rawPostOffices.filter(o => {
             const lat = parseFloat(o.location?.lat || o.latitude || 0);
@@ -203,78 +254,45 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || userLat);
           lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || userLng);
           lastMileName = optimalLastMileOffice.name || "Bưu cục chặng cuối DemiMart Express";
-
-          setAddressData(prev => {
-            if (prev.full_address.includes("Đang kết xuất")) {
-              return {
-                receiver_name: order?.user_info?.full_name || "Khách hàng DemiMart",
-                receiver_phone: order?.user_info?.phone_number || "Liên hệ qua App",
-                full_address: `${optimalLastMileOffice.address || `${optimalLastMileOffice.ward_name} • ${optimalLastMileOffice.districtName} • Việt Nam`}`
-              };
-            }
-            return prev;
-          });
         }
 
         if (!isMounted) return;
 
-        // Khởi tạo bản đồ với URL chuẩn địa danh Google Maps Việt Nam (hl=vi&gl=VN)
+        // Khởi tạo bản đồ Leaflet Instance
         if (!leafletMapInstance.current && mapRef.current) {
           leafletMapInstance.current = L.map(mapRef.current).setView([userLat, userLng], 12);
           
           L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=vi&gl=VN', {
-            maxZoom: 20,
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-            attribution: '© Google Maps Việt Nam'
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: '© Google Maps Việt Nam'
           }).addTo(leafletMapInstance.current);
 
           routingLayer.current = L.featureGroup().addTo(leafletMapInstance.current);
         }
 
-        // Cấu hình các Icon trực quan
-        const customShopIcon = L.icon({ 
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/869/869636.png', 
-          iconSize: [38, 38], iconAnchor: [19, 38], popupAnchor: [0, -34]
-        });
+        const customShopIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/869/869636.png', iconSize: [38, 38], iconAnchor: [19, 38], popupAnchor: [0, -34] });
+        const customDistrictTruckIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2654/2654162.png', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -32] });
+        const customRouteStationIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2271/2271068.png', iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });
 
-        const customDistrictTruckIcon = L.icon({ 
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/2654/2654162.png', 
-          iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -32]
-        });
-
-        const customUserReceiverIcon = L.icon({ 
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/5693/5693847.png', 
-          iconSize: [38, 38], iconAnchor: [19, 38], popupAnchor: [0, -34]
-        });
-
-        const customRouteStationIcon = L.icon({
-          iconUrl: 'https://cdn-icons-png.flaticon.com/512/2271/2271068.png',
-          iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28]
-        });
-
-        // 🌟 ÉP ĐỒNG BỘ LỘ TRÌNH ĐƯỜNG BỘ: Tạo danh sách trạm trục bám sát Quốc lộ 1A từ Nam ra Bắc tuần tự
-        let waypoints = [`${storeLng},${storeLat}`]; // Điểm xuất phát (TP.HCM)
+        // Sắp xếp Waypoints bám trục liên tỉnh một chiều
+        let waypoints = [`${storeLng},${storeLat}`]; 
         const isTayNguyenZone = userLng < 108.2 && userLat > 11.5 && userLat < 15.0;
 
         if (isTayNguyenZone) {
           waypoints.push("106.883412,11.521093"); 
           waypoints.push("107.684125,12.001254"); 
         } else if (userLat > 11.2) {
-          // Khách ở miền Trung/Bắc $\rightarrow$ Bắt buộc đẩy trạm trung chuyển uốn theo trục biển duyên hải dọc QL1A
-          waypoints.push("107.234125,10.938512"); // Mốc Bình Thuận
-          waypoints.push("108.106943,10.933391"); // Mốc Nha Trang / Khánh Hòa
-          if (userLat > 12.0) waypoints.push("109.196749,12.245071"); // Quy Nhơn / Bình Định
-          if (userLat > 13.5) waypoints.push("109.219515,13.774697"); // Quảng Ngãi
-          if (userLat > 16.0) waypoints.push("108.221464,16.059541"); // Đà Nẵng / Huế
-          if (userLat > 18.0) waypoints.push("105.681123,18.673412"); // Vinh / Nghệ An
-          if (userLat > 20.0) waypoints.push("105.820421,20.251093"); // Hà Nội
+          waypoints.push("107.234125,10.938512"); 
+          waypoints.push("108.106943,10.933391"); 
+          if (userLat > 12.0) waypoints.push("109.196749,12.245071"); 
+          if (userLat > 13.5) waypoints.push("109.219515,13.774697"); 
+          if (userLat > 16.0) waypoints.push("108.221464,16.059541"); 
+          if (userLat > 18.0) waypoints.push("105.681123,18.673412"); 
+          if (userLat > 20.0) waypoints.push("105.820421,20.251093"); 
         }
 
-        // Đẩy bưu cục chặng phát cuối chốt cận đích vào trước nhà khách hàng
         if (lastMileLng && lastMileLat) {
           waypoints.push(`${lastMileLng},${lastMileLat}`); 
         }
-
         waypoints.push(`${userLng},${userLat}`); 
 
         const coordsString = waypoints.join(';');
@@ -287,21 +305,22 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           const route = routeData.routes[0];
           const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
           
-          // Vẽ đường Line bản đồ lộ trình màu xanh nổi bật bám sát đường bộ
           L.polyline(coordinates, { color: '#006c49', weight: 5, opacity: 0.9, lineJoin: 'round', lineCap: 'round' }).addTo(routingLayer.current);
 
-          // Ghim điểm đầu Kho tổng và điểm đích khách hàng
-          L.marker([storeLat, storeLng], { icon: customShopIcon }).bindPopup(`<b>${storeName}</b><br/>Kho xuất phát tổng của hệ thống`).addTo(routingLayer.current);
-          L.marker([userLat, userLng], { icon: customUserReceiverIcon }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`).addTo(routingLayer.current);
+          // Ghim các mốc cố định
+          L.marker([storeLat, storeLng], { icon: customShopIcon }).bindPopup(`<b>${storeName}</b><br/>Kho xuất phát tổng`).addTo(routingLayer.current);
 
-          // Ghim bưu cục chặng cuối cận đích lên bản đồ
+          // 🌟 CHỐT CHẶN TRIỆT ĐỂ BẤT ĐỒNG BỘ: Ép ghim Avatar người dùng có độ ưu tiên key tối đa ngay chặng đầu
+          const finalRenderAvatar = targetAvatar || liveUserAvatar;
+          customerMarkerRef.current = L.marker([userLat, userLng], { icon: createCustomerAvatarIcon(finalRenderAvatar) }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`);
+          customerMarkerRef.current.addTo(routingLayer.current);
+
           if (lastMileLat && lastMileLng) {
             L.marker([lastMileLat, lastMileLng], { icon: customDistrictTruckIcon })
              .bindPopup(`<b>🏁 ${lastMileName}</b><br/>Bưu cục chặng cuối phụ trách phát hàng`)
              .addTo(routingLayer.current);
           }
 
-          // Lấy chính xác bưu cục trục (Hub) chặng giữa theo tỷ lệ uốn lượn thực tế
           let hubOnRouteList = [];
           if (coordinates.length > 15) {
             const distributionRatios = [0.33, 0.66]; 
@@ -309,7 +328,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               const targetIndex = Math.floor(coordinates.length * ratio);
               if (coordinates[targetIndex]) {
                 const nodeCoord = coordinates[targetIndex];
-                
                 if (lastMileLat && Math.abs(nodeCoord[0] - lastMileLat) < 0.05) return;
                 if (Math.abs(nodeCoord[0] - storeLat) < 0.05) return;
 
@@ -322,24 +340,18 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             });
           }
 
-          // Ghim đúng các bưu cục Hub hành trình chặng giữa
           hubOnRouteList.forEach(hub => {
             L.marker([hub.lat, hub.lng], { icon: customRouteStationIcon })
-             .bindPopup(`<b>🏢 ${hub.name}</b><br/>Trạm trục xử lý phân phối chặng trục`)
+             .bindPopup(`<b>🏢 ${hub.name}</b><br/>Trạm trục xử lý phân phối`)
              .addTo(routingLayer.current);
           });
 
-          // =========================================================================
-          // 📥 LOGIC ĐỒNG BỘ: TỰ ĐỘNG GỬI MẢNG BƯU CỤC ĐƯỜNG BỘ ĐÃ LỌC VỀ BACKEND ĐỂ LƯU
-          // =========================================================================
+          // --- LOGIC TỰ ĐỘNG HÓA LƯU TRẠM XUỐNG DATABASE ---
           try {
             const stationsToSave = [];
-
-            // 1. Gộp trạm trung chuyển Hub chặng giữa kèm tìm bưu cục KML gần nhất
             hubOnRouteList.forEach((hub, idx) => {
               let nearestKmlToHub = null;
               let minDistanceSq = Infinity;
-
               if (rawPostOffices.length > 0) {
                 rawPostOffices.forEach(office => {
                   const oLat = parseFloat(office.location?.lat || office.latitude || 0);
@@ -351,7 +363,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
                   }
                 });
               }
-
               stationsToSave.push({
                 station_id: `HUB_${order?.ma_don_hang || Date.now()}_${idx + 1}`,
                 name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
@@ -365,7 +376,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               });
             });
 
-            // 2. Gộp bưu cục Last Mile chuẩn xác tên từ file KML
             if (lastMileLat && lastMileLng) {
               stationsToSave.push({
                 station_id: optimalLastMileOffice?.id || 'LAST_MILE_GEN',
@@ -380,7 +390,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
               });
             }
 
-            // 3. Đẩy lên API lưu vào Database
             const currentOrderId = order?.id || order?._id;
             if (stationsToSave.length > 0 && currentOrderId) {
               await orderApi.post('/orders/shipping/save-route-stations', {
@@ -388,12 +397,8 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
                 ma_don_hang: order.ma_don_hang,
                 stations: stationsToSave
               });
-              console.log("📥 Đã tự động lưu lộ trình chuẩn bám đường bộ vào bảng logs.");
             }
-          } catch (saveErr) {
-            console.error("Lỗi đồng bộ trạm bưu cục:", saveErr);
-          }
-          // =========================================================================
+          } catch (saveErr) {}
 
           setRouteInfo({
             distanceKm: apiCalcDistance > 0 ? apiCalcDistance : parseFloat((route.distance / 1000).toFixed(1)),
@@ -417,19 +422,9 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     return () => { isMounted = false; clearTimeout(timeoutId); };
   }, [isOpen, order]);
 
-  useEffect(() => {
-    return () => {
-      if (leafletMapInstance.current) {
-        leafletMapInstance.current.remove();
-        leafletMapInstance.current = null;
-        routingLayer.current = null;
-      }
-    };
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
-  const items = order?.items || [];
+  const items = order?.items || order?.danh_sach_san_pham || [];
   const groupedSidebarItemsMap = {};
   
   items.forEach((item) => {
@@ -623,7 +618,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         {/* Footer */}
         <div className="p-4 bg-white border-t flex justify-between items-center text-xs shrink-0 text-slate-400 font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={16} className="text-[#006c49]"/> Đã sửa lỗi mất bưu cục phát chặng cuối: Hiển thị bưu cục Hub chặng và bưu cục phát chuẩn xác uốn lượn Quốc lộ VN.
+            <ShieldCheck size={16} className="text-[#006c49]"/> Đã đồng bộ cấu trúc hiển thị ảnh đại diện thật của người dùng tại điểm chốt nhận hàng trên bản đồ số liên thông chốt chặn bất đồng bộ thành công.
           </span>
         </div>
       </div>
