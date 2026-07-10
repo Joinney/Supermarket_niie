@@ -10,7 +10,7 @@ import {
   cancelOrder,
   getPostOffices,
   testReadKml,
-  getOrderTrackingLogs, // 🌟 ĐÃ CẬP NHẬT: Thay thế saveRouteStations sang hàm truy vấn SELECT
+  getOrderTrackingLogs, // 🌟 Đã đồng bộ chuẩn xác với Controller truy vấn SELECT
   calculateShipping 
 } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js'; 
@@ -30,7 +30,7 @@ router.post('/shipping/calc', calculateShipping);
 // 3. Lấy danh sách bưu cục GHN cho bản đồ (Xử lý dữ liệu KML động)
 router.post('/post-offices', getPostOffices);
 
-// 4. Tiếp nhận đặt hàng (Hỗ trợ Tự động hóa cấy lộ trình bưu cục vào DB khi khởi tạo)
+// 4. Tiếp nhận đặt hàng (Tự động hóa cấy lộ trình bưu cục vào DB khi khởi tạo)
 router.post('/place-order', protect, placeOrder);
 
 // 5. Lấy danh sách lịch sử đơn hàng cá nhân của người dùng đang đăng nhập
@@ -52,7 +52,7 @@ router.post('/internal/update-status', updateInternalOrderStatus);
 // 7. Thống kê số liệu đơn hàng cho Admin Dashboard (Tổng doanh thu, đơn trong ngày...)
 router.get('/admin/statistics', protect, getOrderStatistics); 
 
-// 8. Lấy danh sách toàn bộ đơn hàng phân trang, tìm kiếm và lọc cho Admin
+// 8. Lấy danh sách toàn bộ đơn hàng phân trang, tìm kiếm và lọc cho Admin (Tích hợp bóc vết trạm hiện tại)
 router.get('/admin/all-orders', protect, getAllOrdersAdmin); 
 
 // 9. Lấy chi tiết 1 đơn hàng kèm danh sách sản phẩm và thông tin khách hàng (Auth-Service)
@@ -66,7 +66,7 @@ router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder);
 // 🏁 ROUTE ĐỊNH TUYẾN LOGISTICS VÀ KIỂM THỬ (LOGISTICS ENDPOINTS)
 // ========================================================
 
-// 11. 🌟 TRUY VẤN LOGISTICS: Kết xuất mảng lộ trình bưu cục chặng giữa và chặng phát cuối từ DB lên bản đồ
+// 11. TRUY VẤN LOGISTICS: Kết xuất mảng lộ trình bưu cục chặng giữa và chặng phát cuối từ DB lên bản đồ
 router.get('/shipping/logs/:orderId', getOrderTrackingLogs);
 
 // 12. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc

@@ -124,7 +124,7 @@ const getShippingFee = async (req, res) => {
   }
 };
 
-// 2. Tiếp nhận đặt hàng (ĐỒNG BỘ 100% THUẬT TOÁN LOGISTICS TỪ FRONTEND ĐỂ GHI NHẬN VÀO DATABASE)
+// 2. Tiếp nhận đặt hàng (Tự động cấy lưu vết logs lộ trình chặng đơn hướng)
 const placeOrder = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -209,14 +209,11 @@ const placeOrder = async (req, res) => {
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công với ID:", order.id);
 
-    // =========================================================================
-    // 🚚 LUỒNG KHỚP NỐI 100% LOGIC ROUTING & MATCHING TRẠM TỪ FRONTEND REACT
-    // =========================================================================
+    // --- LUỒNG TỰ ĐỘNG HÓA TÍNH CHẶNG VÀ ĐỒNG BỘ TRẠM VÀO DATABASE ---
     try {
       const storeLat = 10.792622;
       const storeLng = 106.680172;
 
-      // [1] Khởi tạo bóc tách mạng lưới đồng bộ từ tệp KML địa chính quốc gia
       const kmlPath = path.resolve(new URL('.', import.meta.url).pathname, 'danh_sach_bc.kml');
       let rawPostOffices = [];
       if (fs.existsSync(kmlPath)) {
@@ -224,7 +221,6 @@ const placeOrder = async (req, res) => {
         rawPostOffices = parseKmlWithRegex(kmlContent);
       }
 
-      // [2] Thực hiện khớp nối ma trận tìm trạm chặng phát cuối (Last-Mile cận đích)
       let optimalLastMileOffice = null;
       let lastMileLat = userLatNum;
       let lastMileLng = userLngNum;
@@ -252,7 +248,6 @@ const placeOrder = async (req, res) => {
         lastMileName = optimalLastMileOffice.name || "Bưu cục chặng cuối DemiMart Express";
       }
 
-      // [3] Thiết lập mảng Waypoints định tuyến chặng trục OSRM trùng khớp hoàn toàn điều kiện vùng miền của Frontend
       let waypoints = [`${storeLng},${storeLat}`];
       const isTayNguyenZone = userLngNum < 108.2 && userLatNum > 11.5 && userLatNum < 15.0;
 
@@ -274,72 +269,65 @@ const placeOrder = async (req, res) => {
       }
       waypoints.push(`${userLngNum},${userLatNum}`);
 
-      // [4] Gọi OSRM phân tích hình học chặng trục để trích tách Hub
       const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
       const routeRes = await axios.get(osrmUrl);
       
       if (routeRes.data?.code === "Ok") {
         const routeGeo = routeRes.data.routes[0];
-        const coordinates = routeGeo.geometry.coordinates; // Mảng [lng, lat] từ OSRM
+        const coordinates = routeGeo.geometry.coordinates;
 
         let stationsToSave = [];
 
-        // Trích xuất chính xác 2 mốc Hub chặng giữa tại tỉ lệ hình học 33% và 66%
-        // Trích xuất thông tin 2 Trạm trung chuyển hành trình (33% và 66%)
-          if (coordinates.length > 15) {
-            const distributionRatios = [0.33, 0.66];
-            distributionRatios.forEach((ratio, idx) => {
-              const targetIndex = Math.floor(coordinates.length * ratio);
-              if (coordinates[targetIndex]) {
-                const nodeCoord = coordinates[targetIndex]; // [lng, lat]
-                
-                // Quét và "mượn" thông tin địa chính gần mốc hình học này nhất
-                let nearestKmlToHub = null;
-                let minHubDistSq = Infinity;
-                rawPostOffices.forEach(office => {
-                  const distSq = ((office.location.lat - nodeCoord[1]) ** 2) + ((office.location.lng - nodeCoord[0]) ** 2);
-                  if (distSq < minHubDistSq) {
-                    minHubDistSq = distSq;
-                    nearestKmlToHub = office;
-                  }
-                });
+        if (coordinates.length > 15) {
+          const distributionRatios = [0.33, 0.66];
+          distributionRatios.forEach((ratio, idx) => {
+            const targetIndex = Math.floor(coordinates.length * ratio);
+            if (coordinates[targetIndex]) {
+              const nodeCoord = coordinates[targetIndex];
+              
+              let nearestKmlToHub = null;
+              let minHubDistSq = Infinity;
+              rawPostOffices.forEach(office => {
+                const distSq = ((office.location.lat - nodeCoord[1]) ** 2) + ((office.location.lng - nodeCoord[0]) ** 2);
+                if (distSq < minHubDistSq) {
+                  minHubDistSq = distSq;
+                  nearestKmlToHub = office;
+                }
+              });
 
-                stationsToSave.push({
-                  station_id: `HUB_${order.ma_don_hang}_${idx + 1}`,
-                  // 🌟 SỬA ĐỔI TÊN: Chỉ đính kèm số thứ tự (1) hoặc (2) dựa vào idx
-                  station_name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
-                  tinh_thanh: nearestKmlToHub?.provinceName || '',
-                  quan_huyen: nearestKmlToHub?.districtName || '',
-                  phuong_xa: nearestKmlToHub?.wardName || '',
-                  so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || '',
-                  station_lat: nodeCoord[1],
-                  station_lng: nodeCoord[0],
-                  station_type: 'HUB',
-                  action_type: 'TRUNG_CHUYEN',
-                  trang_thai_hien_thi: 'Đã qua trạm trung chuyển'
-                });
-              }
-            });
-          }
+              stationsToSave.push({
+                station_id: `HUB_${order.ma_don_hang}_${idx + 1}`,
+                station_name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
+                tinh_thanh: nearestKmlToHub?.provinceName || '',
+                quan_huyen: nearestKmlToHub?.districtName || '',
+                phuong_xa: nearestKmlToHub?.wardName || '',
+                so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || '',
+                station_lat: nodeCoord[1],
+                station_lng: nodeCoord[0],
+                station_type: 'HUB',
+                action_type: 'TRUNG_CHUYEN',
+                trang_thai_hien_thi: 'Đã qua trạm trung chuyển'
+              });
+            }
+          });
+        }
 
-          // Thêm Trạm chặng cuối Last Mile phụ trách phân phối phát
-          if (optimalLastMileOffice) {
-            stationsToSave.push({
-              station_id: String(optimalLastMileOffice.id),
-              // 🌟 SỬA ĐỔI TÊN: Lấy chuẩn xác 100% trường tên từ tệp KML, không tự ý biến tấu chuỗi
-              station_name: String(optimalLastMileOffice.name),
-              tinh_thanh: String(optimalLastMileOffice.provinceName || ''),
-              quan_huyen: String(optimalLastMileOffice.districtName || ''),
-              phuong_xa: String(optimalLastMileOffice.wardName || ''),
-              so_nha_duong: String(optimalLastMileOffice.street || optimalLastMileOffice.address || ''),
-              station_lat: optimalLastMileOffice.location.lat,
-              station_lng: optimalLastMileOffice.location.lng,
-              station_type: 'LAST_MILE',
-              action_type: 'DIEU_PHOI_PHAT',
-              trang_thai_hien_thi: 'Đã cập bưu cục phát chặng cuối'
-            });
-          }
-        // [5] Thực thi Query chèn dữ liệu hàng loạt vào database PostgreSQL công khai
+        if (optimalLastMileOffice) {
+          stationsToSave.push({
+            station_id: String(optimalLastMileOffice.id),
+            station_name: String(optimalLastMileOffice.name),
+            tinh_thanh: String(optimalLastMileOffice.provinceName || ''),
+            quan_huyen: String(optimalLastMileOffice.districtName || ''),
+            phuong_xa: String(optimalLastMileOffice.wardName || ''),
+            so_nha_duong: String(optimalLastMileOffice.street || optimalLastMileOffice.address || ''),
+            station_lat: lastMileLat,
+            station_lng: lastMileLng,
+            station_type: 'LAST_MILE',
+            action_type: 'DIEU_PHOI_PHAT',
+            trang_thai_hien_thi: 'Đã cập bưu cục phát chặng cuối'
+          });
+        }
+
         const insertLogQuery = `
           INSERT INTO public.order_tracking_logs (
             order_id, ma_don_hang, station_id, station_name, 
@@ -368,12 +356,11 @@ const placeOrder = async (req, res) => {
           if (db.query) await db.query(insertLogQuery, queryParams);
           else await db.execute(insertLogQuery, queryParams);
         }
-        console.log(`[🚀 AUTOMATION ENGINE]: Đã tự động cấy lưu ${stationsToSave.length} trạm logistics đồng bộ 100% với frontend cho đơn #${order.ma_don_hang}`);
+        console.log(`[🚀 AUTOMATION ENGINE]: Đã tự động cấy lưu ${stationsToSave.length} trạm logistics.`);
       }
     } catch (logisticsErr) {
-      console.error("⚠️ Cảnh báo lỗi cấu trúc khi xử lý tự động hóa luồng logistics hành trình:", logisticsErr.message);
+      console.error("⚠️ Cảnh báo lỗi cấu trúc:", logisticsErr.message);
     }
-    // =========================================================================
 
     const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
     if (methodUpper !== 'COD' && methodUpper !== '') {
@@ -467,7 +454,7 @@ const getOrderStatistics = async (req, res) => {
   }
 };
 
-// 5. Lấy danh sách đơn hàng cho Admin
+// 5. Lấy danh sách đơn hàng admin phân trang
 const getAllOrdersAdmin = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -503,9 +490,34 @@ const getAllOrdersAdmin = async (req, res) => {
     const totalPages = Math.ceil(totalItems / limit);
 
     const dataSql = `
-      SELECT o.id, o.ma_don_hang, o.phuong_thuc_thanh_toan, o.trang_thai_thanh_toan, o.trang_thai_don_hang, o.tong_thanh_toan, o.ngay_tao,
-        (SELECT json_agg(json_build_object('product_name', oi.product_name, 'variant_name', oi.variant_name, 'quantity', oi.quantity, 'price', oi.price, 'image_url', oi.image_url)) FROM public.order_items oi WHERE oi.order_id = o.id) AS danh_sach_san_pham
-      FROM public.orders o ${whereClause} ORDER BY o.ngay_tao DESC LIMIT $${pIdx} OFFSET $${pIdx + 1};
+      SELECT 
+        o.id, 
+        o.ma_don_hang, 
+        o.phuong_thuc_thanh_toan, 
+        o.trang_thai_thanh_toan, 
+        o.trang_thai_don_hang, 
+        o.tong_thanh_toan, 
+        o.ngay_tao,
+        o.to_lat, o.to_lng,
+        COALESCE(
+          (
+            SELECT station_name 
+            FROM public.order_tracking_logs tl 
+            WHERE tl.order_id = o.id 
+            ORDER BY tl.id DESC 
+            LIMIT 1
+          ), 
+          'Đang chờ phân bổ trạm trục'
+        ) AS tram_hien_tai,
+        (
+          SELECT json_agg(json_build_object('product_name', oi.product_name, 'variant_name', oi.variant_name, 'quantity', oi.quantity, 'price', oi.price, 'image_url', oi.image_url)) 
+          FROM public.order_items oi 
+          WHERE oi.order_id = o.id
+        ) AS danh_sach_san_pham
+      FROM public.orders o 
+      ${whereClause} 
+      ORDER BY o.ngay_tao DESC 
+      LIMIT $${pIdx} OFFSET $${pIdx + 1};
     `;
 
     const dataParams = [...queryParams, limit, offset];
@@ -514,6 +526,7 @@ const getAllOrdersAdmin = async (req, res) => {
 
     return res.status(200).json({ success: true, orders, totalPages, currentPage: page, totalItems });
   } catch (err) {
+    console.error("🔥 Lỗi API getAllOrdersAdmin:", err.message);
     return res.status(500).json({ success: false, message: "Lỗi máy chủ khi lấy danh sách đơn hàng." });
   }
 };
@@ -530,14 +543,16 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-// 7. Lấy chi tiết đơn hàng cho Admin
+// 7. Lấy chi tiết đơn hàng cho Admin (🌟 ĐÃ SỬA: Đã select thêm to_lat, to_lng từ Database)
 const getOrderDetailAdmin = async (req, res) => {
   try {
     const { id } = req.params;
     const isNumber = /^\d+$/.test(id); 
+    
+    // 🌟 KHẮC PHỤC LỖI CHÍ MẠNG: Đã chèn thêm o.to_lat, o.to_lng vào câu lệnh SELECT SQL
     let orderSql = isNumber 
-      ? `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao FROM public.orders WHERE id = $1 LIMIT 1;`
-      : `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, ngay_tao FROM public.orders WHERE ma_don_hang = $1 LIMIT 1;`;
+      ? `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE id = $1 LIMIT 1;`
+      : `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE ma_don_hang = $1 LIMIT 1;`;
 
     const orderResult = db.query ? await db.query(orderSql, [isNumber ? Number(id) : id]) : await db.execute(orderSql, [isNumber ? Number(id) : id]);
     const order = orderResult.rows ? orderResult.rows[0] : orderResult[0];
@@ -630,7 +645,7 @@ const getPostOffices = async (req, res) => {
   }
 };
 
-// 10. Endpoint test Postman KML
+// 10. Endpoint test KML
 const testReadKml = async (req, res) => {
   try {
     const { district_name, province_name } = req.body;
@@ -650,7 +665,7 @@ const testReadKml = async (req, res) => {
   }
 };
 
-// 11. Tính toán cự cận địa lý cửa hàng hoạt động và chi phí
+// 11. Tính toán địa lý và chi phí
 const calculateShipping = async (req, res) => {
   try {
     const { userLat, userLng } = req.body;
@@ -669,11 +684,6 @@ const calculateShipping = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
-};
-
-// 12. Dummy API saveRouteStations
-const saveRouteStations = async (req, res) => {
-  return res.status(200).json({ success: true, message: "Hệ thống tự động hóa logistics chặng trục hoàn tất." });
 };
 
 function calcHaversine(lat1, lon1, lat2, lon2) {
@@ -698,23 +708,45 @@ const getOrderTrackingLogs = async (req, res) => {
       });
     }
 
-    // Câu lệnh SELECT sắp xếp theo id tăng dần để đảm bảo đúng thứ tự chặng chèn vào từ placeOrder
-    const selectQuery = `
-      SELECT 
-        id, order_id, ma_don_hang, station_id, station_name, 
-        tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
-        station_lat, station_lng, station_type, action_type, 
-        trang_thai_hien_thi, ngay_tao
-      FROM public.order_tracking_logs
-      WHERE order_id = $1
-      ORDER BY id ASC
-    `;
+    // Kiểm tra xem orderId truyền lên là mã đơn dạng chuỗi chữ (DMxxx) hay là ID số tăng dần (188)
+    const isMaDonHangStr = /^[A-Za-z]/.test(String(orderId).trim());
+
+    let selectQuery = "";
+    let queryParam = null;
+
+    if (isMaDonHangStr) {
+      // Nếu là chuỗi chữ (DM1783624998963), tìm theo cột ma_don_hang
+      selectQuery = `
+        SELECT 
+          id, order_id, ma_don_hang, station_id, station_name, 
+          tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
+          station_lat, station_lng, station_type, action_type, 
+          trang_thai_hien_thi, ngay_tao
+        FROM public.order_tracking_logs
+        WHERE ma_don_hang = $1
+        ORDER BY id ASC
+      `;
+      queryParam = String(orderId).trim();
+    } else {
+      // Nếu là số thuần túy (188), tìm theo cột order_id để tránh ép sai kiểu dữ liệu (Data Type Mismatch)
+      selectQuery = `
+        SELECT 
+          id, order_id, ma_don_hang, station_id, station_name, 
+          tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
+          station_lat, station_lng, station_type, action_type, 
+          trang_thai_hien_thi, ngay_tao
+        FROM public.order_tracking_logs
+        WHERE order_id = $1
+        ORDER BY id ASC
+      `;
+      queryParam = Number(orderId);
+    }
 
     let result;
     if (db.query) {
-      result = await db.query(selectQuery, [Number(orderId)]);
+      result = await db.query(selectQuery, [queryParam]);
     } else {
-      result = await db.execute(selectQuery, [Number(orderId)]);
+      result = await db.execute(selectQuery, [queryParam]);
     }
 
     const logs = result.rows ? result.rows : result[0] || [];
@@ -734,9 +766,6 @@ const getOrderTrackingLogs = async (req, res) => {
   }
 };
 
-// ========================================================
-// ✅ KHỐI EXPORT TẬP TRUNG CHÍNH XÁC NHẤT CHO MODULE ROUTER
-// ========================================================
 export { 
   getShippingFee, 
   placeOrder, 
@@ -749,5 +778,5 @@ export {
   getPostOffices,
   testReadKml,
   calculateShipping,
-  getOrderTrackingLogs // 🌟 Đã đổi từ saveRouteStations sang hàm SELECT mới
+  getOrderTrackingLogs
 };
