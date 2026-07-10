@@ -8,7 +8,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { AuthContext } from "../../../context/AuthContext";
-import { authApi, orderApi } from "../../../api/axios";
+import { authApi, orderApi, couponApi } from "../../../api/axios";
 
 export default function Tabvoucher() {
   const { user, getMembershipTier } = useContext(AuthContext);
@@ -37,13 +37,12 @@ export default function Tabvoucher() {
       try {
         // Tải 3 luồng dữ liệu song song cực nhanh
         const [couponRes, settingsRes, spentRes] = await Promise.all([
-          authApi.get("http://localhost:5007/api/coupons").catch(() => null),
-          authApi
-            .get("http://localhost:5001/api/auth/settings/vip")
-            .catch((err) => {
-              console.error("❌ Gọi API VIP lỗi:", err);
-              return null;
-            }),
+          couponApi.get("/").catch(() => null),
+
+          authApi.get("/auth/settings/vip").catch((err) => {
+            console.error("❌ Gọi API VIP lỗi:", err);
+            return null;
+          }),
           orderApi
             .get(`/orders/internal/user-spent/${user.id}`)
             .catch(() => null),

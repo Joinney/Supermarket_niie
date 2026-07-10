@@ -22,8 +22,8 @@ export const getCart = async (req, res) => {
       }
 
       try {
-        // Fallback: Gọi liên dịch vụ sang Product Service (Cổng 5002) nếu là bản ghi cũ chưa có mảng EAV
-        const response = await axios.get(`http://localhost:5002/api/products/variants/${item.variantId}`);
+        // 🌟 ĐÃ SỬA: Cập nhật endpoint liên dịch vụ sang Product Service (Cổng 5002) lên chuẩn v1
+        const response = await axios.get(`http://localhost:5002/api/v1/products/variants/${item.variantId}`);
         
         if (response.data) {
           const vData = response.data;
@@ -228,7 +228,10 @@ export const uploadPaymentProof = async (req, res) => {
     res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải ảnh." });
   }
 };
-// Thêm hàm này vào cuối file controllers/cartController.js của bạn
+
+// =========================================================================
+// 7. LẤY GIỎ HÀNG THEO USER ID (DANH CHO TRANG QUẢN TRỊ ADMIN VIEW)
+// =========================================================================
 export const getCartByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -247,8 +250,8 @@ export const getCartByUserId = async (req, res) => {
       }
 
       try {
-        // Fallback: Gọi liên dịch vụ sang Product Service (Cổng 5002)
-        const response = await axios.get(`http://localhost:5002/api/products/variants/${item.variantId}`);
+        // 🌟 ĐÃ SỬA: Cập nhật endpoint liên dịch vụ sang Product Service (Cổng 5002) lên chuẩn v1 cho cả luồng Admin
+        const response = await axios.get(`http://localhost:5002/api/v1/products/variants/${item.variantId}`);
         if (response.data) {
           const vData = response.data;
           return {

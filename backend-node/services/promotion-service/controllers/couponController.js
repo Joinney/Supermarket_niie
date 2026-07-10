@@ -90,7 +90,8 @@ export const validateCoupon = async (req, res) => {
         const minLifetimeSpent = Number(coupon.min_lifetime_spent);
         if (minLifetimeSpent > 0) {
             try {
-                const orderSvcRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/user-spent/${userId}`);
+                // 🌟 NÂNG CẤP V1: Đã thêm /api/v1/ vào đường dẫn gọi sang Order Service
+                const orderSvcRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/user-spent/${userId}`);
                 const totalSpent = Number(orderSvcRes.data?.total_spent || 0);
                 
                 if (totalSpent < minLifetimeSpent) {

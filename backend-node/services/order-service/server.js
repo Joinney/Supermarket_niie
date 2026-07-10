@@ -20,7 +20,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5174',
-  'https://demimart-fe.onrender.com' // 🌟 Cấp quyền cho tên miền Frontend chạy trên Render của bạn
+  'https://demimart-fe.onrender.com' 
 ];
 
 app.use(cors({

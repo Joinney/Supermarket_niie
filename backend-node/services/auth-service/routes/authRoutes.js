@@ -22,7 +22,7 @@ const router = express.Router();
  *         description: Service đang hoạt động rực rờng
  */
 router.get('/', (req, res) => {
-    res.json({ message: "Chào Demi, Auth Service đang hoạt động rực rỡ! 🚀" });
+    res.json({ message: "Chào Demi, Auth Service đang hoạt động rực rỡ! (v1) 🚀" });
 });
 
 /**
@@ -85,6 +85,7 @@ router.post('/signup', upload.single('avatar'), signup);
  *         description: Đăng nhập thành công
  */
 router.post('/signin', signin);
+router.post('/login', signin);
 
 /**
  * @swagger
@@ -109,6 +110,10 @@ router.post('/logout', logout);
  *         description: Cấp Access Token mới thành công
  */
 router.post('/refresh-token', refreshToken);
+
+// ==========================================
+// CÁC ROUTE NỘI BỘ VÀ ADMIN
+// ==========================================
 router.get('/internal/users', getAllInternalUsers);
 router.get('/buyers', getAllBuyers);
 router.get('/internal/users/role-group/:id', getUserRoleGroup);
@@ -120,4 +125,5 @@ router.get('/admin/statistics/customers', getCustomerStatistics);
 router.post('/admin/internal/users/:id/sync-tier', syncMembershipTier);
 router.get('/settings/vip', getVipSettings);
 router.put('/settings/vip', updateVipSettings);
+
 export default router;

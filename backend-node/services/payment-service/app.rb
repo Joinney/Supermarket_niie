@@ -1,10 +1,11 @@
 require 'sinatra'
+require 'sinatra/namespace'
 require 'json'
 require 'dotenv/load'
 require 'rubygems'
 require 'bundler/setup'
 
-# Load các gem mặc định từ Gemfile (Đã bao gồm swagger-blocks)
+# Load các gem mặc định từ Gemfile
 Bundler.require(:default)
 
 # Load cấu hình nội bộ hệ thống dữ liệu & tài liệu API
@@ -21,7 +22,7 @@ set :protection, :origin_whitelist => [
   'http://demi_order_service:5005', 
   'http://localhost:5173', 
   'http://localhost:5005',
-  'https://demimart-fe.onrender.com' # 🌟 THÊM MỚI: Cấp quyền cho tên miền Frontend chạy trên Render
+  'https://demimart-fe.onrender.com'
 ]
 
 # Cấu hình CORS xử lý chéo domain trực tiếp tầng HTTP của Sinatra
@@ -50,7 +51,6 @@ end
 # 🛡️ CẤU HÌNH PHÒNG VỆ VÀ NỚI LỎNG BẢO MẬT TẦNG GỐC APP.RB
 # ========================================================
 if ENV['PORT'] || ENV['RACK_ENV'] == 'production'
-  # Cho phép bỏ qua hoàn toàn các bộ lọc check host bảo mật của rack-protection khi chạy trên cloud
   set :protection, :except => [:host_authorization, :json_csrf, :remote_token, :http_origin]
 else
   set :protection, :except => [:json_csrf, :host_authorization, :remote_token]
@@ -68,9 +68,12 @@ else
 end
 
 # ========================================================
-# 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE
+# 🚀 ĐĂNG KÝ MODULE ROUTE CHO PAYMENT SERVICE (CHUẨN v1)
 # ========================================================
-use PaymentRoutes
+namespace '/api/v1' do
+  # Bọc toàn bộ các endpoint của PaymentRoutes vào tiền tố /api/v1
+  use PaymentRoutes
+end
 
 # ========================================================
 # 📜 ROUTE PHỤC VỤ TÀI LIỆU SWAGGER API (/docs)
@@ -88,7 +91,7 @@ get '/docs' do
     <html lang="vi">
     <head>
       <meta charset="UTF-8">
-      <title>Demi Mart Payment API Docs</title>
+      <title>Demi Mart Payment API Docs (v1)</title>
       <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
       <style>
         html { box-sizing: border-box; overflow-y: scroll; }
@@ -132,6 +135,7 @@ get '/health' do
   { 
     status: "OK", 
     service: "Demi Mart Payment Service",
+    version: "v1",
     message: "Hệ thống cổng thanh toán đang hoạt động xanh mướt! 🚀💳" 
   }.to_json
 end
@@ -203,10 +207,32 @@ get '/' do
     <body>
       <div class="container">
         <h1>Demi Mart Payment Service</h1>
-        <p>Hệ thống đang hoạt động xanh mướt! 🚀</p>
+        <p>Hệ thống thanh toán đang hoạt động xanh mướt (v1)! 🚀</p>
         <a href="/docs" class="btn-swagger">Vào Swagger xem API &rarr;</a>
       </div>
     </body>
     </html>
   HTML
+end
+
+# ========================================================
+# 🚨 XỬ LÝ LỖI 404 & 500 ĐỒNG BỘ TOÀN HỆ THỐNG
+# ========================================================
+not_found do
+  content_type :json
+  status 404
+  { 
+    success: false, 
+    message: "Route '#{request.path_info}' không tồn tại trên Demi Payment Service (v1)!" 
+  }.to_json
+end
+
+error do
+  content_type :json
+  status 500
+  { 
+    success: false, 
+    message: "Server thanh toán gặp sự cố nhỏ, check log nhé!", 
+    error: env['sinatra.error'].message 
+  }.to_json
 end

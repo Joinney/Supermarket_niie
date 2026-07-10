@@ -257,9 +257,9 @@ export const getUserDetail = async (req, res) => {
         let orders = [];
         let payments = [];
 
-        // 🌟 GỌI API SANG ORDER SERVICE THAY VÌ QUERY TRỰC TIẾP
+        // 🌟 ĐÃ SỬA: GỌI API SANG ORDER SERVICE BẰNG ĐƯỜNG DẪN v1
         try {
-            const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/user-orders/${id}`);
+            const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/user-orders/${id}`);
             if (orderRes.data && orderRes.data.success) {
                 const rawOrders = orderRes.data.data || [];
                 orders = rawOrders.map(order => ({
@@ -269,11 +269,11 @@ export const getUserDetail = async (req, res) => {
                     amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.tong_thanh_toan || 0).replace(/\s?₫/, ' VND')
                 }));
                 
-                // Nếu có mã đơn hàng, gọi tiếp sang Payment Service
+                // Nếu có mã đơn hàng, gọi tiếp sang Payment Service (Chuẩn v1)
                 const danhSachMaDonHang = rawOrders.map(o => o.ma_don_hang);
                 if (danhSachMaDonHang.length > 0) {
                     try {
-                        const paymentRes = await axios.post(`${PAYMENT_SERVICE_URL}/api/payments/internal/get-by-orders`, { orderIds: danhSachMaDonHang });
+                        const paymentRes = await axios.post(`${PAYMENT_SERVICE_URL}/api/v1/payments/internal/get-by-orders`, { orderIds: danhSachMaDonHang });
                         if (paymentRes.data && paymentRes.data.success) {
                             payments = (paymentRes.data.data || []).map(pay => {
                                 let statusFormatted = "THANH TOÁN LỖI";
@@ -363,7 +363,7 @@ export const updateUserDetail = async (req, res) => {
 };
 
 // ========================================================
-// 🌟 API 9: THỐNG KÊ KHÁCH HÀNG (SỬ DỤNG GIAO TIẾP HTTP CHUẨN)
+// 🌟 API 9: THỐNG KÊ KHÁCH HÀNG (SỬ DỤNG GIAO TIẾP HTTP CHUẨN v1)
 // ========================================================
 export const getCustomerStatistics = async (req, res) => {
     try {
@@ -377,9 +377,9 @@ export const getCustomerStatistics = async (req, res) => {
         let returnRate = "0.0";
         let topCustomers = [];
 
-        // 🌟 GỌI API SANG ORDER SERVICE THAY VÌ QUERY TRỰC TIẾP
+        // 🌟 ĐÃ SỬA: GỌI API SANG ORDER SERVICE ĐỂ TRÍCH XUẤT (Chuẩn v1)
         try {
-            const orderStatsRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/customer-stats`);
+            const orderStatsRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/customer-stats`);
             if (orderStatsRes.data && orderStatsRes.data.success) {
                 returnRate = orderStatsRes.data.return_rate;
                 const topSpenderData = orderStatsRes.data.top_spenders || [];
@@ -421,7 +421,7 @@ export const getCustomerStatistics = async (req, res) => {
 };
 
 // ========================================================
-// 🌟 API 10: TỰ ĐỘNG THĂNG HẠNG VIP ĐỘNG (ĐÃ NÂNG CẤP ĐỌC TỪ DB)
+// 🌟 API 10: TỰ ĐỘNG THĂNG HẠNG VIP ĐỘNG (CHUẨN v1)
 // ========================================================
 export const syncMembershipTier = async (req, res) => {
     const { id } = req.params;
@@ -431,10 +431,10 @@ export const syncMembershipTier = async (req, res) => {
             return res.status(200).json({ success: true, message: "Không phải Buyer, bỏ qua thăng hạng." });
         }
 
-        // 1. Lấy tổng chi tiêu của Khách từ Order Service
+        // 1. Lấy tổng chi tiêu của Khách từ Order Service (Chuẩn v1)
         let spent = 0;
         try {
-            const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/orders/internal/user-spent/${id}`);
+            const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/user-spent/${id}`);
             if (orderRes.data && orderRes.data.success) {
                 spent = Number(orderRes.data.total_spent || 0);
             }

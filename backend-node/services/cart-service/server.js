@@ -52,7 +52,7 @@ app.use(cors({
 }));
 
 // =========================================================================
-// 🔥 2. ĐẶP TAN LỖI TYPER.TEST BẰNG CUSTOM TYPE FILTER (VÁ LỖI VĨ NH VIỄN)
+// 🔥 2. ĐẶP TAN LỖI TYPER.TEST BẰNG CUSTOM TYPE FILTER (VÁ LỖI VĨNH VIỄN)
 // Đặt sau CORS để đảm bảo an toàn, chỉ lọc dữ liệu khi request thực sự có Body
 // =========================================================================
 app.use(bodyParser.json({
@@ -94,26 +94,58 @@ try {
 }
 
 // =========================================================================
-// 4. LOG DEBUG REQUEST VÀ ĐIỀU HƯỚNG SUB-ROUTES API
+// 4. LOG DEBUG REQUEST VÀ ĐIỀU HƯỚNG SUB-ROUTES API (CHUẨN v1)
 // =========================================================================
-app.use('/api/cart', (req, res, next) => {
+const v1Router = express.Router();
+
+v1Router.use('/cart', (req, res, next) => {
     console.log(`🚀 [Cart Request]: ${req.method} ${req.originalUrl}`);
     console.log(`📂 Content-Type Header:`, req.headers['content-type'] || 'none');
     next();
 }, cartRoutes);
 
-app.get('/', (req, res) => {
-    res.send('<h1>Demi Mart Cart Service is running!</h1>');
-});
+// 🌟 Gắn toàn bộ nhóm API Cart vào tiền tố /api/v1
+app.use('/api/v1', v1Router);
 
-app.use((req, res) => {
-    res.status(404).json({ message: "Endpoint not found" });
+// Health Check
+app.get('/', (req, res) => {
+    res.status(200).send(`
+        <div style="text-align: center; margin-top: 50px; font-family: sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
+            <h1 style="color: #006c49;">Demi Mart Cart Service</h1>
+            <p style="color: #64748b;">Hệ thống giỏ hàng đang hoạt động xanh mướt! 🛒🚀</p>
+            <div style="margin-top: 20px;">
+                <a href="/api-docs" style="background-color: #006c49; color: white; padding: 12px 24px; border-radius: 10px; font-weight: bold; text-decoration: none;">Vào Swagger xem API →</a>
+            </div>
+        </div>
+    `);
 });
 
 // =========================================================================
-// 5. KHỞI CHẠY SERVER DỊCH VỤ
+// 5. XỬ LÝ LỖI 404 & 500 (NÂNG CẤP BẮT ORIGINAL URL)
+// =========================================================================
+app.use((req, res) => {
+    res.status(404).json({ 
+        success: false, 
+        message: `Route '${req.originalUrl}' không tồn tại trên Demi Cart Service (v1)!` 
+    });
+});
+
+app.use((err, req, res, next) => {
+    console.error(`🔥 LỖI HỆ THỐNG TẠI ROUTE '${req.originalUrl}':`, err);
+    res.status(500).json({ 
+        success: false, 
+        message: "Server giỏ hàng gặp sự cố nhỏ, check log nhé!",
+        error: err.message || "Lỗi hệ thống không xác định"
+    });
+});
+
+// =========================================================================
+// 6. KHỞI CHẠY SERVER DỊCH VỤ
 // =========================================================================
 const PORT = process.env.PORT || 5003;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🛒 Cart Service running on port ${PORT}`);
+    console.log(`\n=========================================`);
+    console.log(`🛒 Cart Service Live: http://localhost:${PORT}`);
+    console.log(`📝 Swagger Docs:      http://localhost:${PORT}/api-docs`);
+    console.log(`=========================================\n`);
 });

@@ -110,29 +110,35 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 6. Đăng ký các mạch API
-app.use('/api/auth', authRoutes);
-app.use('/api/auth', forgotRoutes);
-app.use('/api/auth/google', googleRoutes);
+// 6. Đăng ký các mạch API theo chuẩn Versioning (v1)
+const v1Router = express.Router();
 
-console.log("Đang đăng ký profileRoutes...");
-app.use('/api/profile', profileRoutes);
+v1Router.use('/auth', authRoutes);
+v1Router.use('/auth', forgotRoutes);
+v1Router.use('/auth/google', googleRoutes);
+
+console.log("Đang đăng ký profileRoutes chuẩn v1...");
+v1Router.use('/profile', profileRoutes);
 
 // 🎯 HÀM ĐỊA CHÍNH CÔNG KHAI TUYỆT ĐỐI - ĐÓN ĐẦU TRƯỚC TIỀN TỐ TRUNG GIAN
-app.get('/api/addresses/locations/provinces', getProvincesProxy);
-app.get('/api/addresses/locations/districts', getDistrictsProxy);
-app.get('/api/addresses/locations/wards', getWardsProxy);
+v1Router.get('/addresses/locations/provinces', getProvincesProxy);
+v1Router.get('/addresses/locations/districts', getDistrictsProxy);
+v1Router.get('/addresses/locations/wards', getWardsProxy);
 
 // Đăng ký mạch quản lý địa chỉ có Token bảo mật
-app.use('/api/addresses', addressRoutes);
+v1Router.use('/addresses', addressRoutes);
+app.use('/api/v1', v1Router);
 
 // 7. Xử lý lỗi 404 & Lỗi hệ thống
 app.use((req, res) => {
-    res.status(404).json({ success: false, message: "Route này không tồn tại trên Demi Auth Service!" });
+    res.status(404).json({ 
+        success: false, 
+        message: `Route '${req.originalUrl}' không tồn tại trên Demi Auth Service (v1)!` 
+    });
 });
 
 app.use((err, req, res, next) => {
-    console.error('🔥 LỒI HỆ THỐNG CHI TIẾT:', err);
+    console.error(`🔥 LỖI HỆ THỐNG TẠI ROUTE '${req.originalUrl}':`, err);
     res.status(500).json({ 
         success: false, 
         message: "Server gặp sự cố nhỏ, check log nhé!",

@@ -126,20 +126,29 @@ class PaymentController
   end
 
   # ========================================================
-  # 🚀 HELPER NỘI BỘ: ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE QUA HTTP
+  # 🚀 HELPER NỘI BỘ: ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE QUA HTTP (ĐÃ CHUẨN v1)
   # ========================================================
   def self.sync_order_status_to_completed(ma_don_hang, phuong_thuc)
     begin
-      uri = URI("http://localhost:5005/api/orders/internal/update-status")
+      # 🌟 ĐÃ SỬA: Thêm /v1 vào đường dẫn gọi chéo sang Order Service
+      # Bạn nên dùng ENV cho URL để dễ thay đổi trong Docker
+      base_url = ENV['ORDER_SERVICE_URL'] || 'http://localhost:5005'
+      uri = URI("#{base_url}/api/v1/orders/internal/update-status")
+      
       req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/json')
-      req.body = { ma_don_hang: ma_don_hang, trang_thai_thanh_toan: 'completed', phuong_thuc: phuong_thuc }.to_json
+      req.body = { 
+        ma_don_hang: ma_don_hang, 
+        trang_thai_thanh_toan: 'completed', 
+        phuong_thuc: phuong_thuc 
+      }.to_json
       
       res = Net::HTTP.start(uri.hostname, uri.port) do |http|
         http.request(req)
       end
-      puts "🔄 Đồng bộ trạng thái đơn hàng sang Order-Service phản hồi: #{res.code}"
+      
+      puts "🔄 Đồng bộ trạng thái đơn hàng sang Order-Service (v1) phản hồi: #{res.code}"
     rescue => e
-      puts "⚠️ Cảnh báo: Không thể kết nối gọi API sang Order-Service để đồng bộ: #{e.message}"
+      puts "⚠️ Cảnh báo: Không thể kết nối gọi API sang Order-Service (v1) để đồng bộ: #{e.message}"
     end
   end
 end

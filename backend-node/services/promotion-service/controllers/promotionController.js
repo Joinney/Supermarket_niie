@@ -194,19 +194,17 @@ export const getActiveFlashSaleClient = async (req, res) => {
         `;
         const { rows: allItems } = await pool.query(itemsQuery, [promoIds]);
 
-        // 3. Gọi sang Product Service (ĐÃ BỌC TRY...CATCH RIÊNG ĐỂ CHỐNG SẬP)
+        // 3. Gọi sang Product Service 
         const variantIds = [...new Set(allItems.map(item => item.ma_bien_the))];
         const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:5002';
         
         let productDetails = [];
         try {
-            // Nếu call thành công thì lấy data
-            const productRes = await axios.post(`${PRODUCT_SERVICE_URL}/api/products/internal-variants`, {
-            variantIds: variantIds
+            const productRes = await axios.post(`${PRODUCT_SERVICE_URL}/api/v1/products/internal-variants`, {
+                variantIds: variantIds
             });
             productDetails = productRes.data.data || productRes.data || [];
         } catch (axiosErr) {
-            // NẾU PRODUCT SERVICE CHƯA CÓ API NÀY, CHỈ BÁO LỖI VÀNG VÀ BỎ QUA, KHÔNG LÀM SẬP API
             console.warn(`⚠️ Cảnh báo: Không thể lấy chi tiết sản phẩm từ Product Service (Mã lỗi: ${axiosErr.response?.status}). Sẽ dùng dữ liệu mặc định.`);
         }
 
@@ -214,7 +212,6 @@ export const getActiveFlashSaleClient = async (req, res) => {
             const itemsInPromo = allItems.filter(i => i.ma_khuyen_mai === promo.ma_khuyen_mai);
             
             const products = itemsInPromo.map(item => {
-                // Nếu call api product lỗi, pd sẽ rỗng và dùng dữ liệu fallback an toàn
                 const pd = productDetails.find(p => p.ma_bien_the === item.ma_bien_the) || {};
                 const tonKhoFlashSale = item.so_luong_gioi_han - item.da_ban;
 
@@ -223,7 +220,6 @@ export const getActiveFlashSaleClient = async (req, res) => {
                     ten_san_pham: pd.ten_san_pham || "Đang tải tên sản phẩm...",
                     hinh_anh_chinh: pd.hinh_anh_chinh || "",
                     
-                    // 🌟 ĐƯA GIA_BAN_LE RA NGOÀI CÙNG CẤP VỚI TÊN SẢN PHẨM Ở ĐÂY
                     gia_ban_le: pd.gia_ban_le || 0,
 
                     chi_tiet_bien_the: [{
@@ -256,7 +252,6 @@ export const getActiveFlashSaleClient = async (req, res) => {
 
         res.status(200).json({ success: true, data: resultData });
     } catch (error) {
-        // Lỗi này giờ chỉ nhảy vào nếu Database Promotion bị sập
         console.error("❌ Lỗi getActiveFlashSaleClient (Fatal):", error.message);
         res.status(500).json({ success: false, message: "Lỗi đồng bộ dữ liệu Khuyến mãi." });
     }

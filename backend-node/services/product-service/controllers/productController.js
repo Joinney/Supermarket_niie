@@ -23,53 +23,27 @@ const sanitizePagination = (pageInput, limitInput) => {
 export const getInternalVariants = async (req, res) => {
     try {
         const { variantIds } = req.body;
-
         if (!variantIds || !Array.isArray(variantIds) || variantIds.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Danh sách mã biến thể (variantIds) không được trống.' 
-            });
+            return res.status(400).json({ success: false, message: 'Danh sách mã biến thể không được trống.' });
         }
-
         const query = `
-            SELECT 
-                bt.ma_bien_the, 
-                bt.ma_san_pham, 
-                bt.ten_bien_the, 
-                bt.sku, 
-                bt.gia_ban_le,
-                bt.so_luong_ton, 
-                bt.trang_thai,
-                sp.ten_san_pham,
-                COALESCE(
-                    (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_bien_the = bt.ma_bien_the AND la_anh_chinh = true AND trang_thai = true LIMIT 1),
-                    (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = bt.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1)
-                ) AS hinh_anh_chinh,
-                COALESCE(
-                    (
-                        SELECT jsonb_object_agg(dmtt.ten_thuoc_tinh, gttt.gia_tri)
+            SELECT bt.ma_bien_the, bt.ma_san_pham, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.so_luong_ton, bt.trang_thai, sp.ten_san_pham,
+                COALESCE((SELECT duong_dan_url FROM public.media_san_pham WHERE ma_bien_the = bt.ma_bien_the AND la_anh_chinh = true AND trang_thai = true LIMIT 1),
+                         (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = bt.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1)) AS hinh_anh_chinh,
+                COALESCE((SELECT jsonb_object_agg(dmtt.ten_thuoc_tinh, gttt.gia_tri)
                         FROM public.chi_tiet_bien_the_thuoc_tinh cbtt
                         JOIN public.gia_tri_thuoc_tinh gttt ON cbtt.ma_gia_tri = gttt.ma_gia_tri
                         JOIN public.danh_muc_thuoc_tinh dmtt ON gttt.ma_thuoc_tinh = dmtt.ma_thuoc_tinh
-                        WHERE cbtt.ma_bien_the = bt.ma_bien_the
-                    ), '{}'::jsonb
-                ) AS tuy_chon
+                        WHERE cbtt.ma_bien_the = bt.ma_bien_the), '{}'::jsonb) AS tuy_chon
             FROM public.bien_the_san_pham bt
             JOIN public.san_pham sp ON bt.ma_san_pham = sp.ma_san_pham
-            WHERE bt.ma_bien_the = ANY($1::text[]) 
-              AND bt.trang_thai = true;
+            WHERE bt.ma_bien_the = ANY($1::text[]) AND bt.trang_thai = true;
         `;
-
         const { rows: variants } = await pool.query(query, [variantIds]);
-        
-        // 🌟 ĐÃ NÂNG CẤP: Trả về chuẩn cấu trúc { success: true, data: ... }
         res.status(200).json({ success: true, data: variants });
     } catch (error) {
         console.error('❌ Lỗi API getInternalVariants:', error.message);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Sự cố máy chủ khi truy xuất dữ liệu biến thể nội bộ.' 
-        });
+        res.status(500).json({ success: false, message: 'Sự cố máy chủ khi truy xuất dữ liệu biến thể nội bộ.' });
     }
 };
 
@@ -229,7 +203,7 @@ export const getAllProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 2. LẤY CHI TIẾT 1 SẢN PHẨM (PHÂN LUỒNG QUYỀN ADMIN / CLIENT)
+// 2. LẤY CHI TIẾT 1 SẢN PHẨM (ĐÃ CẬP NHẬT V1 CHO PROMOTION SERVICE)
 // =========================================================================
 export const getProductById = async (req, res) => {
     const { id } = req.params; 
@@ -237,35 +211,23 @@ export const getProductById = async (req, res) => {
 
     try {
         const productQuery = `
-            SELECT 
-                sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, 
-                sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the,
+            SELECT sp.ma_san_pham, sp.ma_dm_con, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao, sp.ngay_cap_nhat, sp.co_bien_the,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
-                
                 COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
                 COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat
-
             FROM public.san_pham sp
             LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
             WHERE sp.ma_san_pham = $1;
         `;
         const productResult = await pool.query(productQuery, [id]);
 
-        if (productResult.rows.length === 0) {
-            return res.status(404).json({ message: "Sản phẩm không tồn tại trong hệ thống!" });
-        }
+        if (productResult.rows.length === 0) return res.status(404).json({ message: "Sản phẩm không tồn tại!" });
 
         const product = productResult.rows[0];
-
-        if (role === 'client' && product.trang_thai === false) {
-            return res.status(404).json({ message: "Sản phẩm này đã ngừng kinh doanh hoặc đang tạm khóa." });
-        }
+        if (role === 'client' && product.trang_thai === false) return res.status(404).json({ message: "Sản phẩm đã ngừng kinh doanh." });
 
         const variantsQuery = `
-            SELECT 
-                bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai, bt.so_luong_ton,
-                dm.ten_thuoc_tinh, gt.gia_tri,
-                dv.ten_don_vi AS ten_don_vi
+            SELECT bt.ma_bien_the, bt.ten_bien_the, bt.sku, bt.gia_ban_le, bt.trang_thai, bt.so_luong_ton, dm.ten_thuoc_tinh, gt.gia_tri, dv.ten_don_vi 
             FROM public.bien_the_san_pham bt
             LEFT JOIN public.chi_tiet_bien_the_thuoc_tinh ct ON bt.ma_bien_the = ct.ma_bien_the
             LEFT JOIN public.gia_tri_thuoc_tinh gt ON ct.ma_gia_tri = gt.ma_gia_tri
@@ -280,65 +242,40 @@ export const getProductById = async (req, res) => {
 
         variantsResult.rows.forEach(row => {
             if (role === 'client' && row.trang_thai === false) return;
-
             if (!variantsMap[row.ma_bien_the]) {
                 variantsMap[row.ma_bien_the] = {
-                    ma_bien_the: row.ma_bien_the,
-                    ten_bien_the: row.ten_bien_the,
-                    sku: row.sku,
-                    gia_ban_le: Number(row.gia_ban_le),
-                    // ======================================
-                    // MẶC ĐỊNH LÀ KHÔNG CÓ FLASH SALE
-                    // ======================================
-                    gia_khuyen_mai: null, 
-                    is_flash_sale: false,
-                    
-                    so_luong_ton: row.so_luong_ton || 0,
-                    trang_thai: row.trang_thai, 
-                    thuoc_tinh: {},
-                    ten_don_vi: row.ten_don_vi || "Gói"
+                    ma_bien_the: row.ma_bien_the, ten_bien_the: row.ten_bien_the, sku: row.sku, gia_ban_le: Number(row.gia_ban_le),
+                    gia_khuyen_mai: null, is_flash_sale: false, so_luong_ton: row.so_luong_ton || 0, trang_thai: row.trang_thai, 
+                    thuoc_tinh: {}, ten_don_vi: row.ten_don_vi || "Gói"
                 };
             }
             if (row.ten_thuoc_tinh && row.gia_tri) {
                 variantsMap[row.ma_bien_the].thuoc_tinh[row.ten_thuoc_tinh] = row.gia_tri;
-                
-                if (!attributesRaw[row.ten_thuoc_tinh]) {
-                    attributesRaw[row.ten_thuoc_tinh] = new Set();
-                }
+                if (!attributesRaw[row.ten_thuoc_tinh]) attributesRaw[row.ten_thuoc_tinh] = new Set();
                 attributesRaw[row.ten_thuoc_tinh].add(row.gia_tri);
             }
         });
 
         let bien_the = Object.values(variantsMap);
 
-        // =========================================================================
-        // 🌟 BƯỚC NÂNG CẤP DÀNH CHO CLIENT: GỌI SANG PROMOTION SERVICE CHECK GIÁ
-        // =========================================================================
         if (role === 'client' && bien_the.length > 0) {
             const PROMOTION_SERVICE_URL = process.env.PROMOTION_SERVICE_URL || 'http://localhost:5007';
             
             const promotionPromises = bien_the.map(async (bt) => {
                 try {
-                    // ⚠️ QUAN TRỌNG: URL này phải khớp y hệt Route ở Promotion Service
-                    // Nếu bên kia bạn đặt router là /api/promotions thì để nguyên, nếu là /api/promotion thì bỏ chữ 's'
-                    const promoRes = await axios.post(`${PROMOTION_SERVICE_URL}/api/promotions/internal/check-variant-promotion`, {
+                    // 🌟 CẬP NHẬT V1: Đường dẫn gọi chéo lên chuẩn v1
+                    const promoRes = await axios.post(`${PROMOTION_SERVICE_URL}/api/v1/promotions/internal/check-variant-promotion`, {
                         ma_bien_the: bt.ma_bien_the
                     });
-                    console.log("✅ Dữ liệu giá nhận từ Promotion Service:", promoRes.data);
-                    const promoData = promoRes.data;
                     
+                    const promoData = promoRes.data;
                     if (promoData.success && promoData.is_flash_sale) {
                         const saleData = promoData.data;
-
                         bt.gia_goc = bt.gia_ban_le; 
                         bt.gia_ban_le = Number(saleData.gia_khuyen_mai);
                         bt.gia_khuyen_mai = Number(saleData.gia_khuyen_mai);
                         bt.is_flash_sale = true;
-                        
-                        // Đè trực tiếp tồn kho = tồn kho của sự kiện Sale
                         bt.so_luong_ton = Number(saleData.ton_kho_sale);
-                        
-                        // Đóng gói thong_tin_sale y như API danh mục để FE ProductCard dùng chung 1 logic
                         bt.thong_tin_sale = {
                             gia_khuyen_mai: Number(saleData.gia_khuyen_mai),
                             so_luong_gioi_han: Number(saleData.so_luong_gioi_han),
@@ -347,52 +284,28 @@ export const getProductById = async (req, res) => {
                         };
                     }
                 } catch (err) {
-                    console.error(`⚠️ Lỗi check giá Sale biến thể ${bt.ma_bien_the}:`, err.response?.data || err.message);
+                    console.error(`⚠️ Lỗi check giá Sale biến thể ${bt.ma_bien_the}:`, err.message);
                 }
                 return bt;
             });
 
-            // Chờ check xong giá của tất cả biến thể
             bien_the = await Promise.all(promotionPromises);
-            
-            // Tìm lại giá bán thấp nhất cho tổng sản phẩm
             let lowestPrice = product.gia_ban_thap_nhat;
             bien_the.forEach(bt => {
-                const finalPrice = bt.gia_ban_le; 
-                if (finalPrice < lowestPrice || lowestPrice === 0) {
-                    lowestPrice = finalPrice;
-                }
+                if (bt.gia_ban_le < lowestPrice || lowestPrice === 0) lowestPrice = bt.gia_ban_le;
             });
             product.gia_ban_thap_nhat = lowestPrice;
         }
 
         const attributes = Object.keys(attributesRaw).map((ten, index) => ({
-            id_nhom: index + 1,
-            ten_thuoc_tinh: ten,
-            gia_tri_khadung: Array.from(attributesRaw[ten])
+            id_nhom: index + 1, ten_thuoc_tinh: ten, gia_tri_khadung: Array.from(attributesRaw[ten]), selected: Array.from(attributesRaw[ten])[0]
         }));
 
-        const mediaQuery = `
-            SELECT ma_media, ma_bien_the, duong_dan_url, la_anh_chinh, loai_media, thoi_luong_video, trang_thai
-            FROM public.media_san_pham
-            WHERE ma_san_pham = $1;
-        `;
-        const mediaResult = await pool.query(mediaQuery, [id]);
-
-        const finalMedia = role === 'client' 
-            ? mediaResult.rows.filter(m => m.trang_thai === true) 
-            : mediaResult.rows;
-
-        res.status(200).json({
-            ...product,
-            attributes,
-            bien_the,
-            media: finalMedia
-        });
-
+        const mediaResult = await pool.query(`SELECT duong_dan_url, loai_media, thoi_luong_video, trang_thai FROM public.media_san_pham WHERE ma_san_pham = $1`, [id]);
+        
+        res.status(200).json({ ...product, attributes, bien_the, media: role === 'client' ? mediaResult.rows.filter(m => m.trang_thai) : mediaResult.rows });
     } catch (error) {
-        console.error("❌ Lỗi API getProductById:", error.message);
-        res.status(500).json({ error: "Lỗi hệ thống khi tìm chi tiết sản phẩm.", detail: error.message });
+        res.status(500).json({ error: "Lỗi hệ thống.", detail: error.message });
     }
 };
 
