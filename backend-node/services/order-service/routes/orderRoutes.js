@@ -6,6 +6,7 @@ import {
   getOrderStatistics, 
   getAllOrdersAdmin, 
   getMyOrders, 
+  getOrdersByUserAdmin,
   getOrderDetailAdmin, 
   cancelOrder,
   getPostOffices,
@@ -57,6 +58,9 @@ router.get('/admin/all-orders', protect, getAllOrdersAdmin);
 
 // 9. Lấy chi tiết 1 đơn hàng kèm danh sách sản phẩm và thông tin khách hàng (Auth-Service)
 router.get('/admin/orders/:id', protect, getOrderDetailAdmin); 
+
+// 9.1 Lấy danh sách đơn hàng theo user id (Admin) - để trang quản trị xem lịch sử đơn của 1 khách
+router.get('/admin/user-orders/:userId', protect, getOrdersByUserAdmin);
 
 // 10. Hủy đơn hàng đang chờ xử lý và kích hoạt hoàn lại số lượng vào kho sản phẩm
 router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder); 

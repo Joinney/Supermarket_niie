@@ -257,7 +257,7 @@ const Danhsachkhachhang = () => {
                 <th className="py-4 px-6">Liên hệ (Email)</th>
                 <th className="py-4 px-6 text-center">Số điện thoại</th>
                 <th className="py-4 px-6 text-center">Giới tính</th>
-                <th className="py-4 px-6 text-center">Hạng VIP</th>{" "}
+                <th className="py-4 px-6 text-center">Hạng VIP</th>
                 {/* 🌟 THÊM CỘT NÀY */}
                 <th className="py-4 px-6 text-center">Lần cuối truy cập</th>
                 <th className="py-4 px-6 text-center">Thao tác</th>

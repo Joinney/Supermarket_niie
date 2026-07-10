@@ -578,7 +578,20 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-// 7. Lấy chi tiết đơn hàng cho Admin
+// 6.1 Lấy lịch sử đơn hàng theo userId (Admin) — cho phép admin truy vấn lịch sử của bất kỳ user nào
+const getOrdersByUserAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) return res.status(400).json({ success: false, message: "Thiếu userId trong params." });
+    const orders = await Order.getByUserId(userId);
+    return res.status(200).json({ success: true, orders });
+  } catch (err) {
+    console.error("🔥 Lỗi API getOrdersByUserAdmin:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi lấy danh sách đơn hàng của khách." });
+  }
+};
+
+// 7. Lấy chi tiết đơn hàng cho Admin (🌟 ĐÃ SỬA: Đã select thêm to_lat, to_lng từ Database)
 const getOrderDetailAdmin = async (req, res) => {
   try {
     const { id } = req.params;
@@ -804,6 +817,7 @@ export {
   getOrderStatistics, 
   getAllOrdersAdmin, 
   getMyOrders, 
+  getOrdersByUserAdmin,
   getOrderDetailAdmin, 
   cancelOrder,
   getPostOffices,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
-import { authApi, cartApi } from "../../../api/axios";
+import { authApi, cartApi, orderApi } from "../../../api/axios";
 
 const Chitietkhachhang = () => {
   const { id } = useParams();
@@ -49,17 +49,81 @@ const Chitietkhachhang = () => {
           const userData = userResponse.data;
           const cartItems = cartResponse.data?.items || [];
 
+          // Thử gọi Order Service lấy các đơn hàng thực tế của user (Admin view)
+          let ordersForUser = [];
+          try {
+            const adminToken = localStorage.getItem("adminToken")
+              ? String(localStorage.getItem("adminToken"))
+                  .replace(/^"|"$/g, "")
+                  .trim()
+              : "";
+            const orderRes = await orderApi.get(
+              `/admin/user-orders/${userId}`,
+              {
+                headers: {
+                  Authorization: adminToken ? `Bearer ${adminToken}` : "",
+                },
+              },
+            );
+            if (orderRes.data?.success) {
+              ordersForUser = orderRes.data.orders || [];
+            }
+          } catch (orderErr) {
+            console.warn(
+              "Không lấy được danh sách đơn hàng của khách (Order Service):",
+              orderErr?.message || orderErr,
+            );
+            ordersForUser = userData.orders || [];
+          }
+
+          // Chuyển đổi dữ liệu đơn hàng về dạng hiển thị và tính tổng chi tiêu
+          const formattedOrders = (ordersForUser || []).map((o) => {
+            const ma = o.ma_don_hang || (o.id ? String(o.id) : "");
+            const date = o.ngay_tao
+              ? new Date(o.ngay_tao).toLocaleString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })
+              : o.date || "";
+            const status =
+              o.trang_thai_don_hang ||
+              o.trang_thai_thanh_toan ||
+              (o.status ? String(o.status) : "PENDING");
+            const amountNum =
+              Number(o.tong_thanh_toan || o.tong_thanh_toan || o.total || 0) ||
+              0;
+            const amountStr = amountNum
+              ? amountNum.toLocaleString("vi-VN") + "đ"
+              : o.amount || "0 đ";
+            return {
+              id: ma,
+              rawId: o.id,
+              date,
+              status,
+              amount: amountStr,
+              amountNumber: amountNum,
+              items: o.danh_sach_san_pham || o.items || [],
+            };
+          });
+
+          const totalSpendingNum = formattedOrders.reduce(
+            (s, it) => s + (Number(it.amountNumber) || 0),
+            0,
+          );
+
           // Gộp dữ liệu từ API thật
           setCustomer({
             ...userData,
             cart: cartItems,
-            // Nếu API thật chưa trả về các trường này, hãy để nó là giá trị mặc định trống, không lấy từ dữ liệu mẫu
-            total_orders: userData.orders
-              ? `${userData.orders.length} đơn`
+            total_orders: formattedOrders.length
+              ? `${formattedOrders.length} đơn`
               : "0 đơn",
-            total_spending: "0 VND", // Hoặc tính toán từ data thật
+            total_spending: totalSpendingNum
+              ? `${totalSpendingNum.toLocaleString("vi-VN")} đ`
+              : "0 đ",
             addresses: userData.addresses || [],
-            orders: userData.orders || [],
+            orders: formattedOrders,
             payments: userData.payments || [],
           });
         } else {
@@ -201,18 +265,20 @@ const Chitietkhachhang = () => {
     }, 0) || 0;
 
   const filteredModalOrders = (customer.orders || []).filter((order) => {
-    const matchesSearch = order.id
-      .toLowerCase()
-      .includes(orderSearch.toLowerCase());
+    const idStr = String(order.id || order.ma_don_hang || "").toLowerCase();
+    const matchesSearch = idStr.includes(
+      String(orderSearch || "").toLowerCase(),
+    );
     const matchesFilter =
       orderFilterStatus === "ALL" || order.status === orderFilterStatus;
     return matchesSearch && matchesFilter;
   });
 
   const filteredModalPayments = (customer.payments || []).filter((pay) => {
-    const matchesSearch = pay.id
-      .toLowerCase()
-      .includes(paymentSearch.toLowerCase());
+    const payIdStr = String(pay.id || "").toLowerCase();
+    const matchesSearch = payIdStr.includes(
+      String(paymentSearch || "").toLowerCase(),
+    );
     const matchesFilter =
       paymentFilterStatus === "ALL" || pay.status === paymentFilterStatus;
     return matchesSearch && matchesFilter;
