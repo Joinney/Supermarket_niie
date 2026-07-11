@@ -6,7 +6,6 @@ import {
   useMap,
   Marker,
   Polyline,
-  Popup,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css"; 
@@ -26,9 +25,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: iconShadow,
 });
 
-// =================================================================
-// CONFIGURATION: ĐƯỜNG DẪN CÁC ICON TRÊN BẢN ĐỒ (QUẢN LÝ TẬP TRUNG)
-// =================================================================
 const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2654/2654162.png"; 
 const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/5643764.png"; 
 const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; 
@@ -39,7 +35,6 @@ const LIVE_ANIMATION_TRUCK_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upl
 
 // Hình ảnh Xe máy Shipper giao hàng nội tỉnh hoặc chặng cuối nhà khách
 const LIVE_SHIPPER_MOTOR_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783716506/xemayshiper_zpydkt.png";
-// =================================================================
 
 function ChangeMapView({ bounds }) {
   const map = useMap();
@@ -126,24 +121,35 @@ export default function Chitiettrackingorder() {
   const [isArrivedAtStation, setIsArrivedAtStation] = useState(false);
   const [currentStationIndex, setCurrentStationIndex] = useState(-1);
   
-  const [visibleLogs, setVisibleLogs] = useState([]);
   const [isFullyDelivered, setIsFullyDelivered] = useState(false); 
   const [deliveredTime, setDeliveredTime] = useState("");
   const [isTruckVehicleMode, setIsTruckVehicleMode] = useState(true);
   const [speedMode, setSpeedMode] = useState("optimized"); 
 
   const [currentCoordIndex, setCurrentCoordIndex] = useState(0);
+  const [timeLogs, setTimeLogs] = useState({});
 
   const animationIndexRef = useRef(0);
   const simulationIntervalRef = useRef(null);
   const socketRef = useRef(null); 
+  const timelineScrollRef = useRef(null);
 
   const getSpeedStep = () => {
     if (speedMode === "fast") return 6;      
     return 3;                                
   };
 
-  // Đồng bộ lưu tọa độ tạm thời vào MongoDB để bên User kéo realtime dữ liệu mượt
+  const generateLogTime = (key, offsetMinutes = 0) => {
+    if (timeLogs[key]) return timeLogs[key];
+    const baseDate = orderDetail ? new Date(orderDetail.ngay_tao) : new Date();
+    baseDate.setMinutes(baseDate.getMinutes() + offsetMinutes);
+    const timeStr = baseDate.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' });
+    const dateStr = baseDate.toLocaleDateString("vi-VN").substring(0, 5);
+    const finalStr = `${dateStr} - ${timeStr}`;
+    setTimeLogs(prev => ({ ...prev, [key]: finalStr }));
+    return finalStr;
+  };
+
   const saveCurrentLocationToDB = async (lat, lng, stationIdx, coordIdx, statusOverride = null) => {
     if (!orderDetail) return;
     try {
@@ -162,7 +168,6 @@ export default function Chitiettrackingorder() {
     }
   };
 
-  // 🌟 THÊM MỚI HELPER: Gọi API ghi nhận dòng nhật ký quét trạm chính thức vào SQL bền vững
   const createNewOrderTrackingLogSQL = async (stationData, statusText) => {
     if (!orderDetail) return;
     try {
@@ -202,9 +207,9 @@ export default function Chitiettrackingorder() {
         ma_don_hang: orderDetail.ma_don_hang, coordinates: [finalPt[1], finalPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
       });
 
+      setIsTruckVehicleMode(false); // Giao xong ép về xe máy
       await saveCurrentLocationToDB(finalPt[0], finalPt[1], currentStationIndex, targetIdx, "🎉 Đã giao xong");
       
-      // 🌟 GHI LOG KHI NHẢY THẲNG GIAO XONG
       await createNewOrderTrackingLogSQL({
         station_name: "Địa chỉ khách hàng",
         station_lat: finalPt[0],
@@ -246,8 +251,6 @@ export default function Chitiettrackingorder() {
       });
 
       await saveCurrentLocationToDB(matchPt[0], matchPt[1], nextStationIdx, bestMatchIndex, "⚠️ Đã đến bưu cục");
-      
-      // 🌟 GHI LOG KHI BẤM NHẢY TRẠM ĐẾN BƯU CỤC KẾ
       await createNewOrderTrackingLogSQL(targetStation, `Đã quét mã nhập trạm thành công tại ${targetStation.station_name}`);
 
       if (isSimulating) {
@@ -256,15 +259,6 @@ export default function Chitiettrackingorder() {
       }
       setIsArrivedAtStation(true);
       setCurrentStationIndex(nextStationIdx);
-
-      setVisibleLogs(prev => {
-        if (prev.some(log => log.station_id === targetStation.station_id)) return prev;
-        return [...prev, {
-          ...targetStation,
-          scanTime: new Date().toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' }),
-          scanDate: new Date().toLocaleDateString("vi-VN")
-        }];
-      });
     } else {
       const now = new Date();
       const targetIdx = routeCoords.length - 1;
@@ -278,9 +272,9 @@ export default function Chitiettrackingorder() {
         ma_don_hang: orderDetail.ma_don_hang, coordinates: [endPt[1], endPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
       });
 
+      setIsTruckVehicleMode(false); // Chặng cuối giao xong ép về xe máy
       await saveCurrentLocationToDB(endPt[0], endPt[1], currentStationIndex, targetIdx, "🎉 Đã giao xong");
       
-      // 🌟 GHI LOG KHI NHẢY CHẶNG CUỐI THÀNH CÔNG
       await createNewOrderTrackingLogSQL({
         station_name: "Địa chỉ người nhận",
         station_lat: endPt[0],
@@ -342,6 +336,12 @@ export default function Chitiettrackingorder() {
     }
   }, [speedMode]);
 
+  useEffect(() => {
+    if (timelineScrollRef.current) {
+      timelineScrollRef.current.scrollTop = timelineScrollRef.current.scrollHeight;
+    }
+  }, [currentStationIndex, isArrivedAtStation, isFullyDelivered]);
+
   const startTruckSimulation = () => {
     if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
     setIsSimulating(true);
@@ -365,6 +365,7 @@ export default function Chitiettrackingorder() {
           await saveCurrentLocationToDB(currentCoord[0], currentCoord[1], currentStationIndex, currentIndex);
         }
 
+        // Logic kiểm tra xe máy / xe tải thực tế
         if (routeInfo.isDirectDelivery) {
           setIsTruckVehicleMode(false); 
         } else if (currentStationIndex >= stations.length - 1 && stations.length > 0) {
@@ -396,18 +397,7 @@ export default function Chitiettrackingorder() {
           });
 
           await saveCurrentLocationToDB(currentCoord[0], currentCoord[1], foundStationIdx, currentIndex, "⚠️ Đã đến bưu cục");
-          
-          // 🌟 GHI LOG KHI CHẠY SIMULATION CHẠM TRẠM BƯU CỤC TỰ ĐỘNG
           await createNewOrderTrackingLogSQL(targetStationLog, `Đã nhập trạm quét mã thành công tại bưu cục trung chuyển`);
-
-          setVisibleLogs(prev => {
-            if (prev.some(log => log.station_id === targetStationLog.station_id)) return prev;
-            return [...prev, {
-              ...targetStationLog,
-              scanTime: new Date().toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' }),
-              scanDate: new Date().toLocaleDateString("vi-VN")
-            }];
-          });
           return;
         }
 
@@ -419,6 +409,7 @@ export default function Chitiettrackingorder() {
         setTruckPosition(endPt);
         setIsSimulating(false);
         setIsFullyDelivered(true);
+        setIsTruckVehicleMode(false); // Giao xong ép về xe máy
         setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
         
         socketRef.current.emit("send_truck_location", {
@@ -426,8 +417,6 @@ export default function Chitiettrackingorder() {
         });
 
         await saveCurrentLocationToDB(endPt[0], endPt[1], currentStationIndex, routeCoords.length - 1, "🎉 Đã giao xong");
-        
-        // 🌟 GHI LOG KHI CHẠY SIMULATION TỚI ĐÍCH CUỐI CÙNG
         await createNewOrderTrackingLogSQL({
           station_name: "Địa chỉ người nhận",
           station_lat: endPt[0],
@@ -440,7 +429,12 @@ export default function Chitiettrackingorder() {
     }, 25);
   };
 
-  const handleConfirmArrival = () => {
+  const handleConfirmArrival = async () => {
+    if (currentStationIndex >= 0 && currentStationIndex < stations.length) {
+      const currentStation = stations[currentStationIndex];
+      await createNewOrderTrackingLogSQL(currentStation, `Đã làm thủ tục xuất bưu cục - Rời kho vận chuyển`);
+    }
+    
     setIsArrivedAtStation(false); 
     animationIndexRef.current += 5; 
     setCurrentCoordIndex(animationIndexRef.current);
@@ -508,14 +502,6 @@ export default function Chitiettrackingorder() {
       }
       setStations(uniqueStations);
 
-      // Đẩy ngược danh sách logs đã quét lưu ở SQL lên cây Timeline hiển thị bên trái của Admin
-      const historicalLogs = rawLogs.filter(log => log.station_id !== "DIRECT_STORE_HQ").map(log => ({
-        ...log,
-        scanDate: new Date(log.ngay_tao).toLocaleDateString("vi-VN"),
-        scanTime: new Date(log.ngay_tao).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })
-      }));
-      setVisibleLogs(historicalLogs);
-
       let waypoints = [`${storeLng},${storeLat}`];
       
       if (!hasDirectLog) {
@@ -533,6 +519,10 @@ export default function Chitiettrackingorder() {
         const coordinates = routeData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
         setRouteCoordinates(coordinates);
 
+        // 🌟 KHU VỰC ĐÃ CẬP NHẬT: Định hình chính xác xe máy hay xe tải khi load lại trang
+        let localStationIdx = orderMainData.current_station_index || -1;
+        let isDeliveredFromDB = orderMainData.status_text && (orderMainData.status_text.includes("giao xong") || orderMainData.status_text.includes("thành công"));
+
         if (orderMainData.current_coord_index !== undefined && orderMainData.current_coord_index !== null) {
           const savedIndex = Math.min(orderMainData.current_coord_index, coordinates.length - 1);
           
@@ -542,14 +532,15 @@ export default function Chitiettrackingorder() {
           setFocusLocation(coordinates[savedIndex]);
           
           if (orderMainData.current_station_index !== undefined) {
-            setCurrentStationIndex(orderMainData.current_station_index);
+            setCurrentStationIndex(localStationIdx);
           }
 
           if (orderMainData.status_text && orderMainData.status_text.includes("bưu cục")) {
             setIsArrivedAtStation(true);
           }
-          if (orderMainData.status_text && orderMainData.status_text.includes("giao xong")) {
+          if (isDeliveredFromDB) {
             setIsFullyDelivered(true);
+            setDeliveredTime(new Date(orderMainData.updated_at || Date.now()).toLocaleDateString("vi-VN") + " - " + new Date(orderMainData.updated_at || Date.now()).toLocaleTimeString("vi-VN", {hour: '2-digit', minute:'2-digit'}));
           }
         } else if (orderMainData.current_lat && orderMainData.current_lng) {
           setTruckPosition([orderMainData.current_lat, orderMainData.current_lng]);
@@ -571,8 +562,12 @@ export default function Chitiettrackingorder() {
         coordinates.forEach((pt) => bounds.extend(pt));
         setMapBounds(bounds);
 
-        if (hasDirectLog) setIsTruckVehicleMode(false);
-        else setIsTruckVehicleMode(true);
+        // ĐỒNG BỘ ĐIỀU KIỆN XE TẢI / XE MÁY SAU KHI RELOAD
+        if (hasDirectLog || isDeliveredFromDB || (localStationIdx >= uniqueStations.length - 1 && uniqueStations.length > 0)) {
+          setIsTruckVehicleMode(false); // Đưa về xe máy nếu giao hỏa tốc trực tiếp, đã giao xong hoặc đang ở chặng cuối
+        } else {
+          setIsTruckVehicleMode(true); // Các chặng trung chuyển lớn đi xe tải
+        }
 
         setRouteInfo({
           distanceKm: parseFloat((route.distance / 1000).toFixed(1)),
@@ -596,6 +591,107 @@ export default function Chitiettrackingorder() {
       if (socketRef.current) socketRef.current.disconnect();
     };
   }, [id]);
+
+  const renderDynamicTimeline = () => {
+    const listNodes = [];
+
+    // NODE 1: Tiếp nhận đơn hàng
+    listNodes.push({
+      title: "Đã tiếp nhận đơn hàng",
+      desc: "Kho tổng Store2Door - TP. Hồ Chí Minh",
+      badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
+      badgeColor: "emerald",
+      time: generateLogTime("tiep_nhan", 0),
+      isCompleted: true
+    });
+
+    // NODE 2: Rời kho xuất phát chặng đầu
+    if (currentStationIndex >= 0 || currentCoordIndex > 0) {
+      listNodes.push({
+        title: "Đã rời kho",
+        desc: "Vận chuyển đến trung tâm phân loại trung chuyển",
+        badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
+        badgeColor: "emerald",
+        time: generateLogTime("roi_kho_tong", 35),
+        isCompleted: true
+      });
+    }
+
+    // DUYỆT CÁC TRẠM THỰC TẾ ĐÃ VÀ ĐANG ĐI QUA
+    stations.forEach((station, idx) => {
+      if (idx < currentStationIndex) {
+        listNodes.push({
+          title: `Đã đến bưu cục`,
+          desc: `Kiện hàng cập bến an toàn tại: ${station.station_name}`,
+          badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
+          badgeColor: "emerald",
+          time: generateLogTime(`toi_tram_${idx}`, 60 + idx * 120),
+          isCompleted: true
+        });
+        listNodes.push({
+          title: `Đã rời kho`,
+          desc: `Vận chuyển từ bưu cục ${station.station_name} sang chặng kế tiếp`,
+          badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
+          badgeColor: "emerald",
+          time: generateLogTime(`roi_tram_${idx}`, 95 + idx * 120),
+          isCompleted: true
+        });
+      }
+      else if (idx === currentStationIndex) {
+        if (isArrivedAtStation) {
+          listNodes.push({
+            title: `Đã đến bưu cục`,
+            desc: `Kiện hàng cập bến tại: ${station.station_name}`,
+            badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
+            badgeColor: "emerald",
+            time: generateLogTime(`toi_tram_${idx}`, 60 + idx * 120),
+            isCompleted: true
+          });
+          
+          if (!isFullyDelivered) {
+            listNodes.push({
+              title: "Đang xử lý tại bưu cục",
+              desc: `Đang làm thủ tục điều phối xe trung chuyển rời ${station.station_name}`,
+              badge: "🚚 CHỜ XUẤT BƯU CỤC",
+              badgeColor: "amber",
+              time: "Hiện tại",
+              isCurrent: true
+            });
+          }
+        } else {
+          listNodes.push({
+            title: "Đang vận chuyển",
+            desc: `Xe đang di chuyển lưu thông quốc lộ đến trạm: ${station.station_name}`,
+            badge: "🚚 LIVE",
+            badgeColor: "amber",
+            time: "Hiện tại",
+            isCurrent: true,
+            isLive: true
+          });
+        }
+      }
+    });
+
+    if (isFullyDelivered) {
+      listNodes.push({
+        title: "Giao hàng thành công 🎉",
+        desc: "Kiện hàng đã được bàn giao tận tay khách hàng an toàn toàn vẹn.",
+        time: deliveredTime,
+        isEndNode: true,
+        isCompleted: true
+      });
+    } else if (currentStationIndex === stations.length - 1 && !isArrivedAtStation) {
+      listNodes.push({
+        title: "Đang giao hàng",
+        desc: "Bưu tá đang giao đến địa chỉ người nhận",
+        time: "Hiện tại",
+        isCurrent: true,
+        isLive: true
+      });
+    }
+
+    return listNodes;
+  };
 
   if (loading) {
     return (
@@ -630,65 +726,65 @@ export default function Chitiettrackingorder() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-base font-black text-slate-999">Lịch trình quét trạm hệ thống</h2>
+              <h2 className="text-base font-black text-slate-900">Lộ trình di chuyển</h2>
               <span className="text-xs text-slate-400 font-bold">Tổng hành trình: {routeInfo.distanceKm} km</span>
             </div>
 
-            <div className="relative border-l-2 border-dashed border-slate-200 ml-3 space-y-8 pb-4">
-              <div className="relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <span className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#006c49] ring-4 ring-emerald-50"></span>
-                <div className="flex-1">
-                  <h4 className="text-sm font-black text-slate-900">Đã tiếp nhận đơn hàng</h4>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">Kho tổng Store2Door - TP. Hồ Chí Minh</p>
-                  <div className="mt-1"><span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-[#006c49] text-[9px] font-black rounded uppercase border border-blue-100 tracking-wider">📦 Đã rời kho xuất phát</span></div>
-                </div>
-                <div className="text-right shrink-0 text-[11px] text-slate-400 font-bold whitespace-nowrap">
-                  {new Date(orderDetail.ngay_tao).toLocaleDateString("vi-VN")} - 08:30
-                </div>
-              </div>
+            <div 
+              ref={timelineScrollRef}
+              className="max-h-[380px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
+            >
+              <div className="relative border-l-2 border-slate-200 ml-3 space-y-8 pb-4 pt-2">
+                
+                {renderDynamicTimeline().map((node, index) => (
+                  <div key={index} className={`relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 ${node.isCurrent ? 'bg-amber-50/40 p-3 rounded-2xl border border-amber-100 border-dashed animate-fadeIn' : node.isEndNode ? 'bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 border-dashed animate-fadeIn' : 'animate-fadeIn'}`}>
+                    
+                    {node.isCompleted ? (
+                      <span className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#0a2540] ring-4 ring-slate-100"></span>
+                    ) : (
+                      <span className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-amber-500 ring-4 ring-amber-50"></span>
+                    )}
 
-              {routeInfo.isDirectDelivery ? (
-                <div className="relative pl-6">
-                  <span className="absolute -left-[7px] top-1 flex h-3 w-3 items-center justify-center rounded-full bg-amber-500 ring-4 ring-amber-50 animate-pulse"></span>
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-900">
-                        Luồng điều phối: Giao trực tiếp siêu tốc
+                    <div className="flex-1">
+                      <h4 className={`text-sm font-black ${node.isCurrent ? 'text-amber-600 flex items-center gap-1.5' : 'text-slate-900'}`}>
+                        {node.title} {node.isLive && <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black animate-pulse">LIVE</span>}
                       </h4>
-                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                        Trạng thái: Khách hàng nằm trong bán kính gần cửa hàng, bỏ qua các bưu cục gom hàng trung gian.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                stations.map((log, index) => (
-                  <div key={log.id || index} className="relative pl-6">
-                    <span
-                      className={`absolute -left-[7px] top-1 flex h-3 w-3 items-center justify-center rounded-full ${index === stations.length - 1 ? "bg-amber-500 ring-4 ring-amber-50 animate-pulse" : "bg-[#006c49] ring-4 ring-emerald-50"}`}
-                    ></span>
-                    <div className="flex justify-between items-start gap-4">
-                      <div>
-                        <h4 className="text-sm font-black text-slate-900">
-                          {log.station_name}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                          Khu vực: {log.phuong_xa} • {log.quan_huyen} • {log.tinh_thanh}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-[#006c49] text-[9px] font-black rounded uppercase border tracking-wider">
-                            {log.trang_thai_hien_thi}
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">{node.desc}</p>
+                      
+                      {node.badge && (
+                        <div className="mt-1">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-[#0a2540] text-[9px] font-black rounded border border-slate-200 uppercase tracking-wider`}>
+                            {node.badge}
                           </span>
                         </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[11px] text-slate-400 font-bold block">
-                          {new Date(log.ngay_tao).toLocaleDateString("vi-VN")}
-                        </span>
-                      </div>
+                      )}
                     </div>
+
+              {visibleLogs.map((log, index) => (
+                <div key={index} className="relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 animate-fadeIn">
+                  <span className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#006c49] ring-4 ring-emerald-50"></span>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-black text-slate-900">{log.station_name}</h4>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">Khu vực: {log.phuong_xa} • {log.quan_huyen} • {log.tinh_thanh}</p>
+                    <div className="mt-1"><span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-[#006c49] text-[9px] font-black rounded uppercase border border-emerald-100 tracking-wider">✓ Đã quét mã nhập trạm thành công</span></div>
                   </div>
-                ))
+                  <div className="text-right shrink-0 text-[11px] text-emerald-600 font-extrabold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                    <Clock size={10} /> {log.scanDate} - {log.scanTime}
+                  </div>
+                </div>
+              ))}
+
+              {isFullyDelivered && (
+                <div className="relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 border-dashed animate-fadeIn">
+                  <span className="absolute -left-[7px] top-4 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-600 text-white font-black text-[8px] ring-4 ring-emerald-100">✓</span>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-black text-emerald-900 flex items-center gap-1">Giao hàng thành công 🎉</h4>
+                    <p className="text-[11px] text-emerald-700 font-medium mt-0.5">Kiện hàng đã được bàn giao tận tay khách hàng an toàn toàn vẹn.</p>
+                  </div>
+                  <div className="text-right shrink-0 text-[11px] text-white font-black bg-emerald-600 px-2 py-1 rounded shadow-sm">
+                    {deliveredTime}
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -705,9 +801,9 @@ export default function Chitiettrackingorder() {
                 {isArrivedAtStation ? (
                   <button 
                     onClick={handleConfirmArrival}
-                    className="px-4 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-black rounded-md shadow animate-bounce cursor-pointer"
+                    className="px-4 py-1.5 bg-[#006c49] hover:bg-emerald-800 text-white text-[11px] font-black rounded-md shadow animate-bounce cursor-pointer"
                   >
-                    ✓ Xác nhận đã tới bưu cục (Bấm để đi tiếp)
+                    ✓ Xác nhận xe đi tiếp (Đã rời kho)
                   </button>
                 ) : (
                   <button 
@@ -715,7 +811,7 @@ export default function Chitiettrackingorder() {
                     disabled={isSimulating || isFullyDelivered}
                     className="px-4 py-1.5 bg-[#0a2540] hover:bg-[#1e3a5f] text-white text-[11px] font-black rounded-md shadow flex items-center gap-1 cursor-pointer disabled:opacity-40"
                   >
-                    {isFullyDelivered ? "✓ Hành trình đã hoàn tất" : animationIndexRef.current === 0 ? "▷ Khởi hành chuyến xe" : "▷ Tiếp tục chặng kế tiếp"}
+                    {isFullyDelivered ? "✓ Hành trình đã hoàn tất" : animationIndexRef.current === 0 ? "▷ Khởi hành chuyến xe" : "▷ Tiếp tục hành trình"}
                   </button>
                 )}
               </div>
@@ -750,9 +846,6 @@ export default function Chitiettrackingorder() {
                   <Zap size={12} /> Nhanh siêu tốc
                 </button>
               </div>
-            </div>
-            <div>
-              <button onClick={() => setFocusLocation(truckPosition)} className="flex items-center gap-1 px-3 py-1 bg-[#1a365d] text-white text-[10px] font-bold rounded cursor-pointer"><Navigation size={10} className="rotate-45" /> Theo dõi vị trí xe</button>
             </div>
           </div>
 
