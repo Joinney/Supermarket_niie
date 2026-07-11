@@ -5,6 +5,8 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import http from 'http'; // 🌟 THÊM MỚI
+import { Server } from 'socket.io'; // 🌟 THÊM MỚI
 import orderRoutes from './routes/orderRoutes.js';
 import { connectDB } from './configs/mongo/databasemg.js';
 
@@ -14,6 +16,37 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app); // 🌟 THÊM MỚI: Tạo HTTP Server bọc Express
+
+// === 🔌 CẤU HÌNH SOCKET.IO SERVER REALTIME HUB ===
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+io.on('connection', (socket) => {
+  // Client (User hoặc Admin) tham gia vào phòng riêng của mã đơn hàng
+  socket.on('join_order_room', (ma_don_hang) => {
+    socket.join(ma_don_hang);
+  });
+
+  // Admin liên tục phát dữ liệu di chuyển thực địa chặng xe
+  socket.on('send_truck_location', (data) => {
+    const { ma_don_hang, coordinates, isArrived, isFullyDelivered, currentStationIndex } = data;
+    // Phát quảng bá đồng bộ ngay cho User nằm trong Room đó
+    socket.to(ma_don_hang).emit('receive_truck_location', {
+      coordinates,
+      isArrived,
+      isFullyDelivered,
+      currentStationIndex,
+      updatedAt: new Date()
+    });
+  });
+
+  socket.on('disconnect', () => {});
+});
 
 // === 🛡️ CẤU HÌNH CORS ĐỒNG BỘ MÔI TRƯỜNG ===
 const allowedOrigins = [
@@ -25,7 +58,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Cho phép các request không có origin (như Postman hoặc các service gọi nội bộ qua mạng của Render)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -36,8 +68,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
-
-// 🚨 ĐÃ XÓA app.options('*', cors()) Ở ĐÂY ĐỂ TRÁNH LỖI CRASH DOCKER 🚨
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -144,18 +174,11 @@ const swaggerUiOptions = {
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, swaggerUiOptions));
 
-// =========================================================================
-// 🌟 ĐĂNG KÝ MODULE ROUTE THEO CHUẨN VERSIONING (v1)
-// =========================================================================
+// === 🌟 ĐĂNG KÝ MODULE ROUTE THEO CHUẨN VERSIONING (v1) ===
 const v1Router = express.Router();
-// Mount order routes directly under /api/v1 so frontend requests to
-// /api/v1/admin/... match the backend endpoints (frontend expects that prefix).
 v1Router.use('/', orderRoutes);
 
-// Bọc toàn bộ các endpoint của Order vào tiền tố /api/v1
 app.use('/api/v1', v1Router);
-// Đồng bộ thêm alias để chấp nhận frontend cũ hoặc đường dẫn có hậu tố `/orders`
-// (ví dụ: `/api/v1/orders/admin/all-orders`) — giữ tương thích ngược.
 app.use('/api/v1/orders', orderRoutes);
 
 app.get('/', (req, res) => {
@@ -174,9 +197,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Order Service is running smoothly on v1' });
 });
 
-// =========================================================================
-// 🚨 XỬ LÝ LỖI 404 & 500 TẬP TRUNG
-// =========================================================================
+// === 🚨 XỬ LÝ LỖI 404 & 500 TẬP TRUNG ===
 app.use((req, res) => {
   res.status(404).json({ 
       success: false, 
@@ -195,9 +216,10 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5005;
 
 connectDB().then(() => {
-  app.listen(PORT, '0.0.0.0', () => { // Đảm bảo bind IP 0.0.0.0 cho Docker
+  // Thay app.listen thành server.listen để kích hoạt Websocket Hub
+  server.listen(PORT, '0.0.0.0', () => { 
     console.log(`\n=========================================`);
-    console.log(`✅ Order Service Live: http://localhost:${PORT}`);
+    console.log(`✅ Order Service Live + Socket.io Active: http://localhost:${PORT}`);
     console.log(`🔗 API V1 URL:       http://localhost:${PORT}/api/v1`);
     console.log(`📝 Swagger Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`=========================================\n`);

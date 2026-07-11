@@ -12,6 +12,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css"; 
 import { orderApi } from "../../../api/axios";
 import { Loader2, Navigation, Clock, Zap, FastForward, Compass } from "lucide-react";
+import io from "socket.io-client"; 
 
 // --- KHẮC PHỤC LỖI MẤT ASSET ICON MARKER CỦA LEAFLET KHI BUILD VITE ---
 import iconMarker from "leaflet/dist/images/marker-icon.png";
@@ -28,10 +29,16 @@ L.Icon.Default.mergeOptions({
 // =================================================================
 // CONFIGURATION: ĐƯỜNG DẪN CÁC ICON TRÊN BẢN ĐỒ (QUẢN LÝ TẬP TRUNG)
 // =================================================================
-const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/7542/7542670.png"; // Icon xe tải chặng cuối
-const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/5643764.png"; // Icon điều phối màn hình chặng đầu
-const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; // Icon kho tổng xuất phát
-const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; // Icon Hub trung chuyển liên tỉnh
+const TRUCK_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2654/2654162.png"; 
+const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/5643764.png"; 
+const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; 
+const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; 
+
+// Hình ảnh xe tải chạy đường trục chặng dài liên tỉnh
+const LIVE_ANIMATION_TRUCK_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783715202/xedemimart_s5pu46.png";
+
+// Hình ảnh Xe máy Shipper giao hàng nội tỉnh hoặc chặng cuối nhà khách
+const LIVE_SHIPPER_MOTOR_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783716506/xemayshiper_zpydkt.png";
 // =================================================================
 
 function ChangeMapView({ bounds }) {
@@ -122,15 +129,15 @@ export default function Chitiettrackingorder() {
   const [visibleLogs, setVisibleLogs] = useState([]);
   const [isFullyDelivered, setIsFullyDelivered] = useState(false); 
   const [deliveredTime, setDeliveredTime] = useState("");
-
-  // STATE QUẢN LÝ LOẠI XE ĐANG ĐƯỢC CHẠY TRÊN BẢN ĐỒ (TRUE = XE TẢI, FALSE = XE MÁY SHIPPER)
   const [isTruckVehicleMode, setIsTruckVehicleMode] = useState(true);
-
-  // STATES QUẢN LÝ CHẾ ĐỘ TỐC ĐỘ DI CHUYỂN
   const [speedMode, setSpeedMode] = useState("optimized"); 
+
+  // 🌟 STATE THEO DÕI INDEX ĐỂ RE-RENDER ĐƯỜNG ĐI DI ĐỘNG THEO XE
+  const [currentCoordIndex, setCurrentCoordIndex] = useState(0);
 
   const animationIndexRef = useRef(0);
   const simulationIntervalRef = useRef(null);
+  const socketRef = useRef(null); 
 
   const getSpeedStep = () => {
     if (speedMode === "fast") return 6;      
@@ -140,13 +147,18 @@ export default function Chitiettrackingorder() {
   const jumpToNextStation = () => {
     if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
 
-    // 🌟 NẾU ĐƠN TRONG TỈNH (GIAO THẲNG): Nhảy một phát tới thẳng nhà khách luôn
     if (routeInfo.isDirectDelivery) {
       const now = new Date();
       animationIndexRef.current = routeCoords.length - 1;
-      setTruckPosition(routeCoords[routeCoords.length - 1]);
-      setFocusLocation(routeCoords[routeCoords.length - 1]);
+      setCurrentCoordIndex(routeCoords.length - 1); 
+      const finalPt = routeCoords[routeCoords.length - 1];
+      setTruckPosition(finalPt);
+      setFocusLocation(finalPt);
       
+      socketRef.current.emit("send_truck_location", {
+        ma_don_hang: orderDetail.ma_don_hang, coordinates: finalPt, isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
+      });
+
       if (isSimulating) {
         clearInterval(simulationIntervalRef.current);
         setIsSimulating(false);
@@ -157,17 +169,13 @@ export default function Chitiettrackingorder() {
     }
 
     const nextStationIdx = currentStationIndex + 1;
-    
     if (nextStationIdx < stations.length) {
       const targetStation = stations[nextStationIdx];
-      const sLat = parseFloat(targetStation.station_lat);
-      const sLng = parseFloat(targetStation.station_lng);
-
       let bestMatchIndex = animationIndexRef.current;
       let minDistance = Infinity;
 
       for (let i = animationIndexRef.current; i < routeCoords.length; i++) {
-        const diff = Math.abs(routeCoords[i][0] - sLat) + Math.abs(routeCoords[i][1] - sLng);
+        const diff = Math.abs(routeCoords[i][0] - parseFloat(targetStation.station_lat)) + Math.abs(routeCoords[i][1] - parseFloat(targetStation.station_lng));
         if (diff < minDistance) {
           minDistance = diff;
           bestMatchIndex = i;
@@ -175,8 +183,14 @@ export default function Chitiettrackingorder() {
       }
 
       animationIndexRef.current = bestMatchIndex;
-      setTruckPosition(routeCoords[bestMatchIndex]);
-      setFocusLocation(routeCoords[bestMatchIndex]);
+      setCurrentCoordIndex(bestMatchIndex); 
+      const matchPt = routeCoords[bestMatchIndex];
+      setTruckPosition(matchPt);
+      setFocusLocation(matchPt);
+
+      socketRef.current.emit("send_truck_location", {
+        ma_don_hang: orderDetail.ma_don_hang, coordinates: matchPt, isArrived: true, isFullyDelivered: false, currentStationIndex: nextStationIdx
+      });
 
       if (isSimulating) {
         clearInterval(simulationIntervalRef.current);
@@ -191,14 +205,20 @@ export default function Chitiettrackingorder() {
           ...targetStation,
           scanTime: new Date().toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' }),
           scanDate: new Date().toLocaleDateString("vi-VN")
-            }];
-          });
+        }];
+      });
     } else {
       const now = new Date();
       animationIndexRef.current = routeCoords.length - 1;
-      setTruckPosition(routeCoords[routeCoords.length - 1]);
-      setFocusLocation(routeCoords[routeCoords.length - 1]);
+      setCurrentCoordIndex(routeCoords.length - 1); 
+      const endPt = routeCoords[routeCoords.length - 1];
+      setTruckPosition(endPt);
+      setFocusLocation(endPt);
       
+      socketRef.current.emit("send_truck_location", {
+        ma_don_hang: orderDetail.ma_don_hang, coordinates: endPt, isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
+      });
+
       if (isSimulating) {
         clearInterval(simulationIntervalRef.current);
         setIsSimulating(false);
@@ -210,11 +230,7 @@ export default function Chitiettrackingorder() {
 
   const createStationTextLabelIcon = (iconUrl, labelText, size = 36) => {
     return L.divIcon({
-      html: `
-        <div style="display: flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px;">
-          <img src="${iconUrl}" style="width: ${size}px; height: ${size}px; object-fit: contain; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));" />
-        </div>
-      `,
+      html: `<div style="display: flex; align-items: center; justify-content: center; width: ${size}px; height: ${size}px;"><img src="${iconUrl}" style="width: ${size}px; height: ${size}px; object-fit: contain; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.3));" /></div>`,
       className: "custom-station-clean-icon-marker",
       iconSize: [size, size],
       iconAnchor: [size / 2, size],
@@ -222,9 +238,7 @@ export default function Chitiettrackingorder() {
   };
 
   const createLiveTruckIcon = (widthPx = 64, heightPx = 64) => {
-    // 🌟 ĐÃ CẬP NHẬT: Tự động đổi asset ảnh dựa trên chế độ xe (Xe tải hoặc Xe máy Shipper)
     const currentVehicleImg = isTruckVehicleMode ? LIVE_ANIMATION_TRUCK_URL : LIVE_SHIPPER_MOTOR_URL;
-    
     return L.divIcon({
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; position: relative;">
@@ -261,7 +275,6 @@ export default function Chitiettrackingorder() {
 
   const startTruckSimulation = () => {
     if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
-    
     setIsSimulating(true);
     const stepSize = getSpeedStep(); 
     
@@ -273,22 +286,22 @@ export default function Chitiettrackingorder() {
         setTruckPosition(currentCoord);
         setFocusLocation(currentCoord);
 
-        // 🌟 LOGIC ĐỔI XE THÔNG MINH: Nếu đơn hàng trong tỉnh thì dùng luôn xe máy shipper ngay từ đầu
+        socketRef.current.emit("send_truck_location", {
+          ma_don_hang: orderDetail.ma_don_hang, coordinates: currentCoord, isArrived: false, isFullyDelivered: false, currentStationIndex: currentStationIndex
+        });
+
         if (routeInfo.isDirectDelivery) {
           setIsTruckVehicleMode(false); 
         } else if (currentStationIndex >= stations.length - 1 && stations.length > 0) {
-          setIsTruckVehicleMode(false); // Đơn ngoại tỉnh chuyển sang xe máy khi qua bưu cục phát chặng cuối
+          setIsTruckVehicleMode(false); 
         } else {
-          setIsTruckVehicleMode(true);  // Xe tải chạy đường trục chặng dài liên tỉnh
+          setIsTruckVehicleMode(true);  
         }
 
         let foundStationIdx = -1;
         for (let i = 0; i < stations.length; i++) {
           if (i <= currentStationIndex) continue; 
-          
-          const sLat = parseFloat(stations[i].station_lat);
-          const sLng = parseFloat(stations[i].station_lng);
-          
+          const sLat = parseFloat(stations[i].station_lat); const sLng = parseFloat(stations[i].station_lng);
           if (Math.abs(currentCoord[0] - sLat) < 0.004 && Math.abs(currentCoord[1] - sLng) < 0.004) {
             foundStationIdx = i;
             break;
@@ -302,6 +315,11 @@ export default function Chitiettrackingorder() {
           setCurrentStationIndex(foundStationIdx);
 
           const targetStationLog = stations[foundStationIdx];
+          
+          socketRef.current.emit("send_truck_location", {
+            ma_don_hang: orderDetail.ma_don_hang, coordinates: currentCoord, isArrived: true, isFullyDelivered: false, currentStationIndex: foundStationIdx
+          });
+
           setVisibleLogs(prev => {
             if (prev.some(log => log.station_id === targetStationLog.station_id)) return prev;
             return [...prev, {
@@ -313,13 +331,20 @@ export default function Chitiettrackingorder() {
           return;
         }
 
-        animationIndexRef.current += 3; 
+        animationIndexRef.current += stepSize; 
+        setCurrentCoordIndex(animationIndexRef.current); 
       } else {
         const now = new Date();
-        setTruckPosition(routeCoords[routeCoords.length - 1]);
+        const endPt = routeCoords[routeCoords.length - 1];
+        setTruckPosition(endPt);
         setIsSimulating(false);
         setIsFullyDelivered(true);
         setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
+        
+        socketRef.current.emit("send_truck_location", {
+          ma_don_hang: orderDetail.ma_don_hang, coordinates: endPt, isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
+        });
+
         clearInterval(simulationIntervalRef.current);
       }
     }, 25);
@@ -328,6 +353,7 @@ export default function Chitiettrackingorder() {
   const handleConfirmArrival = () => {
     setIsArrivedAtStation(false); 
     animationIndexRef.current += 5; 
+    setCurrentCoordIndex(animationIndexRef.current);
     startTruckSimulation(); 
   };
 
@@ -345,28 +371,8 @@ export default function Chitiettrackingorder() {
       if (orderRes.data?.success) {
         orderMainData = orderRes.data.data;
         setOrderDetail(orderMainData);
-
-        let finalAvatar = null;
-        if (orderMainData?.user_info) {
-          finalAvatar =
-            orderMainData.user_info.avatar ||
-            orderMainData.user_info.image_url ||
-            orderMainData.user_info.avatar_url ||
-            orderMainData.user_info.image ||
-            orderMainData.user_info.picture;
-        }
-
-        if (!finalAvatar) {
-          finalAvatar =
-            orderMainData?.avatar ||
-            orderMainData?.avatar_url ||
-            orderMainData?.image_url ||
-            orderMainData?.customer_avatar;
-        }
-
-        if (finalAvatar && typeof finalAvatar === "string" && finalAvatar.trim() !== "") {
-          setUserAvatarUrl(finalAvatar);
-        }
+        let finalAvatar = orderMainData?.user_info?.avatar_url;
+        if (finalAvatar) setUserAvatarUrl(finalAvatar);
       } else {
         throw new Error("Không lấy được dữ liệu cấu trúc gốc của đơn hàng.");
       }
@@ -430,17 +436,14 @@ export default function Chitiettrackingorder() {
         setRouteCoordinates(coordinates);
         setTruckPosition(coordinates[0]);
         animationIndexRef.current = 0;
+        setCurrentCoordIndex(0); 
 
         const bounds = L.latLngBounds([[storeLat, storeLng], [userLat, userLng]]);
         coordinates.forEach((pt) => bounds.extend(pt));
         setMapBounds(bounds);
 
-        // 🌟 ĐÃ CẬP NHẬT TRẠNG THÁI XE BAN ĐẦU: Nếu là đơn trong tỉnh thì ép hiển thị Xe máy Shipper ngay từ đầu
-        if (hasDirectLog) {
-          setIsTruckVehicleMode(false);
-        } else {
-          setIsTruckVehicleMode(true);
-        }
+        if (hasDirectLog) setIsTruckVehicleMode(false);
+        else setIsTruckVehicleMode(true);
 
         setRouteInfo({
           distanceKm: parseFloat((route.distance / 1000).toFixed(1)),
@@ -453,13 +456,17 @@ export default function Chitiettrackingorder() {
     } catch (err) {
       setError("Không thể nạp thông tin trục hành trình đường bộ OSRM.");
     } finally {
+      // 🌟 KHẮC PHỤC TRIỆT ĐỂ LỖI CÚ PHÁP CATCH/FINALLY GỐC Ở ĐÂY
       setLoading(false);
     }
   };
 
   useEffect(() => { 
     if (id) fetchTrackingDetail(); 
-    return () => { if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current); };
+    return () => { 
+      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current); 
+      if (socketRef.current) socketRef.current.disconnect();
+    };
   }, [id]);
 
   if (loading) {
@@ -467,6 +474,14 @@ export default function Chitiettrackingorder() {
       <div className="w-full min-h-screen flex flex-col items-center justify-center gap-2 bg-[#fafafa] text-[#006c49]">
         <Loader2 className="animate-spin w-9 h-9 stroke-[3]" />
         <span className="text-xs font-black uppercase tracking-widest">Đang khởi tạo thực địa...</span>
+      </div>
+    );
+  }
+
+  if (error || !orderDetail) {
+    return (
+      <div className="w-full min-h-screen p-10 bg-[#fafafa] text-center font-bold text-rose-500 text-xs">
+        ⚠️ {error || "Không tìm thấy thông tin vận đơn khớp."}
       </div>
     );
   }
@@ -487,7 +502,7 @@ export default function Chitiettrackingorder() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-base font-black text-slate-900">Lịch trình quét trạm hệ thống</h2>
+              <h2 className="text-base font-black text-slate-999">Lịch trình quét trạm hệ thống</h2>
               <span className="text-xs text-slate-400 font-bold">Tổng hành trình: {routeInfo.distanceKm} km</span>
             </div>
 
@@ -556,7 +571,6 @@ export default function Chitiettrackingorder() {
                 <h4 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
                   🚚 Phân hệ điều phối xe giao hàng <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-widest">OSRM</span>
                 </h4>
-                <p className="text-[11px] text-slate-500 mt-1 font-medium">Bấm khởi hành để kích hoạt hệ thống bám vết xe di chuyển thực địa</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -580,9 +594,7 @@ export default function Chitiettrackingorder() {
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-              <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
-                🕹️ Cấu hình tốc độ mô phỏng vận tải:
-              </span>
+              <span className="text-xs font-bold text-slate-600 flex items-center gap-1">🕹️ Cấu hình tốc độ mô phỏng vận tải:</span>
               <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200/60 shadow-xs">
                 <button
                   onClick={jumpToNextStation}
@@ -611,7 +623,6 @@ export default function Chitiettrackingorder() {
                 </button>
               </div>
             </div>
-            
             <div>
               <button onClick={() => setFocusLocation(truckPosition)} className="flex items-center gap-1 px-3 py-1 bg-[#1a365d] text-white text-[10px] font-bold rounded cursor-pointer"><Navigation size={10} className="rotate-45" /> Theo dõi vị trí xe</button>
             </div>
@@ -624,24 +635,10 @@ export default function Chitiettrackingorder() {
                   <TileLayer url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=vi&gl=VN" subdomains={["mt0", "mt1", "mt2", "mt3"]} />
                   <ChangeMapView bounds={mapBounds} />
                   <UpdateMapLayer coords={routeCoords} />
+                  <MapFocusController focusLocation={focusLocation} />
 
-                  {routeCoords.length > 1 && (
-                    <Polyline
-                      key={routeCoords.length}
-                      positions={routeCoords}
-                      color="#006c49"
-                      weight={5}
-                      opacity={0.9}
-                      lineJoin="round"
-                      lineCap="round"
-                    />
-                  )}
-
-                  {/* Ghim vị trí điểm đầu Kho tổng tại Quận 1 */}
-                  <Marker
-                    position={[10.771963, 106.697194]}
-                    icon={createStationTextLabelIcon(SHOP_ICON_URL, "Kho Xuất Phát Tổng DemiMart", 34)}
-                  />
+                  {routeCoords.length > 1 && <Polyline positions={routeCoords} color="#006c49" weight={5} opacity={0.9} />}
+                  <Marker position={[10.771963, 106.697194]} icon={createStationTextLabelIcon(SHOP_ICON_URL, "Kho Tổng", 34)} />
 
                   {/* Duyệt ghim động bưu cục trung gian */}
                   {!routeInfo.isDirectDelivery && stations.map((station) => {

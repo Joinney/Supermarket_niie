@@ -8,8 +8,11 @@ WORKDIR /app
 # Việc này giúp tận dụng Docker cache, giúp build nhanh hơn cho các lần sau
 COPY package*.json ./
 
-# Cài đặt các thư viện cần thiết
+# Cài đặt các thư viện định nghĩa trong package.json trước
 RUN npm install --legacy-peer-deps
+
+# 🌟 ÉP CÀI ĐẶT BỔ SUNG SOCKET.IO ĐỂ KHÔNG BỊ SÓT TRONG CONTAINER
+RUN npm install socket.io --legacy-peer-deps
 
 # Copy toàn bộ mã nguồn của order-service vào container
 COPY . .
