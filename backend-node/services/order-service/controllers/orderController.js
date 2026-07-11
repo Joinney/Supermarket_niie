@@ -129,7 +129,6 @@ const getShippingFee = async (req, res) => {
 const placeOrder = async (req, res) => {
   console.log("Dữ liệu nhận được từ client:", req.body);
   try {
-    
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
 
@@ -202,7 +201,7 @@ const placeOrder = async (req, res) => {
 
     const normalizedOrder = {
         ...req.body,
-        trang_thai_don_hang: 'Chờ xác nhận', // 🌟 THAY ĐỔI: Gán cứng chữ Tiếng Việt khi vừa tạo xong đơn
+        trang_thai_don_hang: 'Chờ xác nhận', 
         danh_sach_san_pham: normalizedItems,
         paypal_transaction_id: req.body.paypal_transaction_id || null, 
         paypal_order_id: req.body.paypal_order_id || null,
@@ -253,7 +252,7 @@ const placeOrder = async (req, res) => {
           so_nha_duong: `Khu vực phân phối cự ly gần`,
           station_lat: storeLat,
           station_lng: storeLng,
-          station_type: 'FIRST_MILE', // Để Frontend render icon bưu cục nhận chặng đầu
+          station_type: 'FIRST_MILE', 
           action_type: 'GIAO_THANG_TRỰC_TIEP',
           trang_thai_hien_thi: 'Đơn hàng nội tỉnh - Hệ thống xuất kho giao trực tiếp siêu tốc đến bạn'
         });
@@ -268,19 +267,17 @@ const placeOrder = async (req, res) => {
           rawPostOffices = parseKmlWithRegex(kmlContent);
         }
 
-      let optimalFirstMileOffice = null;
-      let optimalLastMileOffice = null;
-      let lastMileLat = userLatNum;
-      let lastMileLng = userLngNum;
+        let optimalFirstMileOffice = null;
+        let optimalLastMileOffice = null;
+        let lastMileLat = userLatNum;
+        let lastMileLng = userLngNum;
 
         if (rawPostOffices.length > 0) {
           // 🌟 THUẬT TOÁN TỐI ƯU TIỆN ĐƯỜNG: Tìm bưu cục chặng đầu tiện đường đi nhất hướng về khách hàng
-          // Tiêu chí: Khoảng cách (Kho -> Trạm) + (Trạm -> Khách) gần với đường chim bay nhất, loại bỏ trạm quay ngược hướng.
           let minTotalTransitScore = Infinity;
           
           rawPostOffices.forEach(office => {
             const distFromStore = calcHaversine(storeLat, storeLng, office.location.lat, office.location.lng);
-            // Giới hạn bưu cục chặng đầu gom hàng chỉ loanh quanh khu vực TP.HCM (bán kính 25km từ kho tổng)
             if (distFromStore <= 25.0) {
               const distToClient = calcHaversine(office.location.lat, office.location.lng, userLatNum, userLngNum);
               const totalLoopDistance = distFromStore + distToClient;
@@ -298,20 +295,20 @@ const placeOrder = async (req, res) => {
             clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 1.5 && Math.abs(o.location.lng - userLngNum) < 1.5);
           }
 
-        let minDistanceToClient = Infinity;
-        optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
+          let minDistanceToClient = Infinity;
+          optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
 
-        clientZoneOffices.forEach(office => {
-          const distSq = ((office.location.lat - userLatNum) ** 2) + ((office.location.lng - userLngNum) ** 2);
-          if (distSq < minDistanceToClient) {
-            minDistanceToClient = distSq;
-            optimalLastMileOffice = office;
-          }
-        });
+          clientZoneOffices.forEach(office => {
+            const distSq = ((office.location.lat - userLatNum) ** 2) + ((office.location.lng - userLngNum) ** 2);
+            if (distSq < minDistanceToClient) {
+              minDistanceToClient = distSq;
+              optimalLastMileOffice = office;
+            }
+          });
 
-        lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || userLatNum);
-        lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || userLngNum);
-      }
+          lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || userLatNum);
+          lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || userLngNum);
+        }
 
         let waypoints = [`${storeLng},${storeLat}`];
 
@@ -319,32 +316,32 @@ const placeOrder = async (req, res) => {
           waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
         }
 
-      const isTayNguyenZone = userLngNum < 108.2 && userLatNum > 11.5 && userLatNum < 15.0;
+        const isTayNguyenZone = userLngNum < 108.2 && userLatNum > 11.5 && userLatNum < 15.0;
 
-      if (isTayNguyenZone) {
-        waypoints.push("106.883412,11.521093");
-        waypoints.push("107.684125,12.001254");
-      } else if (userLatNum > 11.2) {
-        waypoints.push("107.234125,10.938512");
-        waypoints.push("108.106943,10.933391");
-        if (userLatNum > 12.0) waypoints.push("109.196749,12.245071");
-        if (userLatNum > 13.5) waypoints.push("109.219515,13.774697");
-        if (userLatNum > 16.0) waypoints.push("108.221464,16.059541");
-        if (userLatNum > 18.0) waypoints.push("105.681123,18.673412");
-        if (userLatNum > 20.0) waypoints.push("105.820421,20.251093");
-      }
+        if (isTayNguyenZone) {
+          waypoints.push("106.883412,11.521093");
+          waypoints.push("107.684125,12.001254");
+        } else if (userLatNum > 11.2) {
+          waypoints.push("107.234125,10.938512");
+          waypoints.push("108.106943,10.933391");
+          if (userLatNum > 12.0) waypoints.push("109.196749,12.245071");
+          if (userLatNum > 13.5) waypoints.push("109.219515,13.774697");
+          if (userLatNum > 16.0) waypoints.push("108.221464,16.059541");
+          if (userLatNum > 18.0) waypoints.push("105.681123,18.673412");
+          if (userLatNum > 20.0) waypoints.push("105.820421,20.251093");
+        }
 
-      if (lastMileLng && lastMileLat) {
-        waypoints.push(`${lastMileLng},${lastMileLat}`);
-      }
-      waypoints.push(`${userLngNum},${userLatNum}`);
+        if (lastMileLng && lastMileLat) {
+          waypoints.push(`${lastMileLng},${lastMileLat}`);
+        }
+        waypoints.push(`${userLngNum},${userLatNum}`);
 
-      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
-      const routeRes = await axios.get(osrmUrl);
-      
-      if (routeRes.data?.code === "Ok") {
-        const routeGeo = routeRes.data.routes[0];
-        const coordinates = routeGeo.geometry.coordinates;
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
+        const routeRes = await axios.get(osrmUrl);
+        
+        if (routeRes.data?.code === "Ok") {
+          const routeGeo = routeRes.data.routes[0];
+          const coordinates = routeGeo.geometry.coordinates;
 
           // 1. Thêm bưu cục gom hàng chặng đầu vào logs
           if (optimalFirstMileOffice) {
@@ -363,57 +360,59 @@ const placeOrder = async (req, res) => {
             });
           }
 
-        // [2] THÊM CÁC HUB TRUNG CHUYỂN DỌC ĐƯỜNG LIÊN TỈNH
-        if (coordinates.length > 15) {
-          const distributionRatios = [0.33, 0.66];
-          distributionRatios.forEach((ratio, idx) => {
-            const targetIndex = Math.floor(coordinates.length * ratio);
-            if (coordinates[targetIndex]) {
-              const nodeCoord = coordinates[targetIndex];
-              
-              let nearestKmlToHub = null;
-              let minHubDistSq = Infinity;
-              rawPostOffices.forEach(office => {
-                const distSq = ((office.location.lat - nodeCoord[1]) ** 2) + ((office.location.lng - nodeCoord[0]) ** 2);
-                if (distSq < minHubDistSq) {
-                  minHubDistSq = distSq;
-                  nearestKmlToHub = office;
-                }
-              });
+          // [2] THÊM CÁC HUB TRUNG CHUYỂN DỌC ĐƯỜNG LIÊN TỈNH
+          if (coordinates.length > 15) {
+            const distributionRatios = [0.33, 0.66];
+            distributionRatios.forEach((ratio, idx) => {
+              const targetIndex = Math.floor(coordinates.length * ratio);
+              if (coordinates[targetIndex]) {
+                const nodeCoord = coordinates[targetIndex];
+                
+                let nearestKmlToHub = null;
+                let minHubDistSq = Infinity;
+                rawPostOffices.forEach(office => {
+                  const distSq = ((office.location.lat - nodeCoord[1]) ** 2) + ((office.location.lng - nodeCoord[0]) ** 2);
+                  if (distSq < minHubDistSq) {
+                    minHubDistSq = distSq;
+                    nearestKmlToHub = office;
+                  }
+                });
 
-              stationsToSave.push({
-                station_id: `HUB_${order.ma_don_hang}_${idx + 1}`,
-                station_name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
-                tinh_thanh: nearestKmlToHub?.provinceName || '',
-                quan_huyen: nearestKmlToHub?.districtName || '',
-                phuong_xa: nearestKmlToHub?.wardName || '',
-                so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || '',
-                station_lat: nodeCoord[1],
-                station_lng: nodeCoord[0],
-                station_type: 'HUB',
-                action_type: 'TRUNG_CHUYEN',
-                trang_thai_hien_thi: 'Đã qua trạm trung chuyển'
-              });
-            }
-          });
-        }
+                stationsToSave.push({
+                  station_id: `HUB_${order.ma_don_hang}_${idx + 1}`,
+                  station_name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
+                  tinh_thanh: nearestKmlToHub?.provinceName || '',
+                  quan_huyen: nearestKmlToHub?.districtName || '',
+                  phuong_xa: nearestKmlToHub?.wardName || '',
+                  so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || '',
+                  station_lat: nodeCoord[1],
+                  station_lng: nodeCoord[0],
+                  station_type: 'HUB',
+                  action_type: 'TRUNG_CHUYEN',
+                  trang_thai_hien_thi: 'Đã qua trạm trung chuyển'
+                });
+              }
+            });
+          }
 
-        // [3] THÊM BƯU CỤC PHÁT CHẶNG CUỐI
-        if (optimalLastMileOffice) {
-          stationsToSave.push({
-            station_id: String(optimalLastMileOffice.id),
-            station_name: String(optimalLastMileOffice.name),
-            tinh_thanh: String(optimalLastMileOffice.provinceName || ''),
-            quan_huyen: String(optimalLastMileOffice.districtName || ''),
-            phuong_xa: String(optimalLastMileOffice.wardName || ''),
-            so_nha_duong: String(optimalLastMileOffice.street || optimalLastMileOffice.address || ''),
-            station_lat: lastMileLat,
-            station_lng: lastMileLng,
-            station_type: 'LAST_MILE',
-            action_type: 'DIEU_PHOI_PHAT',
-            trang_thai_hien_thi: 'Đã cập bưu cục phát chặng cuối'
-          });
+          // [3] THÊM BƯU CỤC PHÁT CHẶNG CUỐI
+          if (optimalLastMileOffice) {
+            stationsToSave.push({
+              station_id: String(optimalLastMileOffice.id),
+              station_name: String(optimalLastMileOffice.name),
+              tinh_thanh: String(optimalLastMileOffice.provinceName || ''),
+              quan_huyen: String(optimalLastMileOffice.districtName || ''),
+              phuong_xa: String(optimalLastMileOffice.wardName || ''),
+              so_nha_duong: String(optimalLastMileOffice.street || optimalLastMileOffice.address || ''),
+              station_lat: lastMileLat,
+              station_lng: lastMileLng,
+              station_type: 'LAST_MILE',
+              action_type: 'DIEU_PHOI_PHAT',
+              trang_thai_hien_thi: 'Đã cập bưu cục phát chặng cuối'
+            });
+          }
         }
+      } // <--- Đã sửa: Bổ sung dấu đóng ngoặc nhọn bị khuyết ở khối rẽ nhánh giao ngoại tỉnh
 
       // Lưu mảng logs hành trình vào PostgreSQL công khai
       const insertLogQuery = `
@@ -533,12 +532,12 @@ const getOrderStatistics = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-          overview: { total_orders: totalOrdersCount, delivered_orders: Number(stats.delivered_orders || 0), pending_orders: Number(stats.pending_orders || 0), today_orders: Number(stats.today_orders || 0), total_revenue: totalRevenueAmount, avg_order_value: Math.round(averageOrderValue) },
-          recent_orders: formattedRecentOrders
+        overview: { total_orders: totalOrdersCount, delivered_orders: Number(stats.delivered_orders || 0), pending_orders: Number(stats.pending_orders || 0), today_orders: Number(stats.today_orders || 0), total_revenue: totalRevenueAmount, avg_order_value: Math.round(averageOrderValue) },
+        recent_orders: formattedRecentOrders
       }
     });
   } catch (err) {
-      return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê đơn hàng." });
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi trích xuất thống kê đơn hàng." });
   }
 };
 
@@ -631,7 +630,7 @@ const getMyOrders = async (req, res) => {
   }
 };
 
-// 6.1 Lấy lịch sử đơn hàng theo userId (Admin) — cho phép admin truy vấn lịch sử của bất kỳ user nào
+// 6.1 Lấy lịch sử đơn hàng theo userId (Admin)
 const getOrdersByUserAdmin = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -701,7 +700,6 @@ const cancelOrder = async (req, res) => {
 
     if (!orderInfo) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
     
-    // 🌟 THAY ĐỔI: Chấp nhận cả chuỗi 'Chờ xác nhận' làm điều kiện được phép hủy đơn hàng
     const currentStatus = String(orderInfo.trang_thai_don_hang).trim();
     if (currentStatus !== 'Chờ xử lý' && currentStatus !== 'pending' && currentStatus !== 'Chờ xác nhận') {
         return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang ở trạng thái chờ xử lý hoặc chờ xác nhận." });

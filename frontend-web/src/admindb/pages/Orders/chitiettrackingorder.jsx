@@ -6,12 +6,13 @@ import {
   useMap,
   Marker,
   Polyline,
+  Popup, // Sửa lỗi: Thêm import Popup bị thiếu
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css"; 
 import { orderApi } from "../../../api/axios";
 import { Loader2, Navigation, Clock, Zap, FastForward, Compass } from "lucide-react";
-import io from "socket.io-client"; 
+// import io from "socket.io-client"; // Mở comment nếu có dùng socket thực tế
 
 // --- KHẮC PHỤC LỖI MẤT ASSET ICON MARKER CỦA LEAFLET KHI BUILD VITE ---
 import iconMarker from "leaflet/dist/images/marker-icon.png";
@@ -68,21 +69,21 @@ function UpdateMapLayer({ coords }) {
 
 // --- LOGISTICS CUSTOM ICONS PHÂN HỆ ĐỘC LẬP ---
 const warehouseIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/2271/2271068.png", // Hub chặng giữa
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/2271/2271068.png", 
   iconSize: [30, 30],
   iconAnchor: [15, 30],
   popupAnchor: [0, -28],
 });
 
 const lastMileOfficeIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/2654/2654162.png", // Bưu cục phát chặng cuối
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/2654/2654162.png", 
   iconSize: [36, 36],
   iconAnchor: [18, 36],
   popupAnchor: [0, -32],
 });
 
 const storeStartIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/869/869636.png", // Kho tổng xuất phát
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/869/869636.png", 
   iconSize: [34, 34],
   iconAnchor: [17, 34],
   popupAnchor: [0, -32],
@@ -98,6 +99,7 @@ export default function Chitiettrackingorder() {
   const [routeCoords, setRouteCoordinates] = useState([]);
   const [stations, setStations] = useState([]);
   const [mapBounds, setMapBounds] = useState(null);
+  const [focusLocation, setFocusLocation] = useState([10.771963, 106.697194]); // Sửa lỗi: Thêm state focusLocation bị thiếu
   
   // Tọa độ Kho tổng mặc định chuẩn GPS Quận 1 giống ModalLoTrinh
   const [currentStationPosition, setCurrentStationPosition] = useState([
@@ -131,12 +133,12 @@ export default function Chitiettrackingorder() {
 
   const animationIndexRef = useRef(0);
   const simulationIntervalRef = useRef(null);
-  const socketRef = useRef(null); 
+  const socketRef = useRef({ emit: () => {} }); // Sửa lỗi: Tránh crash nếu socket chưa kết nối
   const timelineScrollRef = useRef(null);
 
   const getSpeedStep = () => {
     if (speedMode === "fast") return 6;      
-    return 3;                                
+    return 3;                                 
   };
 
   const generateLogTime = (key, offsetMinutes = 0) => {
@@ -377,7 +379,6 @@ export default function Chitiettrackingorder() {
         for (let i = 0; i < stations.length; i++) {
           if (i <= currentStationIndex) continue; 
           const sLat = parseFloat(stations[i].station_lat); const sLng = parseFloat(stations[i].station_lng);
-          // Thu hẹp bán kính check trạm dừng chuẩn xác chống dừng sớm
           if (Math.abs(currentCoord[0] - sLat) < 0.0008 && Math.abs(currentCoord[1] - sLng) < 0.0008) {
             foundStationIdx = i;
             break;
@@ -516,7 +517,8 @@ export default function Chitiettrackingorder() {
       const routeData = await routeRes.json();
 
       if (routeData.code === "Ok" && routeData.routes?.length > 0) {
-        const coordinates = routeData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
+        const currentRoute = routeData.routes[0]; // Sửa lỗi: Khai báo biến route của OSRM
+        const coordinates = currentRoute.geometry.coordinates.map((coord) => [coord[1], coord[0]]);
         setRouteCoordinates(coordinates);
 
         let localStationIdx = orderMainData.current_station_index || -1;
@@ -568,8 +570,8 @@ export default function Chitiettrackingorder() {
         }
 
         setRouteInfo({
-          distanceKm: parseFloat((route.distance / 1000).toFixed(1)),
-          durationMin: Math.ceil(route.duration / 60),
+          distanceKm: parseFloat((currentRoute.distance / 1000).toFixed(1)),
+          durationMin: Math.ceil(currentRoute.duration / 60),
           storeName: hasDirectLog ? "Giao thẳng từ Kho tổng" : (uniqueStations.find((s) => s.station_type === "LAST_MILE")?.station_name || "Bưu cục phát chặng cuối"),
           totalOfficesOnRoute: uniqueStations.filter((s) => s.station_type === "HUB").length,
           isDirectDelivery: hasDirectLog
@@ -582,7 +584,6 @@ export default function Chitiettrackingorder() {
     }
   };
 
-  // 🌟 KHÔI PHỤC ĐẦY ĐỦ HÀM CHÂN THỰC: Tạo mảng các node hiển thị trục dọc
   const renderDynamicTimeline = () => {
     const listNodes = [];
 
@@ -677,7 +678,6 @@ export default function Chitiettrackingorder() {
     if (id) fetchTrackingDetail(); 
     return () => { 
       if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current); 
-      if (socketRef.current) socketRef.current.disconnect();
     };
   }, [id]);
 
@@ -693,7 +693,7 @@ export default function Chitiettrackingorder() {
   if (error || !orderDetail) {
     return (
       <div className="w-full min-h-screen p-10 bg-[#fafafa] text-center font-bold text-rose-500 text-xs">
-        ⚠️ {error || "Không tìm thấy thông tin vận đơn khớp."}
+         {error || "Không tìm thấy thông tin vận đơn khớp."}
       </div>
     );
   }
@@ -723,7 +723,6 @@ export default function Chitiettrackingorder() {
               className="max-h-[380px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
             >
               <div className="relative border-l-2 border-slate-200 ml-3 space-y-8 pb-4 pt-2">
-                
                 {renderDynamicTimeline().map((node, index) => (
                   <div key={index} className={`relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 ${node.isCurrent ? 'bg-amber-50/40 p-3 rounded-2xl border border-amber-100 border-dashed animate-fadeIn' : node.isEndNode ? 'bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 border-dashed animate-fadeIn' : 'animate-fadeIn'}`}>
                     
@@ -741,39 +740,16 @@ export default function Chitiettrackingorder() {
                       
                       {node.badge && (
                         <div className="mt-1">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-[#0a2540] text-[9px] font-black rounded border border-slate-200 uppercase tracking-wider`}>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-[#0a2540] text-[9px] font-black rounded border border-slate-200 uppercase tracking-wider">
                             {node.badge}
                           </span>
                         </div>
                       )}
                     </div>
-
-              {visibleLogs.map((log, index) => (
-                <div key={index} className="relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 animate-fadeIn">
-                  <span className="absolute -left-[7px] top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#006c49] ring-4 ring-emerald-50"></span>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-black text-slate-900">{log.station_name}</h4>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">Khu vực: {log.phuong_xa} • {log.quan_huyen} • {log.tinh_thanh}</p>
-                    <div className="mt-1"><span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-[#006c49] text-[9px] font-black rounded uppercase border border-emerald-100 tracking-wider">✓ Đã quét mã nhập trạm thành công</span></div>
+                    <div className="text-right shrink-0 text-[11px] text-slate-400 font-bold">{node.time}</div>
                   </div>
-                  <div className="text-right shrink-0 text-[11px] text-emerald-600 font-extrabold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                    <Clock size={10} /> {log.scanDate} - {log.scanTime}
-                  </div>
-                </div>
-              ))}
-
-              {isFullyDelivered && (
-                <div className="relative pl-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 border-dashed animate-fadeIn">
-                  <span className="absolute -left-[7px] top-4 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-600 text-white font-black text-[8px] ring-4 ring-emerald-100">✓</span>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-black text-emerald-900 flex items-center gap-1">Giao hàng thành công 🎉</h4>
-                    <p className="text-[11px] text-emerald-700 font-medium mt-0.5">Kiện hàng đã được bàn giao tận tay khách hàng an toàn toàn vẹn.</p>
-                  </div>
-                  <div className="text-right shrink-0 text-[11px] text-white font-black bg-emerald-600 px-2 py-1 rounded shadow-sm">
-                    {deliveredTime}
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           </div>
 
@@ -789,7 +765,7 @@ export default function Chitiettrackingorder() {
                 {isArrivedAtStation ? (
                   <button 
                     onClick={handleConfirmArrival}
-                    className="px-4 py-1.5 bg-[#006c49] hover:bg-emerald-800 text-white text-[11px] font-black rounded-md shadow animate-bounce cursor-pointer"
+                    className="px-4 py-1.5 bg-[#006c49] hover:bg-emerald-800 text-white text-[11px] font-black rounded-md shadow animate-bounce cursor-pointer border-none"
                   >
                     ✓ Xác nhận xe đi tiếp (Đã rời kho)
                   </button>
@@ -797,7 +773,7 @@ export default function Chitiettrackingorder() {
                   <button 
                     onClick={startTruckSimulation}
                     disabled={isSimulating || isFullyDelivered}
-                    className="px-4 py-1.5 bg-[#0a2540] hover:bg-[#1e3a5f] text-white text-[11px] font-black rounded-md shadow flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                    className="px-4 py-1.5 bg-[#0a2540] hover:bg-[#1e3a5f] text-white text-[11px] font-black rounded-md shadow flex items-center gap-1 cursor-pointer disabled:opacity-40 border-none"
                   >
                     {isFullyDelivered ? "✓ Hành trình đã hoàn tất" : animationIndexRef.current === 0 ? "▷ Khởi hành chuyến xe" : "▷ Tiếp tục hành trình"}
                   </button>
@@ -818,8 +794,8 @@ export default function Chitiettrackingorder() {
 
                 <button
                   onClick={() => setSpeedMode("optimized")}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                    speedMode === "optimized" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border-none ${
+                    speedMode === "optimized" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-600 bg-transparent hover:bg-slate-50"
                   }`}
                 >
                   <Compass size={12} /> Tối ưu
@@ -827,8 +803,8 @@ export default function Chitiettrackingorder() {
 
                 <button
                   onClick={() => setSpeedMode("fast")}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                    speedMode === "fast" ? "bg-amber-600 text-white shadow-sm animate-pulse" : "text-slate-600 hover:bg-slate-50"
+                  className={`flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border-none ${
+                    speedMode === "fast" ? "bg-amber-600 text-white shadow-sm animate-pulse" : "text-slate-600 bg-transparent hover:bg-slate-50"
                   }`}
                 >
                   <Zap size={12} /> Nhanh siêu tốc
@@ -846,7 +822,6 @@ export default function Chitiettrackingorder() {
                   <UpdateMapLayer coords={routeCoords} />
                   <MapFocusController focusLocation={focusLocation} />
 
-                  {/* 🌟 ĐOẠN ĐƯỜNG ĐƯỢC XỬ LÝ ĐỘNG THEO YÊU CẦU */}
                   {routeCoords.length > 1 && (() => {
                     const safeIndex = Math.min(currentCoordIndex, routeCoords.length - 1);
                     const passedPath = routeCoords.slice(0, safeIndex + 1);
@@ -854,7 +829,6 @@ export default function Chitiettrackingorder() {
 
                     return (
                       <>
-                        {/* 1. Tuyến đường CHƯA ĐI QUA: Vẫn giữ màu xanh lá nhưng mờ lại và hiển thị nét đứt */}
                         {remainingPath.length > 1 && (
                           <Polyline 
                             positions={remainingPath} 
@@ -865,7 +839,6 @@ export default function Chitiettrackingorder() {
                           />
                         )}
 
-                        {/* 2. Tuyến đường ĐÃ ĐI QUA: Màu xanh lá đậm nguyên bản bám đặc sát theo xe */}
                         {passedPath.length > 1 && (
                           <Polyline 
                             positions={passedPath} 
@@ -876,9 +849,12 @@ export default function Chitiettrackingorder() {
                         )}
                       </>
                     );
-                  })}
+                  })()}
 
-                  {/* Render trực tiếp Marker động chứa avatar thật của khách hàng */}
+                  {truckPosition && (
+                    <Marker position={truckPosition} icon={createLiveTruckIcon()} />
+                  )}
+
                   <Marker
                     position={customerTarget}
                     icon={createCustomerAvatarIcon(userAvatarUrl)}
