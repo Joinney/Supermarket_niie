@@ -30,19 +30,17 @@ export default function DanhsachTrackingorder() {
     total_revenue: 0,
   });
 
-  // 🔄 TRUY VẤN LIVE DỮ LIỆU TỪ BACKEND DATABASE (SỬA LỖI ĐỒNG BỘ 401 THEO ADMIN TOKEN)
+  // 🔄 TRUY VẤN LIVE DỮ LIỆU TỪ BACKEND DATABASE
   const fetchTrackingOrders = async () => {
     setLoading(true);
     setError(null);
     try {
-      // 🌟 ĐỒNG BỘ CHUẨN: Lấy chính xác biến adminToken như trang Danhsachdonhang
       let authToken = localStorage.getItem("adminToken");
 
       if (authToken) {
         authToken = String(authToken).replace(/^"|"$/g, "").trim();
       }
 
-      // Cấu hình tham số và header mang theo Token xác thực admin
       const requestConfig = {
         params: {
           page: currentPage,
@@ -59,9 +57,19 @@ export default function DanhsachTrackingorder() {
       const response = await orderApi.get("/admin/all-orders", requestConfig);
 
       if (response.data?.success) {
-        setOrders(response.data.orders || []);
+        const rawOrders = response.data.orders || [];
+        
+        // 🌟 LỌC BỎ: Loại bỏ hoàn toàn các đơn hàng có trạng thái "Chờ xác nhận" trước khi set vào state hiển thị
+        const filteredOrders = rawOrders.filter(
+          (order) => String(order.trang_thai_don_hang).trim() !== "Chờ xác nhận"
+        );
+        
+        setOrders(filteredOrders);
         setTotalPages(response.data.totalPages || 1);
-        setTotalItems(response.data.totalItems || 0);
+        
+        // Cập nhật lại số lượng đếm hiển thị thực tế nếu frontend lọc bớt đơn
+        const diffCount = rawOrders.length - filteredOrders.length;
+        setTotalItems(Math.max(0, (response.data.totalItems || 0) - diffCount));
       }
 
       // 2. Gọi API lấy số liệu thống kê Counter hiển thị thẻ card
@@ -123,11 +131,10 @@ export default function DanhsachTrackingorder() {
     fetchTrackingOrders();
   };
 
-  // 🌟 ĐIỀU HƯỚNG SANG PANEL BẢN ĐỒ CHI TIẾT: Sử dụng mã đơn hàng ma_don_hang trên URL đại diện
   const handleViewOrderDetail = (order) => {
     navigate(`/admin/Donhang/Chitiettracking/${order.ma_don_hang}`, {
       state: {
-        orderId: order.id, // Vẫn gửi ngầm ID gốc để trang chi tiết query DB nếu cần
+        orderId: order.id,
         maDonHang: order.ma_don_hang,
       },
     });
@@ -320,6 +327,7 @@ export default function DanhsachTrackingorder() {
                     >
                       <option value="">Tất cả trạng thái</option>
                       <option value="Chờ xử lý">Chờ xử lý</option>
+                      <option value="Xác nhận">Xác nhận</option>
                       <option value="Đang giao">Đang giao hàng</option>
                       <option value="Đã giao">Đã giao thành công</option>
                       <option value="Đã hủy">Đã hủy bỏ</option>

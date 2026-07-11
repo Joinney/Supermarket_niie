@@ -4,6 +4,7 @@ import db from '../configs/database.js';
 import fs from 'fs';
 import path from 'path';
 import { LiveLocation } from '../models/liveLocationModel.js';
+
 // ========================================================
 // 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN
 // ========================================================
@@ -201,6 +202,7 @@ const placeOrder = async (req, res) => {
 
     const normalizedOrder = {
         ...req.body,
+        trang_thai_don_hang: 'Chờ xác nhận', // 🌟 THAY ĐỔI: Gán cứng chữ Tiếng Việt khi vừa tạo xong đơn
         danh_sach_san_pham: normalizedItems,
         paypal_transaction_id: req.body.paypal_transaction_id || null, 
         paypal_order_id: req.body.paypal_order_id || null,
@@ -210,6 +212,23 @@ const placeOrder = async (req, res) => {
 
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công với ID:", order.id);
+
+    // 🌟 THÊM LOGIC: Tự động chuyển trạng thái sang "Xác nhận" sau 1 phút (60000 ms)
+    setTimeout(async () => {
+      try {
+        console.log(`[Hẹn giờ] Bắt đầu tự động chuyển trạng thái cho đơn hàng: ${order.ma_don_hang}`);
+        const autoConfirmQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Xác nhận' WHERE id = $1`;
+        
+        if (db.query) {
+          await db.query(autoConfirmQuery, [order.id]);
+        } else {
+          await db.execute(autoConfirmQuery, [order.id]);
+        }
+        console.log(`[Hẹn giờ] Đơn hàng ${order.ma_don_hang} đã cập nhật trạng thái sang 'Xác nhận' thành công.`);
+      } catch (timerErr) {
+        console.error(`🔥 [Lỗi hẹn giờ] Không thể tự động xác nhận đơn hàng ${order.ma_don_hang}:`, timerErr.message);
+      }
+    }, 60000);
 
     // --- LUỒNG TỰ ĐỘNG HÓA TÍNH CHẶNG VÀ ĐỒNG BỘ TRẠM VÀO DATABASE ---
     try {
@@ -255,13 +274,21 @@ const placeOrder = async (req, res) => {
       let lastMileLng = userLngNum;
 
         if (rawPostOffices.length > 0) {
-          // [A] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC GOM CHẶNG ĐẦU (GẦN KHO TỔNG NHẤT)
-          let minDistanceToStore = Infinity;
+          // 🌟 THUẬT TOÁN TỐI ƯU TIỆN ĐƯỜNG: Tìm bưu cục chặng đầu tiện đường đi nhất hướng về khách hàng
+          // Tiêu chí: Khoảng cách (Kho -> Trạm) + (Trạm -> Khách) gần với đường chim bay nhất, loại bỏ trạm quay ngược hướng.
+          let minTotalTransitScore = Infinity;
+          
           rawPostOffices.forEach(office => {
-            const distToStoreSq = ((office.location.lat - storeLat) ** 2) + ((office.location.lng - storeLng) ** 2);
-            if (distToStoreSq < minDistanceToStore) {
-              minDistanceToStore = distToStoreSq;
-              optimalFirstMileOffice = office;
+            const distFromStore = calcHaversine(storeLat, storeLng, office.location.lat, office.location.lng);
+            // Giới hạn bưu cục chặng đầu gom hàng chỉ loanh quanh khu vực TP.HCM (bán kính 25km từ kho tổng)
+            if (distFromStore <= 25.0) {
+              const distToClient = calcHaversine(office.location.lat, office.location.lng, userLatNum, userLngNum);
+              const totalLoopDistance = distFromStore + distToClient;
+
+              if (totalLoopDistance < minTotalTransitScore) {
+                minTotalTransitScore = totalLoopDistance;
+                optimalFirstMileOffice = office;
+              }
             }
           });
 
@@ -474,7 +501,7 @@ const getOrderStatistics = async (req, res) => {
         SELECT 
             COUNT(*) as total_orders,
             SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('delivered', 'da_giao', 'đã giao') THEN 1 ELSE 0 END) as delivered_orders,
-            SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('pending', 'cho_xu_ly', 'chờ xử lý', 'dang_xu_ly', '') THEN 1 ELSE 0 END) as pending_orders,
+            SUM(CASE WHEN LOWER(TRIM(COALESCE(trang_thai_don_hang, ''))) IN ('pending', 'cho_xu_ly', 'chờ xử lý', 'dang_xu_ly', 'chờ xác nhận', '') THEN 1 ELSE 0 END) as pending_orders,
             SUM(CASE WHEN DATE(ngay_tao) = CURRENT_DATE THEN 1 ELSE 0 END) as today_orders,
             SUM(CASE 
                 WHEN LOWER(TRIM(COALESCE(trang_thai_thanh_toan, ''))) IN ('completed', 'da_thanh_toan', 'đã thanh toán', 'success') 
@@ -500,7 +527,7 @@ const getOrderStatistics = async (req, res) => {
         customer: "Khách hàng Demi", 
         date: new Date(item.ngay_tao).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         total: Number(item.tong_thanh_toan),
-        status: item.trang_thai_don_hang || "Chờ xử lý"
+        status: item.trang_thai_don_hang || "Chờ xác nhận"
     }));
 
     return res.status(200).json({
@@ -639,7 +666,6 @@ const getOrderDetailAdmin = async (req, res) => {
 
     if (order.user_id) {
       try {
-        // 🌟 SỬA: Đã thêm http:// vào đường dẫn
         const authResponse = await axios.get(`http://demi_auth_service:5001/api/v1/auth/internal/users/${order.user_id}`);
         if (authResponse.data) order.user_info = authResponse.data; 
       } catch (authErr) { console.warn("Lỗi fetch user info"); }
@@ -674,8 +700,11 @@ const cancelOrder = async (req, res) => {
     const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
 
     if (!orderInfo) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
-    if (orderInfo.trang_thai_don_hang !== 'Chờ xử lý' && orderInfo.trang_thai_don_hang !== 'pending') {
-        return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang chờ xử lý." });
+    
+    // 🌟 THAY ĐỔI: Chấp nhận cả chuỗi 'Chờ xác nhận' làm điều kiện được phép hủy đơn hàng
+    const currentStatus = String(orderInfo.trang_thai_don_hang).trim();
+    if (currentStatus !== 'Chờ xử lý' && currentStatus !== 'pending' && currentStatus !== 'Chờ xác nhận') {
+        return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang ở trạng thái chờ xử lý hoặc chờ xác nhận." });
     }
 
     const itemsQuery = `SELECT variant_id, quantity FROM public.order_items WHERE order_id = $1`;

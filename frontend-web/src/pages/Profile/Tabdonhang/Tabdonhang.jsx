@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Package, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+import { Package, MapPin, ChevronDown, ChevronUp, Trash2, FileText, Star } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
 
-export default function Tabdonhang({ orders }) {
+export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onViewDetails }) {
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
   const [expandedOrders, setExpandedOrders] = useState({});
 
@@ -39,7 +39,7 @@ export default function Tabdonhang({ orders }) {
               groupedItemsMap[key] = {
                 product_name: item.product_name || "Kiện hàng Demi Mart",
                 image_url: item.image_url,
-                variants: [], // Mảng chứa các biến thể của sản phẩm này
+                variants: [],
               };
             }
             groupedItemsMap[key].variants.push({
@@ -48,15 +48,14 @@ export default function Tabdonhang({ orders }) {
             });
           });
 
-          // Chuyển object map thành mảng để render
           const groupedItems = Object.values(groupedItemsMap);
-          const firstGroup = groupedItems[0]; // Nhóm sản phẩm đầu tiên hiển thị ở ngoài
+          const firstGroup = groupedItems[0];
 
           const statusText = order.trang_thai_don_hang || "Chờ xử lý";
           const orderIdStr = order.id || order.ma_don_hang;
           const isExpanded = !!expandedOrders[orderIdStr];
 
-          if (!firstGroup) return null; // Bỏ qua nếu đơn hàng bị lỗi rỗng sản phẩm
+          if (!firstGroup) return null;
 
           return (
             <div
@@ -80,7 +79,7 @@ export default function Tabdonhang({ orders }) {
                 </span>
               </div>
 
-              {/* 🌟 RENDER SẢN PHẨM ĐẦU TIÊN (Đã được gom biến thể) */}
+              {/* 🌟 RENDER SẢN PHẨM ĐẦU TIÊN */}
               <div className="flex gap-4 items-center">
                 <img
                   src={
@@ -95,7 +94,6 @@ export default function Tabdonhang({ orders }) {
                     {firstGroup.product_name}
                   </h4>
 
-                  {/* In ra chuỗi phân loại: xxx • x1, yyy • x2 */}
                   <p className="text-xs text-slate-400 font-medium mt-0.5 leading-relaxed">
                     Phân loại:{" "}
                     {firstGroup.variants.map((v, i) => (
@@ -106,7 +104,6 @@ export default function Tabdonhang({ orders }) {
                     ))}
                   </p>
 
-                  {/* CHỈ HIỆN NÚT XEM THÊM NẾU CÓ TỪ 2 NHÓM SẢN PHẨM KHÁC NHAU TRỞ LÊN */}
                   {groupedItems.length > 1 && (
                     <button
                       onClick={() => toggleOrderExpand(orderIdStr)}
@@ -138,7 +135,7 @@ export default function Tabdonhang({ orders }) {
                 </div>
               </div>
 
-              {/* 🌟 RENDER CÁC SẢN PHẨM KHÁC (NẾU MỞ RỘNG) */}
+              {/* 🌟 RENDER CÁC SẢN PHẨM KHÁC */}
               {isExpanded && groupedItems.length > 1 && (
                 <div className="mt-2 pt-2 border-t border-dashed border-slate-200 flex flex-col gap-3 pl-4 animate-fadeIn">
                   {groupedItems.slice(1).map((group, idx) => (
@@ -151,7 +148,7 @@ export default function Tabdonhang({ orders }) {
                           group.image_url ||
                           "https://images.unsplash.com/photo-1542838132-92c53300491e?w=150"
                         }
-                        className="w-12 h-12 rounded-xl object-cover border border-slate-100 bg-slate-50 shrink-0 grayscale-[20%]"
+                        className="w-12 h-12 rounded-xl object-cover border border-slate-100 bg-slate-50 shrink-0"
                         alt="prod"
                       />
                       <div className="flex-1 min-w-0 text-left">
@@ -174,17 +171,61 @@ export default function Tabdonhang({ orders }) {
                 </div>
               )}
 
-              <div className="border-t border-slate-50 pt-3 flex justify-between items-center">
-                <span className="text-[11px] text-slate-500 font-semibold truncate max-w-[50%]">
+              {/* 🌟 KHU VỰC THAY ĐỔI NÚT CHỨC NĂNG DỰA TRÊN TRẠNG THÁI ĐƠN HÀNG */}
+              <div className="border-t border-slate-50 pt-3 flex justify-between items-center gap-2">
+                <span className="text-[11px] text-slate-500 font-semibold truncate max-w-[40%]">
                   🚀 Giao bởi: {order.don_vi_van_chuyen || "Siêu thị Demi"}
                 </span>
 
-                <button
-                  onClick={() => setSelectedOrderForMap(order)}
-                  className="bg-emerald-50 hover:bg-[#006c49] text-[#006c49] hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border border-emerald-200/60 cursor-pointer"
-                >
-                  <MapPin size={12} /> Theo dõi lộ trình
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* TRẠNG THÁI: CHỜ XÁC NHẬN -> Hiện nút Hủy đơn sáng */}
+                  {statusText === "Chờ xác nhận" && (
+                    <button
+                      onClick={() => onCancelOrder && onCancelOrder(order)}
+                      className="bg-red-50 hover:bg-red-600 text-red-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border border-red-200/60 cursor-pointer"
+                    >
+                      <Trash2 size={12} /> Hủy đơn hàng
+                    </button>
+                  )}
+
+                  {/* TRẠNG THÁI: XÁC NHẬN -> Làm mờ nút Hủy đơn hoàn toàn */}
+                  {statusText === "Xác nhận" && (
+                    <button
+                      disabled
+                      className="bg-slate-100 text-slate-400 px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 border border-slate-200 opacity-60 cursor-not-allowed"
+                    >
+                      <Trash2 size={12} /> Hủy đơn hàng
+                    </button>
+                  )}
+
+                  {/* TRẠNG THÁI: ĐANG GIAO -> Hiện nút Theo dõi lộ trình */}
+                  {statusText === "Đang giao" && (
+                    <button
+                      onClick={() => setSelectedOrderForMap(order)}
+                      className="bg-emerald-50 hover:bg-[#006c49] text-[#006c49] hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 border border-emerald-200/60 cursor-pointer"
+                    >
+                      <MapPin size={12} /> Theo dõi lộ trình
+                    </button>
+                  )}
+
+                  {/* TRẠNG THÁI: ĐÃ GIAO -> Hiện bộ đôi nút Chi tiết và Đánh giá */}
+                  {statusText === "Đã giao" && (
+                    <>
+                      <button
+                        onClick={() => onViewDetails && onViewDetails(order)}
+                        className="bg-slate-50 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-slate-200 cursor-pointer"
+                      >
+                        <FileText size={12} /> Chi tiết
+                      </button>
+                      <button
+                        onClick={() => onReviewOrder && onReviewOrder(order)}
+                        className="bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1 border border-amber-200 cursor-pointer"
+                      >
+                        <Star size={12} /> Đánh giá
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           );

@@ -207,7 +207,7 @@ export default function Chitiettrackingorder() {
         ma_don_hang: orderDetail.ma_don_hang, coordinates: [finalPt[1], finalPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
       });
 
-      setIsTruckVehicleMode(false); // Giao xong ép về xe máy
+      setIsTruckVehicleMode(false); 
       await saveCurrentLocationToDB(finalPt[0], finalPt[1], currentStationIndex, targetIdx, "🎉 Đã giao xong");
       
       await createNewOrderTrackingLogSQL({
@@ -272,7 +272,7 @@ export default function Chitiettrackingorder() {
         ma_don_hang: orderDetail.ma_don_hang, coordinates: [endPt[1], endPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
       });
 
-      setIsTruckVehicleMode(false); // Chặng cuối giao xong ép về xe máy
+      setIsTruckVehicleMode(false); 
       await saveCurrentLocationToDB(endPt[0], endPt[1], currentStationIndex, targetIdx, "🎉 Đã giao xong");
       
       await createNewOrderTrackingLogSQL({
@@ -365,7 +365,6 @@ export default function Chitiettrackingorder() {
           await saveCurrentLocationToDB(currentCoord[0], currentCoord[1], currentStationIndex, currentIndex);
         }
 
-        // Logic kiểm tra xe máy / xe tải thực tế
         if (routeInfo.isDirectDelivery) {
           setIsTruckVehicleMode(false); 
         } else if (currentStationIndex >= stations.length - 1 && stations.length > 0) {
@@ -378,7 +377,8 @@ export default function Chitiettrackingorder() {
         for (let i = 0; i < stations.length; i++) {
           if (i <= currentStationIndex) continue; 
           const sLat = parseFloat(stations[i].station_lat); const sLng = parseFloat(stations[i].station_lng);
-          if (Math.abs(currentCoord[0] - sLat) < 0.004 && Math.abs(currentCoord[1] - sLng) < 0.004) {
+          // Thu hẹp bán kính check trạm dừng chuẩn xác chống dừng sớm
+          if (Math.abs(currentCoord[0] - sLat) < 0.0008 && Math.abs(currentCoord[1] - sLng) < 0.0008) {
             foundStationIdx = i;
             break;
           }
@@ -409,7 +409,7 @@ export default function Chitiettrackingorder() {
         setTruckPosition(endPt);
         setIsSimulating(false);
         setIsFullyDelivered(true);
-        setIsTruckVehicleMode(false); // Giao xong ép về xe máy
+        setIsTruckVehicleMode(false); 
         setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
         
         socketRef.current.emit("send_truck_location", {
@@ -519,7 +519,6 @@ export default function Chitiettrackingorder() {
         const coordinates = routeData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
         setRouteCoordinates(coordinates);
 
-        // 🌟 KHU VỰC ĐÃ CẬP NHẬT: Định hình chính xác xe máy hay xe tải khi load lại trang
         let localStationIdx = orderMainData.current_station_index || -1;
         let isDeliveredFromDB = orderMainData.status_text && (orderMainData.status_text.includes("giao xong") || orderMainData.status_text.includes("thành công"));
 
@@ -562,11 +561,10 @@ export default function Chitiettrackingorder() {
         coordinates.forEach((pt) => bounds.extend(pt));
         setMapBounds(bounds);
 
-        // ĐỒNG BỘ ĐIỀU KIỆN XE TẢI / XE MÁY SAU KHI RELOAD
         if (hasDirectLog || isDeliveredFromDB || (localStationIdx >= uniqueStations.length - 1 && uniqueStations.length > 0)) {
-          setIsTruckVehicleMode(false); // Đưa về xe máy nếu giao hỏa tốc trực tiếp, đã giao xong hoặc đang ở chặng cuối
+          setIsTruckVehicleMode(false); 
         } else {
-          setIsTruckVehicleMode(true); // Các chặng trung chuyển lớn đi xe tải
+          setIsTruckVehicleMode(true); 
         }
 
         setRouteInfo({
@@ -584,47 +582,34 @@ export default function Chitiettrackingorder() {
     }
   };
 
-  useEffect(() => { 
-    if (id) fetchTrackingDetail(); 
-    return () => { 
-      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current); 
-      if (socketRef.current) socketRef.current.disconnect();
-    };
-  }, [id]);
-
+  // 🌟 KHÔI PHỤC ĐẦY ĐỦ HÀM CHÂN THỰC: Tạo mảng các node hiển thị trục dọc
   const renderDynamicTimeline = () => {
     const listNodes = [];
 
-    // NODE 1: Tiếp nhận đơn hàng
     listNodes.push({
       title: "Đã tiếp nhận đơn hàng",
       desc: "Kho tổng Store2Door - TP. Hồ Chí Minh",
       badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
-      badgeColor: "emerald",
       time: generateLogTime("tiep_nhan", 0),
       isCompleted: true
     });
 
-    // NODE 2: Rời kho xuất phát chặng đầu
     if (currentStationIndex >= 0 || currentCoordIndex > 0) {
       listNodes.push({
         title: "Đã rời kho",
         desc: "Vận chuyển đến trung tâm phân loại trung chuyển",
         badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
-        badgeColor: "emerald",
         time: generateLogTime("roi_kho_tong", 35),
         isCompleted: true
       });
     }
 
-    // DUYỆT CÁC TRẠM THỰC TẾ ĐÃ VÀ ĐANG ĐI QUA
     stations.forEach((station, idx) => {
       if (idx < currentStationIndex) {
         listNodes.push({
           title: `Đã đến bưu cục`,
           desc: `Kiện hàng cập bến an toàn tại: ${station.station_name}`,
           badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
-          badgeColor: "emerald",
           time: generateLogTime(`toi_tram_${idx}`, 60 + idx * 120),
           isCompleted: true
         });
@@ -632,7 +617,6 @@ export default function Chitiettrackingorder() {
           title: `Đã rời kho`,
           desc: `Vận chuyển từ bưu cục ${station.station_name} sang chặng kế tiếp`,
           badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
-          badgeColor: "emerald",
           time: generateLogTime(`roi_tram_${idx}`, 95 + idx * 120),
           isCompleted: true
         });
@@ -643,17 +627,14 @@ export default function Chitiettrackingorder() {
             title: `Đã đến bưu cục`,
             desc: `Kiện hàng cập bến tại: ${station.station_name}`,
             badge: "✓ ĐÃ XÁC NHẬN BỞI BƯU CỤC",
-            badgeColor: "emerald",
             time: generateLogTime(`toi_tram_${idx}`, 60 + idx * 120),
             isCompleted: true
           });
-          
           if (!isFullyDelivered) {
             listNodes.push({
               title: "Đang xử lý tại bưu cục",
               desc: `Đang làm thủ tục điều phối xe trung chuyển rời ${station.station_name}`,
               badge: "🚚 CHỜ XUẤT BƯU CỤC",
-              badgeColor: "amber",
               time: "Hiện tại",
               isCurrent: true
             });
@@ -663,7 +644,6 @@ export default function Chitiettrackingorder() {
             title: "Đang vận chuyển",
             desc: `Xe đang di chuyển lưu thông quốc lộ đến trạm: ${station.station_name}`,
             badge: "🚚 LIVE",
-            badgeColor: "amber",
             time: "Hiện tại",
             isCurrent: true,
             isLive: true
@@ -692,6 +672,14 @@ export default function Chitiettrackingorder() {
 
     return listNodes;
   };
+
+  useEffect(() => { 
+    if (id) fetchTrackingDetail(); 
+    return () => { 
+      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current); 
+      if (socketRef.current) socketRef.current.disconnect();
+    };
+  }, [id]);
 
   if (loading) {
     return (
