@@ -5,7 +5,7 @@ dotenv.config();
 
 export const connectDB = async () => {
   try {
-    const MONGO_URI = process.env.MONGO_URI || "mongodb://phannguyenbaomy0609_db_user:5IhfSgHHPp6asvbF@ac-4tzt1fb-shard-00-00.mfgvpbg.mongodb.net:27017,ac-4tzt1fb-shard-00-01.mfgvpbg.mongodb.net:27017,ac-4tzt1fb-shard-00-02.mfgvpbg.mongodb.net:27017/supermarket_db?replicaSet=atlas-hoo88e-shard-0&ssl=true&authSource=admin";
+    const MONGO_URI = process.env.MONGO_URI || "mongodb://voduyduydlk_db_user:DemiMart2026@ac-kf1htmb-shard-00-00.kozikg3.mongodb.net:27017,ac-kf1htmb-shard-00-01.kozikg3.mongodb.net:27017,ac-kf1htmb-shard-00-02.kozikg3.mongodb.net:27017/shipping-service?ssl=true&replicaSet=atlas-gwlp8o-shard-0&authSource=admin&appName=DemiMartMGDB";
     
     await mongoose.connect(MONGO_URI);
     console.log("🍃 [ORDER-SERVICE] Kết nối thành công cơ sở dữ liệu MongoDB Atlas (Trụ sở)!");

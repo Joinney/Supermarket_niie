@@ -3,7 +3,7 @@ import axios from 'axios';
 import db from '../configs/database.js';
 import fs from 'fs';
 import path from 'path';
-
+import { LiveLocation } from '../models/liveLocationModel.js';
 // ========================================================
 // 📦 HELPER 1: TÍNH TOÁN CƯỚC PHÍ GIAO HÀNG ĐỘNG QUA API GHN
 // ========================================================
@@ -126,7 +126,9 @@ const getShippingFee = async (req, res) => {
 
 // 2. Tiếp nhận đặt hàng (Tự động hóa cấy lộ trình bưu cục đa trạm vào DB)
 const placeOrder = async (req, res) => {
+  console.log("Dữ liệu nhận được từ client:", req.body);
   try {
+    
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
 
@@ -633,17 +635,33 @@ const getOrderDetailAdmin = async (req, res) => {
     const itemsSql = `SELECT id, order_id, variant_id, quantity, price, product_name, variant_name, image_url, ma_san_pham, sku FROM public.order_items WHERE order_id = $1;`;
     const itemsResult = db.query ? await db.query(itemsSql, [order.id]) : await db.execute(itemsSql, [order.id]);
     order.danh_sach_san_pham = itemsResult.rows ? itemsResult.rows : itemsResult;
-    order.user_info = { full_name: "Khách mua hàng (Ẩn danh)", phone_number: "Chưa cập nhật SĐT", email: "Chưa cập nhật Email" };
+    order.user_info = { full_name: "Khách mua hàng", phone_number: "Chưa cập nhật", email: "Chưa cập nhật" };
 
     if (order.user_id) {
       try {
+        // 🌟 SỬA: Đã thêm http:// vào đường dẫn
         const authResponse = await axios.get(`http://demi_auth_service:5001/api/v1/auth/internal/users/${order.user_id}`);
         if (authResponse.data) order.user_info = authResponse.data; 
-      } catch (authErr) {}
+      } catch (authErr) { console.warn("Lỗi fetch user info"); }
     }
+
+    try {
+      const liveData = await LiveLocation.findOne({ ma_don_hang: String(order.ma_don_hang).trim() });
+      if (liveData) {
+        order.current_lat = liveData.current_location.coordinates[1];
+        order.current_lng = liveData.current_location.coordinates[0];
+        order.current_station_index = liveData.current_station_index;
+        order.current_coord_index = liveData.current_coord_index;
+        order.status_text = liveData.status_text;
+      }
+    } catch (mongoFetchErr) {
+      console.error("⚠️ Lỗi trích xuất từ MongoDB:", mongoFetchErr.message);
+    }
+
     return res.status(200).json({ success: true, data: order });
   } catch (err) {
-    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải dữ liệu chi tiết." });
+    console.error("🔥 Lỗi getOrderDetailAdmin:", err);
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải dữ liệu." });
   }
 };
 

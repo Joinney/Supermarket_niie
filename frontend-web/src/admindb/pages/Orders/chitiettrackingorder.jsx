@@ -132,7 +132,6 @@ export default function Chitiettrackingorder() {
   const [isTruckVehicleMode, setIsTruckVehicleMode] = useState(true);
   const [speedMode, setSpeedMode] = useState("optimized"); 
 
-  // 🌟 STATE THEO DÕI INDEX ĐỂ RE-RENDER ĐƯỜNG ĐI DI ĐỘNG THEO XE
   const [currentCoordIndex, setCurrentCoordIndex] = useState(0);
 
   const animationIndexRef = useRef(0);
@@ -144,20 +143,74 @@ export default function Chitiettrackingorder() {
     return 3;                                
   };
 
-  const jumpToNextStation = () => {
+  // Đồng bộ lưu tọa độ tạm thời vào MongoDB để bên User kéo realtime dữ liệu mượt
+  const saveCurrentLocationToDB = async (lat, lng, stationIdx, coordIdx, statusOverride = null) => {
+    if (!orderDetail) return;
+    try {
+      await orderApi.post("/shipping/update-location", {
+        ma_don_hang: orderDetail.ma_don_hang,
+        order_id: orderDetail.id || id,
+        current_lat: lat,
+        current_lng: lng,
+        current_station_index: stationIdx,
+        current_coord_index: coordIdx, 
+        status_text: statusOverride || (routeInfo.isDirectDelivery ? "Shipper đang giao hỏa tốc" : "Đang trung chuyển"),
+        is_truck: isTruckVehicleMode
+      });
+    } catch (err) {
+      console.error("❌ Lỗi đồng bộ dữ liệu MongoDB:", err);
+    }
+  };
+
+  // 🌟 THÊM MỚI HELPER: Gọi API ghi nhận dòng nhật ký quét trạm chính thức vào SQL bền vững
+  const createNewOrderTrackingLogSQL = async (stationData, statusText) => {
+    if (!orderDetail) return;
+    try {
+      await orderApi.post("/orders/tracking-logs/create-node", {
+        order_id: orderDetail.id,
+        ma_don_hang: orderDetail.ma_don_hang,
+        station_id: stationData.station_id || `LIVE_NODE_${Date.now()}`,
+        station_name: stationData.station_name,
+        tinh_thanh: stationData.tinh_thanh || "",
+        quan_huyen: stationData.quan_huyen || "",
+        phuong_xa: stationData.phuong_xa || "",
+        so_nha_duong: stationData.so_nha_duong || "",
+        station_lat: stationData.station_lat,
+        station_lng: stationData.station_lng,
+        station_type: stationData.station_type || "HUB",
+        action_type: isFullyDelivered ? "HOAN_THANH_GIAO" : "NHAP_TRAM_REALTIME",
+        trang_thai_hien_thi: statusText
+      });
+    } catch (err) {
+      console.error("❌ Lỗi tạo dòng nhật ký quét trạm SQL:", err.message);
+    }
+  };
+
+  const jumpToNextStation = async () => {
     if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
 
     if (routeInfo.isDirectDelivery) {
       const now = new Date();
-      animationIndexRef.current = routeCoords.length - 1;
-      setCurrentCoordIndex(routeCoords.length - 1); 
-      const finalPt = routeCoords[routeCoords.length - 1];
+      const targetIdx = routeCoords.length - 1;
+      animationIndexRef.current = targetIdx;
+      setCurrentCoordIndex(targetIdx); 
+      const finalPt = routeCoords[targetIdx];
       setTruckPosition(finalPt);
       setFocusLocation(finalPt);
       
       socketRef.current.emit("send_truck_location", {
-        ma_don_hang: orderDetail.ma_don_hang, coordinates: finalPt, isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
+        ma_don_hang: orderDetail.ma_don_hang, coordinates: [finalPt[1], finalPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
       });
+
+      await saveCurrentLocationToDB(finalPt[0], finalPt[1], currentStationIndex, targetIdx, "🎉 Đã giao xong");
+      
+      // 🌟 GHI LOG KHI NHẢY THẲNG GIAO XONG
+      await createNewOrderTrackingLogSQL({
+        station_name: "Địa chỉ khách hàng",
+        station_lat: finalPt[0],
+        station_lng: finalPt[1],
+        station_type: "CUSTOMER_HOME"
+      }, "Kiện hàng đã được giao tận tay khách hàng an toàn.");
 
       if (isSimulating) {
         clearInterval(simulationIntervalRef.current);
@@ -189,8 +242,13 @@ export default function Chitiettrackingorder() {
       setFocusLocation(matchPt);
 
       socketRef.current.emit("send_truck_location", {
-        ma_don_hang: orderDetail.ma_don_hang, coordinates: matchPt, isArrived: true, isFullyDelivered: false, currentStationIndex: nextStationIdx
+        ma_don_hang: orderDetail.ma_don_hang, coordinates: [matchPt[1], matchPt[0]], isArrived: true, isFullyDelivered: false, currentStationIndex: nextStationIdx
       });
+
+      await saveCurrentLocationToDB(matchPt[0], matchPt[1], nextStationIdx, bestMatchIndex, "⚠️ Đã đến bưu cục");
+      
+      // 🌟 GHI LOG KHI BẤM NHẢY TRẠM ĐẾN BƯU CỤC KẾ
+      await createNewOrderTrackingLogSQL(targetStation, `Đã quét mã nhập trạm thành công tại ${targetStation.station_name}`);
 
       if (isSimulating) {
         clearInterval(simulationIntervalRef.current);
@@ -209,15 +267,26 @@ export default function Chitiettrackingorder() {
       });
     } else {
       const now = new Date();
-      animationIndexRef.current = routeCoords.length - 1;
-      setCurrentCoordIndex(routeCoords.length - 1); 
-      const endPt = routeCoords[routeCoords.length - 1];
+      const targetIdx = routeCoords.length - 1;
+      animationIndexRef.current = targetIdx;
+      setCurrentCoordIndex(targetIdx); 
+      const endPt = routeCoords[targetIdx];
       setTruckPosition(endPt);
       setFocusLocation(endPt);
       
       socketRef.current.emit("send_truck_location", {
-        ma_don_hang: orderDetail.ma_don_hang, coordinates: endPt, isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
+        ma_don_hang: orderDetail.ma_don_hang, coordinates: [endPt[1], endPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
       });
+
+      await saveCurrentLocationToDB(endPt[0], endPt[1], currentStationIndex, targetIdx, "🎉 Đã giao xong");
+      
+      // 🌟 GHI LOG KHI NHẢY CHẶNG CUỐI THÀNH CÔNG
+      await createNewOrderTrackingLogSQL({
+        station_name: "Địa chỉ người nhận",
+        station_lat: endPt[0],
+        station_lng: endPt[1],
+        station_type: "CUSTOMER_HOME"
+      }, "Đã hoàn thành bàn giao kiện hàng.");
 
       if (isSimulating) {
         clearInterval(simulationIntervalRef.current);
@@ -277,8 +346,9 @@ export default function Chitiettrackingorder() {
     if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
     setIsSimulating(true);
     const stepSize = getSpeedStep(); 
+    let dbSaveCounter = 0; 
     
-    simulationIntervalRef.current = setInterval(() => {
+    simulationIntervalRef.current = setInterval(async () => {
       let currentIndex = animationIndexRef.current;
 
       if (currentIndex < routeCoords.length) {
@@ -287,8 +357,13 @@ export default function Chitiettrackingorder() {
         setFocusLocation(currentCoord);
 
         socketRef.current.emit("send_truck_location", {
-          ma_don_hang: orderDetail.ma_don_hang, coordinates: currentCoord, isArrived: false, isFullyDelivered: false, currentStationIndex: currentStationIndex
+          ma_don_hang: orderDetail.ma_don_hang, coordinates: [currentCoord[1], currentCoord[0]], isArrived: false, isFullyDelivered: false, currentStationIndex: currentStationIndex
         });
+
+        dbSaveCounter++;
+        if (dbSaveCounter % 20 === 0) { 
+          await saveCurrentLocationToDB(currentCoord[0], currentCoord[1], currentStationIndex, currentIndex);
+        }
 
         if (routeInfo.isDirectDelivery) {
           setIsTruckVehicleMode(false); 
@@ -317,8 +392,13 @@ export default function Chitiettrackingorder() {
           const targetStationLog = stations[foundStationIdx];
           
           socketRef.current.emit("send_truck_location", {
-            ma_don_hang: orderDetail.ma_don_hang, coordinates: currentCoord, isArrived: true, isFullyDelivered: false, currentStationIndex: foundStationIdx
+            ma_don_hang: orderDetail.ma_don_hang, coordinates: [currentCoord[1], currentCoord[0]], isArrived: true, isFullyDelivered: false, currentStationIndex: foundStationIdx
           });
+
+          await saveCurrentLocationToDB(currentCoord[0], currentCoord[1], foundStationIdx, currentIndex, "⚠️ Đã đến bưu cục");
+          
+          // 🌟 GHI LOG KHI CHẠY SIMULATION CHẠM TRẠM BƯU CỤC TỰ ĐỘNG
+          await createNewOrderTrackingLogSQL(targetStationLog, `Đã nhập trạm quét mã thành công tại bưu cục trung chuyển`);
 
           setVisibleLogs(prev => {
             if (prev.some(log => log.station_id === targetStationLog.station_id)) return prev;
@@ -342,8 +422,18 @@ export default function Chitiettrackingorder() {
         setDeliveredTime(`${now.toLocaleDateString("vi-VN")} - ${now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`);
         
         socketRef.current.emit("send_truck_location", {
-          ma_don_hang: orderDetail.ma_don_hang, coordinates: endPt, isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
+          ma_don_hang: orderDetail.ma_don_hang, coordinates: [endPt[1], endPt[0]], isArrived: false, isFullyDelivered: true, currentStationIndex: currentStationIndex
         });
+
+        await saveCurrentLocationToDB(endPt[0], endPt[1], currentStationIndex, routeCoords.length - 1, "🎉 Đã giao xong");
+        
+        // 🌟 GHI LOG KHI CHẠY SIMULATION TỚI ĐÍCH CUỐI CÙNG
+        await createNewOrderTrackingLogSQL({
+          station_name: "Địa chỉ người nhận",
+          station_lat: endPt[0],
+          station_lng: endPt[1],
+          station_type: "CUSTOMER_HOME"
+        }, "Giao hàng thành công hoàn tất hành trình.");
 
         clearInterval(simulationIntervalRef.current);
       }
@@ -418,6 +508,14 @@ export default function Chitiettrackingorder() {
       }
       setStations(uniqueStations);
 
+      // Đẩy ngược danh sách logs đã quét lưu ở SQL lên cây Timeline hiển thị bên trái của Admin
+      const historicalLogs = rawLogs.filter(log => log.station_id !== "DIRECT_STORE_HQ").map(log => ({
+        ...log,
+        scanDate: new Date(log.ngay_tao).toLocaleDateString("vi-VN"),
+        scanTime: new Date(log.ngay_tao).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })
+      }));
+      setVisibleLogs(historicalLogs);
+
       let waypoints = [`${storeLng},${storeLat}`];
       
       if (!hasDirectLog) {
@@ -434,9 +532,40 @@ export default function Chitiettrackingorder() {
       if (routeData.code === "Ok" && routeData.routes?.length > 0) {
         const coordinates = routeData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
         setRouteCoordinates(coordinates);
-        setTruckPosition(coordinates[0]);
-        animationIndexRef.current = 0;
-        setCurrentCoordIndex(0); 
+
+        if (orderMainData.current_coord_index !== undefined && orderMainData.current_coord_index !== null) {
+          const savedIndex = Math.min(orderMainData.current_coord_index, coordinates.length - 1);
+          
+          animationIndexRef.current = savedIndex;
+          setCurrentCoordIndex(savedIndex);
+          setTruckPosition(coordinates[savedIndex]);
+          setFocusLocation(coordinates[savedIndex]);
+          
+          if (orderMainData.current_station_index !== undefined) {
+            setCurrentStationIndex(orderMainData.current_station_index);
+          }
+
+          if (orderMainData.status_text && orderMainData.status_text.includes("bưu cục")) {
+            setIsArrivedAtStation(true);
+          }
+          if (orderMainData.status_text && orderMainData.status_text.includes("giao xong")) {
+            setIsFullyDelivered(true);
+          }
+        } else if (orderMainData.current_lat && orderMainData.current_lng) {
+          setTruckPosition([orderMainData.current_lat, orderMainData.current_lng]);
+          let closestIdx = 0;
+          let minDiff = Infinity;
+          coordinates.forEach((pt, idx) => {
+            let diff = Math.abs(pt[0] - orderMainData.current_lat) + Math.abs(pt[1] - orderMainData.current_lng);
+            if (diff < minDiff) { minDiff = diff; closestIdx = idx; }
+          });
+          animationIndexRef.current = closestIdx;
+          setCurrentCoordIndex(closestIdx);
+        } else {
+          setTruckPosition(coordinates[0]);
+          animationIndexRef.current = 0;
+          setCurrentCoordIndex(0);
+        }
 
         const bounds = L.latLngBounds([[storeLat, storeLng], [userLat, userLng]]);
         coordinates.forEach((pt) => bounds.extend(pt));
@@ -456,7 +585,6 @@ export default function Chitiettrackingorder() {
     } catch (err) {
       setError("Không thể nạp thông tin trục hành trình đường bộ OSRM.");
     } finally {
-      // 🌟 KHẮC PHỤC TRIỆT ĐỂ LỖI CÚ PHÁP CATCH/FINALLY GỐC Ở ĐÂY
       setLoading(false);
     }
   };
@@ -637,34 +765,35 @@ export default function Chitiettrackingorder() {
                   <UpdateMapLayer coords={routeCoords} />
                   <MapFocusController focusLocation={focusLocation} />
 
-                  {routeCoords.length > 1 && <Polyline positions={routeCoords} color="#006c49" weight={5} opacity={0.9} />}
-                  <Marker position={[10.771963, 106.697194]} icon={createStationTextLabelIcon(SHOP_ICON_URL, "Kho Tổng", 34)} />
-
-                  {/* Duyệt ghim động bưu cục trung gian */}
-                  {!routeInfo.isDirectDelivery && stations.map((station) => {
-                    const lat = parseFloat(station.station_lat);
-                    const lng = parseFloat(station.station_lng);
-                    if (!lat || !lng) return null;
-
-                    let targetIconUrl = ROUTE_STATION_ICON_URL;
-                    let iconSizePx = 30;
-
-                    if (station.station_type === "FIRST_MILE") {
-                      targetIconUrl = COORDINATOR_ICON_URL;
-                      iconSizePx = 38;
-                    } else if (station.station_type === "LAST_MILE") {
-                      targetIconUrl = TRUCK_ICON_URL;
-                      iconSizePx = 38;
-                    }
-
-                    const dynamicTextLabelIcon = createStationTextLabelIcon(targetIconUrl, station.station_name, iconSizePx);
+                  {/* 🌟 ĐOẠN ĐƯỜNG ĐƯỢC XỬ LÝ ĐỘNG THEO YÊU CẦU */}
+                  {routeCoords.length > 1 && (() => {
+                    const safeIndex = Math.min(currentCoordIndex, routeCoords.length - 1);
+                    const passedPath = routeCoords.slice(0, safeIndex + 1);
+                    const remainingPath = routeCoords.slice(safeIndex);
 
                     return (
-                      <Marker
-                        key={station.id || station.station_id}
-                        position={[lat, lng]}
-                        icon={dynamicTextLabelIcon}
-                      />
+                      <>
+                        {/* 1. Tuyến đường CHƯA ĐI QUA: Vẫn giữ màu xanh lá nhưng mờ lại và hiển thị nét đứt */}
+                        {remainingPath.length > 1 && (
+                          <Polyline 
+                            positions={remainingPath} 
+                            color="#006c49" 
+                            weight={4} 
+                            opacity={0.45} 
+                            dashArray="8, 12" 
+                          />
+                        )}
+
+                        {/* 2. Tuyến đường ĐÃ ĐI QUA: Màu xanh lá đậm nguyên bản bám đặc sát theo xe */}
+                        {passedPath.length > 1 && (
+                          <Polyline 
+                            positions={passedPath} 
+                            color="#006c49" 
+                            weight={5} 
+                            opacity={1} 
+                          />
+                        )}
+                      </>
                     );
                   })}
 

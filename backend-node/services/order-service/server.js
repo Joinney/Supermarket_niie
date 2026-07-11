@@ -5,9 +5,10 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import http from 'http'; // 🌟 THÊM MỚI
-import { Server } from 'socket.io'; // 🌟 THÊM MỚI
+import { createServer } from 'http'; // 🌟 THÊM MỚI: Dùng module http gốc để bọc Express app
+import { Server } from 'socket.io'; // 🌟 THÊM MỚI: Thư viện Socket.io Server
 import orderRoutes from './routes/orderRoutes.js';
+import liveLocationRoutes from './routes/liveLocationRoutes.js'; 
 import { connectDB } from './configs/mongo/databasemg.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,37 +17,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
-const server = http.createServer(app); // 🌟 THÊM MỚI: Tạo HTTP Server bọc Express
-
-// === 🔌 CẤU HÌNH SOCKET.IO SERVER REALTIME HUB ===
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
-});
-
-io.on('connection', (socket) => {
-  // Client (User hoặc Admin) tham gia vào phòng riêng của mã đơn hàng
-  socket.on('join_order_room', (ma_don_hang) => {
-    socket.join(ma_don_hang);
-  });
-
-  // Admin liên tục phát dữ liệu di chuyển thực địa chặng xe
-  socket.on('send_truck_location', (data) => {
-    const { ma_don_hang, coordinates, isArrived, isFullyDelivered, currentStationIndex } = data;
-    // Phát quảng bá đồng bộ ngay cho User nằm trong Room đó
-    socket.to(ma_don_hang).emit('receive_truck_location', {
-      coordinates,
-      isArrived,
-      isFullyDelivered,
-      currentStationIndex,
-      updatedAt: new Date()
-    });
-  });
-
-  socket.on('disconnect', () => {});
-});
+const httpServer = createServer(app); // 🌟 THÊM MỚI: Tạo Http Server bao Express phục vụ tích hợp Socket.io
 
 // === 🛡️ CẤU HÌNH CORS ĐỒNG BỘ MÔI TRƯỜNG ===
 const allowedOrigins = [
@@ -69,10 +40,42 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// === 🌟 THÊM MỚI: CẤU HÌNH SOCKET.IO ĐỒNG BỘ REALTIME PHÒNG ĐƠN HÀNG LOGISTICS ===
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+io.on('connection', (socket) => {
+  // 1. Nhận sự kiện gia nhập phòng theo mã vận đơn khi thiết bị kết nối
+  socket.on('join_order_room', (ma_don_hang) => {
+    const roomStr = String(ma_don_hang).trim();
+    socket.join(roomStr);
+    console.log(`📦 [Socket] Thiết bị đã gia nhập phòng đơn hàng: ${roomStr}`);
+  });
+
+  // 2. Hứng tọa độ tịnh tiến từ Admin và đồng bộ phát ngay lập tức về phòng đơn hàng cho User nhận
+  socket.on('send_truck_location', (data) => {
+    if (!data || !data.ma_don_hang) return;
+    const roomStr = String(data.ma_don_hang).trim();
+    
+    // Broadcast dữ liệu cho mọi thiết bị đang mở bản đồ trong cùng room
+    io.to(roomStr).emit('send_truck_location', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔌 [Socket] Thiết bị ngắt kết nối thực địa.');
+  });
+});
+// =========================================================================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// === 📝 CẤU HÌNH SWAGGER ĐỊNH NGHĨA TRỰC TIẾP (CẬP NHẬT CHUẨN v1) ===
+// === 📝 CẤU HÌNH SWAGGER ĐỊNH NGHĨA TRỰC TIẾP ===
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -174,12 +177,17 @@ const swaggerUiOptions = {
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs, swaggerUiOptions));
 
-// === 🌟 ĐĂNG KÝ MODULE ROUTE THEO CHUẨN VERSIONING (v1) ===
+// =========================================================================
+// 🌟 ĐĂNG KÝ MODULE ROUTE THEO CHUẨN VERSIONING (v1)
+// =========================================================================
 const v1Router = express.Router();
+
 v1Router.use('/', orderRoutes);
+v1Router.use('/shipping', liveLocationRoutes);
 
 app.use('/api/v1', v1Router);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/orders', liveLocationRoutes); 
 
 app.get('/', (req, res) => {
   res.status(200).send(`
@@ -197,7 +205,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Order Service is running smoothly on v1' });
 });
 
-// === 🚨 XỬ LÝ LỖI 404 & 500 TẬP TRUNG ===
+// =========================================================================
+// 🚨 XỬ LÝ LỖI 404 & 500 TẬP TRUNG
+// =========================================================================
 app.use((req, res) => {
   res.status(404).json({ 
       success: false, 
@@ -215,11 +225,12 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5005;
 
+// Đảm bảo cài đặt thư viện socket.io cho backend: npm install socket.io
 connectDB().then(() => {
-  // Thay app.listen thành server.listen để kích hoạt Websocket Hub
-  server.listen(PORT, '0.0.0.0', () => { 
+  // 🌟 SỬA TẠI ĐÂY: Lắng nghe qua httpServer đã nhúng Socket thay vì dùng app gốc
+  httpServer.listen(PORT, '0.0.0.0', () => { 
     console.log(`\n=========================================`);
-    console.log(`✅ Order Service Live + Socket.io Active: http://localhost:${PORT}`);
+    console.log(`✅ Order Service Live: http://localhost:${PORT}`);
     console.log(`🔗 API V1 URL:       http://localhost:${PORT}/api/v1`);
     console.log(`📝 Swagger Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`=========================================\n`);
