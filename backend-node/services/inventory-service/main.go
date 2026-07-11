@@ -31,11 +31,10 @@ func main() {
 
 	// === 🛡️ CẤU HÌNH CORS ĐỒNG BỘ MÔI TRƯỜNG ===
 	r.Use(cors.New(cors.Config{
-		// Thêm miền Frontend thực tế chạy trên Render vào danh sách cho phép
 		AllowOrigins: []string{
 			"http://localhost:5173", 
 			"http://localhost:3000",
-			"https://demimart-fe.onrender.com", // 🌟 THÊM MỚI: Cho phép domain Render gọi chéo Service
+			"https://demimart-fe.onrender.com", 
 		}, 
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
@@ -62,21 +61,27 @@ func main() {
 		}
 	}
 
-	// Định tuyến nhóm API V1 chuẩn hóa
+	// ========================================================
+	// 📡 ĐỊNH TUYẾN NHÓM API V1 CHUẨN HÓA (REFACTORING GROUP)
+	// ========================================================
 	api := r.Group("/api/v1")
 	{
-		api.GET("/inventory", controllers.GetInventory)
+		// 🏢 1. NHÓM QUẢN LÝ KHO HÀNG (warehouse_controller.go)
+		api.GET("/warehouses", controllers.GetWarehouses)
+		api.PUT("/warehouses/:id/toggle-status", controllers.ToggleWarehouseStatus)
+		
+		// 🧾 2. NHÓM CHỨNG TỪ & PHIẾU NHẬP KHO (import_controller.go)
 		api.POST("/inventory", controllers.CreateInventoryImport)
-		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
-		
-		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
-		
-		// Tuyến endpoint đồng bộ danh sách phiếu nhập kho thực tế cho Frontend
 		api.GET("/inventory-tickets", controllers.GetInventoryTickets)
-		
+		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
+
+		// 📦 3. NHÓM QUẢN LÝ LÔ HÀNG & DATE (lot_controller.go)
 		api.GET("/lots", controllers.GetLots)
 		api.POST("/lots", controllers.CreateLot)
-		api.GET("/warehouses", controllers.GetWarehouses)
+
+		// 📊 4. NHÓM TỒN KHO VÀ ĐƠN VỊ VẬT TƯ (stock_controller.go)
+		api.GET("/inventory", controllers.GetInventory)
+		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
 		api.GET("/unit-conversions", controllers.GetUnitConversions) 
 	}
 
@@ -118,7 +123,6 @@ func main() {
 		c.String(http.StatusOK, htmlContent)
 	})
 
-	// Lắng nghe và khởi chạy server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "5006"

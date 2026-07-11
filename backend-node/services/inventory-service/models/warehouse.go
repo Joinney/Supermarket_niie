@@ -39,7 +39,6 @@ type PhieuKho struct {
 	MaKho           string    `gorm:"column:ma_kho;type:varchar(50)" json:"ma_kho"`
 	MaDonThamChieu  string    `gorm:"column:ma_don_tham_chieu;type:varchar(50)" json:"ma_don_tham_chieu"`
 	GhiChu          string    `gorm:"column:ghi_chu;type:text" json:"ghi_chu"`
-	// 🌟 ĐÃ SỬA: Chuyển từ string sang int để khớp hoàn toàn với kiểu INT của Postgres
 	NguoiThucHienID int       `gorm:"column:nguoi_thuc_hien_id;type:integer" json:"nguoi_thuc_hien_id"`
 	NgayTao         time.Time `gorm:"column:ngay_tao;autoCreateTime" json:"ngay_tao"`
 	NgayCapNhat     time.Time `gorm:"column:ngay_cap_nhat;autoUpdateTime" json:"ngay_cap_nhat"`

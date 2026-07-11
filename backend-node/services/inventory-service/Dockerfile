@@ -25,7 +25,7 @@ RUN swag init
 RUN go mod tidy
 
 # Biên dịch ứng dụng theo thư mục hiện hành (.) thay vì chỉ định đích danh file lẻ
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -v -a -installsuffix cgo -o main .
 
 # ========================================================
 # 🚀 STAGE 2: MÔI TRƯỜNG RUNTIME SIÊU GỌN (ALPINE LINUX)
