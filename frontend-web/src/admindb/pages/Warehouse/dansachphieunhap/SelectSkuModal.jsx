@@ -12,18 +12,15 @@ import {
 } from "lucide-react";
 
 export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
-  // Đổi tên component cho khớp với import ở form cha
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
-  // Quản lý trạng thái đóng/mở rộng và cache biến thể đối với sản phẩm có nhóm biến thể
   const [variantsCache, setVariantsMap] = useState({});
   const [expandedProductId, setExpandedProductId] = useState(null);
   const [loadingVariants, setLoadingVariants] = useState(false);
 
-  // 🌟 Tải toàn bộ danh sách sản phẩm (Bao gồm cả đơn và nhóm biến thể)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -43,7 +40,6 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
     fetchProducts();
   }, [isOpen]);
 
-  // 🌟 Xử lý mở rộng để tải biến thể con cho sản phẩm có nhóm biến thể
   const handleToggleProduct = async (product) => {
     if (!product.co_bien_the) return;
 
@@ -64,13 +60,24 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
       const variants = detailedData.bien_the || [];
 
       const formattedVariants = variants.map((v) => {
-        const specText = Object.entries(v.thuoc_tinh || {})
-          .map(([k, val]) => `${k}: ${val}`)
-          .join(", ");
+        // 🌟 ƯU TIÊN 1: Lấy Tên Biến Thể cụ thể từ Database (VD: Đường Biên Hòa 800g)
+        let displayName = v.ten_bien_the;
+
+        // 🌟 DỰ PHÒNG: Nếu ten_bien_the rỗng hoặc null, tự động nối (Tên gốc + Thuộc tính)
+        if (
+          !displayName ||
+          displayName.trim() === "" ||
+          displayName.trim().toLowerCase() === "mặc định"
+        ) {
+          const specText = Object.entries(v.thuoc_tinh || {})
+            .map(([k, val]) => `${k}: ${val}`)
+            .join(", ");
+          displayName = `${detailedData.ten_san_pham || "Sản phẩm"} ${specText ? `(${specText})` : ""}`;
+        }
 
         return {
           sku: v.sku || `SKU-${v.ma_bien_the}`,
-          name: `${detailedData.ten_san_pham || "Sản phẩm"} ${specText ? `(${specText})` : ""}`,
+          name: displayName, // Đã fix logic hiển thị tên
           category: detailedData.ten_danh_muc_con || "SẢN PHẨM",
           unit: v.ten_don_vi || "Gói",
           price: v.gia_ban_le || 0,
@@ -92,7 +99,6 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
     }
   };
 
-  // Trích xuất danh mục độc bản (Có bảo vệ null)
   const categoriesList = useMemo(() => {
     const categories = new Set();
     products.forEach((p) => {
@@ -103,7 +109,6 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
     return Array.from(categories);
   }, [products]);
 
-  // Bộ lọc tìm kiếm (Có bảo vệ toLowerCase)
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const safeName = (p.ten_san_pham || "").toLowerCase();
@@ -268,7 +273,7 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
                           <button
                             type="button"
                             onClick={(e) => {
-                              e.stopPropagation(); // Ngăn chặn sự kiện click lan ra ngoài
+                              e.stopPropagation();
                               onSelect({
                                 sku: product.ma_san_pham,
                                 name: product.ten_san_pham,
@@ -311,6 +316,7 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
                             className="py-2.5 flex items-center justify-between hover:bg-white rounded-lg px-2 transition-colors"
                           >
                             <div>
+                              {/* 🌟 ĐÃ HIỂN THỊ TÊN BIẾN THỂ RÕ RÀNG Ở ĐÂY */}
                               <p className="text-xs font-bold text-slate-700">
                                 {v.name}
                               </p>

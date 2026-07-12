@@ -219,15 +219,28 @@ func CreateInventoryImport(c *gin.Context) {
 		
 		for _, p := range products {
 			syncList = append(syncList, SyncItem{Sku: p.Sku, Quantity: p.StandardQuantity})
+			
+			// 1. Kiểm tra tồn kho
 			var existStock int64
 			config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
+			
+			// 2. Thực thi lệnh DB và BẮT LỖI NẾU CÓ
 			if existStock == 0 {
-				_ = config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)", warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now())
+				errInsert := config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)", warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now()).Error
+				if errInsert != nil {
+					fmt.Printf("❌ [DB ERROR] LỖI THÊM MỚI TỒN KHO CHO SKU %s: %v\n", p.Sku, errInsert)
+				} else {
+					fmt.Printf("✅ [DB SUCCESS] Đã lưu thành công SKU %s vào bảng ton_kho.\n", p.Sku)
+				}
 			} else {
-				_ = config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName)
+				errUpdate := config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName).Error
+				if errUpdate != nil {
+					fmt.Printf("❌ [DB ERROR] LỖI CẬP NHẬT TỒN KHO CHO SKU %s: %v\n", p.Sku, errUpdate)
+				}
 			}
 		}
 
+		// (Phần gọi HTTP request sang Product-Service giữ nguyên như cũ)
 		jsonData, _ := json.Marshal(map[string]interface{}{"items": syncList})
 		productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
 		if productServiceHost == "" {
@@ -239,20 +252,18 @@ func CreateInventoryImport(c *gin.Context) {
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
 		
-		// 🚨 Cảnh báo Console nếu sập kết nối HTTP
 		if err != nil {
-			fmt.Printf("❌ [CẢNH BÁO CRITICAL] GỌI API PRODUCT-SERVICE THẤT BẠI: %v\n", err)
+			fmt.Printf("❌ [HTTP CRITICAL] GỌI API PRODUCT-SERVICE THẤT BẠI: %v\n", err)
 			return
 		}
 		defer resp.Body.Close()
 
-		// 🚨 Cảnh báo Console nếu Product-Service từ chối dữ liệu
 		if resp.StatusCode >= 400 {
 			buf := new(bytes.Buffer)
 			buf.ReadFrom(resp.Body)
-			fmt.Printf("❌ [CẢNH BÁO CRITICAL] PRODUCT-SERVICE TỪ CHỐI (Status: %d): %s\n", resp.StatusCode, buf.String())
+			fmt.Printf("❌ [HTTP CRITICAL] PRODUCT-SERVICE TỪ CHỐI (Status: %d): %s\n", resp.StatusCode, buf.String())
 		} else {
-			fmt.Println("✅ [Sync] Đã đồng bộ tồn kho sang Product-Service thành công rực rỡ!")
+			fmt.Println("✅ [Sync] Đã đồng bộ tồn kho sang Product-Service thành công!")
 		}
 	}(input.Products, input.WarehouseID)
 

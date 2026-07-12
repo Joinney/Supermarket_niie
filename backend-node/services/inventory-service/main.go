@@ -79,7 +79,7 @@ func main() {
 		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
 
 		// 📦 3. NHÓM QUẢN LÝ LÔ HÀNG & DATE (lot_controller.go)
-		api.GET("/lots", controllers.GetLots)
+		api.GET("/lots/summary", controllers.GetLotsSummary)
 		api.POST("/lots", controllers.CreateLot)
 
 		// 📊 4. NHÓM TỒN KHO VÀ ĐƠN VỊ VẬT TƯ (stock_controller.go)

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import SelectSkuModal from "./SelectSkuModal";
 import ProductDetailModal from "./ProductDetailModal";
-// 🌟 Chỉ dùng duy nhất warehouseApi (Đã có sẵn Token Interceptor)
 import { warehouseApi } from "../../../../api/axios";
 
 export default function TaoPhieuNhapForm() {
@@ -40,9 +39,8 @@ export default function TaoPhieuNhapForm() {
   const dropdownLotRef = useRef(null);
   const dropdownRatioRef = useRef(null);
 
-  // 📡 ĐỒNG BỘ DỮ LIỆU TỪ BACKEND WAREHOUSE-SERVICE
+  // 📡 ĐỒNG BỘ DỮ LIỆU TỪ BACKEND
   useEffect(() => {
-    // 1. Tải danh sách kho
     warehouseApi
       .get("/warehouses")
       .then((res) => {
@@ -51,7 +49,6 @@ export default function TaoPhieuNhapForm() {
       })
       .catch((err) => console.error("Lỗi tải danh sách kho nhận:", err));
 
-    // 2. Tải danh mục quy đổi đơn vị
     warehouseApi
       .get("/unit-conversions")
       .then((res) => {
@@ -67,24 +64,49 @@ export default function TaoPhieuNhapForm() {
       })
       .catch((err) => console.error("Lỗi tải danh mục quy đổi từ DB:", err));
 
-    // 3. Tải danh sách lô hàng & HSD
     warehouseApi
-      .get("/lots")
+      .get("/lots/summary")
       .then((res) => {
-        const mappedLots = res.data.map((lot) => ({
-          id: lot.ma_lo_hang,
-          name: `${lot.ma_lo_hang} (HSD: ${lot.ngay_het_han ? lot.ngay_het_han.substring(0, 10) : "N/A"})`,
-          productionDate: lot.ngay_san_xuat
-            ? lot.ngay_san_xuat.substring(0, 10)
-            : "",
-          expiryDate: lot.ngay_het_han ? lot.ngay_het_han.substring(0, 10) : "",
-        }));
+        const data = res.data || [];
+        const lotMap = {};
+
+        data.forEach((item) => {
+          if (!lotMap[item.ma_lo_hang]) {
+            lotMap[item.ma_lo_hang] = {
+              id: item.ma_lo_hang,
+              expiryDate: item.ngay_het_han
+                ? item.ngay_het_han.substring(0, 10)
+                : "N/A",
+              skus: new Set([item.sku]),
+              productNames: new Set([
+                item.ten_san_pham !== "Chưa xác định" ? item.ten_san_pham : "",
+              ]),
+            };
+          } else {
+            lotMap[item.ma_lo_hang].skus.add(item.sku);
+            if (item.ten_san_pham !== "Chưa xác định") {
+              lotMap[item.ma_lo_hang].productNames.add(item.ten_san_pham);
+            }
+          }
+        });
+
+        const mappedLots = Object.values(lotMap).map((lot) => {
+          const pNames = Array.from(lot.productNames)
+            .filter(Boolean)
+            .join(", ");
+          return {
+            id: lot.id,
+            expiryDate: lot.expiryDate,
+            skus: Array.from(lot.skus),
+            displayName: pNames ? `${lot.id} (${pNames})` : lot.id,
+            name: lot.id,
+          };
+        });
         setGlobalLots(mappedLots);
       })
       .catch((err) => console.error("Lỗi đồng bộ danh sách lô hàng:", err));
   }, []);
 
-  // Xử lý click ra ngoài để đóng Dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -139,7 +161,6 @@ export default function TaoPhieuNhapForm() {
       showNotification(`Đã tăng số lượng nhập của ${targetName}`);
     } else {
       const matchedRatio = globalRatios.find((r) => r.maSanPham === targetSku);
-
       const newRow = {
         sku: targetSku,
         name: targetName,
@@ -179,7 +200,20 @@ export default function TaoPhieuNhapForm() {
     showNotification("Đã bỏ sản phẩm khỏi phiếu", "warning");
   };
 
+  // 🛡️ LÁ CHẮN 1: CẢNH BÁO KHI CỐ TÌNH CHỌN LÔ CŨ ĐÃ HẾT HẠN
   const handleSelectLotForProduct = (sku, lotId) => {
+    const selectedLot = globalLots.find((l) => l.id === lotId);
+    if (selectedLot && selectedLot.expiryDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expDate = new Date(selectedLot.expiryDate);
+      if (expDate < today) {
+        return showNotification(
+          `⚠️ TỪ CHỐI: Lô [${lotId}] đã hết hạn sử dụng!`,
+          "error",
+        );
+      }
+    }
     setSelectedProducts((prev) =>
       prev.map((item) =>
         item.sku === sku ? { ...item, selectedLotId: lotId } : item,
@@ -188,44 +222,69 @@ export default function TaoPhieuNhapForm() {
     setActiveLotDropdownSku(null);
   };
 
-  // 🚀 TẠO LÔ HÀNG NHANH BẰNG API THẬT
+  // 🛡️ LÁ CHẮN 2 & TỰ ĐỘNG ĐẾM SỐ: TẠO LÔ NHANH CHUẨN ERP
   const handleCreateFastLot = async (sku) => {
-    if (!newLotName.trim() || !newLotExpiry)
-      return alert("Vui lòng điền đầy đủ thông tin Lô hàng!");
+    if (!newLotExpiry)
+      return showNotification("Vui lòng chọn Hạn sử dụng!", "error");
 
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedExpiryDate = new Date(newLotExpiry);
+    selectedExpiryDate.setHours(0, 0, 0, 0);
+
+    if (selectedExpiryDate < today) {
+      return showNotification(
+        "⚠️ LỖI: Không thể tạo Lô hàng có HSD nằm trong quá khứ!",
+        "error",
+      );
+    }
+
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, "0");
     const dd = String(today.getDate()).padStart(2, "0");
     const currentDateSign = `${yyyy}${mm}${dd}`;
 
+    // Tự động trích xuất mã Quốc gia/Tiền tố từ SKU (VD: "VN", "US")
     const skuPrefix =
       sku && sku.includes("-") ? sku.split("-")[0].toUpperCase() : "GEN";
-    const autoLotId = `LOT-${currentDateSign}-${skuPrefix}${Math.floor(10 + Math.random() * 90)}`;
+    const baseLotCode = `LOT-${currentDateSign}-${skuPrefix}`;
+
+    // Đếm tự động các lô cùng tiền tố trong ngày
+    const samePrefixLots = globalLots.filter((l) =>
+      l.id.startsWith(baseLotCode),
+    );
+    const nextSequence = String(samePrefixLots.length + 1).padStart(2, "0");
+
+    const finalLotId =
+      newLotName.trim() !== ""
+        ? newLotName.trim().toUpperCase()
+        : `${baseLotCode}${nextSequence}`; // VD: LOT-20260712-VN01
 
     const currentProduct = selectedProducts.find((p) => p.sku === sku);
     const estimatedPrice = currentProduct ? currentProduct.price : 0;
 
     const payloadNewLot = {
       sku: sku,
-      lot_name: autoLotId,
+      lot_name: finalLotId,
       price: parseFloat(estimatedPrice),
       expiry_date: newLotExpiry,
     };
 
     try {
+      setSubmitting(true);
       const res = await warehouseApi.post("/lots", payloadNewLot);
       if (res.status === 200 || res.status === 201) {
         const newLotObj = {
-          id: autoLotId,
-          name: `${autoLotId} (${newLotName.trim()})`,
-          productionDate: `${yyyy}-${mm}-${dd}`,
+          id: finalLotId,
+          displayName: `${finalLotId} (Lô vừa tạo)`,
+          name: finalLotId,
           expiryDate: newLotExpiry,
+          skus: [sku],
         };
 
         setGlobalLots((prev) => [newLotObj, ...prev]);
         handleSelectLotForProduct(sku, newLotObj.id);
-        showNotification(`Đã tạo và áp dụng lô thực tế: ${autoLotId}`);
+        showNotification(`Đã tạo lô thành công: ${finalLotId}`);
         setNewLotName("");
         setNewLotExpiry("");
         setShowLotFastAdd(false);
@@ -233,6 +292,8 @@ export default function TaoPhieuNhapForm() {
     } catch (err) {
       console.error("Lỗi khi đẩy lô hàng mới lên server:", err);
       showNotification("Không thể tạo lô hàng mới trên máy chủ!", "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -296,7 +357,7 @@ export default function TaoPhieuNhapForm() {
     return globalLots.filter(
       (l) =>
         l.name.toLowerCase().includes(query) ||
-        l.id.toLowerCase().includes(query),
+        l.displayName.toLowerCase().includes(query),
     );
   }, [lotSearchQuery, globalLots]);
 
@@ -305,7 +366,6 @@ export default function TaoPhieuNhapForm() {
     const itemsWithTotals = selectedProducts.map((item) => {
       const standardQuantity = item.quantity * item.ratio;
       const totalPrice = standardQuantity * item.price;
-
       grandTotal += totalPrice;
       return { ...item, standardQuantity, totalPrice };
     });
@@ -314,7 +374,6 @@ export default function TaoPhieuNhapForm() {
 
   const { itemsWithTotals, grandTotal } = calculateTotals();
 
-  // 🚀 XÁC NHẬN LƯU PHIẾU NHẬP LÊN DATABASE
   const handleConfirmSubmit = async (e) => {
     e.preventDefault();
     if (selectedProducts.length === 0)
@@ -332,19 +391,9 @@ export default function TaoPhieuNhapForm() {
         try {
           const parsedAdmin = JSON.parse(savedAdminStr);
           currentUserId = parsedAdmin.id || parsedAdmin.user_id || 1;
-          const fullName =
-            parsedAdmin.full_name ||
-            parsedAdmin.fullName ||
-            parsedAdmin.username ||
-            "Hệ thống";
-          const role =
-            parsedAdmin.role || localStorage.getItem("adminRole") || "Staff";
-          currentFullName = `${fullName} (${role})`;
-        } catch (parseErr) {
-          console.error(
-            "Lỗi parse thông tin adminInfo từ localStorage:",
-            parseErr,
-          );
+          currentFullName = `${parsedAdmin.full_name || parsedAdmin.fullName || parsedAdmin.username || "Hệ thống"} (${parsedAdmin.role || localStorage.getItem("adminRole") || "Staff"})`;
+        } catch (err) {
+          console.error(err);
         }
       }
 
@@ -370,42 +419,33 @@ export default function TaoPhieuNhapForm() {
       const response = await warehouseApi.post("/inventory", payload);
       if (response.status === 200 || response.status === 201) {
         showNotification("🎉 Đã lưu chứng từ và cập nhật số lượng tồn kho!");
-        // Chờ 1.5s để người dùng kịp đọc thông báo rồi đá về trang danh sách
-        setTimeout(() => {
-          navigate("/admin/inventory/import-list");
-        }, 1500);
+        setTimeout(() => navigate("/admin/inventory/import-list"), 1500);
       }
     } catch (err) {
-      const errorMsg =
+      showNotification(
         err.response?.data?.error ||
-        "Lỗi đồng bộ dữ liệu tới máy chủ kho hàng!";
-      showNotification(errorMsg, "error");
+          "Lỗi đồng bộ dữ liệu tới máy chủ kho hàng!",
+        "error",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const formatVnCurrency = (num) => {
-    return new Intl.NumberFormat("vi-VN").format(num) + " đ";
-  };
+  const formatVnCurrency = (num) =>
+    new Intl.NumberFormat("vi-VN").format(num) + " đ";
 
   return (
     <div className="w-full min-h-screen bg-[#f4f6f8] font-sans text-slate-700 antialiased p-4 text-left relative">
-      {/* TOAST SYSTEM */}
       {toast.show && (
         <div
-          className={`fixed top-5 right-5 z-[99999] px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border text-xs font-bold transition-all duration-300 ${
-            toast.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-rose-50 border-rose-200 text-rose-800"
-          }`}
+          className={`fixed top-5 right-5 z-[99999] px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 border text-xs font-bold transition-all duration-300 ${toast.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"}`}
         >
           <span>{toast.type === "success" ? "✅" : "❌"}</span>
           <span>{toast.message}</span>
         </div>
       )}
 
-      {/* HEADER AREA */}
       <div className="flex justify-between items-start mb-5">
         <div>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">
@@ -425,7 +465,6 @@ export default function TaoPhieuNhapForm() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* KHỐI TRÁI */}
         <div className="lg:col-span-8 space-y-4">
           <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
             <div className="relative flex-1">
@@ -454,7 +493,6 @@ export default function TaoPhieuNhapForm() {
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               📦 Biến thể hàng hóa nhập kho thực tế
             </h3>
-
             <div className="w-full" style={{ overflow: "visible" }}>
               <table
                 className="w-full border-collapse text-left text-xs font-bold"
@@ -464,9 +502,7 @@ export default function TaoPhieuNhapForm() {
                   <tr className="bg-slate-50 text-[10px] text-gray-400 uppercase border-b border-slate-100 select-none">
                     <th className="py-3 px-2 w-[22%]">Mặt hàng / SKU</th>
                     <th className="py-3 px-2 w-[22%]">Quản lý LÔ & HSD</th>
-                    <th className="py-3 px-2 w-[26%]">
-                      Quy Cách Đóng Gói / Quy Đổi
-                    </th>
+                    <th className="py-3 px-2 w-[26%]">Quy Cách / Quy Đổi</th>
                     <th className="py-3 px-2 text-center w-[9%]">SL Nhập</th>
                     <th className="py-3 px-2 text-center text-emerald-700 w-[11%]">
                       Tồn Kho Đổi Ra
@@ -498,6 +534,25 @@ export default function TaoPhieuNhapForm() {
                       const isLotOpen = activeLotDropdownSku === row.sku;
                       const isRatioOpen = activeRatioDropdownSku === row.sku;
 
+                      // LỌC RA 3 NHÓM LÔ THÔNG MINH
+                      const todayTime = new Date().setHours(0, 0, 0, 0);
+                      const validSuggestedLots = [];
+                      const expiredSuggestedLots = [];
+                      const validOtherLots = [];
+
+                      filteredLots.forEach((l) => {
+                        const isExpired =
+                          l.expiryDate &&
+                          new Date(l.expiryDate).setHours(0, 0, 0, 0) <
+                            todayTime;
+                        if (l.skus && l.skus.includes(row.sku)) {
+                          if (isExpired) expiredSuggestedLots.push(l);
+                          else validSuggestedLots.push(l);
+                        } else {
+                          if (!isExpired) validOtherLots.push(l);
+                        }
+                      });
+
                       return (
                         <tr
                           key={row.sku}
@@ -518,6 +573,7 @@ export default function TaoPhieuNhapForm() {
                             </div>
                           </td>
 
+                          {/* 🌟 CỘT CHỌN LÔ HÀNG THÔNG MINH */}
                           <td
                             className="py-3 px-2 relative"
                             style={{ overflow: "visible" }}
@@ -556,7 +612,7 @@ export default function TaoPhieuNhapForm() {
                             {isLotOpen && (
                               <div
                                 ref={dropdownLotRef}
-                                className="absolute left-0 mt-1 bg-white border border-gray-200 shadow-2xl rounded-2xl p-2.5 space-y-2 text-left w-56"
+                                className="absolute left-0 mt-1 bg-white border border-gray-200 shadow-2xl rounded-2xl p-2.5 space-y-2 text-left w-64"
                                 style={{ zIndex: 9999 }}
                               >
                                 {!showFastAddLot ? (
@@ -570,29 +626,90 @@ export default function TaoPhieuNhapForm() {
                                       }
                                       className="w-full px-2.5 py-1.5 bg-slate-50 border border-gray-200 rounded-lg text-[11px] outline-none"
                                     />
-                                    <div className="max-h-32 overflow-y-auto divide-y divide-slate-50">
+
+                                    <div className="max-h-48 overflow-y-auto divide-y divide-slate-50">
                                       {filteredLots.length === 0 ? (
                                         <p className="text-[10px] text-gray-400 text-center py-2">
                                           Không tìm thấy lô
                                         </p>
                                       ) : (
-                                        filteredLots.map((lot) => (
-                                          <button
-                                            type="button"
-                                            key={lot.id}
-                                            onClick={() =>
-                                              handleSelectLotForProduct(
-                                                row.sku,
-                                                lot.id,
-                                              )
-                                            }
-                                            className={`w-full text-left px-2 py-1.5 text-[11px] font-bold block rounded cursor-pointer ${row.selectedLotId === lot.id ? "bg-emerald-50 text-emerald-800" : "hover:bg-slate-50"}`}
-                                          >
-                                            <p className="truncate">
-                                              🏷️ {lot.id}
-                                            </p>
-                                          </button>
-                                        ))
+                                        <>
+                                          {/* NHÓM 1: LÔ KHUYÊN DÙNG (CÒN HẠN) */}
+                                          {validSuggestedLots.length > 0 && (
+                                            <div className="px-2 py-1 bg-emerald-50 text-[9px] font-black text-emerald-700 uppercase sticky top-0 z-10">
+                                              Khuyên dùng (Còn hạn)
+                                            </div>
+                                          )}
+                                          {validSuggestedLots.map((lot) => (
+                                            <button
+                                              type="button"
+                                              key={lot.id}
+                                              onClick={() =>
+                                                handleSelectLotForProduct(
+                                                  row.sku,
+                                                  lot.id,
+                                                )
+                                              }
+                                              className={`w-full text-left px-2 py-2 text-[11px] font-bold block rounded cursor-pointer ${row.selectedLotId === lot.id ? "bg-emerald-50 text-emerald-800" : "hover:bg-slate-50"}`}
+                                            >
+                                              <p className="truncate text-slate-700">
+                                                🏷️ {lot.displayName}
+                                              </p>
+                                              <p className="text-[9px] text-emerald-600 font-mono mt-0.5">
+                                                HSD: {lot.expiryDate}
+                                              </p>
+                                            </button>
+                                          ))}
+
+                                          {/* NHÓM 2: LÔ ĐÃ HẾT HẠN (DISABLE) */}
+                                          {expiredSuggestedLots.length > 0 && (
+                                            <div className="px-2 py-1 bg-rose-50 text-[9px] font-black text-rose-700 uppercase sticky top-0 z-10 mt-1">
+                                              Lô cũ (Đã hết hạn)
+                                            </div>
+                                          )}
+                                          {expiredSuggestedLots.map((lot) => (
+                                            <button
+                                              type="button"
+                                              key={lot.id}
+                                              disabled
+                                              className="w-full text-left px-2 py-2 text-[11px] font-bold block rounded cursor-not-allowed opacity-50 bg-slate-50"
+                                            >
+                                              <p className="truncate text-slate-500">
+                                                🚫 {lot.displayName}
+                                              </p>
+                                              <p className="text-[9px] text-rose-500 font-mono mt-0.5">
+                                                HSD: {lot.expiryDate}
+                                              </p>
+                                            </button>
+                                          ))}
+
+                                          {/* NHÓM 3: CÁC LÔ KHÁC (CÒN HẠN) */}
+                                          {validOtherLots.length > 0 && (
+                                            <div className="px-2 py-1 bg-slate-100 text-[9px] font-black text-slate-500 uppercase sticky top-0 z-10 mt-1">
+                                              Các lô khác (Còn hạn)
+                                            </div>
+                                          )}
+                                          {validOtherLots.map((lot) => (
+                                            <button
+                                              type="button"
+                                              key={lot.id}
+                                              onClick={() =>
+                                                handleSelectLotForProduct(
+                                                  row.sku,
+                                                  lot.id,
+                                                )
+                                              }
+                                              className={`w-full text-left px-2 py-2 text-[11px] font-bold block rounded cursor-pointer ${row.selectedLotId === lot.id ? "bg-emerald-50 text-emerald-800" : "hover:bg-slate-50"}`}
+                                            >
+                                              <p className="truncate text-slate-700">
+                                                🏷️ {lot.displayName}
+                                              </p>
+                                              <p className="text-[9px] text-gray-400 font-mono mt-0.5">
+                                                HSD: {lot.expiryDate}
+                                              </p>
+                                            </button>
+                                          ))}
+                                        </>
                                       )}
                                     </div>
                                     <button
@@ -607,12 +724,12 @@ export default function TaoPhieuNhapForm() {
                                   <div className="space-y-2 p-1">
                                     <input
                                       type="text"
-                                      placeholder="Tên lô diễn giải..."
+                                      placeholder="Mã lô tuỳ chỉnh (Hoặc để trống tự tạo)..."
                                       value={newLotName}
                                       onChange={(e) =>
                                         setNewLotName(e.target.value)
                                       }
-                                      className="w-full px-2 py-1 border rounded text-[11px]"
+                                      className="w-full px-2 py-1.5 border rounded text-[11px] outline-none"
                                     />
                                     <input
                                       type="date"
@@ -620,13 +737,13 @@ export default function TaoPhieuNhapForm() {
                                       onChange={(e) =>
                                         setNewLotExpiry(e.target.value)
                                       }
-                                      className="w-full px-2 py-1 border rounded text-[11px] cursor-pointer"
+                                      className="w-full px-2 py-1.5 border rounded text-[11px] cursor-pointer outline-none"
                                     />
-                                    <div className="grid grid-cols-2 gap-1.5">
+                                    <div className="grid grid-cols-2 gap-1.5 pt-1">
                                       <button
                                         type="button"
                                         onClick={() => setShowLotFastAdd(false)}
-                                        className="py-1 bg-slate-100 rounded text-[10px] cursor-pointer hover:bg-slate-200"
+                                        className="py-1.5 bg-slate-100 rounded text-[10px] cursor-pointer hover:bg-slate-200 font-bold"
                                       >
                                         Hủy
                                       </button>
@@ -635,9 +752,9 @@ export default function TaoPhieuNhapForm() {
                                         onClick={() =>
                                           handleCreateFastLot(row.sku)
                                         }
-                                        className="py-1 bg-emerald-600 text-white rounded text-[10px] cursor-pointer hover:bg-emerald-700"
+                                        className="py-1.5 bg-emerald-600 text-white rounded text-[10px] cursor-pointer hover:bg-emerald-700 font-bold"
                                       >
-                                        Lưu
+                                        Lưu & Áp dụng
                                       </button>
                                     </div>
                                   </div>
@@ -646,6 +763,7 @@ export default function TaoPhieuNhapForm() {
                             )}
                           </td>
 
+                          {/* Các cột còn lại */}
                           <td
                             className="py-3 px-2 relative"
                             style={{ overflow: "visible" }}
@@ -777,7 +895,6 @@ export default function TaoPhieuNhapForm() {
                               </div>
                             )}
                           </td>
-
                           <td className="py-3 px-2 text-center">
                             <input
                               type="number"
@@ -789,11 +906,9 @@ export default function TaoPhieuNhapForm() {
                               className="w-full text-center p-1 bg-white border border-gray-200 rounded-lg font-mono font-bold text-slate-800 outline-none focus:border-emerald-500"
                             />
                           </td>
-
                           <td className="py-3 px-2 text-center font-mono text-emerald-700 font-black bg-emerald-50/40 rounded">
                             {row.standardQuantity} {row.unit}
                           </td>
-
                           <td className="py-3 px-2">
                             <input
                               type="number"
@@ -804,7 +919,6 @@ export default function TaoPhieuNhapForm() {
                               className="w-full text-right p-1 bg-white border border-gray-200 rounded-lg font-mono text-slate-700 outline-none focus:border-emerald-500"
                             />
                           </td>
-
                           <td className="py-3 px-2 text-right font-mono font-black text-slate-800">
                             {formatVnCurrency(row.totalPrice)}
                           </td>
@@ -827,7 +941,6 @@ export default function TaoPhieuNhapForm() {
           </div>
         </div>
 
-        {/* KHỐI PHẢI */}
         <div className="lg:col-span-4 space-y-4">
           <div className="bg-[#006c49] text-white p-4 rounded-xl shadow-sm">
             <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-200">
@@ -837,7 +950,6 @@ export default function TaoPhieuNhapForm() {
               {formatVnCurrency(grandTotal)}
             </p>
           </div>
-
           <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">
@@ -855,7 +967,6 @@ export default function TaoPhieuNhapForm() {
                 ))}
               </select>
             </div>
-
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">
                 Hình thức kiểm duyệt *
@@ -869,7 +980,6 @@ export default function TaoPhieuNhapForm() {
                 <option value="TRATON">Khách Trả Hàng Lưu Kho</option>
               </select>
             </div>
-
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">
                 Ghi chú vận hành
@@ -882,7 +992,6 @@ export default function TaoPhieuNhapForm() {
                 className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none resize-none focus:border-emerald-500 transition"
               ></textarea>
             </div>
-
             <div className="pt-2">
               <button
                 type="submit"
