@@ -8,14 +8,48 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetInventory lấy toàn bộ danh mục sản phẩm (items) đăng ký với kho
+// InventoryStockResponse định nghĩa cấu trúc dữ liệu trả về cho Frontend
+type InventoryStockResponse struct {
+	Sku         string  `json:"id" gorm:"column:sku"`
+	Name        string  `json:"name" gorm:"column:name"`
+	Quantity    int     `json:"quantity" gorm:"column:total_quantity"`
+	CostPrice   float64 `json:"costPrice" gorm:"column:total_cost_value"`
+	TotalValue  float64 `json:"totalValue" gorm:"column:total_retail_value"`
+	CreatedAt   string  `json:"createdAt" gorm:"column:first_import_date"` // Ngày nhập kho lần đầu
+	UpdatedAt   string  `json:"updatedAt" gorm:"column:last_update_date"`  // Ngày cập nhật kho gần nhất
+}
+
+// 🌟 GetInventory (ĐÃ NÂNG CẤP): Gom nhóm tồn kho theo SKU kèm Thời gian biến động
 func GetInventory(c *gin.Context) {
-	var items []models.Item
-	if err := config.DB.Find(&items).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var inventoryList []InventoryStockResponse
+
+	// Câu lệnh SQL "thần thánh": JOIN 3 bảng, tính tổng tồn, tổng vốn và THỜI GIAN
+	err := config.DB.Table("ton_kho").
+		Select(`
+			ton_kho.sku, 
+			COALESCE(MAX(items.name), 'Sản phẩm chưa xác định') AS name, 
+			SUM(ton_kho.so_luong_thuc_te) AS total_quantity,
+			SUM(ton_kho.so_luong_thuc_te * COALESCE(lo_hang.gia_nhap, 0)) AS total_cost_value,
+			SUM(ton_kho.so_luong_thuc_te * COALESCE(items.price, lo_hang.gia_nhap * 1.3, 0)) AS total_retail_value,
+			MIN(ton_kho.ngay_tao) AS first_import_date,
+			MAX(ton_kho.ngay_cap_nhat) AS last_update_date
+		`).
+		Joins("LEFT JOIN items ON ton_kho.sku = items.sku").
+		Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang").
+		Group("ton_kho.sku").
+		Order("last_update_date DESC"). // Đưa mặt hàng mới có biến động kho lên đầu
+		Scan(&inventoryList).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn tổng hợp tồn kho: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, items)
+
+	if inventoryList == nil {
+		inventoryList = make([]InventoryStockResponse, 0)
+	}
+
+	c.JSON(http.StatusOK, inventoryList)
 }
 
 // CreateItem đăng ký một mã sản phẩm vật tư mới vào danh mục kho

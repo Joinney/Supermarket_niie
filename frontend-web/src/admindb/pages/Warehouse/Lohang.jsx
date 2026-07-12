@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { warehouseApi } from "../../../api/axios";
 
-// 🌟 HÀM PHỤ TRỢ: Loại bỏ dấu tiếng Việt để tìm kiếm thông minh hơn
 const removeVietnameseTones = (str) => {
   if (!str) return "";
   return str
