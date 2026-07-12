@@ -8,7 +8,7 @@ import {
   FileText, 
   Star,
   ClipboardCheck, 
-  Bike,           
+  Bike,          
   Home            
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
@@ -211,7 +211,8 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                     </button>
                   )}
 
-                  {(statusText === "Lấy hàng" || statusText === "Đang giao") && (
+                  {/* CHỈ ĐỂ LẠI TRẠNG THÁI "ĐANG GIAO" ĐƯỢC PHÉP XEM LỘ TRÌNH VÌ XE ĐÃ DI CHUYỂN THỰC TẾ */}
+                  {statusText === "Đang giao" && (
                     <button onClick={() => setSelectedOrderForMap(order)} className="bg-emerald-50 hover:bg-emerald-600 text-[#006c49] hover:text-white px-3 py-1.5 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 border border-emerald-100 cursor-pointer">
                       <MapPin size={11} /> Theo dõi lộ trình
                     </button>

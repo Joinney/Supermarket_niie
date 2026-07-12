@@ -411,26 +411,47 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           routingLayer.current = L.featureGroup().addTo(leafletMapInstance.current);
         }
 
-        const hasDirectLog = databaseTrackingLogs.some(log => log.station_id === "DIRECT_STORE_HQ");
+        const sortedLogs = [...databaseTrackingLogs].sort(
+          (a, b) => new Date(a.ngay_tao) - new Date(b.ngay_tao)
+        );
+
+        const hasDirectLog = sortedLogs.some(log => log.station_id === "DIRECT_STORE_HQ");
         let waypoints = [`${storeLng},${storeLat}`];
         let firstMileName = "Bưu cục gom hàng DemiMart";
         let lastMileName = "Bưu cục phát chặng cuối DemiMart Express";
         let totalHubs = 0;
 
+        // --- ĐỒNG BỘ HOÀN TOÀN: LỌC SẠCH TRẠM TRÙNG GIỐNG CHITIETTRACKINGORDER ---
         let uniqueStations = [];
-        databaseTrackingLogs.forEach((log) => {
-          const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
-          if (!lat || !lng) return;
-          if (Math.abs(lat - storeLat) < 0.002 && Math.abs(lng - storeLng) < 0.002) return;
-          if (!uniqueStations.some(s => Math.abs(parseFloat(s.station_lat) - lat) < 0.003)) uniqueStations.push(log);
-        });
+        if (hasDirectLog) {
+          uniqueStations = sortedLogs;
+        } else {
+          sortedLogs.forEach((log) => {
+            const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
+            if (!lat || !lng) return;
+
+            if (Math.abs(lat - storeLat) < 0.002 && Math.abs(lng - storeLng) < 0.002) return;
+            if (Math.abs(lat - userLat) < 0.002 && Math.abs(lng - userLng) < 0.002) return;
+
+            const isExist = uniqueStations.some(
+              (s) =>
+                Math.abs(parseFloat(s.station_lat) - lat) < 0.003 &&
+                Math.abs(parseFloat(s.station_lng) - lng) < 0.003
+            );
+
+            if (!isExist) {
+              uniqueStations.push(log);
+            }
+          });
+        }
 
         if (hasDirectLog) {
-          const directLog = databaseTrackingLogs.find(l => l.station_id === "DIRECT_STORE_HQ");
+          const directLog = sortedLogs.find(l => l.station_id === "DIRECT_STORE_HQ");
           L.marker([storeLat, storeLng], { icon: createStationCleanIcon(SHOP_ICON_URL, 36) }).on("click", () => { if (isMounted) setSelectedStation(directLog); }).addTo(routingLayer.current);
           firstMileName = "Kho hàng trung tâm"; lastMileName = "Giao hàng trực tiếp siêu tốc";
         } else {
-          databaseTrackingLogs.forEach((log) => {
+          // Duyệt và thêm waypoint từ mảng uniqueStations đã được lọc sạch
+          uniqueStations.forEach((log) => {
             const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
             if (!lat || !lng) return;
             waypoints.push(`${lng},${lat}`);
@@ -530,14 +551,12 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             });
           }, 30);
 
-          // LẮNG NGHE SỰ KIỆN PHÁT TỌA ĐỘ ĐỒNG BỘ "send_truck_location" TỪ ADMIN
+          // LẮNG NGHE SỰ KIỆN PHÁT TỌA ĐỘ ĐỒNG BỘ "send_truck_location" TÀI XẾ TỪ ADMIN
           socketRef.current.on("send_truck_location", (socketData) => {
             const { coordinates: truckCoords, isArrived, isFullyDelivered, currentStationIndex: socketStationIdx } = socketData;
             
-            // Chặn đè mốc rỗng: Admin chưa khởi hành thì giữ nguyên xe tại mốc khởi tạo
             if (!truckCoords || !Array.isArray(truckCoords) || truckCoords.length < 2) return;
 
-            // Đảo chuẩn tọa độ từ [lng, lat] của MongoDB sang [lat, lng] của Leaflet
             const adminLat = truckCoords[1];
             const adminLng = truckCoords[0];
 

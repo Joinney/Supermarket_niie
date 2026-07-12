@@ -13,7 +13,8 @@ router.post('/update-location', async (req, res) => {
     current_station_index, 
     current_coord_index, 
     status_text, 
-    is_truck 
+    is_truck,
+    is_direct_delivery // Kế thừa cờ nhận diện đơn hàng nội tỉnh (giao thẳng) từ Frontend
   } = req.body;
 
   try {
@@ -34,16 +35,39 @@ router.post('/update-location', async (req, res) => {
     let calculatedOrderStatus = "Đang giao"; // Mặc định cho các chặng giữa và chặng phát sau này
     let customerStatusText = status_text || "Đang vận chuyển";
 
-    // [CHẶNG 1]: Xe đang di chuyển từ Shop đi đến trước Trạm bưu cục đầu tiên
-    if (stationIdx === -1) {
-      calculatedOrderStatus = "Xác nhận"; 
-      if (!status_text) {
-        customerStatusText = "Xe vận tải đang di chuyển từ tổng kho hướng về trạm nhận hàng";
+    // Mốc kiểm tra từ khóa hoàn tất đơn hàng
+    const isDeliverySuccess = (
+      cleanStatus.includes("giao xong") || 
+      cleanStatus.includes("thành công") || 
+      cleanStatus.includes("hoàn thành") || 
+      cleanStatus.includes("🎉 đã giao xong")
+    );
+
+    // [KIỂM TRA CHẶNG]: Tách biệt đơn nội tỉnh (giao trực tiếp) và liên tỉnh (qua HUB)
+    if (is_direct_delivery === true || is_direct_delivery === 'true') {
+      
+      if (isDeliverySuccess) {
+        // Nút bấm chặng cuối: Giao hàng thành công
+        calculatedOrderStatus = "Đã giao";
+        customerStatusText = "🎉 Giao hàng thành công";
+      } 
+      else if (stationIdx === -1 && coordIdx === 0) {
+        // Trạng thái tĩnh ban đầu tại kho khi chưa bấm chạy mô phỏng
+        calculatedOrderStatus = "Lấy hàng";
+        customerStatusText = "Bưu tá đã tiếp nhận đơn hàng hỏa tốc và đang chuẩn bị hàng";
+      } 
+      else {
+        // ĐƠN TRONG TỈNH: Chỉ cần bấm "Khởi hành/Tiếp tục" (coordIdx > 0 hoặc xe di chuyển) -> Chuyển ĐANG GIAO luôn
+        calculatedOrderStatus = "Đang giao";
+        if (!status_text || cleanStatus.includes("trung chuyển")) {
+          customerStatusText = "Shipper đang giao hỏa tốc kiện hàng đến địa chỉ của bạn";
+        }
       }
-    } 
-    // [CHẶNG 2 & 3]: Xử lý tính toán động tại Trạm đầu tiên (Index = 0)
-    else if (stationIdx === 0) {
-      // 🌟 KIỂM TRA BẰNG TỪ KHÓA ĐI TIẾP CỦA NÚT BẤM ADMIN HOẶC CHECK LỆCH TỌA ĐỘ THỰC THẾ
+
+    } else {
+      // ----------------------------------------------------------------
+      // GIỮ NGUYÊN LUỒNG XỬ LÝ ĐƠN LIÊN TỈNH GỐC CỦA BẠN (QUA NHIỀU HUB)
+      // ----------------------------------------------------------------
       const isAdminClickNextButton = (
         cleanStatus.includes("xuất bưu cục") || 
         cleanStatus.includes("rời kho") || 
@@ -53,24 +77,28 @@ router.post('/update-location', async (req, res) => {
         cleanStatus.includes("đi tiếp")
       );
 
-      if (isAdminClickNextButton) {
-        calculatedOrderStatus = "Đang giao";
-        customerStatusText = status_text || "Xe đã rời trạm đầu tiên, bắt đầu hành trình trung chuyển liên tỉnh";
-      } else {
-        // Nếu Admin chưa bấm đi tiếp, giữ trạng thái "Lấy hàng"
-        calculatedOrderStatus = "Lấy hàng";
-        customerStatusText = status_text || "Đã cập bến bưu cục chặng đầu - Đang làm thủ tục quét mã lấy hàng";
+      if (isDeliverySuccess) {
+        calculatedOrderStatus = "Đã giao";
+        customerStatusText = "🎉 Giao hàng thành công";
+      } 
+      else if (stationIdx === -1) {
+        calculatedOrderStatus = "Xác nhận"; 
+        if (!status_text) {
+          customerStatusText = "Xe vận tải đang di chuyển từ tổng kho hướng về trạm nhận hàng";
+        }
+      } 
+      else if (stationIdx === 0) {
+        if (isAdminClickNextButton) {
+          calculatedOrderStatus = "Đang giao";
+          customerStatusText = status_text || "Xe đã rời trạm đầu tiên, bắt đầu hành trình trung chuyển liên tỉnh";
+        } else {
+          calculatedOrderStatus = "Lấy hàng";
+          customerStatusText = status_text || "Đã cập bến bưu cục chặng đầu - Đang làm thủ tục quét mã lấy hàng";
+        }
       }
-    }
-    // [CHẶNG 4]: Xe lưu thông qua tất cả các trạm phân loại HUB chặng giữa phía sau
-    else if (stationIdx > 0) {
-      calculatedOrderStatus = "Đang giao";
-    }
-
-    // [CHẶNG ĐÍCH]: Khi bưu tá bàn giao kiện hàng hoàn tất
-    if (cleanStatus.includes("giao xong") || cleanStatus.includes("thành công") || cleanStatus.includes("🎉 đã giao xong")) {
-      calculatedOrderStatus = "Đã giao";
-      customerStatusText = "🎉 Giao hàng thành công";
+      else if (stationIdx > 0) {
+        calculatedOrderStatus = "Đang giao";
+      }
     }
 
     // ----------------------------------------------------------------

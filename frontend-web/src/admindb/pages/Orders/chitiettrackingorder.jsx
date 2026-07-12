@@ -136,7 +136,8 @@ export default function Chitiettrackingorder() {
         current_station_index: stationIdx,
         current_coord_index: coordIdx, 
         status_text: statusOverride || (routeInfo.isDirectDelivery ? "Shipper đang giao hỏa tốc" : "Đang trung chuyển"),
-        is_truck: isTruckVehicleMode
+        is_truck: isTruckVehicleMode,
+        is_direct_delivery: routeInfo.isDirectDelivery // Đồng bộ truyền dữ liệu nội tỉnh/giao thẳng lên Backend
       });
     } catch (err) {
       console.error("❌ Lỗi đồng bộ dữ liệu MongoDB:", err);
@@ -330,6 +331,11 @@ export default function Chitiettrackingorder() {
     const stepSize = getSpeedStep(); 
     let dbSaveCounter = 0; 
     
+    // 🔥 ĐỒNG BỘ TỨC THÌ: Gửi lệnh update location đầu tiên ngay khi bấm nút để Backend chuyển sang "Đang giao" không bị trễ hình
+    if (routeInfo.isDirectDelivery && animationIndexRef.current === 0) {
+      saveCurrentLocationToDB(routeCoords[0][0], routeCoords[0][1], currentStationIndex, 1, "Shipper đang giao hỏa tốc");
+    }
+
     simulationIntervalRef.current = setInterval(async () => {
       let currentIndex = animationIndexRef.current;
 
@@ -687,7 +693,7 @@ export default function Chitiettrackingorder() {
   if (error || !orderDetail) {
     return (
       <div className="w-full min-h-screen p-10 bg-[#fafafa] text-center font-bold text-rose-500 text-xs">
-         {error || "Không tìm thấy thông tin vận đơn khớp."}
+          {error || "Không tìm thấy thông tin vận đơn khớp."}
       </div>
     );
   }
