@@ -11,7 +11,8 @@ import {
   getOrdersByUserAdmin,
   getPostOffices,
   testReadKml,
-  getOrderTrackingLogs, // 🌟 Đã đồng bộ chuẩn xác với Controller truy vấn SELECT
+  getOrderTrackingLogs,
+  createOrderTrackingLogNode, // 🌟 THÊM MỚI: Import hàm controller xử lý tạo node
   calculateShipping 
 } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js'; 
@@ -65,12 +66,17 @@ router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder);
 // 9.1 Lấy danh sách đơn hàng theo user id (Admin) - để trang quản trị xem lịch sử đơn của 1 khách
 router.get('/admin/user-orders/:userId', protect, getOrdersByUserAdmin);
 
+
 // ========================================================
 // 🏁 ROUTE ĐỊNH TUYẾN LOGISTICS VÀ KIỂM THỬ (LOGISTICS ENDPOINTS)
 // ========================================================
 
 // 11. TRUY VẤN LOGISTICS: Kết xuất mảng lộ trình bưu cục chặng giữa và chặng phát cuối từ DB lên bản đồ
 router.get('/shipping/logs/:orderId', getOrderTrackingLogs);
+
+// 12. GHI LOG LOGISTICS REALTIME: Tiếp nhận lệnh nhảy trạm từ Admin để lưu lịch sử quét trạm vào PostgreSQL
+// 🛠️ ĐÃ FIX LỖI 404: Khai báo endpoint POST để Front-end gửi dữ liệu lên thành công
+router.post('/shipping/tracking-logs/create-node', createOrderTrackingLogNode);
 
 // 13. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
 router.post('/test-kml', testReadKml);

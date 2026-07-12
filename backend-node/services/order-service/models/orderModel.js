@@ -15,14 +15,16 @@ export const create = async (userId, data) => {
     phuong_thuc_thanh_toan,
     paypal_transaction_id,
     paypal_order_id,
-    to_district_id, // Bóc tách trực tiếp để tái sử dụng an toàn
+    to_district_id, 
     to_ward_code,
-    to_lat, to_lng, tong_khoang_cach_km, thoi_gian_du_kien_phut,
-    trang_thai_don_hang // 🌟 THÊM: Bốc tách trường này từ dữ liệu controller truyền sang
+    to_lat, to_lng, 
+    tong_khoang_cach_km, 
+    thoi_gian_du_kien_phut,
+    trang_thai_don_hang 
   } = data;
 
-  // 1. Khởi tạo mã đơn hàng dựa trên thời gian
-  const ma_don_hang = 'DM' + Date.now();
+  // 1. Khởi tạo mã đơn hàng dựa trên thời gian thực địa (Unique timestamp)
+  const ma_don_hang = 'DM' + Date.now() + Math.floor(Math.random() * 1000);
   
   // 2. Khai báo biến client trước khối try để phạm vi biến (scope) bao quát được finally
   let client; 
@@ -58,7 +60,7 @@ export const create = async (userId, data) => {
       RETURNING id, ma_don_hang;
     `;
 
-    // Xác định trạng thái thanh toán linh hoạt
+    // Xác định trạng thái thanh toán linh hoạt dựa trên cổng tích hợp
     let trangThaiThanhToan = 'pending';
     if (phuong_thuc_thanh_toan === 'PayPal' || phuong_thuc_thanh_toan === 'VNPay_Success') {
       trangThaiThanhToan = 'completed';
@@ -74,8 +76,8 @@ export const create = async (userId, data) => {
 
     const orderValues = [
       String(ma_don_hang),
-      userId,                                         // Đảm bảo map trúng vào cột $2 (user_id)
-      Number(to_district_id || 2194),              // Đã định dạng số an toàn
+      userId,                                                     // Đảm bảo map trúng vào cột $2 (user_id)
+      Number(to_district_id || 2194),                             // Đã định dạng số an toàn
       String(to_ward_code || "220713"), 
       Number(tong_tien_hang || 0),
       Number(phi_van_chuyen || 0),
@@ -83,10 +85,9 @@ export const create = async (userId, data) => {
       Number(tong_thanh_toan || 0),
       String(phuong_thuc_thanh_toan || 'COD'),
       trangThaiThanhToan,
-      String(trang_thai_don_hang || 'Chờ xác nhận'), // 🌟 ĐÃ FIX: Nhận trạng thái động từ Controller (ví dụ: 'Chờ xác nhận') thay vì gán cứng 'pending'
+      String(trang_thai_don_hang || 'Chờ xác nhận'),              // Nhận trạng thái động từ Controller
       paypal_transaction_id ? String(paypal_transaction_id) : null,
       paypal_order_id ? String(paypal_order_id) : null,
-
       to_lat ? parseFloat(to_lat) : null,
       to_lng ? parseFloat(to_lng) : null,
       Number(tong_khoang_cach_km || 0),
@@ -126,7 +127,7 @@ export const create = async (userId, data) => {
     return orderRes.rows[0]; 
 
   } catch (error) {
-    // 6. Hoàn tác dữ liệu (Rollback) lập tiếp nếu có bất kỳ lỗi xung đột nào xảy ra ngầm
+    // 6. Hoàn tác dữ liệu (Rollback) lập tức nếu có bất kỳ lỗi xung đột nào xảy ra ngầm
     if (client) {
       await client.query('ROLLBACK');
     }
@@ -137,7 +138,7 @@ export const create = async (userId, data) => {
     });
     throw error;
   } finally {
-    // 🌟 ĐÃ FIX: Chỉ giải phóng khi kết nối client thực sự tồn tại, chống lỗi sập app lãng phí
+    // Chỉ giải phóng khi kết nối client thực sự tồn tại, chống lỗi sập app lãng phí
     if (client) {
       client.release();
     }

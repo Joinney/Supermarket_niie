@@ -211,14 +211,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
   const createUserLiveVehicleIcon = (isTruckMode, statusText = "Đang di chuyển", widthPx = 64, heightPx = 64) => {
     const currentImg = isTruckMode ? LIVE_ANIMATION_TRUCK_URL : LIVE_SHIPPER_MOTOR_URL;
     
-    // Đảm bảo hiển thị màu xanh lục chuẩn khi giao xong
-    let badgeColor = "#006c49";
-    if (statusText.includes("giao xong") || statusText.includes("thành công")) {
-      badgeColor = "#006c49";
-    } else if (statusText.includes('đến') || statusText.includes('bưu cục') || statusText.includes('Xác nhận')) {
-      badgeColor = "#b91c1c";
-    }
-
     return L.divIcon({
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; position: relative;">
@@ -341,7 +333,13 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     }
 
     const stringRoomId = String(order.ma_don_hang || "").trim();
-    socketRef.current = io("http://localhost:5005");
+    
+    // 🛠️ ĐỒNG BỘ GATEWAY CỔNG 5005 ĐÚNG VỚI BACKEND ORDER SERVICE
+    socketRef.current = io("http://localhost:5005", {
+      transports: ["websocket"],
+      upgrade: false,
+      forceNew: true
+    });
     socketRef.current.emit("join_order_room", stringRoomId);
 
     const renderRouteMap = async () => {
@@ -349,7 +347,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
       const storeLat = 10.771963;
       const storeLng = 106.697194;
-      const storeName = "Kho Xuất Phát Tổng DemiMart";
 
       let databaseTrackingLogs = [];
       let currentTruckCoords = [storeLat, storeLng]; 
@@ -386,10 +383,10 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           }
         } catch (addrErr) {}
 
-        // [3] TRUY VẤN LỘ TRÌNH THỰC TẾ VÀ TỌA ĐỘ XE LƯU TRONG DB KHI F5
+        // [3] ĐỒNG BỘ LỘ TRÌNH VÀ TỌA ĐỘ XE LƯU TRONG DB KHI F5
         try {
           const targetOrderId = order.id || order.ma_don_hang;
-          const trackingRes = await orderApi.get(`/orders/tracking-logs/${targetOrderId}`);
+          const trackingRes = await orderApi.get(`/shipping/logs/${targetOrderId}`);
           if (trackingRes.data?.success) {
             databaseTrackingLogs = trackingRes.data.data || [];
           }
@@ -398,7 +395,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           if (liveOrderRes.data?.success && liveOrderRes.data.data?.current_lat) {
             currentTruckCoords = [parseFloat(liveOrderRes.data.data.current_lat), parseFloat(liveOrderRes.data.data.current_lng)];
             dbStatusText = liveOrderRes.data.data.status_text || "Đang di chuyển";
-            currentStationIdxFromDB = liveOrderRes.data.data.current_station_index !== undefined ? liveOrderRes.data.data.current_station_index : -1;
           }
         } catch (dbLogErr) {
           console.error("⚠️ Không lấy được dữ liệu logs:", dbLogErr.message);
@@ -415,14 +411,12 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           routingLayer.current = L.featureGroup().addTo(leafletMapInstance.current);
         }
 
-        // Kiểm tra xem đơn hàng thuộc diện GIAO THẲNG SIÊU TỐC NỘI TỈNH
         const hasDirectLog = databaseTrackingLogs.some(log => log.station_id === "DIRECT_STORE_HQ");
         let waypoints = [`${storeLng},${storeLat}`];
         let firstMileName = "Bưu cục gom hàng DemiMart";
         let lastMileName = "Bưu cục phát chặng cuối DemiMart Express";
         let totalHubs = 0;
 
-        // Lọc danh sách bưu cục trung chuyển độc nhất
         let uniqueStations = [];
         databaseTrackingLogs.forEach((log) => {
           const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
@@ -431,14 +425,11 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           if (!uniqueStations.some(s => Math.abs(parseFloat(s.station_lat) - lat) < 0.003)) uniqueStations.push(log);
         });
 
-        // Vẽ các Trạm/Hub cố định lên bản đồ
         if (hasDirectLog) {
-          // Luồng giao siêu tốc trực tiếp nội tỉnh: Chỉ ghim duy nhất Kho tổng xuất phát
           const directLog = databaseTrackingLogs.find(l => l.station_id === "DIRECT_STORE_HQ");
           L.marker([storeLat, storeLng], { icon: createStationCleanIcon(SHOP_ICON_URL, 36) }).on("click", () => { if (isMounted) setSelectedStation(directLog); }).addTo(routingLayer.current);
           firstMileName = "Kho hàng trung tâm"; lastMileName = "Giao hàng trực tiếp siêu tốc";
         } else {
-          // Luồng đa trạm chặng đường xa: Duyệt mảng Data đổ ra Marker tương ứng
           databaseTrackingLogs.forEach((log) => {
             const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
             if (!lat || !lng) return;
@@ -462,24 +453,19 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             }
 
             L.marker([lat, lng], { icon: createStationCleanIcon(currentIconUrl, iconSizePx) })
-              .on("click", () => {
-                if (isMounted) setSelectedStation(log); 
-              })
+              .on("click", () => { if (isMounted) setSelectedStation(log); })
               .addTo(routingLayer.current);
           });
 
           L.marker([storeLat, storeLng], { icon: createStationCleanIcon(SHOP_ICON_URL, 36) }).addTo(routingLayer.current);
         }
 
-        // Thêm điểm đích nhà khách hàng
         waypoints.push(`${userLng},${userLat}`);
 
-        // Ghim Avatar Khách hàng điểm giao
         const finalRenderAvatar = targetAvatar || liveUserAvatar;
         customerMarkerRef.current = L.marker([userLat, userLng], { icon: createCustomerAvatarIcon(finalRenderAvatar) }).bindPopup(`<b>Điểm giao hàng đơn ${order?.ma_don_hang}</b>`);
         customerMarkerRef.current.addTo(routingLayer.current);
 
-        // GỌI OSRM ĐỂ NỐI ĐƯỜNG NỀN
         const coordsString = waypoints.join(";");
         const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&continue_straight=true`;
         const routeRes = await fetch(osrmUrl);
@@ -497,7 +483,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
             storeName: lastMileName, firstMileOfficeName: firstMileName, loading: false, totalOfficesOnRoute: totalHubs, isDirectDelivery: hasDirectLog
           });
 
-          // Định vị vị trí xe khởi tạo
+          // Định vị vị trí xe khởi tạo tĩnh từ DB
           let initIndex = 0;
           let minDiff = Infinity;
           for (let i = 0; i < coordinates.length; i++) {
@@ -508,93 +494,85 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           targetCoordIndexRef.current = initIndex;
 
           let initTruckMode = !hasDirectLog;
+          if (liveVehicleMarkerRef.current) leafletMapInstance.current.removeLayer(liveVehicleMarkerRef.current);
+          
           liveVehicleMarkerRef.current = L.marker([coordinates[initIndex][0], coordinates[initIndex][1]], {
             icon: createUserLiveVehicleIcon(initTruckMode, dbStatusText, 64, 64)
           }).addTo(leafletMapInstance.current);
 
-          if (leafletMapInstance.current && routingLayer.current) {
-            leafletMapInstance.current.fitBounds(routingLayer.current.getBounds(), { padding: [50, 50] });
-          }
+          leafletMapInstance.current.fitBounds(routingLayer.current.getBounds(), { padding: [50, 50] });
 
-          // 🌟 BỘ CHẠY NỘI SUY TỰ ĐỘNG ĐUỔI BẮT TỐC ĐỘ CAO (CÓ FAST-CATCHUP KHI F5 TẢI LẠI TRANG)
+          // 🌟 KHÓA CỨNG LÒ XO NỘI SUY: Chỉ bám đuổi tịnh tiến mượt mà khi targetCoordIndexRef thay đổi từ dữ liệu thực tế của Socket
           userSimulationIntervalRef.current = setInterval(() => {
             setCurrentCoordIndex((prevIndex) => {
               const targetIdx = targetCoordIndexRef.current;
               if (prevIndex < targetIdx) {
                 const distanceLeft = targetIdx - prevIndex;
 
-                // 💡 ĐỒNG BỘ ĐUỔI BẮT KHI F5: Nếu lệch pha > 30 index OSRM, nhảy cóc thẳng tới sát xe Admin luôn
-                if (distanceLeft > 30) {
-                  const catchupIdx = targetIdx - 3;
-                  const currentPt = coordinates[catchupIdx];
-                  if (liveVehicleMarkerRef.current) {
+                // Đồng bộ nhảy cóc nếu lệch chặng quá xa do F5
+                if (distanceLeft > 40) {
+                  const currentPt = coordinates[targetIdx];
+                  if (liveVehicleMarkerRef.current && currentPt) {
                     liveVehicleMarkerRef.current.setLatLng([currentPt[0], currentPt[1]]);
                   }
-                  return catchupIdx;
+                  return targetIdx;
                 }
 
-                // Nếu khoảng cách bình thường, tự tính bước nhảy lò xo động để bám đuổi mịn màng
-                const dynamicStep = distanceLeft > 10 ? 4 : 1; 
-                const nextIdx = Math.min(prevIndex + dynamicStep, targetIdx); 
+                const dynamicStep = distanceLeft > 15 ? 4 : distanceLeft > 5 ? 2 : 1;
+                const nextIdx = Math.min(prevIndex + dynamicStep, targetIdx);
                 const currentPt = coordinates[nextIdx];
-                if (liveVehicleMarkerRef.current) {
+                if (liveVehicleMarkerRef.current && currentPt) {
                   liveVehicleMarkerRef.current.setLatLng([currentPt[0], currentPt[1]]);
                 }
                 return nextIdx;
               }
               return prevIndex;
             });
-          }, 25);
+          }, 30);
 
           // LẮNG NGHE SỰ KIỆN PHÁT TỌA ĐỘ ĐỒNG BỘ "send_truck_location" TỪ ADMIN
           socketRef.current.on("send_truck_location", (socketData) => {
             const { coordinates: truckCoords, isArrived, isFullyDelivered, currentStationIndex: socketStationIdx } = socketData;
-            if (!truckCoords) return;
+            
+            // Chặn đè mốc rỗng: Admin chưa khởi hành thì giữ nguyên xe tại mốc khởi tạo
+            if (!truckCoords || !Array.isArray(truckCoords) || truckCoords.length < 2) return;
 
-            // Đảo chuẩn tọa độ: MongoDB [lng, lat] chuyển thành Leaflet [lat, lng]
-            const leafletCoords = [truckCoords[1], truckCoords[0]];
+            // Đảo chuẩn tọa độ từ [lng, lat] của MongoDB sang [lat, lng] của Leaflet
+            const adminLat = truckCoords[1];
+            const adminLng = truckCoords[0];
 
-            let matchedIndex = 0;
+            let bestMatchIndex = targetCoordIndexRef.current;
             let minD = Infinity;
             for (let i = 0; i < coordinates.length; i++) {
-              const diff = Math.abs(coordinates[i][0] - truckCoords[0]) + Math.abs(coordinates[i][1] - truckCoords[1]);
-              if (diff < minDistance) {
-                minDistance = diff;
+              const diff = Math.abs(coordinates[i][0] - adminLat) + Math.abs(coordinates[i][1] - adminLng);
+              if (diff < minD) {
+                minD = diff;
                 bestMatchIndex = i;
               }
             }
-            setCurrentCoordIndex(bestMatchIndex);
 
-            // XỬ LÝ REALTIME TRÊN SOCKET: Ép định dạng xe máy khi đạt điều kiện
             let isTruck = true;
             if (hasDirectLog || isFullyDelivered || socketStationIdx >= uniqueStations.length - 1) {
               isTruck = false;
             }
             setIsTruckVehicleMode(isTruck);
 
-            // 🌟 ĐÃ SỬA CHỮA CHUẨN: Ưu tiên gán text "🎉 Đã giao xong" lên đầu để không bị chữ "giao hỏa tốc" đè
             let statusText = "Đang di chuyển";
             if (isFullyDelivered) statusText = "🎉 Đã giao xong";
             else if (isArrived) statusText = "⚠️ Đã đến bưu cục";
             else if (!isTruck) statusText = "Shipper đang giao hỏa tốc";
 
-            if (!liveVehicleMarkerRef.current) {
-              liveVehicleMarkerRef.current = L.marker([truckCoords[0], truckCoords[1]], {
-                icon: createUserLiveVehicleIcon(isTruck, statusText, 64, 64)
-              }).addTo(leafletMapInstance.current);
-            } else {
-              liveVehicleMarkerRef.current.setLatLng([truckCoords[0], truckCoords[1]]);
+            if (liveVehicleMarkerRef.current) {
               liveVehicleMarkerRef.current.setIcon(createUserLiveVehicleIcon(isTruck, statusText, 64, 64));
             }
 
-            // Đồng bộ đích ngầm ngầm sang mốc Ref mục tiêu
-            targetCoordIndexRef.current = matchedIndex;
+            // 🎯 GÁN ĐÍCH MỤC TIÊU MỚI: Kích hoạt lò xo tịnh tiến chạy đuổi theo Admin
+            targetCoordIndexRef.current = bestMatchIndex;
 
             if (isArrived || isFullyDelivered) {
-              // Chạm trạm dừng chân hoặc hoàn thành: Ghim chặt cứng tức thì không bò tịnh tiến nữa
-              setCurrentCoordIndex(matchedIndex);
+              setCurrentCoordIndex(bestMatchIndex);
               if (liveVehicleMarkerRef.current) {
-                liveVehicleMarkerRef.current.setLatLng([leafletCoords[0], leafletCoords[1]]);
+                liveVehicleMarkerRef.current.setLatLng([adminLat, adminLng]);
               }
             }
           });
@@ -712,7 +690,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           >
             {selectedStation && (
               <div className="flex flex-col h-full w-full">
-                {/* Header Sidebar trái xanh thương hiệu #006c49 */}
+                {/* Header Sidebar trái */}
                 <div className="p-4 bg-[#006c49] text-white flex items-center gap-3 shrink-0 shadow-sm relative">
                   <button 
                     onClick={() => setSelectedStation(null)} 
@@ -920,9 +898,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         {/* Footer */}
         <div className="p-4 bg-white border-t flex justify-between items-center text-xs shrink-0 text-slate-400 font-medium">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck size={16} className="text-[#006c49]" /> Đã dọn dẹp và
-            đóng gói tinh gọn: Loại bỏ hoàn toàn endpoint save-route-stations dư
-            thừa tại Client.
+            <ShieldCheck size={16} className="text-[#006c49]" /> Đã dọn dẹp và đóng gói tinh gọn: Hệ thống đồng bộ hành trình đường vận tải lõi OSRM từ cơ sở dữ liệu thành công.
           </span>
         </div>
       </div>

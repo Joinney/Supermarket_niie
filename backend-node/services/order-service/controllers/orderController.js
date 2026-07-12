@@ -209,25 +209,27 @@ const placeOrder = async (req, res) => {
         to_lng: userLngNum
     };
 
-    const order = await Order.create(userId, normalizedOrder);
-    console.log("✅ Đơn hàng đã tạo thành công với ID:", order.id);
+   const order = await Order.create(userId, normalizedOrder);
+console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang);
 
-    // 🌟 THÊM LOGIC: Tự động chuyển trạng thái sang "Xác nhận" sau 1 phút (60000 ms)
-    setTimeout(async () => {
-      try {
-        console.log(`[Hẹn giờ] Bắt đầu tự động chuyển trạng thái cho đơn hàng: ${order.ma_don_hang}`);
-        const autoConfirmQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Xác nhận' WHERE id = $1`;
-        
-        if (db.query) {
-          await db.query(autoConfirmQuery, [order.id]);
-        } else {
-          await db.execute(autoConfirmQuery, [order.id]);
-        }
-        console.log(`[Hẹn giờ] Đơn hàng ${order.ma_don_hang} đã cập nhật trạng thái sang 'Xác nhận' thành công.`);
-      } catch (timerErr) {
-        console.error(`🔥 [Lỗi hẹn giờ] Không thể tự động xác nhận đơn hàng ${order.ma_don_hang}:`, timerErr.message);
+// 🌟 FIX ĐỒNG BỘ: Sử dụng hàm Wrapper để khóa cứng ID của đơn hàng này trong bộ nhớ hàng đợi bất đồng bộ
+((targetOrderId, targetMaDonHang) => {
+  setTimeout(async () => {
+    try {
+      console.log(`[Hẹn giờ] Tự động xác nhận cho đơn hàng: ${targetMaDonHang}`);
+      const autoConfirmQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Xác nhận' WHERE id = $1`;
+      
+      if (db.query) {
+        await db.query(autoConfirmQuery, [targetOrderId]);
+      } else {
+        await db.execute(autoConfirmQuery, [targetOrderId]);
       }
-    }, 60000);
+      console.log(`[Hẹn giờ] Đơn hàng ${targetMaDonHang} đã chuyển sang 'Xác nhận'.`);
+    } catch (timerErr) {
+      console.error(`🔥 [Lỗi hẹn giờ] Không thể xác nhận đơn hàng ${targetMaDonHang}:`, timerErr.message);
+    }
+  }, 60000);
+})(order.id, order.ma_don_hang);
 
     // --- LUỒNG TỰ ĐỘNG HÓA TÍNH CHẶNG VÀ ĐỒNG BỘ TRẠM VÀO DATABASE ---
     try {
@@ -412,7 +414,7 @@ const placeOrder = async (req, res) => {
             });
           }
         }
-      } // <--- Đã sửa: Bổ sung dấu đóng ngoặc nhọn bị khuyết ở khối rẽ nhánh giao ngoại tỉnh
+      } 
 
       // Lưu mảng logs hành trình vào PostgreSQL công khai
       const insertLogQuery = `
@@ -879,6 +881,75 @@ const getOrderTrackingLogs = async (req, res) => {
   }
 };
 
+// ========================================================
+// 🌟 API 13: GHI LOG LOGISTICS REALTIME TỪ CÁC NODE ADMIN DI CHUYỂN
+// ========================================================
+const createOrderTrackingLogNode = async (req, res) => {
+  try {
+    const {
+      order_id,
+      ma_don_hang,
+      station_id,
+      station_name,
+      tinh_thanh,
+      quan_huyen,
+      phuong_xa,
+      so_nha_duong,
+      station_lat,
+      station_lng,
+      station_type,
+      action_type,
+      trang_thai_hien_thi
+    } = req.body;
+
+    const insertLogQuery = `
+      INSERT INTO public.order_tracking_logs (
+        order_id, ma_don_hang, station_id, station_name, 
+        tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
+        station_lat, station_lng, station_type, action_type, 
+        trang_thai_hien_thi, ngay_tao
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      RETURNING id;
+    `;
+
+    const queryParams = [
+      Number(order_id),
+      String(ma_don_hang),
+      station_id,
+      station_name,
+      tinh_thanh || "",
+      quan_huyen || "",
+      phuong_xa || "",
+      so_nha_duong || "",
+      parseFloat(station_lat),
+      parseFloat(station_lng),
+      station_type || "HUB",
+      action_type || "NHAP_TRAM_REALTIME",
+      trang_thai_hien_thi
+    ];
+
+    let result;
+    if (db.query) {
+      result = await db.query(insertLogQuery, queryParams);
+    } else {
+      result = await db.execute(insertLogQuery, queryParams);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Ghi nhận nhật ký quét trạm realtime thành công vào PostgreSQL!",
+      log_id: result.rows ? result.rows[0].id : result[0]?.insertId
+    });
+
+  } catch (err) {
+    console.error("🔥 Lỗi Controller createOrderTrackingLogNode:", err.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Lỗi máy chủ khi tạo dòng nhật ký quét trạm vận trình." 
+    });
+  }
+};
+
 export { 
   getShippingFee, 
   placeOrder, 
@@ -892,5 +963,6 @@ export {
   getPostOffices,
   testReadKml,
   calculateShipping,
-  getOrderTrackingLogs
+  getOrderTrackingLogs,
+  createOrderTrackingLogNode // 🌟 Đã đưa hàm vào danh sách export thành công
 };

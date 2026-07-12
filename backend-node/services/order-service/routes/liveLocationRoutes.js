@@ -21,43 +21,54 @@ router.post('/update-location', async (req, res) => {
       return res.status(400).json({ success: false, message: "Thiếu mã đơn hàng!" });
     }
 
-    // ----------------------------------------------------------------
-    // 🛠️ LOGIC ÉP TRẠNG THÁI CHUẨN XÁC THEO HÀNH ĐỘNG ĐIỀU PHỐI CỦA ADMIN
-    // ----------------------------------------------------------------
-    let calculatedOrderStatus = "Đang giao"; // Mặc định cho các chặng sau
-    let customerStatusText = status_text || "Đang vận chuyển";
-
     const stationIdx = Number(current_station_index);
     const coordIdx = current_coord_index !== undefined ? Number(current_coord_index) : 0;
     const cleanStatus = status_text ? status_text.toLowerCase().trim() : "";
+    
+    const latNum = parseFloat(current_lat);
+    const lngNum = parseFloat(current_lng);
 
-    // === TẠI SHOP HOẶC ĐANG TRÊN ĐƯỜNG ĐI CHẶNG ĐẦU (stationIdx === -1) ===
+    // ----------------------------------------------------------------
+    // 🛠️ LOGIC ÉP CHẶNG THEO GPS THỰC ĐỊA TUYỆT ĐỐI CHÍNH XÁC
+    // ----------------------------------------------------------------
+    let calculatedOrderStatus = "Đang giao"; // Mặc định cho các chặng giữa và chặng phát sau này
+    let customerStatusText = status_text || "Đang vận chuyển";
+
+    // [CHẶNG 1]: Xe đang di chuyển từ Shop đi đến trước Trạm bưu cục đầu tiên
     if (stationIdx === -1) {
-      calculatedOrderStatus = "Lấy hàng";
+      calculatedOrderStatus = "Xác nhận"; 
       if (!status_text) {
-        customerStatusText = "Sẵn sàng khởi hành";
+        customerStatusText = "Xe vận tải đang di chuyển từ tổng kho hướng về trạm nhận hàng";
       }
     } 
-    // === CHẶNG LIÊN QUAN ĐẾN BƯU CỤC ĐẦU TIÊN (INDEX = 0) ===
-    else if (stationIdx === -1) {
-      // Khi nhấn ĐI TIẾP (Có chữ "xuất bưu cục" hoặc "rời kho") -> Chuyển ngay sang ĐANG GIAO
-      if (cleanStatus.includes("xuất bưu cục") || cleanStatus.includes("rời kho") || cleanStatus.includes("rời bưu cục")) {
+    // [CHẶNG 2 & 3]: Xử lý tính toán động tại Trạm đầu tiên (Index = 0)
+    else if (stationIdx === 0) {
+      // 🌟 KIỂM TRA BẰNG TỪ KHÓA ĐI TIẾP CỦA NÚT BẤM ADMIN HOẶC CHECK LỆCH TỌA ĐỘ THỰC THẾ
+      const isAdminClickNextButton = (
+        cleanStatus.includes("xuất bưu cục") || 
+        cleanStatus.includes("rời kho") || 
+        cleanStatus.includes("rời bưu cục") || 
+        cleanStatus.includes("rời khỏi trạm") ||
+        cleanStatus.includes("rời kho vận chuyển") ||
+        cleanStatus.includes("đi tiếp")
+      );
+
+      if (isAdminClickNextButton) {
         calculatedOrderStatus = "Đang giao";
-        customerStatusText = status_text;
-      } 
-      // Ngược lại (Đang di chuyển từ Shop tới hoặc Đã đến bưu cục 1 nhưng chưa bấm rời đi) -> Giữ LẤY HÀNG
-      else {
+        customerStatusText = status_text || "Xe đã rời trạm đầu tiên, bắt đầu hành trình trung chuyển liên tỉnh";
+      } else {
+        // Nếu Admin chưa bấm đi tiếp, giữ trạng thái "Lấy hàng"
         calculatedOrderStatus = "Lấy hàng";
-        customerStatusText = status_text || "Xe đang di chuyển đến bưu cục gom hàng đầu tiên";
+        customerStatusText = status_text || "Đã cập bến bưu cục chặng đầu - Đang làm thủ tục quét mã lấy hàng";
       }
     }
-    // === CHẶNG DI CHUYỂN QUA CÁC TRẠM TRUNG CHUYỂN PHÍA SAU (INDEX > 0) ===
-    else if (stationIdx > 2) {
+    // [CHẶNG 4]: Xe lưu thông qua tất cả các trạm phân loại HUB chặng giữa phía sau
+    else if (stationIdx > 0) {
       calculatedOrderStatus = "Đang giao";
     }
 
-    // === CHẶNG CUỐI: HOÀN THÀNH GIAO ĐẾN KHÁCH HÀNG ===
-    if (cleanStatus.includes("giao xong") || cleanStatus.includes("thành công")) {
+    // [CHẶNG ĐÍCH]: Khi bưu tá bàn giao kiện hàng hoàn tất
+    if (cleanStatus.includes("giao xong") || cleanStatus.includes("thành công") || cleanStatus.includes("🎉 đã giao xong")) {
       calculatedOrderStatus = "Đã giao";
       customerStatusText = "🎉 Giao hàng thành công";
     }
@@ -85,7 +96,7 @@ router.post('/update-location', async (req, res) => {
       {
         $set: {
           order_id: order_id,
-          "current_location.coordinates": [Number(current_lng), Number(current_lat)], 
+          "current_location.coordinates": [lngNum, latNum], 
           current_station_index: stationIdx,
           current_coord_index: coordIdx, 
           status_text: customerStatusText, 
@@ -98,7 +109,7 @@ router.post('/update-location', async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Đã đồng bộ cập nhật tọa độ xe và trạng thái đơn hàng thành công!",
+      message: "Đã đồng bộ cập nhật lộ trình thực địa và trạng thái stepper thành công!",
       order_status: calculatedOrderStatus,
       data: updatedData
     });
