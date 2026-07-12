@@ -69,7 +69,10 @@ func main() {
 		// 🏢 1. NHÓM QUẢN LÝ KHO HÀNG (warehouse_controller.go)
 		api.GET("/warehouses", controllers.GetWarehouses)
 		api.PUT("/warehouses/:id/toggle-status", controllers.ToggleWarehouseStatus)
-		
+		api.POST("/warehouses", controllers.CreateWarehouse)      
+		api.PUT("/warehouses/:id", controllers.UpdateWarehouse)    
+		api.DELETE("/warehouses/:id", controllers.DeleteWarehouse) 
+
 		// 🧾 2. NHÓM CHỨNG TỪ & PHIẾU NHẬP KHO (import_controller.go)
 		api.POST("/inventory", controllers.CreateInventoryImport)
 		api.GET("/inventory-tickets", controllers.GetInventoryTickets)

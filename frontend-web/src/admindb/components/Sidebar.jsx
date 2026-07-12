@@ -162,7 +162,7 @@ export default function Sidebar() {
     } else if (menuKey === "donHang" && hasAccess("orders")) {
       navigate("/admin/Donhang/DanhsachTrackingorder");
     } else if (menuKey === "khoHang" && hasAccess("inventory")) {
-      navigate("/admin/inventory/create-import");
+      navigate("/admin/inventory/warehouse-list");
     } else if (menuKey === "khachHang" && hasAccess("customers")) {
       navigate("/admin/customers/list");
     } else if (menuKey === "settings" && hasAccess("settings")) {
@@ -671,12 +671,12 @@ export default function Sidebar() {
                   <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
                     <button
                       onClick={() =>
-                        handleSubMenuClick("/admin/inventory/create-import")
+                        handleSubMenuClick("/admin/inventory/warehouse-list")
                       }
-                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/create-import")}`}
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/inventory/warehouse-list")}`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/create-import") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/inventory/warehouse-list") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span> Danh sách kho hàng </span>
                     </button>

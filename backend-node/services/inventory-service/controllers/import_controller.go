@@ -32,17 +32,37 @@ type CreateInventoryImportInput struct {
 	Products    []ImportProductPayload `json:"products" binding:"required"`
 }
 
-// GetInventoryTickets lấy danh sách tất cả chứng từ nhập xuất kho
+// 🌟 FIX LỖI SWAGGER: Đưa Struct này ra ngoài scope của hàm
+type PhieuKhoWithTotal struct {
+	models.PhieuKho
+	TongTien float64 `json:"tong_tien" gorm:"column:tong_tien"`
+}
+
+// ----------------------------------------------------------------------
+// 1. GetInventoryTickets: Đã hỗ trợ tính Tổng tiền
+// ----------------------------------------------------------------------
 func GetInventoryTickets(c *gin.Context) {
-	var tickets []models.PhieuKho
-	if err := config.DB.Order("ngay_tao desc").Find(&tickets).Error; err != nil {
+	var tickets []PhieuKhoWithTotal
+	
+	err := config.DB.Table("phieu_kho").
+		Select("phieu_kho.*, COALESCE(SUM(chi_tiet_phieu_kho.so_luong * lo_hang.gia_nhap), 0) AS tong_tien").
+		Joins("LEFT JOIN chi_tiet_phieu_kho ON phieu_kho.ma_phieu = chi_tiet_phieu_kho.ma_phieu").
+		Joins("LEFT JOIN lo_hang ON chi_tiet_phieu_kho.ma_lo_hang = lo_hang.ma_lo_hang").
+		Group("phieu_kho.ma_phieu").
+		Order("phieu_kho.ngay_tao DESC").
+		Find(&tickets).Error
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách phiếu: " + err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, tickets)
 }
 
-// GetInventoryImportDetail xem chi tiết một phiếu nhập và tính tổng tiền
+// ----------------------------------------------------------------------
+// 2. GetInventoryImportDetail: Xem chi tiết phiếu nhập
+// ----------------------------------------------------------------------
 func GetInventoryImportDetail(c *gin.Context) {
 	maPhieu := c.Param("id")
 	var phieu models.PhieuKho
@@ -63,11 +83,11 @@ func GetInventoryImportDetail(c *gin.Context) {
 
 	var items []ItemDetailResponse
 	err := config.DB.Table("chi_tiet_phieu_kho").
-    	Select("chi_tiet_phieu_kho.sku, items.name, chi_tiet_phieu_kho.ma_lo_hang, chi_tiet_phieu_kho.so_luong, lo_hang.gia_nhap, (chi_tiet_phieu_kho.so_luong * lo_hang.gia_nhap) as total, chi_tiet_phieu_kho.ngay_tao").
-    	Joins("LEFT JOIN lo_hang ON chi_tiet_phieu_kho.ma_lo_hang = lo_hang.ma_lo_hang").
-    	Joins("LEFT JOIN items ON chi_tiet_phieu_kho.sku = items.sku"). 
-    	Where("chi_tiet_phieu_kho.ma_phieu = ?", maPhieu).
-    	Scan(&items).Error
+		Select("chi_tiet_phieu_kho.sku, items.name, chi_tiet_phieu_kho.ma_lo_hang, chi_tiet_phieu_kho.so_luong, lo_hang.gia_nhap, (chi_tiet_phieu_kho.so_luong * lo_hang.gia_nhap) as total, chi_tiet_phieu_kho.ngay_tao").
+		Joins("LEFT JOIN lo_hang ON chi_tiet_phieu_kho.ma_lo_hang = lo_hang.ma_lo_hang").
+		Joins("LEFT JOIN items ON chi_tiet_phieu_kho.sku = items.sku").
+		Where("chi_tiet_phieu_kho.ma_phieu = ?", maPhieu).
+		Scan(&items).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy xuất dữ liệu: " + err.Error()})
@@ -91,7 +111,9 @@ func GetInventoryImportDetail(c *gin.Context) {
 	})
 }
 
-// CreateInventoryImport tạo phiếu nhập kho + chạy goroutine đồng bộ tồn kho sang Website bán hàng
+// ----------------------------------------------------------------------
+// 3. CreateInventoryImport: Tạo phiếu và báo lỗi đồng bộ Tồn kho
+// ----------------------------------------------------------------------
 func CreateInventoryImport(c *gin.Context) {
 	var input CreateInventoryImportInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -185,13 +207,16 @@ func CreateInventoryImport(c *gin.Context) {
 		return
 	}
 
-	// Luồng xử lý ngầm (Asynchronous Sync) sang Website bán hàng giữ nguyên bằng Goroutine
+	// ---------------------------------------------------------
+	// 🌟 GOROUTINE ĐỒNG BỘ TỒN KHO & BẮT LỖI
+	// ---------------------------------------------------------
 	go func(products []ImportProductPayload, warehouseID string) {
 		type SyncItem struct {
 			Sku      string `json:"sku"`
 			Quantity int    `json:"quantity"`
 		}
 		var syncList []SyncItem
+		
 		for _, p := range products {
 			syncList = append(syncList, SyncItem{Sku: p.Sku, Quantity: p.StandardQuantity})
 			var existStock int64
@@ -208,13 +233,26 @@ func CreateInventoryImport(c *gin.Context) {
 		if productServiceHost == "" {
 			productServiceHost = "http://localhost:5002"
 		}
-		req, _ := http.NewRequest("PATCH", productServiceHost+"/api/products/internal/update-stock", bytes.NewBuffer(jsonData))
+		
+		req, _ := http.NewRequest("PATCH", productServiceHost+"/api/v1/products/internal/update-stock", bytes.NewBuffer(jsonData))
 		req.Header.Set("Content-Type", "application/json")
-		client := &http.Client{Timeout: 5 * time.Second}
+		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
-			fmt.Println("📡 [Sync] Đã đồng bộ tồn kho sang Product-Service!")
+		
+		// 🚨 Cảnh báo Console nếu sập kết nối HTTP
+		if err != nil {
+			fmt.Printf("❌ [CẢNH BÁO CRITICAL] GỌI API PRODUCT-SERVICE THẤT BẠI: %v\n", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		// 🚨 Cảnh báo Console nếu Product-Service từ chối dữ liệu
+		if resp.StatusCode >= 400 {
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(resp.Body)
+			fmt.Printf("❌ [CẢNH BÁO CRITICAL] PRODUCT-SERVICE TỪ CHỐI (Status: %d): %s\n", resp.StatusCode, buf.String())
+		} else {
+			fmt.Println("✅ [Sync] Đã đồng bộ tồn kho sang Product-Service thành công rực rỡ!")
 		}
 	}(input.Products, input.WarehouseID)
 

@@ -304,7 +304,8 @@ export default function TaoPhieuNhapForm() {
     let grandTotal = 0;
     const itemsWithTotals = selectedProducts.map((item) => {
       const standardQuantity = item.quantity * item.ratio;
-      const totalPrice = item.quantity * item.price;
+      const totalPrice = standardQuantity * item.price;
+
       grandTotal += totalPrice;
       return { ...item, standardQuantity, totalPrice };
     });

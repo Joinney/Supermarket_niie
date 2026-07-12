@@ -60,15 +60,16 @@ import Nation from "./admindb/pages/products/thitruongquocgia/National.jsx";
 import NationalForm from "./admindb/pages/products/thitruongquocgia/NationalForm.jsx";
 
 // Import các Form/Page từ Warehouse
-import DanhSachPhieuNhap from "./admindb/pages/warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
-import TaoPhieuNhapForm from "./admindb/pages/warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
-import ChiTietPhieuNhap from "./admindb/pages/warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
-import NhapKhoForm from "./admindb/pages/warehouse/danhsachkho/NhapKhoForm.jsx";
-import TaoKhoForm from "./admindb/pages/warehouse/danhsachkho/TaoKhoForm.jsx";
-// Sửa LoHang -> Lohang và TonKho -> Tonkho
-import LoHang from "./admindb/pages/warehouse/Lohang.jsx";
-import TonKho from "./admindb/pages/warehouse/Tonkho.jsx";
-import ChuyenKho from "./admindb/pages/warehouse/dieuchuyenkho/Chuyenkho.jsx";
+import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
+import TaoPhieuNhapForm from "./admindb/pages/Warehouse/dansachphieunhap/TaoPhieuNhapForm.jsx";
+import ChiTietPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/ChiTietPhieuNhap.jsx";
+
+import DanhSachKho from "./admindb/pages/Warehouse/danhsachkho/DanhSachKho.jsx";
+import TaoKhoForm from "./admindb/pages/Warehouse/danhsachkho/TaoKhoForm.jsx";
+
+import LoHang from "./admindb/pages/Warehouse/Lohang.jsx";
+import TonKho from "./admindb/pages/Warehouse/Tonkho.jsx";
+import ChuyenKho from "./admindb/pages/Warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG (ADMIN CONTROL) ---
 import Danhsachkhachhang from "./admindb/pages/customers/Danhsachkhachhang.jsx";
@@ -922,12 +923,17 @@ const AppRoutes = () => (
           </AdminModuleGuard>
         }
       >
-        <Route index element={<Navigate to="import-list" replace />} />
-        <Route path="create-import" element={<NhapKhoForm />} />
+        {/* Chuyển hướng mặc định */}
+        <Route index element={<Navigate to="warehouse-list" replace />} />
+        {/* ---- Nhóm 1: Quản lý Kho Vật Lý ---- */}
+        <Route path="warehouse-list" element={<DanhSachKho />} />
         <Route path="create-warehouse" element={<TaoKhoForm />} />
+        <Route path="edit-warehouse/:id" element={<TaoKhoForm />} />{" "}
+        {/* ---- Nhóm 2: Quản lý Chứng từ (Phiếu Nhập) ---- */}
         <Route path="import-list" element={<DanhSachPhieuNhap />} />
-        <Route path="create-import-ticket" element={<TaoPhieuNhapForm />} />
         <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} />
+        <Route path="create-import-ticket" element={<TaoPhieuNhapForm />} />
+        {/* ---- Nhóm 3: Quản lý Hàng Hóa bên trong ---- */}
         <Route path="batches" element={<LoHang />} />
         <Route path="stock" element={<TonKho />} />
         <Route path="transfer" element={<ChuyenKho />} />
