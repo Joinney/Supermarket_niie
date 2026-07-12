@@ -416,39 +416,15 @@ export default function Chitiettrackingorder() {
     }, 25);
   };
 
-const handleConfirmArrival = async () => {
-    let nextStationIdx = currentStationIndex;
-    
+  const handleConfirmArrival = async () => {
     if (currentStationIndex >= 0 && currentStationIndex < stations.length) {
       const currentStation = stations[currentStationIndex];
-      // 1. Tạo dòng log rời kho bằng chữ rõ ràng
       await createNewOrderTrackingLogSQL(currentStation, `Đã làm thủ tục xuất bưu cục - Rời kho vận chuyển`);
-      
-      // 🌟 FIX ĐỒNG BỘ CHUẨN: Tăng chỉ số trạm lên ngay lập tức để báo hiệu xe đã rời trạm 0, chuyển tiếp sang chặng giữa
-      nextStationIdx = currentStationIndex + 1;
-      setCurrentStationIndex(nextStationIdx);
     }
     
     setIsArrivedAtStation(false); 
     animationIndexRef.current += 5; 
     setCurrentCoordIndex(animationIndexRef.current);
-    
-    // 2. Đồng bộ vị trí chặng đi tiếp ngay lập tức lên DB và Socket với từ khóa xuất trạm
-    const currentPt = routeCoords[animationIndexRef.current];
-    if (currentPt) {
-      if (socketRef.current) {
-        socketRef.current.emit("send_truck_location", {
-          ma_don_hang: orderDetail.ma_don_hang,
-          coordinates: [currentPt[1], currentPt[0]],
-          isArrived: false,
-          isFullyDelivered: false,
-          currentStationIndex: nextStationIdx // Truyền chỉ số chặng đã tăng
-        });
-      }
-      // Gửi status rõ ràng chứa chữ "rời kho" để API backend chuyển trạng thái sang "Đang giao" ngay lập tức
-      await saveCurrentLocationToDB(currentPt[0], currentPt[1], nextStationIdx, animationIndexRef.current, "Đã xuất bưu cục - Đang di chuyển chặng trục liên tỉnh");
-    }
-
     startTruckSimulation(); 
   };
 
