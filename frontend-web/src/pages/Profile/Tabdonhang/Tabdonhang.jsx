@@ -8,18 +8,20 @@ import {
   Star,
   ClipboardCheck, 
   Bike,          
-  Home            
+  Home,
+  X
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
 
 const ORDER_STEPS = [
-  { id: "step_init", icon: ClipboardCheck, matchStatuses: ["Chờ xác nhận", "Xác nhận", "pending"] },
-  { label: "Lấy hàng", icon: Package, matchStatuses: ["Lấy hàng"] }, 
+  { id: "step_init", label: "Xác nhận", icon: ClipboardCheck, matchStatuses: ["Chờ xác nhận", "Xác nhận", "pending", "chờ xử lý"] },
+  { label: "Lấy hàng", icon: Package, matchStatuses: ["Lấy hàng", "đang xử lý"] }, 
   { label: "Đang giao", icon: Bike, matchStatuses: ["Đang giao"] },
   { label: "Đã giao", icon: Home, matchStatuses: ["Đã giao"] },
+  { label: "Đã hủy", icon: X, matchStatuses: ["Đã hủy", "cancelled"] }
 ];
 
-export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onViewDetails, onReorder }) {
+export default function Tabdonhang({ orders, currentTabLabel, onCancelOrder, onReviewOrder, onViewDetails, onReorder }) {
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
   const [expandedOrders, setExpandedOrders] = useState({});
 
@@ -40,13 +42,34 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
     );
   }
 
+  // Lọc danh sách đơn hàng dựa vào tab đang active được chọn ở file cha
+  const activeStepConfig = ORDER_STEPS.find(step => step.label === currentTabLabel);
+  const filteredOrders = orders.filter((order) => {
+    if (!activeStepConfig) return true;
+    const normalizedStatus = (order.trang_thai_don_hang || "").trim().toLowerCase();
+    return activeStepConfig.matchStatuses.some(status => status.toLowerCase() === normalizedStatus);
+  });
+
+  if (filteredOrders.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400 space-y-2">
+        <Package className="w-10 h-12 mx-auto opacity-40" />
+        <p className="text-sm font-bold">Không có đơn hàng nào thuộc trạng thái "{currentTabLabel}".</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 text-left max-w-4xl mx-auto">
-      <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-3">
-        Lịch sử giao dịch vận đơn
+      <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-3 flex justify-between items-center">
+        <span>Lịch sử giao dịch vận đơn</span>
+        <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg font-bold">
+          {currentTabLabel}: {filteredOrders.length} đơn
+        </span>
       </h2>
+      
       <div className="space-y-3.5">
-        {orders.map((order) => {
+        {filteredOrders.map((order) => {
           const items = order.danh_sach_san_pham || order.items || order.products || [];
 
           const groupedItemsMap = {};
@@ -78,7 +101,8 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
           const isPendingCancel = normalizedStatus === "chờ xác nhận" || normalizedStatus === "pending" || normalizedStatus === "chờ xử lý";
           const isConfirmed = normalizedStatus === "xác nhận" || normalizedStatus === "confirmed";
 
-          const currentStepIndex = ORDER_STEPS.findIndex(step => 
+          // Xác định vị trí tiến trình hiện tại (Loại trừ trạng thái hủy ra khỏi stepper ngang)
+          const currentStepIndex = ORDER_STEPS.filter(s => s.label !== "Đã hủy").findIndex(step => 
             step.matchStatuses.some(status => status.toLowerCase() === normalizedStatus)
           );
 
@@ -159,7 +183,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
               {/* STEPPER PROGRESS */}
               {!isCancelled && (
                 <div className="py-2 px-1 flex items-center justify-between relative w-full select-none">
-                  {ORDER_STEPS.map((step, index) => {
+                  {ORDER_STEPS.filter(s => s.label !== "Đã hủy").map((step, index) => {
                     const StepIcon = step.icon;
                     const isVisited = index <= currentStepIndex;
                     const isCurrent = index === currentStepIndex;
@@ -195,7 +219,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                           </span>
                         </div>
 
-                        {index < ORDER_STEPS.length - 1 && (
+                        {index < ORDER_STEPS.filter(s => s.label !== "Đã hủy").length - 1 && (
                           <div className="flex-1 h-[3px] mx-1 bg-slate-50 rounded-full overflow-hidden relative">
                             <div className={`absolute top-0 left-0 h-full bg-orange-500 rounded-full transition-all duration-700 ease-out ${lineWidthClass}`} />
                           </div>
@@ -256,14 +280,11 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                     </div>
                   )}
 
-                  {/* Luồng hiển thị giao dịch đã hủy */}
                   {isCancelled && (
                     <div className="flex items-center gap-2">
-                      {/* 🌟 ĐÃ SỬA: Chuyển nút trạng thái cũ sang tông màu xám tinh tế */}
                       <span className="text-[11px] text-slate-500 font-extrabold uppercase bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs tracking-wider">
                         Đã Hủy Đơn Hàng 
                       </span>
-                      {/* 🌟 ĐÃ SỬA: Nút mua lại màu xanh #006c49, sạch sẽ, không dùng icon */}
                       <button
                         onClick={() => {
                           if (onReorder) onReorder({ ...order, items });

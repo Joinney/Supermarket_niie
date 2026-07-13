@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { authApi, orderApi, cartApi } from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext";
 import L from "leaflet";
@@ -92,6 +92,7 @@ export default function ProfilePage() {
   const { user: authUser, updateUser } = useContext(AuthContext);
   const navigate = useNavigate();
   const { tab } = useParams();
+  const location = useLocation(); // 🚀 Sử dụng useLocation để lắng nghe query thay đổi động
 
   const [activeTab, setActiveTab] = useState("profile");
   const [toast, setToast] = useState({
@@ -110,8 +111,34 @@ export default function ProfilePage() {
     ? authApi.defaults.baseURL.replace(/\/api$/, "")
     : "";
 
+  // 🚀 ĐỒNG BỘ ĐƯỜNG DẪN: Lấy tham số ?status= từ search query của URL
+  const queryParams = new URLSearchParams(location.search);
+  const currentStatusQuery = queryParams.get("status") || "xac-nhan"; // Mặc định là xac-nhan nếu URL trống
+
+  // Khai báo cấu hình ánh xạ bộ lọc đơn hàng bằng tham số query an toàn
+  const rawOrderStepsConfig = [
+    { label: "Xác nhận", queryValue: "xac-nhan", icon: <History size={16} />, matchStatuses: ["chờ xác nhận", "xác nhận", "pending", "chờ xử lý"] },
+    { label: "Lấy hàng", queryValue: "lay-hang", icon: <Package size={16} />, matchStatuses: ["lấy hàng", "đang xử lý"] },
+    { label: "Đang giao", queryValue: "dang-giao", icon: <Clock size={16} />, matchStatuses: ["đang giao"] },
+    { label: "Đã giao", queryValue: "da-giao", icon: <CheckCircle2 size={16} />, matchStatuses: ["đã giao"] },
+    { label: "Đã hủy", queryValue: "da-huy", icon: <X size={16} />, matchStatuses: ["đã hủy", "cancelled"] },
+  ];
+
+  // Tính toán count động dựa trên dữ liệu thật ordersList từ API
+  const orderSteps = rawOrderStepsConfig.map(step => {
+    const count = ordersList.filter(o => {
+      const status = (o.trang_thai_don_hang || "").trim().toLowerCase();
+      return step.matchStatuses.includes(status);
+    }).length;
+    return { ...step, count };
+  });
+
+  // Tìm kiếm xem tab hiển thị nào tương ứng với query hiện tại trên trình duyệt
+  const activeOrderStep = orderSteps.find(s => s.queryValue === currentStatusQuery);
+  const selectedOrderTab = activeOrderStep ? activeOrderStep.label : "Xác nhận";
+
   useEffect(() => {
-    if (activeTab === "orders") {
+    if (activeTab === "orders" || tab === "orders") {
       const fetchRealOrders = async () => {
         setLoadingOrders(true);
         try {
@@ -127,7 +154,7 @@ export default function ProfilePage() {
       };
       fetchRealOrders();
     }
-  }, [activeTab]);
+  }, [activeTab, tab]);
 
   // 🌟 HÀM XỬ LÝ HỦY ĐƠN HÀNG
   const handleCancelOrder = async (orderTarget) => {
@@ -155,8 +182,7 @@ export default function ProfilePage() {
     }
   };
 
-  // 🌟 HÀM XỬ LÝ MUA LẠI ĐƠN HÀNG (ĐÃ ĐƯỢC CHUYỂN VÀO TRONG VÀ ĐỒNG BỘ MẢNG DỮ LIỆU)
- // 🌟 ĐỒNG BỘ NÂNG CAO: Map chính xác tên trường dữ liệu (variantId, name) theo yêu cầu của Cart Service 5003
+  // 🌟 HÀM XỬ LÝ MUA LẠI ĐƠN HÀNG
   const handleReorder = async (orderTarget) => {
     setLoadingOrders(true);
     try {
@@ -172,19 +198,17 @@ export default function ProfilePage() {
       showToast("Đang thêm sản phẩm cũ vào giỏ hàng...");
 
       for (const item of items) {
-        // Trích xuất dữ liệu từ đơn hàng cũ (Postgres)
         const variantId = item.variant_id || item.variantId;
         const productName = item.product_name || item.name || "Sản phẩm Demi Mart";
         const qty = item.quantity || item.qty || 1;
 
         if (variantId) {
-          // 🚀 MAP TRƯỜNG CHUẨN: Đổi sang cấu hình camelCase đúng như validate yêu cầu
           await cartApi.post("/cart/add", {
-            variantId: variantId,             // 💡 Sửa từ variant_id thành variantId
-            name: productName,                // 💡 Bổ sung trường name bắt buộc
+            variantId: variantId,
+            name: productName,
             quantity: Number(qty),
-            price: Number(item.price || 0),   // Dự phòng nếu API yêu cầu thêm giá
-            image_url: item.image_url || ""   // Dự phòng ảnh đại diện sản phẩm
+            price: Number(item.price || 0),
+            image_url: item.image_url || ""
           });
         }
       }
@@ -267,7 +291,7 @@ export default function ProfilePage() {
     },
     {
       id: "orders",
-      path: "orders",
+      path: "orders?status=xac-nhan", // Đồng bộ luôn ở thanh mobile tab
       label: "Đơn hàng",
       icon: <Package size={14} />,
     },
@@ -311,9 +335,14 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    const currentTab = mobileTabs.find((t) => t.path === (tab || ""));
-    if (currentTab) setActiveTab(currentTab.id);
-    else setActiveTab("profile");
+    if (!tab) {
+      setActiveTab("profile");
+    } else if (tab === "orders") {
+      setActiveTab("orders");
+    } else {
+      const currentTab = mobileTabs.find((t) => t.path === tab);
+      if (currentTab) setActiveTab(currentTab.id);
+    }
   }, [tab]);
 
   useEffect(() => {
@@ -586,7 +615,6 @@ export default function ProfilePage() {
 
     if (addr.province_id) {
       try {
-        setLoadingGeography(true);
         const distRes = await authApi.get(
           `/addresses/locations/districts?province_id=${addr.province_id}`,
         );
@@ -859,13 +887,6 @@ export default function ProfilePage() {
     },
   ];
 
-  const orderSteps = [
-    { label: "Xác nhận", icon: <History size={16} />, count: 2 },
-    { label: "Lấy hàng", icon: <Package size={16} />, count: 0 },
-    { label: "Đang giao", icon: <Clock size={16} />, count: 1 },
-    { label: "Đã giao", icon: <CheckCircle2 size={16} />, count: 85 },
-  ];
-
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -1041,11 +1062,11 @@ export default function ProfilePage() {
                           item.path ? `/profile/${item.path}` : "/profile",
                         );
                       }}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${activeTab === item.id ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${activeTab === item.id || (item.id === "orders" && activeTab === "orders") ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}
                     >
                       <span
                         className={
-                          activeTab === item.id
+                          activeTab === item.id || (item.id === "orders" && activeTab === "orders")
                             ? "text-white"
                             : "text-slate-300"
                         }
@@ -1131,9 +1152,9 @@ export default function ProfilePage() {
                     setActiveTab(item.id);
                     navigate(item.path ? `/profile/${item.path}` : "/profile");
                   }}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase border shadow-sm cursor-pointer ${activeTab === item.id ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase border shadow-sm cursor-pointer ${activeTab === item.id || (item.id === "orders" && activeTab === "orders") ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}
                 >
-                  {item.icon} {item.label}
+                  {item.icon} {item.label.split(" ")[0]}
                 </button>
               ))}
             </div>
@@ -1144,9 +1165,20 @@ export default function ProfilePage() {
                 {orderSteps.map((step, i) => (
                   <div
                     key={i}
-                    className="flex flex-col items-center gap-1 group cursor-pointer relative min-w-[70px]"
+                    onClick={() => {
+                      setActiveTab("orders");
+                      // 🚀 SỬA ĐỔI QUAN TRỌNG: Điều hướng dùng Search Query để cố định link gốc /profile/orders không bị lỗi 404 đá trang
+                      navigate(`/profile/orders?status=${step.queryValue}`);
+                    }}
+                    className={`flex flex-col items-center gap-1 group cursor-pointer relative min-w-[70px] pb-1 border-b-2 transition-all ${
+                      selectedOrderTab === step.label && activeTab === "orders" ? "border-b-[#006c49]" : "border-b-transparent"
+                    }`}
                   >
-                    <div className="w-9 h-9 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-slate-300 group-hover:text-[#006c49] transition-all">
+                    <div className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${
+                      selectedOrderTab === step.label && activeTab === "orders"
+                        ? "bg-[#e6f0ed] text-[#006c49] border-[#006c49]/20" 
+                        : "bg-white border-slate-100 text-slate-300 group-hover:text-[#006c49]"
+                    }`}>
                       {step.icon}
                     </div>
                     {step.count > 0 && (
@@ -1154,7 +1186,9 @@ export default function ProfilePage() {
                         {step.count}
                       </span>
                     )}
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                    <p className={`text-[8px] font-black uppercase tracking-widest ${
+                      selectedOrderTab === step.label && activeTab === "orders" ? "text-[#006c49]" : "text-slate-400"
+                    }`}>
                       {step.label}
                     </p>
                   </div>
@@ -1235,10 +1269,10 @@ export default function ProfilePage() {
                   <Tabthongbao notifications={notifications} />
                 )}
                 
-                {/* 🌟 ĐỒNG BỘ PROPS HOÀN CHỈNH: Gán cả hàm hủy đơn và hàm mua lại xuống cho file con */}
                 {activeTab === "orders" && (
                   <Tabdonhang 
                     orders={ordersList} 
+                    currentTabLabel={selectedOrderTab}
                     onCancelOrder={handleCancelOrder}
                     onReorder={handleReorder}
                   />

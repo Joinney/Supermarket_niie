@@ -35,7 +35,7 @@ class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 💳 1. API Khởi tạo thanh toán (VNPay và PayPal sang Controller riêng)
   # ========================================================
-  post '/api/create-transaction' do
+  post '/api/v1/create-transaction' do
     begin
       request_body = request.body.read
       return { success: false, message: 'Body trống!' }.to_json if request_body.empty?
@@ -60,7 +60,7 @@ class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 💳 2. API Đối soát VNPay trả về từ Trạm trung chuyển React
   # ========================================================
-  get '/api/vnpay-return' do
+  get '/api/v1/vnpay-return' do
     query_params = params.transform_keys(&:to_s)
     result = VnpayController.verify_return(query_params)
     status result[:success] ? 200 : 400
@@ -70,7 +70,7 @@ class PaymentRoutes < Sinatra::Base
   # ========================================================
   # 🚀 3. API TIẾP NHẬN PHẢN HỒI CALLBACK/CAPTURE TỪ PAYPAL SYSTEM
   # ========================================================
-  post '/api/paypal-capture' do
+  post '/api/v1/paypal-capture' do
     begin
       request_body = request.body.read
       return { success: false, message: 'Dữ liệu đối soát trống!' }.to_json if request_body.empty?
