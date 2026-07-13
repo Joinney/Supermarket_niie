@@ -19,7 +19,7 @@ const ORDER_STEPS = [
   { label: "Đã giao", icon: Home, matchStatuses: ["Đã giao"] },
 ];
 
-export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onViewDetails }) {
+export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onViewDetails, onReorder }) {
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
   const [expandedOrders, setExpandedOrders] = useState({});
 
@@ -47,7 +47,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
       </h2>
       <div className="space-y-3.5">
         {orders.map((order) => {
-          const items = order.items || [];
+          const items = order.danh_sach_san_pham || order.items || order.products || [];
 
           const groupedItemsMap = {};
           items.forEach((item) => {
@@ -61,7 +61,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
             }
             groupedItemsMap[key].variants.push({
               name: item.variant_name || "Mặc định",
-              qty: item.quantity || 1,
+              qty: item.quantity || item.qty || 1,
             });
           });
 
@@ -74,7 +74,6 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
           const orderIdStr = order.id || order.ma_don_hang;
           const isExpanded = !!expandedOrders[orderIdStr];
 
-          // Phân loại trạng thái chuẩn hóa
           const isCancelled = normalizedStatus === "đã hủy" || normalizedStatus === "cancelled";
           const isPendingCancel = normalizedStatus === "chờ xác nhận" || normalizedStatus === "pending" || normalizedStatus === "chờ xử lý";
           const isConfirmed = normalizedStatus === "xác nhận" || normalizedStatus === "confirmed";
@@ -138,7 +137,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                 </div>
               </div>
 
-              {/* Danh sách mở rộng sản phẩm */}
+              {/* Danh sách sản phẩm thu gọn */}
               {isExpanded && groupedItems.length > 1 && (
                 <div className="pt-1.5 border-t border-dashed border-slate-100 flex flex-col gap-2.5 pl-4 animate-fadeIn">
                   {groupedItems.slice(1).map((group, idx) => (
@@ -157,7 +156,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                 </div>
               )}
 
-              {/* STEPPER VẬN CHUYỂN (Ẩn hoàn toàn khi đơn bị hủy để tránh hiểu lầm) */}
+              {/* STEPPER PROGRESS */}
               {!isCancelled && (
                 <div className="py-2 px-1 flex items-center justify-between relative w-full select-none">
                   {ORDER_STEPS.map((step, index) => {
@@ -214,7 +213,6 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                 </span>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Nếu đơn hàng chưa duyệt và chưa hủy -> Cho phép hiện nút bấm hủy */}
                   {isPendingCancel && !isCancelled && (
                     <button 
                       onClick={() => {
@@ -226,14 +224,12 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                     </button>
                   )}
 
-                  {/* Trạng thái XÁC NHẬN -> Khóa cứng nút hủy */}
                   {isConfirmed && (
                     <button disabled className="bg-slate-50 text-slate-400 px-3 py-1.5 rounded-lg text-[11px] font-black border border-slate-100 opacity-60 cursor-not-allowed">
                       Hủy đơn hàng
                     </button>
                   )}
 
-                  {/* Trạng thái ĐANG GIAO -> Xem Map */}
                   {normalizedStatus === "đang giao" && (
                     <button 
                       onClick={() => setSelectedOrderForMap(order)} 
@@ -243,7 +239,6 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                     </button>
                   )}
 
-                  {/* Trạng thái ĐÃ GIAO */}
                   {normalizedStatus === "đã giao" && (
                     <div className="flex items-center gap-1.5">
                       <button 
@@ -261,11 +256,23 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                     </div>
                   )}
 
-                  {/* 🌟 GIỮ LẠI LỊCH SỬ ĐƠN HÀNG: Hiển thị Badge báo Hủy thành công thay vì xóa mất đơn */}
+                  {/* Luồng hiển thị giao dịch đã hủy */}
                   {isCancelled && (
-                    <span className="text-[11px] text-red-600 font-extrabold uppercase bg-red-50 px-3 py-1.5 rounded-xl border border-red-100/70 shadow-2xs tracking-wider">
-                      Đã Hủy Đơn Hàng 
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {/* 🌟 ĐÃ SỬA: Chuyển nút trạng thái cũ sang tông màu xám tinh tế */}
+                      <span className="text-[11px] text-slate-500 font-extrabold uppercase bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs tracking-wider">
+                        Đã Hủy Đơn Hàng 
+                      </span>
+                      {/* 🌟 ĐÃ SỬA: Nút mua lại màu xanh #006c49, sạch sẽ, không dùng icon */}
+                      <button
+                        onClick={() => {
+                          if (onReorder) onReorder({ ...order, items });
+                        }}
+                        className="bg-[#006c49] hover:bg-[#005236] text-white px-4 py-1.5 rounded-xl text-[11px] font-black transition-all shadow-sm shadow-[#006c49]/10 cursor-pointer"
+                      >
+                        Mua lại
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

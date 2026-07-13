@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { authApi, orderApi } from "../../api/axios";
+import { authApi, orderApi, cartApi } from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext";
 import L from "leaflet";
 import Cropper from "react-easy-crop";
@@ -129,19 +129,17 @@ export default function ProfilePage() {
     }
   }, [activeTab]);
 
-  // 🌟 THÊM MỚI HÀM: Xử lý kích hoạt gửi API hủy đơn hàng lên mạng qua orderApi
+  // 🌟 HÀM XỬ LÝ HỦY ĐƠN HÀNG
   const handleCancelOrder = async (orderTarget) => {
     const confirmCancel = window.confirm(`Bạn có chắc chắn muốn hủy đơn hàng #${orderTarget.ma_don_hang}?`);
     if (!confirmCancel) return;
 
     try {
-      // Gọi qua API công khai đã được sửa cấu hình phân quyền ở tầng Route
       const response = await orderApi.put(`/orders/${orderTarget.ma_don_hang}/cancel`);
       
       if (response.data && response.data.success) {
         showToast(response.data.message || "Hủy đơn hàng thành công!");
         
-        // Đồng bộ cập nhật runtime state đổi trạng thái đơn sang 'Đã hủy' để React render lại UI lập tức
         setOrdersList((prevOrders) =>
           prevOrders.map((order) =>
             order.ma_don_hang === orderTarget.ma_don_hang
@@ -154,6 +152,52 @@ export default function ProfilePage() {
       console.error("Lỗi thực thi gửi API hủy đơn từ phía Client:", err);
       const errorMsg = err.response?.data?.message || "Hệ thống bận, không thể hủy đơn hàng vào lúc này.";
       showToast(errorMsg, "error");
+    }
+  };
+
+  // 🌟 HÀM XỬ LÝ MUA LẠI ĐƠN HÀNG (ĐÃ ĐƯỢC CHUYỂN VÀO TRONG VÀ ĐỒNG BỘ MẢNG DỮ LIỆU)
+ // 🌟 ĐỒNG BỘ NÂNG CAO: Map chính xác tên trường dữ liệu (variantId, name) theo yêu cầu của Cart Service 5003
+  const handleReorder = async (orderTarget) => {
+    setLoadingOrders(true);
+    try {
+      const items = orderTarget.danh_sach_san_pham || orderTarget.items || orderTarget.products || [];
+      
+      console.log("➡️ [DEBUG REORDER]: Đang chuẩn hóa dữ liệu đơn cũ gửi sang Cart Service:", items);
+
+      if (!items || items.length === 0) {
+        showToast("Đơn hàng không có dữ liệu sản phẩm gốc để mua lại!", "error");
+        return;
+      }
+
+      showToast("Đang thêm sản phẩm cũ vào giỏ hàng...");
+
+      for (const item of items) {
+        // Trích xuất dữ liệu từ đơn hàng cũ (Postgres)
+        const variantId = item.variant_id || item.variantId;
+        const productName = item.product_name || item.name || "Sản phẩm Demi Mart";
+        const qty = item.quantity || item.qty || 1;
+
+        if (variantId) {
+          // 🚀 MAP TRƯỜNG CHUẨN: Đổi sang cấu hình camelCase đúng như validate yêu cầu
+          await cartApi.post("/cart/add", {
+            variantId: variantId,             // 💡 Sửa từ variant_id thành variantId
+            name: productName,                // 💡 Bổ sung trường name bắt buộc
+            quantity: Number(qty),
+            price: Number(item.price || 0),   // Dự phòng nếu API yêu cầu thêm giá
+            image_url: item.image_url || ""   // Dự phòng ảnh đại diện sản phẩm
+          });
+        }
+      }
+
+      showToast("Đang chuyển hướng sang giỏ hàng...");
+      navigate("/cart"); 
+
+    } catch (err) {
+      console.error("🔥 Lỗi thực thi thêm hàng mua lại:", err);
+      const errorMsg = err.response?.data?.message || "Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại!";
+      showToast(errorMsg, "error");
+    } finally {
+      setLoadingOrders(false);
     }
   };
 
@@ -1191,16 +1235,17 @@ export default function ProfilePage() {
                   <Tabthongbao notifications={notifications} />
                 )}
                 
-                {/* 🌟 ĐỒNG BỘ PROPS: Đã gán thành công hàm handleCancelOrder xuống cho file con */}
+                {/* 🌟 ĐỒNG BỘ PROPS HOÀN CHỈNH: Gán cả hàm hủy đơn và hàm mua lại xuống cho file con */}
                 {activeTab === "orders" && (
                   <Tabdonhang 
                     orders={ordersList} 
                     onCancelOrder={handleCancelOrder}
+                    onReorder={handleReorder}
                   />
                 )}
                 
                 {activeTab === "vouchers" && <Tabvoucher />}
-                {activeTab === "favorites" && <Tabvoucher />}
+                {activeTab === "favorites" && <Tabdathich />}
               </div>
             </div>
           </div>
