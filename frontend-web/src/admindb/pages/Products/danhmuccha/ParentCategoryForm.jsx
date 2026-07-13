@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-// 🌟 SỬA BƯỚC 1: Thay thế import "axios" trần bằng instance "productApi" từ file config của bạn
-import { productApi } from "../../../../api/axios"; // <--- Thay bằng đường dẫn thực tế đến file config Axios của bạn
-import { UploadCloud, Loader2, ChevronLeft, Save, Smile } from "lucide-react";
+import { productApi } from "../../../../api/axios"; // 🌟 Đảm bảo đường dẫn này đúng với dự án của bạn
+import { UploadCloud, Loader2, ChevronLeft, Save } from "lucide-react"; // Đã bỏ import Smile (Emoji)
 
 export default function ParentCategoryForm() {
   const { id } = useParams();
@@ -13,16 +12,16 @@ export default function ParentCategoryForm() {
   const [countries, setCountries] = useState([]);
   const [loading, setLoading] = useState(isEditMode);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false); 
+  const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef(null);
   const [codeSuffix, setCodeSuffix] = useState("");
 
+  // 🌟 FIX: Đã xóa trường bieu_tuong khỏi State
   const [formData, setFormData] = useState({
     ma_dm_cha: "",
     ten_danh_muc_cha: "",
     ma_quoc_gia: "VN",
     hinh_anh: "",
-    bieu_tuong: "", 
   });
 
   // Khởi tạo dữ liệu via Interceptor
@@ -30,13 +29,13 @@ export default function ParentCategoryForm() {
     const fetchInitData = async () => {
       try {
         setLoading(true);
-        // 🌟 SỬA BƯỚC 2: Gọi các API bằng path tương đối thông qua productApi
-        // Tránh trùng lặp code bóc tách apiUrl thủ công
         const resNations = await productApi.get("/nations");
         setCountries(resNations.data.data || []);
 
         if (isEditMode) {
-          const resParents = await productApi.get("/categories/parents?country=ALL");
+          const resParents = await productApi.get(
+            "/categories/parents?country=ALL",
+          );
           const parentList = resParents.data.data || [];
           const targetCategory = parentList.find((p) => p.ma_dm_cha === id);
 
@@ -45,8 +44,7 @@ export default function ParentCategoryForm() {
               ma_dm_cha: targetCategory.ma_dm_cha,
               ten_danh_muc_cha: targetCategory.ten_danh_muc_cha,
               ma_quoc_gia: targetCategory.ma_quoc_gia,
-              hinh_anh: targetCategory.hinh_anh || "",
-              bieu_tuong: targetCategory.bieu_tuong || "",
+              hinh_anh: targetCategory.hinh_anh || "", // 🌟 FIX: Đã gỡ map dữ liệu bieu_tuong
             });
           } else {
             alert("Không tìm thấy dữ liệu danh mục này!");
@@ -76,7 +74,6 @@ export default function ParentCategoryForm() {
     uploadData.append("image", file);
 
     try {
-      // 🌟 SỬA BƯỚC 3: Đổi luồng upload tệp sang dùng productApi
       const response = await productApi.post("/products/upload", uploadData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -109,7 +106,6 @@ export default function ParentCategoryForm() {
       }
 
       if (isEditMode) {
-        // 🌟 SỬA BƯỚC 4: Gọi lệnh PUT và POST thông qua productApi
         await productApi.put(`/categories/parents/${id}`, finalPayload);
         alert("✅ Cập nhật danh mục thành công!");
       } else {
@@ -169,7 +165,7 @@ export default function ParentCategoryForm() {
               <span>❯</span>
               <span>Danh mục cha</span>
               <span>❯</span>
-              <span className="text-emerald-700 font-bold">
+              <span className="text-[#006c49] font-bold">
                 {isEditMode ? "Cập nhật" : "Khởi tạo mới"}
               </span>
             </div>
@@ -180,7 +176,6 @@ export default function ParentCategoryForm() {
         <div className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative">
           <form onSubmit={handleSubmitForm} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
               {/* Tên Danh Mục */}
               <div className="md:col-span-2 space-y-1">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
@@ -192,9 +187,12 @@ export default function ParentCategoryForm() {
                   placeholder="Ví dụ: Đồ uống nhập khẩu"
                   value={formData.ten_danh_muc_cha}
                   onChange={(e) =>
-                    setFormData({ ...formData, ten_danh_muc_cha: e.target.value })
+                    setFormData({
+                      ...formData,
+                      ten_danh_muc_cha: e.target.value,
+                    })
                   }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-[#006c49] focus:ring-2 focus:ring-emerald-50 transition"
                 />
               </div>
 
@@ -211,7 +209,7 @@ export default function ParentCategoryForm() {
                       ma_quoc_gia: e.target.value,
                     })
                   }
-                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-600 cursor-pointer"
+                  className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#006c49] cursor-pointer"
                 >
                   {countries.map((c) => (
                     <option key={c.ma_quoc_gia} value={c.ma_quoc_gia}>
@@ -241,7 +239,7 @@ export default function ParentCategoryForm() {
                       placeholder="Ví dụ: SNACK, TEA, HEALTH"
                       value={codeSuffix}
                       onChange={(e) => setCodeSuffix(e.target.value)}
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-[#006c49] focus:ring-2 focus:ring-emerald-50 transition"
                     />
                     {generatedCode && (
                       <p className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 mt-1 font-mono w-fit">
@@ -252,24 +250,10 @@ export default function ParentCategoryForm() {
                 )}
               </div>
 
-              {/* Biểu tượng Danh Mục */}
-              <div className="md:col-span-2 space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Smile size={14} className="text-amber-500" /> Biểu tượng nhận diện (Emoji)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: 🍬, 🥤, 🌶️..."
-                  value={formData.bieu_tuong}
-                  onChange={(e) =>
-                    setFormData({ ...formData, bieu_tuong: e.target.value })
-                  }
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-50 transition"
-                />
-              </div>
+              {/* 🌟 FIX: Đã Gỡ Bỏ Hoàn Toàn Block Input "Biểu tượng nhận diện (Emoji)" */}
 
               {/* Hình ảnh danh mục */}
-              <div className="md:col-span-2 space-y-1">
+              <div className="md:col-span-2 space-y-1 border-t border-slate-100 pt-4 mt-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
                   Hình ảnh đại diện phân loại
                 </label>
@@ -282,11 +266,16 @@ export default function ParentCategoryForm() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-[9px] text-slate-400 font-black uppercase">Trống</span>
+                      <span className="text-[9px] text-slate-400 font-black uppercase">
+                        Trống
+                      </span>
                     )}
                     {uploadingImage && (
                       <div className="absolute inset-0 bg-white/70 flex items-center justify-center backdrop-blur-xs">
-                        <Loader2 size={16} className="animate-spin text-emerald-700" />
+                        <Loader2
+                          size={16}
+                          className="animate-spin text-[#006c49]"
+                        />
                       </div>
                     )}
                   </div>
@@ -296,9 +285,9 @@ export default function ParentCategoryForm() {
                       type="button"
                       disabled={uploadingImage}
                       onClick={() => fileInputRef.current.click()}
-                      className="w-full py-2 border border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:border-emerald-600 hover:bg-emerald-50/20 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      className="w-full py-2 border border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:border-[#006c49] hover:bg-emerald-50/20 transition font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
-                      <UploadCloud size={14} /> 
+                      <UploadCloud size={14} />
                       {uploadingImage ? "Đang đồng bộ..." : "Tải ảnh cục bộ"}
                     </button>
                     <input
@@ -308,21 +297,27 @@ export default function ParentCategoryForm() {
                       accept="image/*"
                       onChange={handleFileChange}
                     />
-                    
+
                     <div className="flex items-center gap-2">
                       <div className="h-[1px] bg-slate-100 flex-1"></div>
-                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">Hoặc sử dụng URL</span>
+                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">
+                        Hoặc sử dụng URL
+                      </span>
                       <div className="h-[1px] bg-slate-100 flex-1"></div>
                     </div>
 
                     <input
                       type="url"
                       placeholder="https://giao-dien-anh..."
-                      value={formData.hinh_anh.startsWith("http") ? formData.hinh_anh : ""}
+                      value={
+                        formData.hinh_anh.startsWith("http")
+                          ? formData.hinh_anh
+                          : ""
+                      }
                       onChange={(e) =>
                         setFormData({ ...formData, hinh_anh: e.target.value })
                       }
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-emerald-600 transition"
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-[#006c49] transition"
                     />
                   </div>
                 </div>
@@ -341,7 +336,7 @@ export default function ParentCategoryForm() {
               <button
                 type="submit"
                 disabled={submitLoading || uploadingImage}
-                className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow transition transform active:scale-98 cursor-pointer disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow transition transform active:scale-98 cursor-pointer disabled:opacity-50"
               >
                 {submitLoading ? (
                   <Loader2 size={14} className="animate-spin" />

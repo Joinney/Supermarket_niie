@@ -109,7 +109,6 @@ export default function Sidebar({ isOpen, onClose }) {
   const handleMainMenuClick = (menuSlug) => {
     setActiveCategory(menuSlug);
 
-    // Lấy tiền tố quốc gia
     const prefix = country_code
       ? `/${country_code}`
       : `/${currentStore?.code?.toLowerCase() || "vn"}`;
@@ -121,9 +120,7 @@ export default function Sidebar({ isOpen, onClose }) {
         searchInput.focus();
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
-    }
-    // 🌟 ĐIỀU HƯỚNG TỚI TRANG PROMOTION RIÊNG BIỆT
-    else if (menuSlug === "promotion") {
+    } else if (menuSlug === "promotion") {
       navigate(`${prefix}/category/khuyen-mai`);
       if (window.innerWidth < 1024) onClose();
     }
@@ -151,6 +148,11 @@ export default function Sidebar({ isOpen, onClose }) {
     setIsStoreOpen(false);
     const storeCode = store.code?.toLowerCase() || "vn";
     window.location.href = `/${storeCode}`;
+  };
+
+  // Tạo placeholder ảnh (chữ cái đầu của tên danh mục) nếu chưa có link ảnh
+  const getAvatarUrl = (name) => {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=f8fafc&color=94a3b8&font-size=0.4`;
   };
 
   return (
@@ -231,7 +233,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 }`}
             >
               <span
-                className={`transition-transform ${activeCategory === m.slug ? "scale-110 text-white" : "text-black"}`}
+                className={`transition-transform flex items-center justify-center w-6 h-6 ${activeCategory === m.slug ? "scale-110 text-white" : "text-black"}`}
               >
                 {m.i}
               </span>
@@ -266,15 +268,24 @@ export default function Sidebar({ isOpen, onClose }) {
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all relative group
                       ${isParentActive ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/15" : "hover:bg-white/60 text-slate-600"}`}
                   >
+                    {/* 🌟 VÙNG RENDER HÌNH ẢNH DANH MỤC */}
                     <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-base shadow-sm transition-all duration-300 border
+                      className={`w-9 h-9 rounded-full flex items-center justify-center text-base shadow-sm transition-all duration-300 border overflow-hidden shrink-0
                       ${
                         isParentActive
-                          ? "bg-white text-[#006c49] border-transparent scale-105"
-                          : "bg-white border-slate-100 group-hover:bg-[#e6f0ed] text-black"
+                          ? "bg-white border-[#006c49] scale-105 p-0.5" // Hiệu ứng bọc viền khi được chọn
+                          : "bg-white border-slate-100 group-hover:border-slate-300 text-black p-0"
                       }`}
                     >
-                      {c.i}
+                      <img
+                        src={c.image || getAvatarUrl(c.name)}
+                        alt={c.name}
+                        className={`w-full h-full object-cover ${isParentActive ? "rounded-full" : "rounded-full"}`}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = getAvatarUrl(c.name);
+                        }}
+                      />
                     </div>
                     <span
                       className={`text-[14.5px] flex-1 transition-colors ${isParentActive ? "font-black text-white" : "font-bold text-slate-600 group-hover:text-slate-800"}`}
@@ -309,7 +320,7 @@ export default function Sidebar({ isOpen, onClose }) {
                             className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-[14px] transition-all duration-200 outline-none
                               ${
                                 isSubActive
-                                  ? "bg-[#e6f0ed] text-[#006c49] font-bold shadow-sm" // 🛠️ Dòng CSS tô màu xanh đậm cho category con được chọn
+                                  ? "bg-[#e6f0ed] text-[#006c49] font-bold shadow-sm"
                                   : "text-slate-500 hover:text-slate-800 hover:bg-gray-50/80 font-medium"
                               }`}
                           >

@@ -11,8 +11,9 @@ export const getAllCategories = async (req, res) => {
         const statusFilterCha = role === 'client' ? 'AND trang_thai = true' : '';
         const statusFilterCon = role === 'client' ? 'AND dmc.trang_thai = true' : '';
 
+        // 🌟 FIX: Loại bỏ cột bieu_tuong khỏi câu lệnh SELECT
         const queryCha = `
-            SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, bieu_tuong, hinh_anh, trang_thai 
+            SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, hinh_anh, trang_thai 
             FROM public.danh_muc_cha 
             WHERE UPPER(ma_quoc_gia) = $1 ${statusFilterCha}
             ORDER BY ma_dm_cha ASC;
@@ -36,8 +37,7 @@ export const getAllCategories = async (req, res) => {
                 id: row.ma_dm_cha,
                 name: row.ten_danh_muc_cha,
                 slug: row.duong_dan_seo,
-                i: row.bieu_tuong || "", 
-                image: row.hinh_anh || "",
+                image: row.hinh_anh || "", // 🌟 Chỉ tập trung dùng hình ảnh URL chuẩn
                 trang_thai: row.trang_thai, 
                 children: []
             };
@@ -105,7 +105,6 @@ export const searchCategories = async (req, res) => {
     }
 };
 
-
 // =========================================================================
 // 3. LẤY DANH SÁCH DANH MỤC CHA DÀNH CHO ADMIN (CÓ LỌC QUỐC GIA)
 // =========================================================================
@@ -113,22 +112,19 @@ export const getParentCategories = async (req, res) => {
     try {
         const { country } = req.query; 
         
-        let query = `SELECT * FROM public.danh_muc_cha WHERE 1=1`;
+        let query = `SELECT ma_dm_cha, ten_danh_muc_cha, duong_dan_seo, hinh_anh, trang_thai, ma_quoc_gia, ngay_tao, ngay_cap_nhat FROM public.danh_muc_cha WHERE 1=1`;
         let values = [];
         let paramIndex = 1;
 
-        // Nếu FE có chọn quốc gia (khác ALL) thì lọc
         if (country && country !== 'ALL') {
             query += ` AND UPPER(ma_quoc_gia) = $${paramIndex}`;
             values.push(country.toUpperCase());
             paramIndex++;
         }
 
-        query += ` ORDER BY ngay_tao DESC`; // Sắp xếp mới nhất lên đầu
+        query += ` ORDER BY ngay_tao DESC`;
 
         const { rows } = await pool.query(query, values);
-        
-        // Trả về chuẩn format { success: true, data: [...] } mà Frontend đang đợi
         res.status(200).json({ success: true, data: rows });
     } catch (error) {
         console.error('❌ Lỗi API getParentCategories:', error.message);
@@ -141,12 +137,12 @@ export const getParentCategories = async (req, res) => {
 // =========================================================================
 export const createParentCategory = async (req, res) => {
     try {
-        const { ma_dm_cha, ten_danh_muc_cha, ma_quoc_gia, hinh_anh, bieu_tuong, duong_dan_seo } = req.body;
+        // 🌟 FIX: Loại bỏ bieu_tuong khỏi dữ liệu nhận từ Request Body
+        const { ma_dm_cha, ten_danh_muc_cha, ma_quoc_gia, hinh_anh, duong_dan_seo } = req.body;
 
         let finalMaDmCha = "";
 
         if (ma_dm_cha && ma_dm_cha.trim() !== "") {
-            // Nếu Frontend gửi lên, giữ nguyên định dạng và in hoa
             finalMaDmCha = ma_dm_cha.trim().toUpperCase();
         } else {
             const autoSuffix = ten_danh_muc_cha
@@ -165,7 +161,7 @@ export const createParentCategory = async (req, res) => {
         let counter = 1;
         while (true) {
             const checkRes = await pool.query('SELECT ma_dm_cha FROM public.danh_muc_cha WHERE ma_dm_cha = $1', [currentCode]);
-            if (checkRes.rows.length === 0) break; // Mã an toàn
+            if (checkRes.rows.length === 0) break; 
             currentCode = `${finalMaDmCha}_${counter}`;
             counter++;
         }
@@ -178,10 +174,11 @@ export const createParentCategory = async (req, res) => {
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-');
 
+        // 🌟 FIX: Bỏ cột bieu_tuong và tham số $5 tương ứng
         const query = `
             INSERT INTO public.danh_muc_cha 
-            (ma_dm_cha, ten_danh_muc_cha, ma_quoc_gia, hinh_anh, bieu_tuong, duong_dan_seo, trang_thai) 
-            VALUES ($1, $2, $3, $4, $5, $6, true) 
+            (ma_dm_cha, ten_danh_muc_cha, ma_quoc_gia, hinh_anh, duong_dan_seo, trang_thai) 
+            VALUES ($1, $2, $3, $4, $5, true) 
             RETURNING *;
         `;
         
@@ -190,12 +187,10 @@ export const createParentCategory = async (req, res) => {
             ten_danh_muc_cha.trim(), 
             ma_quoc_gia, 
             hinh_anh || null, 
-            bieu_tuong || null, 
             finalSeo
         ];
 
         const { rows } = await pool.query(query, values);
-        
         res.status(201).json({ success: true, data: rows[0] });
     } catch (error) {
         console.error("❌ Lỗi tạo danh mục cha:", error);
@@ -208,12 +203,10 @@ export const createParentCategory = async (req, res) => {
 // =========================================================================
 export const deleteParentCategory = async (req, res) => {
     try {
-        const { id } = req.params; // ma_dm_cha
+        const { id } = req.params; 
 
-        // Lớp bảo vệ: Kiểm tra xem danh mục cha này có danh mục con nào đang hoạt động không?
         const checkQuery = `SELECT COUNT(*) FROM public.danh_muc_con WHERE ma_dm_cha = $1 AND trang_thai = true`;
         const { rows } = await pool.query(checkQuery, [id]);
-        
         const childCount = parseInt(rows[0].count);
 
         if (childCount > 0) {
@@ -223,7 +216,6 @@ export const deleteParentCategory = async (req, res) => {
             });
         }
 
-        // Đủ điều kiện -> Tiến hành xóa mềm (Ẩn đi)
         const updateQuery = `
             UPDATE public.danh_muc_cha 
             SET trang_thai = false, ngay_cap_nhat = NOW() 
@@ -236,15 +228,13 @@ export const deleteParentCategory = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục.' });
         }
 
-        // 🌟 NÂNG CẤP REAL-TIME: Phát tín hiệu Socket cho Client
         const io = req.app.get('io');
         if (io) {
             io.emit('category_status_changed', {
                 ma_danh_muc: id,
                 trang_thai: false,
-                loai_danh_muc: 'cha' // Truyền thêm loại để Client dễ xử lý nếu cần
+                loai_danh_muc: 'cha' 
             });
-            console.log(`📡 Socket Emit: Đã báo cho Client ẩn danh mục cha [${id}]`);
         }
 
         res.status(200).json({ success: true, message: 'Đã lưu trữ (xóa) danh mục thành công.' });
@@ -275,8 +265,9 @@ export const restoreParentCategory = async (req, res) => {
 // =========================================================================
 export const updateParentCategory = async (req, res) => {
     try {
-        const { id } = req.params; // ma_dm_cha
-        const { ten_danh_muc_cha, ma_quoc_gia, hinh_anh, bieu_tuong } = req.body;
+        const { id } = req.params; 
+        // 🌟 FIX: Loại bỏ bieu_tuong khỏi dữ liệu nhận từ Request Body
+        const { ten_danh_muc_cha, ma_quoc_gia, hinh_anh } = req.body;
         
         const duong_dan_seo = ten_danh_muc_cha
             .toLowerCase()
@@ -285,17 +276,17 @@ export const updateParentCategory = async (req, res) => {
             .replace(/[^a-z0-9\s-]/g, '')    
             .replace(/\s+/g, '-');           
 
+        // 🌟 FIX: Loại bỏ gán bieu_tuong = $4 cũ, dồn các chỉ mục parameter lại chuẩn xác
         const query = `
             UPDATE public.danh_muc_cha 
-            SET ten_danh_muc_cha = $1, ma_quoc_gia = $2, hinh_anh = $3, bieu_tuong = $4, duong_dan_seo = $5 
-            WHERE ma_dm_cha = $6 
+            SET ten_danh_muc_cha = $1, ma_quoc_gia = $2, hinh_anh = $3, duong_dan_seo = $4 
+            WHERE ma_dm_cha = $5 
             RETURNING *;
         `;
         const { rows } = await pool.query(query, [
             ten_danh_muc_cha.trim(), 
             ma_quoc_gia, 
             hinh_anh || null, 
-            bieu_tuong || null, 
             duong_dan_seo, 
             id
         ]);
@@ -371,7 +362,6 @@ export const createChildCategory = async (req, res) => {
         let finalMaDmCon = "";
 
         if (ma_dm_con && ma_dm_con.trim() !== "") {
-            // Nếu Frontend gửi lên mã, giữ nguyên và in hoa
             finalMaDmCon = ma_dm_con.trim().toUpperCase();
         } else {
             const autoSuffix = ten_danh_muc_con
@@ -430,7 +420,7 @@ export const createChildCategory = async (req, res) => {
 // =========================================================================
 export const deleteChildCategory = async (req, res) => {
     try {
-        const { id } = req.params; // ma_dm_con
+        const { id } = req.params; 
         const query = `UPDATE public.danh_muc_con SET trang_thai = false WHERE ma_dm_con = $1 RETURNING *;`;
         const result = await pool.query(query, [id]);
         
@@ -438,7 +428,6 @@ export const deleteChildCategory = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Không tìm thấy danh mục con.' });
         }
 
-        // 🌟 NÂNG CẤP REAL-TIME: Phát tín hiệu Socket cho Client
         const io = req.app.get('io');
         if (io) {
             io.emit('category_status_changed', {
@@ -446,7 +435,6 @@ export const deleteChildCategory = async (req, res) => {
                 trang_thai: false,
                 loai_danh_muc: 'con'
             });
-            console.log(`📡 Socket Emit: Đã báo cho Client ẩn danh mục con [${id}]`);
         }
 
         res.status(200).json({ success: true, message: 'Đã xóa mềm danh mục con.' });
@@ -461,7 +449,7 @@ export const deleteChildCategory = async (req, res) => {
 // =========================================================================
 export const hardDeleteChildCategory = async (req, res) => {
     try {
-        const { id } = req.params; // ma_dm_con
+        const { id } = req.params; 
         
         const productCheck = await pool.query(
             `SELECT COUNT(*) FROM public.san_pham WHERE ma_dm_con = $1`, 
@@ -487,10 +475,9 @@ export const hardDeleteChildCategory = async (req, res) => {
 // =========================================================================
 export const updateChildCategory = async (req, res) => {
     try {
-        const { id } = req.params; // ma_dm_con
+        const { id } = req.params; 
         const { ma_dm_cha, ten_danh_muc_con, ma_quoc_gia, hinh_anh } = req.body;
         
-        // 🌟 TỐI ƯU SEO URL CHUẨN
         const duong_dan_seo = ten_danh_muc_con
             .toLowerCase()
             .normalize('NFD')
@@ -528,7 +515,7 @@ export const updateChildCategory = async (req, res) => {
 // =========================================================================
 export const restoreChildCategory = async (req, res) => {
     try {
-        const { id } = req.params; // ma_dm_con
+        const { id } = req.params; 
         const query = `UPDATE public.danh_muc_con SET trang_thai = true WHERE ma_dm_con = $1 RETURNING *;`;
         const result = await pool.query(query, [id]);
         
@@ -546,7 +533,7 @@ export const restoreChildCategory = async (req, res) => {
 export const toggleHotChildCategory = async (req, res) => {
     try {
         const { id } = req.params;
-        const { la_danh_muc_hot } = req.body; // true hoặc false
+        const { la_danh_muc_hot } = req.body; 
 
         const query = `
             UPDATE public.danh_muc_con 

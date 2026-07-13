@@ -20,8 +20,8 @@ const Quanlytonkho = () => {
 
   // States Bộ Lọc
   const [searchTerm, setSearchTerm] = useState("");
-  const [parentCatFilter, setParentCatFilter] = useState(""); // Lọc Cha
-  const [childCatFilter, setChildCatFilter] = useState(""); // Lọc Con
+  const [parentCatFilter, setParentCatFilter] = useState("");
+  const [childCatFilter, setChildCatFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
