@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-// 🌟 ĐỒNG BỘ: Sử dụng authApi và orderApi từ tệp cấu hình interceptor tập trung
 import { authApi, orderApi } from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext";
 import L from "leaflet";
@@ -107,7 +106,6 @@ export default function ProfilePage() {
   const [ordersList, setOrdersList] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
 
-  // Đọc động URL gốc từ authApi cấu hình tập trung để truyền tải media chính xác
   const API_BASE_URL = authApi.defaults.baseURL
     ? authApi.defaults.baseURL.replace(/\/api$/, "")
     : "";
@@ -130,6 +128,34 @@ export default function ProfilePage() {
       fetchRealOrders();
     }
   }, [activeTab]);
+
+  // 🌟 THÊM MỚI HÀM: Xử lý kích hoạt gửi API hủy đơn hàng lên mạng qua orderApi
+  const handleCancelOrder = async (orderTarget) => {
+    const confirmCancel = window.confirm(`Bạn có chắc chắn muốn hủy đơn hàng #${orderTarget.ma_don_hang}?`);
+    if (!confirmCancel) return;
+
+    try {
+      // Gọi qua API công khai đã được sửa cấu hình phân quyền ở tầng Route
+      const response = await orderApi.put(`/orders/${orderTarget.ma_don_hang}/cancel`);
+      
+      if (response.data && response.data.success) {
+        showToast(response.data.message || "Hủy đơn hàng thành công!");
+        
+        // Đồng bộ cập nhật runtime state đổi trạng thái đơn sang 'Đã hủy' để React render lại UI lập tức
+        setOrdersList((prevOrders) =>
+          prevOrders.map((order) =>
+            order.ma_don_hang === orderTarget.ma_don_hang
+              ? { ...order, trang_thai_don_hang: "Đã hủy" }
+              : order
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Lỗi thực thi gửi API hủy đơn từ phía Client:", err);
+      const errorMsg = err.response?.data?.message || "Hệ thống bận, không thể hủy đơn hàng vào lúc này.";
+      showToast(errorMsg, "error");
+    }
+  };
 
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -250,7 +276,6 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        // 🚀 TỐI ƯU: Gọi dữ liệu qua authApi động
         const response = await authApi.get("/profile/hoso");
         if (response.data.success) setProfile(response.data.data);
       } catch (error) {
@@ -271,7 +296,6 @@ export default function ProfilePage() {
       const fetchProvincesGeo = async () => {
         try {
           setLoadingGeography(true);
-          // 🚀 TỐI ƯU: Chuyển sang nạp thông tin địa chính thông qua authApi tập trung
           const res = await authApi.get("/addresses/locations/provinces");
           if (res.data && res.data.success) setProvinces(res.data.data || []);
         } catch (err) {
@@ -745,7 +769,6 @@ export default function ProfilePage() {
     return `${API_BASE_URL}${url.startsWith("/") ? url : "/" + url}?t=${new Date().getTime()}`;
   };
 
-  // 🌟 HÀM RENDER HUY HIỆU VIP ĐỘNG TÙY BIẾN
   const renderTierBadge = (tier, sizeClass, iconSize) => {
     const name = String(tier || "BẠC").toUpperCase();
     if (name === "KIM CƯƠNG") {
@@ -906,7 +929,6 @@ export default function ProfilePage() {
             <span className="font-black text-slate-900 text-sm tracking-tight leading-none">
               {profile.full_name}
             </span>
-            {/* 🌟 CẬP NHẬT: Hiện hạng VIP tự động trên Mobile */}
             {renderTierBadge(profile.membership_tier, "text-[8px] mt-1.5", 8)}
           </div>
         </div>
@@ -952,7 +974,6 @@ export default function ProfilePage() {
                 <h4 className="font-black text-slate-900 truncate tracking-tight text-sm">
                   {profile.full_name}
                 </h4>
-                {/* 🌟 CẬP NHẬT: Hiện hạng VIP tự động trên Desktop */}
                 {renderTierBadge(
                   profile.membership_tier,
                   "text-[9px] mt-1",
@@ -1169,9 +1190,17 @@ export default function ProfilePage() {
                 {activeTab === "notifications" && (
                   <Tabthongbao notifications={notifications} />
                 )}
-                {activeTab === "orders" && <Tabdonhang orders={ordersList} />}
+                
+                {/* 🌟 ĐỒNG BỘ PROPS: Đã gán thành công hàm handleCancelOrder xuống cho file con */}
+                {activeTab === "orders" && (
+                  <Tabdonhang 
+                    orders={ordersList} 
+                    onCancelOrder={handleCancelOrder}
+                  />
+                )}
+                
                 {activeTab === "vouchers" && <Tabvoucher />}
-                {activeTab === "favorites" && <Tabdathich />}
+                {activeTab === "favorites" && <Tabvoucher />}
               </div>
             </div>
           </div>

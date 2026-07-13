@@ -59,10 +59,11 @@ export default function DanhsachTrackingorder() {
       if (response.data?.success) {
         const rawOrders = response.data.orders || [];
         
-        // 🌟 LỌC BỎ: Loại bỏ hoàn toàn các đơn hàng có trạng thái "Chờ xác nhận" trước khi set vào state hiển thị
-        const filteredOrders = rawOrders.filter(
-          (order) => String(order.trang_thai_don_hang).trim() !== "Chờ xác nhận"
-        );
+        // 🌟 LỌC BỎ NÂNG CAO: Loại bỏ đơn "Chờ xác nhận" VÀ đơn "Đã hủy" ra khỏi danh sách quản lý lộ trình tracking
+        const filteredOrders = rawOrders.filter((order) => {
+          const status = String(order.trang_thai_don_hang || "").trim().toLowerCase();
+          return status !== "chờ xác nhận" && status !== "đã hủy" && status !== "cancelled";
+        });
         
         setOrders(filteredOrders);
         setTotalPages(response.data.totalPages || 1);
@@ -330,7 +331,6 @@ export default function DanhsachTrackingorder() {
                       <option value="Xác nhận">Xác nhận</option>
                       <option value="Đang giao">Đang giao hàng</option>
                       <option value="Đã giao">Đã giao thành công</option>
-                      <option value="Đã hủy">Đã hủy bỏ</option>
                     </select>
                   </div>
                   <div className="flex gap-2">

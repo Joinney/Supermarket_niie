@@ -12,7 +12,7 @@ import {
   getPostOffices,
   testReadKml,
   getOrderTrackingLogs,
-  createOrderTrackingLogNode, // 🌟 THÊM MỚI: Import hàm controller xử lý tạo node
+  createOrderTrackingLogNode, 
   calculateShipping 
 } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js'; 
@@ -38,6 +38,9 @@ router.post('/place-order', protect, placeOrder);
 // 5. Lấy danh sách lịch sử đơn hàng cá nhân của người dùng đang đăng nhập
 router.get('/my-orders', protect, getMyOrders);
 
+// 5.1 Khách hàng tự hủy đơn hàng đang ở trạng thái chờ xử lý (Tự động hoàn kho & xóa sạch trạm trục)
+router.put('/orders/:ma_don_hang/cancel', protect, cancelOrder);
+
 
 // ========================================================
 // 🔒 ROUTE ĐỒNG BỘ NỘI BỘ (INTERNAL SERVICE ENDPOINTS)
@@ -60,7 +63,7 @@ router.get('/admin/all-orders', protect, getAllOrdersAdmin);
 // 9. Lấy chi tiết 1 đơn hàng kèm danh sách sản phẩm và thông tin khách hàng (Auth-Service)
 router.get('/admin/orders/:id', protect, getOrderDetailAdmin); 
 
-// 10. Hủy đơn hàng đang chờ xử lý và kích hoạt hoàn lại số lượng vào kho sản phẩm
+// 10. Admin can thiệp hủy đơn hàng đang chờ xử lý và kích hoạt hoàn kho sản phẩm
 router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder); 
 
 // 9.1 Lấy danh sách đơn hàng theo user id (Admin) - để trang quản trị xem lịch sử đơn của 1 khách
@@ -75,7 +78,6 @@ router.get('/admin/user-orders/:userId', protect, getOrdersByUserAdmin);
 router.get('/shipping/logs/:orderId', getOrderTrackingLogs);
 
 // 12. GHI LOG LOGISTICS REALTIME: Tiếp nhận lệnh nhảy trạm từ Admin để lưu lịch sử quét trạm vào PostgreSQL
-// 🛠️ ĐÃ FIX LỖI 404: Khai báo endpoint POST để Front-end gửi dữ liệu lên thành công
 router.post('/shipping/tracking-logs/create-node', createOrderTrackingLogNode);
 
 // 13. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
