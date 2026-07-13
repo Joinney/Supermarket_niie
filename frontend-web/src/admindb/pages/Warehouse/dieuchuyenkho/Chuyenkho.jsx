@@ -333,21 +333,14 @@ const Dieuchuyenkho = () => {
                           {formatDate(row.ngay_tao)}
                         </td>
                         <td className="py-4 px-6 text-gray-900 font-bold whitespace-pre-line text-xs">
-                          {String(row.nguoi_tao) === "1"
-                            ? "Admin"
-                            : row.nguoi_tao
-                              ? String(row.nguoi_tao).split(" ")[0]
-                              : "Admin"}
+                          {typeof row.nguoi_tao === "string"
+                            ? row.nguoi_tao.split(" ")[0]
+                            : "Admin"}
                           {"\n"}
                           <span className="text-gray-400 font-normal text-[10px]">
-                            {String(row.nguoi_tao) === "1"
-                              ? "Kho"
-                              : row.nguoi_tao
-                                ? String(row.nguoi_tao)
-                                    .split(" ")
-                                    .slice(1)
-                                    .join(" ")
-                                : "Kho"}
+                            {typeof row.nguoi_tao === "string"
+                              ? row.nguoi_tao.split(" ").slice(1).join(" ")
+                              : "Kho"}
                           </span>
                         </td>
 
