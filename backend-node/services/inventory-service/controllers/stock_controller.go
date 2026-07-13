@@ -10,21 +10,24 @@ import (
 
 // InventoryStockResponse định nghĩa cấu trúc dữ liệu trả về cho Frontend
 type InventoryStockResponse struct {
-	Sku         string  `json:"id" gorm:"column:sku"`
-	Name        string  `json:"name" gorm:"column:name"`
-	Quantity    int     `json:"quantity" gorm:"column:total_quantity"`
-	CostPrice   float64 `json:"costPrice" gorm:"column:total_cost_value"`
-	TotalValue  float64 `json:"totalValue" gorm:"column:total_retail_value"`
-	CreatedAt   string  `json:"createdAt" gorm:"column:first_import_date"` // Ngày nhập kho lần đầu
-	UpdatedAt   string  `json:"updatedAt" gorm:"column:last_update_date"`  // Ngày cập nhật kho gần nhất
+	Sku        string  `json:"id" gorm:"column:sku"`
+	Name       string  `json:"name" gorm:"column:name"`
+	Quantity   int     `json:"quantity" gorm:"column:total_quantity"`
+	CostPrice  float64 `json:"costPrice" gorm:"column:total_cost_value"`
+	TotalValue float64 `json:"totalValue" gorm:"column:total_retail_value"`
+	CreatedAt  string  `json:"createdAt" gorm:"column:first_import_date"` // Ngày nhập kho lần đầu
+	UpdatedAt  string  `json:"updatedAt" gorm:"column:last_update_date"`  // Ngày cập nhật kho gần nhất
 }
 
-// 🌟 GetInventory (ĐÃ NÂNG CẤP): Gom nhóm tồn kho theo SKU kèm Thời gian biến động
+// 🌟 GetInventory (ĐÃ NÂNG CẤP): Lọc theo Kho nguồn (nếu có) & Gom nhóm tồn kho
 func GetInventory(c *gin.Context) {
 	var inventoryList []InventoryStockResponse
 
-	// Câu lệnh SQL "thần thánh": JOIN 3 bảng, tính tổng tồn, tổng vốn và THỜI GIAN
-	err := config.DB.Table("ton_kho").
+	// Lấy tham số ma_kho từ URL (nếu có)
+	maKho := c.Query("ma_kho")
+
+	// Khởi tạo câu truy vấn cơ bản
+	query := config.DB.Table("ton_kho").
 		Select(`
 			ton_kho.sku, 
 			COALESCE(MAX(items.name), 'Sản phẩm chưa xác định') AS name, 
@@ -35,7 +38,15 @@ func GetInventory(c *gin.Context) {
 			MAX(ton_kho.ngay_cap_nhat) AS last_update_date
 		`).
 		Joins("LEFT JOIN items ON ton_kho.sku = items.sku").
-		Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang").
+		Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang")
+
+	// 🌟 FIX LOGIC: Nếu FE truyền lên ma_kho thì chỉ lọc tồn kho của đúng kho đó!
+	if maKho != "" {
+		query = query.Where("ton_kho.ma_kho = ?", maKho)
+	}
+
+	// Thực thi gom nhóm và quét dữ liệu
+	err := query.
 		Group("ton_kho.sku").
 		Order("last_update_date DESC"). // Đưa mặt hàng mới có biến động kho lên đầu
 		Scan(&inventoryList).Error

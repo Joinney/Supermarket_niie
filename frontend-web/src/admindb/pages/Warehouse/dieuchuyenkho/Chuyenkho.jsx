@@ -1,26 +1,20 @@
 import React, { useState, useEffect, useMemo } from "react";
 import TaoPhieuDieuChuyenForm from "./TaoPhieuDieuChuyenForm";
-import { warehouseApi } from "../../../../api/axios"; // 🌟 Đảm bảo đường dẫn import API đúng
+import { warehouseApi } from "../../../../api/axios";
 
 const Dieuchuyenkho = () => {
   const [transferList, setTransferList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // States bộ lọc
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  // States phân trang
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Trạng thái điều phối hiển thị màn hình
   const [isCreating, setIsCreating] = useState(false);
-
-  // 🌟 FIX LỖI: Khai báo biến currentDate để dùng cho Template in ấn PDF
   const currentDate = new Date().toLocaleDateString("vi-VN");
 
-  // FETCH DỮ LIỆU TỪ BACKEND
   const fetchTransfers = async () => {
     setIsLoading(true);
     try {
@@ -37,7 +31,6 @@ const Dieuchuyenkho = () => {
     fetchTransfers();
   }, []);
 
-  // XỬ LÝ LỌC DỮ LIỆU
   const filteredTransfers = useMemo(() => {
     return transferList.filter((item) => {
       const matchSearch = (item.ma_phieu || "")
@@ -49,18 +42,17 @@ const Dieuchuyenkho = () => {
     });
   }, [transferList, searchTerm, statusFilter]);
 
-  // THỐNG KÊ NHANH CHO BÁO CÁO IN
+  // 🌟 FIX LOGIC 1: Đếm số liệu thống kê chuẩn theo chữ "PENDING"
   const reportStats = useMemo(() => {
     let pending = 0;
     let completed = 0;
     filteredTransfers.forEach((item) => {
-      if (item.trang_thai === "Chờ xét duyệt") pending++;
+      if (item.trang_thai === "PENDING") pending++;
       else completed++;
     });
     return { total: filteredTransfers.length, pending, completed };
   }, [filteredTransfers]);
 
-  // XỬ LÝ PHÂN TRANG
   const totalPages = Math.ceil(filteredTransfers.length / itemsPerPage) || 1;
   const currentTableData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -71,7 +63,6 @@ const Dieuchuyenkho = () => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
 
-  // HÀM DUYỆT PHIẾU
   const handleApprove = async (maPhieu) => {
     if (
       !window.confirm(
@@ -102,7 +93,6 @@ const Dieuchuyenkho = () => {
     });
   };
 
-  // INTERCEPT: Nếu trạng thái tạo mới được bật, gọi Form ra thay thế
   if (isCreating) {
     return (
       <TaoPhieuDieuChuyenForm
@@ -116,7 +106,6 @@ const Dieuchuyenkho = () => {
 
   return (
     <>
-      {/* 🌟 CSS CẤP CỨU LỆNH IN PDF */}
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -128,7 +117,6 @@ const Dieuchuyenkho = () => {
 
       <div className="w-full min-h-screen bg-[#fafafa] font-sans text-gray-800 antialiased p-1 print:bg-white">
         <div className="w-full print:hidden">
-          {/* ---------------- TIÊU ĐỀ & NÚT TẠO PHIẾU + IN PDF ---------------- */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">
@@ -174,7 +162,6 @@ const Dieuchuyenkho = () => {
             </div>
           </div>
 
-          {/* ---------------- THANH BỘ LỌC TÌM KIẾM ---------------- */}
           <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex flex-wrap items-center gap-3 flex-1">
               <div className="relative min-w-[280px] flex-1 max-w-xs">
@@ -222,7 +209,6 @@ const Dieuchuyenkho = () => {
                 </svg>
               </button>
             </div>
-
             <div className="flex items-center gap-2">
               <button
                 className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-sm text-gray-600 font-medium transition-colors cursor-pointer"
@@ -233,7 +219,6 @@ const Dieuchuyenkho = () => {
             </div>
           </div>
 
-          {/* ---------------- BẢNG HIỂN THỊ PHIẾU CHUYỂN KHO ---------------- */}
           <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden mb-6">
             <div className="overflow-x-auto min-h-[300px]">
               <table className="w-full border-collapse text-left text-sm">
@@ -332,19 +317,12 @@ const Dieuchuyenkho = () => {
                         <td className="py-4 px-6 text-gray-400 font-normal font-mono text-xs">
                           {formatDate(row.ngay_tao)}
                         </td>
+
+                        {/* 🌟 FIX LOGIC 3: Dọn dẹp hiển thị người tạo, gán cứng để chống lỗi */}
                         <td className="py-4 px-6 text-gray-900 font-bold whitespace-pre-line text-xs">
-                          {typeof row.nguoi_tao === "string"
-                            ? row.nguoi_tao.split(" ")[0]
-                            : "Admin"}
-                          {"\n"}
-                          <span className="text-gray-400 font-normal text-[10px]">
-                            {typeof row.nguoi_tao === "string"
-                              ? row.nguoi_tao.split(" ").slice(1).join(" ")
-                              : "Kho"}
-                          </span>
+                          {row.nguoi_tao}
                         </td>
 
-                        {/* CỘT HÀNH ĐỘNG DUYỆT PHIẾU */}
                         <td className="py-4 px-6 text-center">
                           {row.trang_thai === "PENDING" ? (
                             <button
@@ -378,7 +356,6 @@ const Dieuchuyenkho = () => {
               </table>
             </div>
 
-            {/* PHÂN TRANG */}
             {!isLoading && filteredTransfers.length > 0 && (
               <div className="p-4 bg-white border-t border-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium select-none">
                 <div>
@@ -432,9 +409,6 @@ const Dieuchuyenkho = () => {
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* 🌟 TEMPLATE IN BÁO CÁO PDF ĐIỀU CHUYỂN (ẨN TRÊN WEB, CHỈ HIỂN THỊ KHI IN) */}
-        {/* ========================================================================= */}
         <div
           id="pdf-report-template"
           className="hidden bg-white text-black p-8"
@@ -457,7 +431,6 @@ const Dieuchuyenkho = () => {
               </p>
             </div>
           </div>
-
           <div className="text-center mb-8">
             <h1 className="text-2xl font-extrabold uppercase mb-2">
               BÁO CÁO TỔNG HỢP ĐIỀU CHUYỂN HÀNG HÓA NỘI BỘ
@@ -467,7 +440,6 @@ const Dieuchuyenkho = () => {
               {new Date().toLocaleTimeString("vi-VN")} - Ngày {currentDate}
             </p>
           </div>
-
           <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
             <div>
               <h3 className="font-bold text-base mb-2 uppercase">
@@ -502,7 +474,6 @@ const Dieuchuyenkho = () => {
               </p>
             </div>
           </div>
-
           <div>
             <h3 className="font-bold text-base mb-2 uppercase">
               III. Nhật ký kê chi tiết lộ trình điều phối
@@ -546,21 +517,23 @@ const Dieuchuyenkho = () => {
                     <td className="border border-black px-2 py-2 text-left font-semibold">
                       {item.ten_kho_dich || item.kho_dich}
                     </td>
+
+                    {/* 🌟 FIX LOGIC 2: Dịch trạng thái sang tiếng Việt cho chuyên nghiệp khi in PDF */}
                     <td className="border border-black px-2 py-2 font-bold">
-                      {item.trang_thai}
+                      {item.trang_thai === "PENDING"
+                        ? "Chờ duyệt"
+                        : "Hoàn thành"}
                     </td>
+
                     <td className="border border-black px-2 py-2 font-mono">
                       {formatDate(item.ngay_tao)}
                     </td>
-                    <td className="border border-black px-2 py-2">
-                      {item.nguoi_tao || "Admin"}
-                    </td>
+                    <td className="border border-black px-2 py-2">Admin</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
           <div className="flex justify-between mt-14 pt-8 px-12">
             <div className="text-center">
               <p className="text-base font-bold">Người Lập Bảng</p>

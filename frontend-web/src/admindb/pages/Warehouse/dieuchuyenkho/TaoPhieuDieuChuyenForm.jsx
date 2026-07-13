@@ -31,26 +31,47 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
   const [products, setProducts] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
+  // 1. TẢI DANH SÁCH KHO KHI MỞ FORM
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchWarehouses = async () => {
       try {
-        const [whRes, invRes] = await Promise.all([
-          warehouseApi.get("/warehouses"),
-          warehouseApi.get("/inventory"),
-        ]);
-
+        const whRes = await warehouseApi.get("/warehouses");
         const activeWarehouses = (whRes.data || []).filter(
-          (w) => w.trang_thai === "active",
+          (w) => w.trang_thai === "active" || w.trang_thai === true,
         );
         setWarehouses(activeWarehouses);
-        setInventory(invRes.data || []);
       } catch (error) {
-        console.error("Lỗi khi tải dữ liệu khởi tạo:", error);
+        console.error("Lỗi khi tải danh sách kho:", error);
       }
     };
-    fetchData();
+    fetchWarehouses();
   }, []);
+
+  // 2. TẢI TỒN KHO THEO ĐÚNG KHO NGUỒN ĐƯỢC CHỌN
+  useEffect(() => {
+    const fetchWarehouseInventory = async () => {
+      if (!fromWarehouse) {
+        setInventory([]);
+        return;
+      }
+      setIsLoadingInventory(true);
+      try {
+        // Gửi query param ma_kho để BE lọc đúng hàng của kho này
+        const invRes = await warehouseApi.get(
+          `/inventory?ma_kho=${fromWarehouse}`,
+        );
+        setInventory(invRes.data || []);
+      } catch (error) {
+        console.error("Lỗi khi tải tồn kho của kho nguồn:", error);
+        setInventory([]);
+      } finally {
+        setIsLoadingInventory(false);
+      }
+    };
+    fetchWarehouseInventory();
+  }, [fromWarehouse]);
 
   const filteredInventory = inventory.filter((item) => {
     const query = removeVietnameseTones(searchKeyword.toLowerCase());
@@ -58,22 +79,27 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
       (item.name || "").toLowerCase(),
     ).includes(query);
     const matchSku = removeVietnameseTones(
-      (item.id || "").toLowerCase(),
+      (item.sku || item.id || "").toLowerCase(),
     ).includes(query);
-    return (matchName || matchSku) && item.quantity > 0;
+    // Chỉ hiển thị các sản phẩm có tồn kho > 0
+    return (
+      (matchName || matchSku) &&
+      (item.so_luong_thuc_te > 0 || item.quantity > 0)
+    );
   });
 
   const handleAddProduct = (item) => {
-    if (products.some((p) => p.sku === item.id)) {
+    const skuCode = item.sku || item.id;
+    if (products.some((p) => p.sku === skuCode)) {
       alert("Sản phẩm này đã được chọn!");
       return;
     }
     setProducts((prev) => [
       ...prev,
       {
-        sku: item.id,
-        name: item.name,
-        maxStock: item.quantity,
+        sku: skuCode,
+        name: item.name || item.ten_san_pham,
+        maxStock: item.so_luong_thuc_te || item.quantity,
         quantity: 1,
       },
     ]);
@@ -86,11 +112,10 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
     setProducts((prev) =>
       prev.map((item) => {
         if (item.sku === sku) {
-          // Ngăn số âm và ngăn nhập quá số tồn kho hiện có
           let finalQty = qty < 0 ? 0 : qty;
           if (finalQty > item.maxStock) {
             alert(
-              `Sản phẩm ${item.name} chỉ còn tồn tối đa ${item.maxStock} đơn vị!`,
+              `Sản phẩm ${item.name} tại kho này chỉ còn tồn tối đa ${item.maxStock} đơn vị!`,
             );
             finalQty = item.maxStock;
           }
@@ -105,12 +130,26 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
     setProducts((prev) => prev.filter((item) => item.sku !== sku));
   };
 
-  // 🌟 UX LOGIC: Xử lý thông minh khi chọn Kho Nguồn
+  // 3. UX LOGIC KHI ĐỔI KHO NGUỒN
   const handleFromWarehouseChange = (e) => {
     const newFrom = e.target.value;
-    setFromWarehouse(newFrom);
 
-    // Nếu Kho Nguồn mới chọn lại VÔ TÌNH TRÙNG với Kho Đích hiện tại -> Tự động reset Kho đích
+    // Nếu đang chọn sản phẩm mà đổi kho nguồn -> Cảnh báo và Xóa danh sách sản phẩm cũ
+    if (products.length > 0) {
+      if (
+        !window.confirm(
+          "Thay đổi Kho nguồn sẽ làm mới danh sách sản phẩm đang chọn. Bạn có chắc chắn muốn đổi?",
+        )
+      ) {
+        return;
+      }
+    }
+
+    setFromWarehouse(newFrom);
+    setProducts([]); // Dọn dẹp danh sách sản phẩm cũ
+    setSearchKeyword("");
+    setShowSearch(false);
+
     if (newFrom === toWarehouse && newFrom !== "") {
       setToWarehouse("");
     }
@@ -141,7 +180,7 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
       kho_nguon: fromWarehouse,
       kho_dich: toWarehouse,
       ghi_chu: note,
-      nguoi_tao_id: 1,
+      nguoi_tao_id: 1, // Đã fix chuẩn Integer cho DB
       items: products.map((p) => ({
         sku: p.sku,
         quantity: p.quantity,
@@ -166,7 +205,6 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
       className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased overflow-y-auto"
     >
       <div className="w-full">
-        {/* HEADER AREA */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -191,12 +229,11 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
           </button>
         </div>
 
-        {/* MAIN BODY CONFIG: GRID LAYOUT */}
         <form
           onSubmit={handleSubmit}
           className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start"
         >
-          {/* KHỐI TRÁI (8 COLUMNS): DANH SÁCH SẢN PHẨM */}
+          {/* KHỐI TRÁI: DANH SÁCH SẢN PHẨM */}
           <div
             className="lg:col-span-8 bg-white rounded-2xl border border-slate-100 shadow-sm p-4 md:p-5 space-y-4"
             style={{ overflow: "visible" }}
@@ -211,7 +248,7 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
                   <tr className="bg-slate-50/70 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100 select-none">
                     <th className="py-3 px-4 w-[45%]">Sản phẩm / SKU</th>
                     <th className="py-3 px-4 text-center w-[25%]">
-                      Tồn hệ thống tham chiếu
+                      Tồn kho nguồn
                     </th>
                     <th className="py-3 px-4 text-center w-[18%]">SL Chuyển</th>
                     <th className="py-3 px-4 w-12 text-center">Xóa</th>
@@ -285,7 +322,12 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
             </div>
 
             {/* BLOCK TÌM KIẾM VÀ CHỌN SẢN PHẨM */}
-            {!showSearch ? (
+            {!fromWarehouse ? (
+              <div className="w-full py-4 mt-2 border border-dashed border-amber-200 bg-amber-50/50 text-amber-600 rounded-xl text-xs font-bold flex items-center justify-center text-center px-4">
+                Vui lòng chọn "Kho Nguồn" ở bảng bên phải trước khi thêm sản
+                phẩm điều chuyển!
+              </div>
+            ) : !showSearch ? (
               <button
                 type="button"
                 onClick={() => setShowSearch(true)}
@@ -301,7 +343,7 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
               >
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-black uppercase text-slate-500">
-                    Tra cứu sản phẩm trong kho
+                    Tra cứu sản phẩm trong kho nguồn
                   </p>
                   <button
                     type="button"
@@ -325,29 +367,32 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
                   />
                 </div>
 
-                {/* Kết quả tìm kiếm */}
                 <div className="max-h-48 overflow-y-auto bg-white border border-slate-100 rounded-lg shadow-3xs divide-y divide-slate-50">
-                  {filteredInventory.length === 0 ? (
-                    <p className="p-3 text-center text-xs text-slate-400 font-medium italic">
-                      Không tìm thấy sản phẩm nào có sẵn trong kho.
+                  {isLoadingInventory ? (
+                    <p className="p-4 text-center text-xs text-[#006c49] font-bold animate-pulse">
+                      Đang tải dữ liệu tồn kho...
+                    </p>
+                  ) : filteredInventory.length === 0 ? (
+                    <p className="p-4 text-center text-xs text-slate-400 font-medium italic">
+                      Không tìm thấy sản phẩm nào có sẵn trong kho nguồn này.
                     </p>
                   ) : (
                     filteredInventory.map((item) => (
                       <div
-                        key={item.id}
+                        key={item.sku || item.id}
                         onClick={() => handleAddProduct(item)}
                         className="p-2.5 flex items-center justify-between hover:bg-emerald-50 cursor-pointer transition group"
                       >
                         <div>
                           <p className="text-xs font-bold text-slate-800 group-hover:text-[#006c49]">
-                            {item.name}
+                            {item.name || item.ten_san_pham}
                           </p>
                           <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {item.id}
+                            {item.sku || item.id}
                           </p>
                         </div>
                         <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">
-                          Tồn: {item.quantity}
+                          Tồn: {item.so_luong_thuc_te || item.quantity}
                         </span>
                       </div>
                     ))
@@ -357,13 +402,12 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
             )}
           </div>
 
-          {/* KHỐI PHẢI (4 COLUMNS): LỘ TRÌNH & GHI CHÚ */}
+          {/* KHỐI PHẢI: LỘ TRÌNH & GHI CHÚ */}
           <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-50 pb-2">
               🗺️ Lộ trình di chuyển & Ghi chú chứng từ
             </h3>
 
-            {/* 🌟 Chọn Kho Nguồn */}
             <div className="space-y-1">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
                 Kho nguồn (Phân vùng xuất đi){" "}
@@ -389,7 +433,6 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
               </div>
             </div>
 
-            {/* 🌟 Chọn Kho Đích (Có logic khóa động) */}
             <div className="space-y-1">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
                 Kho đích (Phân vùng nhập vào){" "}
@@ -405,7 +448,7 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
                   <option
                     key={w.ma_kho}
                     value={w.ma_kho}
-                    disabled={w.ma_kho === fromWarehouse} // Vô hiệu hóa nếu đang là kho nguồn
+                    disabled={w.ma_kho === fromWarehouse}
                   >
                     {w.ten_kho}{" "}
                     {w.ma_kho === fromWarehouse ? "(Đang là kho nguồn)" : ""}
@@ -414,7 +457,6 @@ const TaoPhieuDieuChuyenForm = ({ onCancel }) => {
               </select>
             </div>
 
-            {/* Ghi chú điều chuyển */}
             <div className="space-y-1 pt-2 border-t border-slate-100">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
                 Ghi chú lý do điều vận

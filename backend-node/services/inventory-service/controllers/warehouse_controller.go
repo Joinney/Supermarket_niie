@@ -173,17 +173,28 @@ func DeleteWarehouse(c *gin.Context) {
 // CÁC HÀM MỚI: QUẢN LÝ ĐIỀU CHUYỂN KHO (INVENTORY TRANSFER)
 // =========================================================
 
+// =========================================================
+// CÁC HÀM MỚI: QUẢN LÝ ĐIỀU CHUYỂN KHO (INVENTORY TRANSFER)
+// =========================================================
+
 // ---------------------------------------------------------
 // 6. LẤY DANH SÁCH PHIẾU ĐIỀU CHUYỂN
 // ---------------------------------------------------------
 func GetTransferTickets(c *gin.Context) {
 	var results []map[string]interface{}
 
-	// 🌟 FIX: Đổi ma_phieu thành ma_chuyen_kho, đổi người tạo thành nguoi_tao_id
+	// 🌟 FIX: Bỏ JOIN users để tránh lỗi "relation does not exist" do khác Database
 	query := `
 		SELECT 
-			p.ma_chuyen_kho AS ma_phieu, p.kho_nguon, p.kho_dich, p.trang_thai, p.ngay_tao, p.nguoi_tao_id AS nguoi_tao,
-			kn.ten_kho AS ten_kho_nguon, kd.ten_kho AS ten_kho_dich
+			p.ma_chuyen_kho AS ma_phieu, 
+			p.kho_nguon, 
+			p.kho_dich, 
+			p.trang_thai, 
+			p.ngay_tao, 
+			p.nguoi_tao_id AS nguoi_tao, 
+			COALESCE(p.nguoi_tao_name, 'Hệ thống') AS nguoi_tao,
+			kn.ten_kho AS ten_kho_nguon, 
+			kd.ten_kho AS ten_kho_dich
 		FROM phieu_chuyen_kho p
 		LEFT JOIN kho_hang kn ON p.kho_nguon = kn.ma_kho
 		LEFT JOIN kho_hang kd ON p.kho_dich = kd.ma_kho
@@ -207,6 +218,7 @@ func CreateTransferTicket(c *gin.Context) {
 		KhoDich    string `json:"kho_dich" binding:"required"`
 		GhiChu     string `json:"ghi_chu"`
 		NguoiTaoID int    `json:"nguoi_tao_id"`
+		NguoiTaoName string `json:"nguoi_tao_name"`
 		Items      []struct {
 			Sku      string `json:"sku" binding:"required"`
 			Quantity int    `json:"quantity" binding:"required,gt=0"`
@@ -227,38 +239,35 @@ func CreateTransferTicket(c *gin.Context) {
 
 	maPhieu := fmt.Sprintf("DC%s-%04d", time.Now().Format("0601"), time.Now().Unix()%10000)
 
-	insertPhieu := `INSERT INTO phieu_chuyen_kho (ma_chuyen_kho, kho_nguon, kho_dich, ghi_chu, trang_thai, nguoi_tao_id, ngay_tao, ngay_cap_nhat) 
+	insertPhieu := `INSERT INTO phieu_chuyen_kho (ma_chuyen_kho, kho_nguon, kho_dich, ghi_chu, trang_thai, nguoi_tao_id, nguoi_tao_name, ngay_tao, ngay_cap_nhat) 
 					VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?)`
 	
-	if err := tx.Exec(insertPhieu, maPhieu, input.KhoNguon, input.KhoDich, input.GhiChu, input.NguoiTaoID, time.Now(), time.Now()).Error; err != nil {
+	if err := tx.Exec(insertPhieu, maPhieu, input.KhoNguon, input.KhoDich, input.GhiChu, input.NguoiTaoID, input.NguoiTaoName, time.Now(), time.Now()).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo phiếu: " + err.Error()})
 		return
 	}
 
-	// 🌟 THUẬT TOÁN CHUẨN: Lấy mã LÔ HÀNG THỰC TẾ đang có trong Tồn Kho Nguồn để tạo chi tiết phiếu
+	// 🌟 THUẬT TOÁN FIFO: Lấy lô thật từ Tồn kho để đưa vào Chi tiết chuyển
 	for _, item := range input.Items {
 		qtyNeeded := item.Quantity
 
-		// 1. Tìm các lô của SKU này tại Kho Nguồn (Sắp xếp cũ nhất lấy trước - FIFO)
 		var lots []struct {
 			MaLoHang      string
 			SoLuongThucTe int
 		}
 		tx.Raw("SELECT ma_lo_hang, so_luong_thuc_te FROM ton_kho WHERE ma_kho = ? AND sku = ? AND so_luong_thuc_te > 0 ORDER BY ngay_tao ASC", input.KhoNguon, item.Sku).Scan(&lots)
 
-		// 2. Tính tổng tồn xem có đủ điều chuyển không
 		totalAvailable := 0
 		for _, l := range lots {
 			totalAvailable += l.SoLuongThucTe
 		}
 		if totalAvailable < qtyNeeded {
 			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Thất bại! Kho nguồn chỉ còn %d đơn vị cho sản phẩm %s", totalAvailable, item.Sku)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Kho nguồn chỉ còn %d đơn vị cho sản phẩm %s", totalAvailable, item.Sku)})
 			return
 		}
 
-		// 3. Cắt lẻ số lượng cần chuyển vào từng Lô thực tế và Insert xuống DB
 		for _, lot := range lots {
 			if qtyNeeded <= 0 {
 				break
@@ -269,7 +278,6 @@ func CreateTransferTicket(c *gin.Context) {
 				takeFromLot = qtyNeeded
 			}
 
-			// Insert vào chi_tiet với Mã Lô thật 100%, tuân thủ nghiêm ngặt Foreign Key
 			insertChiTiet := `INSERT INTO chi_tiet_chuyen_kho (ma_chuyen_kho, sku, ma_lo_hang, so_luong) VALUES (?, ?, ?, ?)`
 			if err := tx.Exec(insertChiTiet, maPhieu, item.Sku, lot.MaLoHang, takeFromLot).Error; err != nil {
 				tx.Rollback()
@@ -286,11 +294,10 @@ func CreateTransferTicket(c *gin.Context) {
 }
 
 // ---------------------------------------------------------
-// 8. DUYỆT PHIẾU CHUYỂN (TRỪ KHO NGUỒN, CỘNG KHO ĐÍCH)
+// 8. DUYỆT PHIẾU CHUYỂN & GHI LỊCH SỬ KHO (lich_su_kho)
 // ---------------------------------------------------------
 func ApproveTransferTicket(c *gin.Context) {
 	maPhieu := c.Param("id")
-
 	tx := config.DB.Begin()
 
 	var phieu struct {
@@ -306,11 +313,10 @@ func ApproveTransferTicket(c *gin.Context) {
 
 	if phieu.TrangThai != "PENDING" {
 		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Phiếu này đã được xử lý hoặc bị hủy!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Phiếu này đã được xử lý!"})
 		return
 	}
 
-	// 🌟 Lấy chi tiết phiếu (Đã có sẵn mã lô thật lấy từ lúc tạo phiếu)
 	var details []struct {
 		Sku      string
 		MaLoHang string
@@ -319,26 +325,61 @@ func ApproveTransferTicket(c *gin.Context) {
 	tx.Raw("SELECT sku, ma_lo_hang, so_luong FROM chi_tiet_chuyen_kho WHERE ma_chuyen_kho = ?", maPhieu).Scan(&details)
 
 	for _, detail := range details {
-		// Trừ Kho Nguồn (Kèm điều kiện >= so luong để chặn lỗi xuất âm nếu hàng bị bán mất trong lúc chờ duyệt)
-		res := tx.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te - ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ? AND so_luong_thuc_te >= ?",
-			detail.SoLuong, time.Now(), phieu.KhoNguon, detail.Sku, detail.MaLoHang, detail.SoLuong)
-
-		if res.RowsAffected == 0 {
+		// ==========================================
+		// 1. XỬ LÝ KHO NGUỒN (XUẤT)
+		// ==========================================
+		var tonTruocNguon int
+		if err := tx.Raw("SELECT so_luong_thuc_te FROM ton_kho WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", phieu.KhoNguon, detail.Sku, detail.MaLoHang).Scan(&tonTruocNguon).Error; err != nil || tonTruocNguon < detail.SoLuong {
 			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Lô %s của sản phẩm %s tại kho nguồn không còn đủ hàng để chuyển đi!", detail.MaLoHang, detail.Sku)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Sản phẩm %s (Lô: %s) không đủ tồn kho thực tế!", detail.Sku, detail.MaLoHang)})
+			return
+		}
+		
+		tonSauNguon := tonTruocNguon - detail.SoLuong
+
+		// Trừ tồn kho nguồn
+		if err := tx.Exec("UPDATE ton_kho SET so_luong_thuc_te = ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", tonSauNguon, time.Now(), phieu.KhoNguon, detail.Sku, detail.MaLoHang).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ tồn kho nguồn"})
 			return
 		}
 
-		// Cộng vào Kho Đích (Giữ nguyên mã lô cũ để quản lý Date/Hạn sử dụng)
+		// 🌟 GHI LỊCH SỬ KHO NGUỒN
+		if err := tx.Exec(`INSERT INTO lich_su_kho (ma_kho, sku, ma_lo_hang, loai_thay_doi, so_luong_thay_doi, so_luong_ton_truoc, so_luong_ton_sau, ma_tai_lieu_tham_chieu, ngay_tao)
+                 VALUES (?, ?, ?, 'XUAT_CHUYEN_KHO', ?, ?, ?, ?, ?)`, 
+				 phieu.KhoNguon, detail.Sku, detail.MaLoHang, -detail.SoLuong, tonTruocNguon, tonSauNguon, maPhieu, time.Now()).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi lịch sử kho nguồn"})
+			return
+		}
+
+
+		// ==========================================
+		// 2. XỬ LÝ KHO ĐÍCH (NHẬP)
+		// ==========================================
+		var tonTruocDich int = 0 // Mặc định là 0 nếu lô này chưa từng có ở kho đích
+		tx.Raw("SELECT so_luong_thuc_te FROM ton_kho WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", phieu.KhoDich, detail.Sku, detail.MaLoHang).Scan(&tonTruocDich)
+		tonSauDich := tonTruocDich + detail.SoLuong
+
+		// Cộng tồn kho đích (Dùng ON CONFLICT cập nhật nếu lô đã tồn tại)
 		upsertQuery := `
 			INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat)
 			VALUES (?, ?, ?, ?, 0, ?, ?)
 			ON CONFLICT (ma_kho, sku, ma_lo_hang) 
-			DO UPDATE SET so_luong_thuc_te = ton_kho.so_luong_thuc_te + EXCLUDED.so_luong_thuc_te, ngay_cap_nhat = EXCLUDED.ngay_cap_nhat;
+			DO UPDATE SET so_luong_thuc_te = ?, ngay_cap_nhat = ?
 		`
-		if err := tx.Exec(upsertQuery, phieu.KhoDich, detail.Sku, detail.MaLoHang, detail.SoLuong, time.Now(), time.Now()).Error; err != nil {
+		if err := tx.Exec(upsertQuery, phieu.KhoDich, detail.Sku, detail.MaLoHang, detail.SoLuong, time.Now(), time.Now(), tonSauDich, time.Now()).Error; err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật kho đích"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng tồn kho đích"})
+			return
+		}
+
+		// 🌟 GHI LỊCH SỬ KHO ĐÍCH
+		if err := tx.Exec(`INSERT INTO lich_su_kho (ma_kho, sku, ma_lo_hang, loai_thay_doi, so_luong_thay_doi, so_luong_ton_truoc, so_luong_ton_sau, ma_tai_lieu_tham_chieu, ngay_tao)
+                 VALUES (?, ?, ?, 'NHAP_CHUYEN_KHO', ?, ?, ?, ?, ?)`, 
+				 phieu.KhoDich, detail.Sku, detail.MaLoHang, detail.SoLuong, tonTruocDich, tonSauDich, maPhieu, time.Now()).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi lịch sử kho đích"})
 			return
 		}
 	}
@@ -351,5 +392,5 @@ func ApproveTransferTicket(c *gin.Context) {
 	}
 
 	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"message": "Đã duyệt và điều chuyển kho thành công!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Duyệt phiếu, điều chuyển kho và lưu lịch sử thành công!"})
 }
