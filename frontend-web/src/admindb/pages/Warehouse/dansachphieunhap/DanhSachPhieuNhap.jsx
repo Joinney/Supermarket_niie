@@ -166,7 +166,11 @@ export default function DanhSachPhieuNhap() {
               onClick={() => navigate("/admin/inventory/create-import-ticket")}
               className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer"
             >
-              <span className="text-sm font-bold">+</span> Tạo Phiếu nhập
+              {/* Thay đổi dấu cộng text thành icon SVG vẽ */}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Tạo Phiếu nhập
             </button>
           </div>
 
@@ -174,8 +178,11 @@ export default function DanhSachPhieuNhap() {
           <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between gap-3 mb-6 relative">
             <div className="flex items-center gap-3 flex-1">
               <div className="relative min-w-[300px] flex-1 max-w-sm">
+                {/* Thay emoji kính lúp bằng SVG */}
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  🔍
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
                 </span>
                 <input
                   type="text"
@@ -228,7 +235,17 @@ export default function DanhSachPhieuNhap() {
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                 className={`px-4 py-2 border rounded-lg text-sm font-bold transition cursor-pointer flex items-center gap-2 ${showFilterDropdown || filterWarehouse || filterPriceRange ? "bg-emerald-50 border-emerald-200 text-[#006c49]" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
               >
-                Lọc Nâng Cao ▼
+                Lọc Nâng Cao
+                {/* Thay thế kí tự tam giác ▼ thành icon mũi tên SVG có hiệu ứng xoay khi đóng mở */}
+                <svg 
+                  className={`w-3 h-3 transition-transform duration-200 ${showFilterDropdown ? "rotate-180" : ""}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2.5" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
               </button>
 
               {showFilterDropdown && (
@@ -340,9 +357,15 @@ export default function DanhSachPhieuNhap() {
                     <tr>
                       <td
                         colSpan="8"
-                        className="py-20 text-center text-xs text-[#006c49] font-bold uppercase tracking-widest animate-pulse"
+                        className="py-20 text-center text-xs text-[#006c49] font-bold uppercase tracking-widest"
                       >
-                        🔄 Đang kết nối phân hệ Kho (Inventory Service)...
+                        <div className="flex items-center justify-center gap-2 animate-pulse">
+                          {/* Thay thế emoji vòng xoay thành icon SVG quay tròn mượt bằng class animate-spin */}
+                          <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                          </svg>
+                          Đang kết nối phân hệ Kho (Inventory Service)...
+                        </div>
                       </td>
                     </tr>
                   ) : filteredTickets.length === 0 ? (
@@ -448,7 +471,7 @@ export default function DanhSachPhieuNhap() {
             </h1>
             <p className="text-sm italic">
               Thời điểm kết xuất: {currentTime.toLocaleTimeString("vi-VN")} -
-              Ngày {currentTime.toLocaleDateString("vi-VN")}
+              Ngày {currentTime.toLocaleDateDateString ? currentTime.toLocaleDateString("vi-VN") : currentTime.toLocaleDateString("vi-VN")}
             </p>
             {(search || filterWarehouse || filterPriceRange) && (
               <p className="text-xs italic mt-1 text-gray-600">

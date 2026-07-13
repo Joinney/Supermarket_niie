@@ -190,19 +190,31 @@ const Quanlytonkho = () => {
     if (daysSinceCreated <= 3)
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-700 uppercase">
-          🆕 Mới nhập
+          {/* Icon Mới nhập vẽ bằng SVG */}
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Mới nhập
         </span>
       );
     if (daysSinceUpdated <= 3)
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700 uppercase">
-          ⬆️ Update
+          {/* Icon Cập nhật vẽ bằng SVG */}
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+          </svg>
+          Update
         </span>
       );
     if (daysSinceUpdated >= 30)
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-700 uppercase">
-          ⚠️ Tồn đọng
+          {/* Icon Tồn đọng vẽ bằng SVG */}
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          Tồn đọng
         </span>
       );
     return null;
@@ -284,7 +296,7 @@ const Quanlytonkho = () => {
               />
             </div>
 
-            {/* 🌟 DROPDOWN 1: DANH MỤC CHA */}
+            {/* 🌟 DROPDOWN 1: DANH MỤC CHA (Đã xóa emoji thô) */}
             <select
               value={parentCatFilter}
               onChange={(e) => {
@@ -293,7 +305,7 @@ const Quanlytonkho = () => {
               }}
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 font-bold focus:outline-none w-[180px] cursor-pointer focus:border-[#006c49] truncate"
             >
-              <option value="">📁 Tất cả Danh mục Cha</option>
+              <option value="">Tất cả Danh mục Cha</option>
               {Object.keys(categoryHierarchy).map((dmCha) => (
                 <option key={dmCha} value={dmCha}>
                   {dmCha}
@@ -301,14 +313,14 @@ const Quanlytonkho = () => {
               ))}
             </select>
 
-            {/* 🌟 DROPDOWN 2: DANH MỤC CON */}
+            {/* 🌟 DROPDOWN 2: DANH MỤC CON (Đã xóa emoji thô) */}
             <select
               value={childCatFilter}
               onChange={(e) => setChildCatFilter(e.target.value)}
               disabled={!parentCatFilter}
               className={`px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 font-bold focus:outline-none w-[180px] truncate ${!parentCatFilter ? "opacity-50 cursor-not-allowed" : "cursor-pointer focus:border-[#006c49]"}`}
             >
-              <option value="">📂 Phân loại Chi tiết</option>
+              <option value="">Phân loại Chi tiết</option>
               {parentCatFilter &&
                 categoryHierarchy[parentCatFilter]?.map((dmCon) => (
                   <option key={dmCon} value={dmCon}>
@@ -317,27 +329,23 @@ const Quanlytonkho = () => {
                 ))}
             </select>
 
-            {/* DROPDOWN 3: VÒNG ĐỜI KHO */}
+            {/* DROPDOWN 3: VÒNG ĐỜI KHO (Đã xóa các kí tự emoji trong option) */}
             <select
               value={timeFilter}
               onChange={(e) => setTimeFilter(e.target.value)}
               className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 font-bold focus:outline-none min-w-[200px] focus:border-[#006c49] cursor-pointer"
             >
-              <option value="all">📦 Tất cả trạng thái kho</option>
-              <option value="inStock">✅ Chỉ lấy hàng còn tồn</option>
-              <option value="firstTime">🆕 Lần đầu thêm (trong 3 ngày)</option>
-              <option value="restocked">
-                ⬆️ Mới nhập/update (trong 3 ngày)
-              </option>
-              <option value="stagnant">
-                ⚠️ Tồn đọng lâu năm (&ge; 30 ngày)
-              </option>
+              <option value="all">Tất cả trạng thái kho</option>
+              <option value="inStock">Chỉ lấy hàng còn tồn</option>
+              <option value="firstTime">Lần đầu thêm (trong 3 ngày)</option>
+              <option value="restocked">Mới nhập/update (trong 3 ngày)</option>
+              <option value="stagnant">Tồn đọng lâu năm (&ge; 30 ngày)</option>
             </select>
 
             <button
               onClick={handleResetFilters}
               title="Làm mới bộ lọc"
-              className="bg-slate-100 text-slate-600 p-2 rounded-lg hover:bg-slate-200 transition-all cursor-pointer border border-slate-200"
+              className="bg-slate-100 text-slate-600 p-2 rounded-lg hover:bg-slate-200 transition-all cursor-pointer border border-slate-200 flex items-center justify-center"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -350,7 +358,7 @@ const Quanlytonkho = () => {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
                 />
               </svg>
             </button>
@@ -439,19 +447,8 @@ const Quanlytonkho = () => {
                 </p>
               </div>
               <div className="p-3 rounded-full bg-orange-50 text-orange-500">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2.5}
-                  stroke="currentColor"
-                  className="w-6 h-6"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-                  />
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879-.659c1.171-.879 3.07-.879 4.242 0 1.172.879 1.172 2.303 0 3.182s-3.07.879-4.242 0a1.75 1.75 0 01-.424-.53m0-10.607l.879-.659c1.171-.879 3.07-.879 4.242 0 1.172.879 1.172 2.303 0 3.182s-3.07.879-4.242 0a1.75 1.75 0 01-.424-.53M12 3v3m0 12v3" />
                 </svg>
               </div>
             </div>
@@ -510,12 +507,17 @@ const Quanlytonkho = () => {
                     <tr>
                       <td
                         colSpan="5"
-                        className="py-20 text-center text-xs text-[#006c49] font-bold uppercase tracking-widest animate-pulse"
+                        className="py-20 text-center text-xs text-[#006c49] font-bold uppercase tracking-widest"
                       >
-                        🔄 Đang tổng hợp dữ liệu kho...
+                        <div className="flex items-center justify-center gap-2">
+                          <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                          </svg>
+                          Đang tổng hợp dữ liệu kho...
+                        </div>
                       </td>
                     </tr>
-                  ) : currentTableData.length === 0 ? (
+                  ) : filteredData.length === 0 ? (
                     <tr>
                       <td
                         colSpan="5"
@@ -534,7 +536,7 @@ const Quanlytonkho = () => {
                           <p className="font-bold text-gray-600 font-mono text-[11px]">
                             {item.id}
                           </p>
-                          <div className="mt-1.5">
+                          <div className="mt-1.5 flex flex-wrap gap-1">
                             {getStatusBadge(
                               item.createdAt,
                               item.updatedAt,
@@ -546,12 +548,16 @@ const Quanlytonkho = () => {
                           <p className="text-gray-800 font-bold max-w-xs break-words">
                             {item.name}
                           </p>
-                          <p className="text-[10px] mt-1 text-slate-500 font-medium">
+                          <div className="text-[10px] mt-1 text-slate-500 font-medium flex items-center gap-1">
                             <span className="text-indigo-500">
                               {item.parentCategory}
                             </span>{" "}
-                            &rarr; {item.childCategory}
-                          </p>
+                            {/* SVG mũi tên sang phải chuyên nghiệp */}
+                            <svg className="w-2.5 h-2.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                            </svg>{" "}
+                            <span>{item.childCategory}</span>
+                          </div>
                         </td>
                         <td className="py-4 px-6 text-right">
                           <span
@@ -761,9 +767,14 @@ const Quanlytonkho = () => {
                     </td>
                     <td className="border border-black px-2 py-2 font-semibold">
                       {item.name}
-                      <p className="text-[10px] font-normal italic text-gray-600 mt-1">
-                        ({item.parentCategory} &rarr; {item.childCategory})
-                      </p>
+                      <div className="text-[10px] font-normal italic text-gray-600 mt-1 flex items-center gap-1">
+                        <span>({item.parentCategory}</span>
+                        {/* SVG mũi tên sang phải trong mẫu in PDF */}
+                        <svg className="w-2 h-2 text-gray-500 inline" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                        <span>{item.childCategory})</span>
+                      </div>
                     </td>
                     <td className="border border-black px-2 py-2 text-center font-bold">
                       {formatNumber(item.quantity)}

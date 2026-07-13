@@ -69,7 +69,6 @@ const DanhSachKho = () => {
       setWarehouseData((prev) => prev.filter((w) => w.ma_kho !== maKho));
       alert("Đã xóa kho hàng thành công!");
     } catch (error) {
-      // Bắt lỗi 409 Conflict từ Backend (Kho đang có phiếu nhập/xuất)
       if (error.response && error.response.status === 409) {
         alert(
           error.response.data.error || "Không thể xóa kho đang chứa dữ liệu.",
@@ -97,7 +96,11 @@ const DanhSachKho = () => {
           onClick={() => navigate("/admin/inventory/create-warehouse")}
           className="flex items-center justify-center gap-1.5 bg-[#006c49] hover:bg-[#005237] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition"
         >
-          <span className="text-sm">+</span> Thêm kho
+          {/* Thay đổi dấu cộng thành icon vẽ SVG */}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Thêm kho
         </button>
       </div>
 
@@ -111,12 +114,14 @@ const DanhSachKho = () => {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:border-[#006c49] transition-all"
           />
+          {/* Icon Tìm kiếm vẽ bằng SVG */}
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-            🔍
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
           </span>
         </div>
 
-        {/* 🌟 Đã sửa value thành inactive để khớp Backend */}
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -132,10 +137,13 @@ const DanhSachKho = () => {
             setSearch("");
             setStatus("");
           }}
-          className="p-2 border border-gray-200 bg-slate-50 hover:bg-slate-100 rounded-xl text-gray-500 transition cursor-pointer"
+          className="p-2 border border-gray-200 bg-slate-50 hover:bg-slate-100 rounded-xl text-gray-500 transition cursor-pointer flex items-center justify-center"
           title="Làm mới"
         >
-          🔄
+          {/* Icon Làm mới / Đồng bộ bằng SVG */}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
         </button>
       </div>
 
@@ -236,14 +244,20 @@ const DanhSachKho = () => {
                             className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
                             title="Sửa thông tin kho"
                           >
-                            ✏️
+                            {/* Icon Sửa (Bút chì) bằng SVG */}
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                            </svg>
                           </button>
                           <button
                             onClick={() => handleDelete(row.ma_kho)}
                             className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition"
                             title="Xóa kho hàng"
                           >
-                            🗑️
+                            {/* Icon Xóa (Thùng rác) bằng SVG */}
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.184v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
                           </button>
                         </div>
                       </td>
