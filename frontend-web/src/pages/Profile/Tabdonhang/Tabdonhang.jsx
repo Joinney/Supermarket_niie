@@ -4,7 +4,6 @@ import {
   MapPin, 
   ChevronDown, 
   ChevronUp, 
-  Trash2, 
   FileText, 
   Star,
   ClipboardCheck, 
@@ -14,7 +13,7 @@ import {
 import ModalLoTrinh from "./ModalLoTrinh";
 
 const ORDER_STEPS = [
-  { id: "step_init", icon: ClipboardCheck, matchStatuses: ["Chờ xác nhận", "Xác nhận"] },
+  { id: "step_init", icon: ClipboardCheck, matchStatuses: ["Chờ xác nhận", "Xác nhận", "pending"] },
   { label: "Lấy hàng", icon: Package, matchStatuses: ["Lấy hàng"] }, 
   { label: "Đang giao", icon: Bike, matchStatuses: ["Đang giao"] },
   { label: "Đã giao", icon: Home, matchStatuses: ["Đã giao"] },
@@ -24,7 +23,8 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
   const [expandedOrders, setExpandedOrders] = useState({});
 
-  const toggleOrderExpand = (orderId) => {
+  const toggleOrderExpand = (orderId, e) => {
+    if (e) e.stopPropagation();
     setExpandedOrders((prev) => ({
       ...prev,
       [orderId]: !prev[orderId],
@@ -69,11 +69,18 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
           const firstGroup = groupedItems[0];
 
           const statusText = order.trang_thai_don_hang || "Chờ xác nhận";
+          const normalizedStatus = statusText.trim().toLowerCase();
+          
           const orderIdStr = order.id || order.ma_don_hang;
           const isExpanded = !!expandedOrders[orderIdStr];
 
+          // Phân loại trạng thái chuẩn hóa
+          const isCancelled = normalizedStatus === "đã hủy" || normalizedStatus === "cancelled";
+          const isPendingCancel = normalizedStatus === "chờ xác nhận" || normalizedStatus === "pending" || normalizedStatus === "chờ xử lý";
+          const isConfirmed = normalizedStatus === "xác nhận" || normalizedStatus === "confirmed";
+
           const currentStepIndex = ORDER_STEPS.findIndex(step => 
-            step.matchStatuses.includes(statusText)
+            step.matchStatuses.some(status => status.toLowerCase() === normalizedStatus)
           );
 
           if (!firstGroup) return null;
@@ -81,9 +88,11 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
           return (
             <div
               key={orderIdStr}
-              className="p-4 rounded-2xl bg-white border border-slate-100 flex flex-col gap-3.5 shadow-xs hover:shadow-sm transition-all"
+              className={`p-4 rounded-2xl bg-white border flex flex-col gap-3.5 shadow-xs hover:shadow-sm transition-all ${
+                isCancelled ? "border-red-100 bg-red-50/5 opacity-90" : "border-slate-100"
+              }`}
             >
-              {/* Header đơn hàng tinh gọn */}
+              {/* Header đơn hàng */}
               <div className="flex justify-between items-center border-b border-slate-50 pb-2">
                 <div>
                   <span className="text-xs font-black text-slate-900 uppercase tracking-wider block">
@@ -93,7 +102,11 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                     Đặt lúc: {new Date(order.ngay_tao || order.created_at || Date.now()).toLocaleDateString("vi-VN")}
                   </span>
                 </div>
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase bg-emerald-50 text-[#006c49] border border-emerald-100/60">
+                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase border ${
+                  isCancelled 
+                    ? "bg-red-50 text-red-600 border-red-100" 
+                    : "bg-emerald-50 text-[#006c49] border-emerald-100/60"
+                }`}>
                   {statusText}
                 </span>
               </div>
@@ -105,14 +118,14 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                   <h4 className="font-bold text-slate-800 text-xs truncate">
                     {firstGroup.product_name}
                   </h4>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                  <div className="text-[11px] text-slate-400 font-medium mt-0.5">
                     Phân loại: {firstGroup.variants.map((v, i) => (
                       <span key={i}>{v.name} • <b className="text-slate-700">x{v.qty}</b>{i < firstGroup.variants.length - 1 ? ", " : ""}</span>
                     ))}
-                  </p>
+                  </div>
 
                   {groupedItems.length > 1 && (
-                    <button onClick={() => toggleOrderExpand(orderIdStr)} className="text-[10px] text-[#006c49] font-bold italic flex items-center mt-1 hover:underline">
+                    <button onClick={(e) => toggleOrderExpand(orderIdStr, e)} className="text-[10px] text-[#006c49] font-bold italic flex items-center mt-1 hover:underline cursor-pointer">
                       {isExpanded ? <>Thu gọn <ChevronUp size={11} className="ml-0.5" /></> : <>Xem thêm {groupedItems.length - 1} sản phẩm khác <ChevronDown size={11} className="ml-0.5" /></>}
                     </button>
                   )}
@@ -125,7 +138,7 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                 </div>
               </div>
 
-              {/* Danh sách mở rộng tinh gọn */}
+              {/* Danh sách mở rộng sản phẩm */}
               {isExpanded && groupedItems.length > 1 && (
                 <div className="pt-1.5 border-t border-dashed border-slate-100 flex flex-col gap-2.5 pl-4 animate-fadeIn">
                   {groupedItems.slice(1).map((group, idx) => (
@@ -133,92 +146,105 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                       <img src={group.image_url || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=150"} className="w-10 h-10 rounded-lg object-cover border border-slate-100 bg-slate-50 shrink-0" alt="prod" />
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="font-bold text-slate-800 text-[11px] truncate">{group.product_name}</h4>
-                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                        <div className="text-[10px] text-slate-400 font-medium mt-0.5">
                           Phân loại: {group.variants.map((v, i) => (
                             <span key={i}>{v.name} • <b className="text-slate-700">x{v.qty}</b>{i < group.variants.length - 1 ? ", " : ""}</span>
                           ))}
-                        </p>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* STEPPER THU GỌN KHÔNG GIAN DỌC */}
-              <div className="py-2 px-1 flex items-center justify-between relative w-full select-none">
-                {ORDER_STEPS.map((step, index) => {
-                  const StepIcon = step.icon;
-                  const isVisited = index <= currentStepIndex;
-                  const isCurrent = index === currentStepIndex;
+              {/* STEPPER VẬN CHUYỂN (Ẩn hoàn toàn khi đơn bị hủy để tránh hiểu lầm) */}
+              {!isCancelled && (
+                <div className="py-2 px-1 flex items-center justify-between relative w-full select-none">
+                  {ORDER_STEPS.map((step, index) => {
+                    const StepIcon = step.icon;
+                    const isVisited = index <= currentStepIndex;
+                    const isCurrent = index === currentStepIndex;
 
-                  let stepLabel = step.label;
-                  if (step.id === "step_init") {
-                    stepLabel = (statusText === "Xác nhận") ? "Xác nhận" : "Chờ xác nhận";
-                  }
-
-                  let lineWidthClass = "w-0";
-                  if (index < currentStepIndex) {
-                    lineWidthClass = "w-full";
-                  } else if (index === currentStepIndex) {
-                    if (step.id === "step_init" && statusText === "Chờ xác nhận") {
-                      lineWidthClass = "w-0";
-                    } else {
-                      lineWidthClass = "w-1/2 animate-pulse bg-gradient-to-r from-orange-500 to-orange-300";
+                    let stepLabel = step.label;
+                    if (step.id === "step_init") {
+                      stepLabel = (normalizedStatus === "xác nhận") ? "Xác nhận" : "Chờ xác nhận";
                     }
-                  }
 
-                  return (
-                    <React.Fragment key={index}>
-                      <div className="flex flex-col items-center relative z-10">
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-500 shadow-xs ${
-                            isVisited ? "bg-orange-500 text-white" : "bg-slate-50 text-slate-400"
-                          }`}
-                        >
-                          <StepIcon className={`w-4 h-4 ${isCurrent && statusText !== "Chờ xác nhận" ? "animate-pulse" : ""}`} />
+                    let lineWidthClass = "w-0";
+                    if (index < currentStepIndex) {
+                      lineWidthClass = "w-full";
+                    } else if (index === currentStepIndex) {
+                      if (step.id === "step_init" && (normalizedStatus === "chờ xác nhận" || normalizedStatus === "pending")) {
+                        lineWidthClass = "w-0";
+                      } else {
+                        lineWidthClass = "w-1/2 animate-pulse bg-gradient-to-r from-orange-500 to-orange-300";
+                      }
+                    }
+
+                    return (
+                      <React.Fragment key={index}>
+                        <div className="flex flex-col items-center relative z-10">
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-500 shadow-xs ${
+                              isVisited ? "bg-orange-500 text-white" : "bg-slate-50 text-slate-400"
+                            }`}
+                          >
+                            <StepIcon className={`w-4 h-4 ${isCurrent && normalizedStatus !== "chờ xác nhận" ? "animate-pulse" : ""}`} />
+                          </div>
+                          <span className={`text-[9px] font-bold mt-1 transition-colors ${isVisited ? "text-orange-600" : "text-slate-400"}`}>
+                            {stepLabel}
+                          </span>
                         </div>
-                        <span className={`text-[9px] font-bold mt-1 transition-colors ${isVisited ? "text-orange-600" : "text-slate-400"}`}>
-                          {stepLabel}
-                        </span>
-                      </div>
 
-                      {index < ORDER_STEPS.length - 1 && (
-                        <div className="flex-1 h-[3px] mx-1 bg-slate-50 rounded-full overflow-hidden relative">
-                          <div className={`absolute top-0 left-0 h-full bg-orange-500 rounded-full transition-all duration-700 ease-out ${lineWidthClass}`} />
-                        </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
+                        {index < ORDER_STEPS.length - 1 && (
+                          <div className="flex-1 h-[3px] mx-1 bg-slate-50 rounded-full overflow-hidden relative">
+                            <div className={`absolute top-0 left-0 h-full bg-orange-500 rounded-full transition-all duration-700 ease-out ${lineWidthClass}`} />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              )}
 
-              {/* Footer đơn hàng và Nút bấm nằm gọn một dòng */}
+              {/* Footer hành động */}
               <div className="border-t border-slate-50 pt-2 flex justify-between items-center gap-2">
                 <span className="text-[10px] text-slate-400 font-semibold truncate max-w-[40%]">
                   🚀 Giao bởi: {order.don_vi_van_chuyen || "Siêu thị Demi"}
                 </span>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {statusText === "Chờ xác nhận" && (
-                    <button onClick={() => onCancelOrder && onCancelOrder(order)} className="bg-red-50 hover:bg-red-600 text-red-600 hover:text-white px-3 py-1.5 rounded-lg text-[11px] font-black transition-all border border-red-100 cursor-pointer">
+                  {/* Nếu đơn hàng chưa duyệt và chưa hủy -> Cho phép hiện nút bấm hủy */}
+                  {isPendingCancel && !isCancelled && (
+                    <button 
+                      onClick={() => {
+                        if (onCancelOrder) onCancelOrder(order);
+                      }} 
+                      className="bg-red-50 hover:bg-red-600 text-red-600 hover:text-white px-3 py-1.5 rounded-lg text-[11px] font-black transition-all border border-red-100 cursor-pointer"
+                    >
                       Hủy đơn hàng
                     </button>
                   )}
 
-                  {statusText === "Xác nhận" && (
+                  {/* Trạng thái XÁC NHẬN -> Khóa cứng nút hủy */}
+                  {isConfirmed && (
                     <button disabled className="bg-slate-50 text-slate-400 px-3 py-1.5 rounded-lg text-[11px] font-black border border-slate-100 opacity-60 cursor-not-allowed">
                       Hủy đơn hàng
                     </button>
                   )}
 
-                  {/* CHỈ ĐỂ LẠI TRẠNG THÁI "ĐANG GIAO" ĐƯỢC PHÉP XEM LỘ TRÌNH VÌ XE ĐÃ DI CHUYỂN THỰC TẾ */}
-                  {statusText === "Đang giao" && (
-                    <button onClick={() => setSelectedOrderForMap(order)} className="bg-emerald-50 hover:bg-emerald-600 text-[#006c49] hover:text-white px-3 py-1.5 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 border border-emerald-100 cursor-pointer">
+                  {/* Trạng thái ĐANG GIAO -> Xem Map */}
+                  {normalizedStatus === "đang giao" && (
+                    <button 
+                      onClick={() => setSelectedOrderForMap(order)} 
+                      className="bg-emerald-50 hover:bg-emerald-600 text-[#006c49] hover:text-white px-3 py-1.5 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 border border-emerald-100 cursor-pointer"
+                    >
                       <MapPin size={11} /> Theo dõi lộ trình
                     </button>
                   )}
 
-                  {statusText === "Đã giao" && (
+                  {/* Trạng thái ĐÃ GIAO */}
+                  {normalizedStatus === "đã giao" && (
                     <div className="flex items-center gap-1.5">
                       <button 
                         onClick={() => onViewDetails && onViewDetails(order)} 
@@ -233,6 +259,13 @@ export default function Tabdonhang({ orders, onCancelOrder, onReviewOrder, onVie
                         <Star size={12} className="shrink-0" /> <span className="whitespace-nowrap">Đánh giá</span>
                       </button>
                     </div>
+                  )}
+
+                  {/* 🌟 GIỮ LẠI LỊCH SỬ ĐƠN HÀNG: Hiển thị Badge báo Hủy thành công thay vì xóa mất đơn */}
+                  {isCancelled && (
+                    <span className="text-[11px] text-red-600 font-extrabold uppercase bg-red-50 px-3 py-1.5 rounded-xl border border-red-100/70 shadow-2xs tracking-wider">
+                      Đã Hủy Đơn Hàng 
+                    </span>
                   )}
                 </div>
               </div>

@@ -196,8 +196,8 @@ const placeOrder = async (req, res) => {
     if (isNaN(finalTotal) || finalTotal < 5000) finalTotal = 50000; 
     req.body.tong_thanh_toan = finalTotal;
 
-    const userLatNum = parseFloat(to_lat || 10.762622);
-    const userLngNum = parseFloat(to_lng || 106.660172);
+    const rgbLatNum = parseFloat(to_lat || 10.762622);
+    const rgbLngNum = parseFloat(to_lng || 106.660172);
 
     const normalizedOrder = {
         ...req.body,
@@ -205,46 +205,52 @@ const placeOrder = async (req, res) => {
         danh_sach_san_pham: normalizedItems,
         paypal_transaction_id: req.body.paypal_transaction_id || null, 
         paypal_order_id: req.body.paypal_order_id || null,
-        to_lat: userLatNum,
-        to_lng: userLngNum
+        to_lat: rgbLatNum,
+        to_lng: rgbLngNum
     };
 
-   const order = await Order.create(userId, normalizedOrder);
-console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang);
+    const order = await Order.create(userId, normalizedOrder);
+    console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang);
 
-// 🌟 FIX ĐỒNG BỘ: Sử dụng hàm Wrapper để khóa cứng ID của đơn hàng này trong bộ nhớ hàng đợi bất đồng bộ
-((targetOrderId, targetMaDonHang) => {
-  setTimeout(async () => {
-    try {
-      console.log(`[Hẹn giờ] Tự động xác nhận cho đơn hàng: ${targetMaDonHang}`);
-      const autoConfirmQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Xác nhận' WHERE id = $1`;
-      
-      if (db.query) {
-        await db.query(autoConfirmQuery, [targetOrderId]);
-      } else {
-        await db.execute(autoConfirmQuery, [targetOrderId]);
-      }
-      console.log(`[Hẹn giờ] Đơn hàng ${targetMaDonHang} đã chuyển sang 'Xác nhận'.`);
-    } catch (timerErr) {
-      console.error(`🔥 [Lỗi hẹn giờ] Không thể xác nhận đơn hàng ${targetMaDonHang}:`, timerErr.message);
-    }
-  }, 60000);
-})(order.id, order.ma_don_hang);
+    // 🌟 RÀNG BUỘC KIỂM TRA TRẠNG THÁI KHHI CHẠY TIẾN TRÌNH HẸN GIỜ (CHẶN HOÀN TOÀN AUTO-CONFIRM NẾU ĐƠN ĐÃ HỦY)
+    ((targetOrderId, targetMaDonHang) => {
+      setTimeout(async () => {
+        try {
+          console.log(`[Hẹn giờ] Khởi chạy kiểm tra điều kiện duyệt tự động cho đơn: ${targetMaDonHang}`);
+          
+          // Truy vấn trực tiếp trạng thái hiện tại dưới Database
+          const getStatusQuery = `SELECT trang_thai_don_hang FROM public.orders WHERE id = $1`;
+          const statusRes = db.query ? await db.query(getStatusQuery, [targetOrderId]) : await db.execute(getStatusQuery, [targetOrderId]);
+          const currentDbStatus = (statusRes.rows ? statusRes.rows[0] : statusRes[0])?.trang_thai_don_hang;
+
+          if (currentDbStatus && String(currentDbStatus).trim().toLowerCase() === 'đã hủy') {
+            console.log(`[Hẹn giờ] Chặn đứng thành công! Đơn hàng ${targetMaDonHang} đã bị khách hàng chủ động hủy. Không thực hiện 'Xác nhận' nữa.`);
+            return; // 🛑 Dừng tiến trình ngầm ngay tại đây
+          }
+
+          const autoConfirmQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Xác nhận' WHERE id = $1 AND trang_thai_don_hang != 'Đã hủy'`;
+          if (db.query) {
+            await db.query(autoConfirmQuery, [targetOrderId]);
+          } else {
+            await db.execute(autoConfirmQuery, [targetOrderId]);
+          }
+          console.log(`[Hẹn giờ] Đơn hàng ${targetMaDonHang} đã chuyển sang 'Xác nhận'.`);
+        } catch (timerErr) {
+          console.error(`🔥 [Lỗi hẹn giờ] Không thể xác nhận đơn hàng ${targetMaDonHang}:`, timerErr.message);
+        }
+      }, 60000);
+    })(order.id, order.ma_don_hang);
 
     // --- LUỒNG TỰ ĐỘNG HÓA TÍNH CHẶNG VÀ ĐỒNG BỘ TRẠM VÀO DATABASE ---
     try {
       const storeLat = 10.771963; // Tọa độ Kho tổng Quận 1
       const storeLng = 106.697194;
 
-      // 🌟 RÀNG BUỘC PHÂN LOẠI THEO TỈNH: Tính khoảng cách thực tế từ Kho tổng đến khách hàng
-      const directDistanceToStore = calcHaversine(userLatNum, userLngNum, storeLat, storeLng);
-      
+      const directDistanceToStore = calcHaversine(rgbLatNum, rgbLngNum, storeLat, storeLng);
       let stationsToSave = [];
 
-      // 🌟 NẾU KHÁCH HÀNG Ở CÙNG TỈNH/THÀNH PHỐ (BÁN KÍNH NỘI THÀNH NỘI TỈNH <= 32.0 KM) -> GIAO THẲNG KHÔNG QUA BƯU CỤC TRUNG GIAN
       if (directDistanceToStore <= 32.0) {
         console.log(`[🚀 NỘI TỈNH - GIAO THẲNG]: Khách hàng thuộc cùng khu vực tỉnh/thành phố (~${directDistanceToStore.toFixed(2)} km). Kích hoạt luồng vận chuyển giao thẳng.`);
-        
         stationsToSave.push({
           station_id: `DIRECT_STORE_HQ`,
           station_name: `Tổng Kho Điều Phối Siêu Tốc DemiMart`,
@@ -259,9 +265,7 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
           trang_thai_hien_thi: 'Đơn hàng nội tỉnh - Hệ thống xuất kho giao trực tiếp siêu tốc đến bạn'
         });
       } else {
-        // 🌟 KHÁC TỈNH TRONG MẠNG LƯỚI TOÀN QUỐC (KHI ĐƠN ĐI XA > 32.0 KM) -> BẮT BUỘC ĐI QUA CÁC BƯU CỤC NHƯ CŨ
-        console.log(`[🚛 NGOẠI TỈNH - LIÊN TRẠM TRỤC]: Khách hàng ở ngoại tỉnh chặng xa (${directDistanceToStore.toFixed(2)} km). Chuyển tiếp luồng vận tải đa điểm đa trạm.`);
-        
+        console.log(`[Trending Ngoại Tỉnh]: Cấu hình luồng trục đa điểm.`);
         const kmlPath = path.resolve(new URL('.', import.meta.url).pathname, 'danh_sach_bc.kml');
         let rawPostOffices = [];
         if (fs.existsSync(kmlPath)) {
@@ -271,19 +275,16 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
 
         let optimalFirstMileOffice = null;
         let optimalLastMileOffice = null;
-        let lastMileLat = userLatNum;
-        let lastMileLng = userLngNum;
+        let lastMileLat = rgbLatNum;
+        let lastMileLng = rgbLngNum;
 
         if (rawPostOffices.length > 0) {
-          // 🌟 THUẬT TOÁN TỐI ƯU TIỆN ĐƯỜNG: Tìm bưu cục chặng đầu tiện đường đi nhất hướng về khách hàng
           let minTotalTransitScore = Infinity;
-          
           rawPostOffices.forEach(office => {
             const distFromStore = calcHaversine(storeLat, storeLng, office.location.lat, office.location.lng);
             if (distFromStore <= 25.0) {
-              const distToClient = calcHaversine(office.location.lat, office.location.lng, userLatNum, userLngNum);
+              const distToClient = calcHaversine(office.location.lat, office.location.lng, rgbLatNum, rgbLngNum);
               const totalLoopDistance = distFromStore + distToClient;
-
               if (totalLoopDistance < minTotalTransitScore) {
                 minTotalTransitScore = totalLoopDistance;
                 optimalFirstMileOffice = office;
@@ -291,52 +292,44 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
             }
           });
 
-          // [B] THUẬT TOÁN ĐỊNH VỊ BƯU CỤC PHÁT CHẶNG CUỐI (GẦN KHÁCH HÀNG NHẤT)
-          let clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 0.6 && Math.abs(o.location.lng - userLngNum) < 0.6);
+          let clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - rgbLatNum) < 0.6 && Math.abs(o.location.lng - rgbLngNum) < 0.6);
           if (clientZoneOffices.length === 0) {
-            clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - userLatNum) < 1.5 && Math.abs(o.location.lng - userLngNum) < 1.5);
+            clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - rgbLatNum) < 1.5 && Math.abs(o.location.lng - rgbLngNum) < 1.5);
           }
 
           let minDistanceToClient = Infinity;
           optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
-
           clientZoneOffices.forEach(office => {
-            const distSq = ((office.location.lat - userLatNum) ** 2) + ((office.location.lng - userLngNum) ** 2);
+            const distSq = ((office.location.lat - rgbLatNum) ** 2) + ((office.location.lng - rgbLngNum) ** 2);
             if (distSq < minDistanceToClient) {
               minDistanceToClient = distSq;
               optimalLastMileOffice = office;
             }
           });
 
-          lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || userLatNum);
-          lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || userLngNum);
+          lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || rgbLatNum);
+          lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || rgbLngNum);
         }
 
         let waypoints = [`${storeLng},${storeLat}`];
+        if (optimalFirstMileOffice) waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
 
-        if (optimalFirstMileOffice) {
-          waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
-        }
-
-        const isTayNguyenZone = userLngNum < 108.2 && userLatNum > 11.5 && userLatNum < 15.0;
-
+        const isTayNguyenZone = rgbLngNum < 108.2 && rgbLatNum > 11.5 && rgbLatNum < 15.0;
         if (isTayNguyenZone) {
           waypoints.push("106.883412,11.521093");
           waypoints.push("107.684125,12.001254");
-        } else if (userLatNum > 11.2) {
+        } else if (rgbLatNum > 11.2) {
           waypoints.push("107.234125,10.938512");
           waypoints.push("108.106943,10.933391");
-          if (userLatNum > 12.0) waypoints.push("109.196749,12.245071");
-          if (userLatNum > 13.5) waypoints.push("109.219515,13.774697");
-          if (userLatNum > 16.0) waypoints.push("108.221464,16.059541");
-          if (userLatNum > 18.0) waypoints.push("105.681123,18.673412");
-          if (userLatNum > 20.0) waypoints.push("105.820421,20.251093");
+          if (rgbLatNum > 12.0) waypoints.push("109.196749,12.245071");
+          if (rgbLatNum > 13.5) waypoints.push("109.219515,13.774697");
+          if (rgbLatNum > 16.0) waypoints.push("108.221464,16.059541");
+          if (rgbLatNum > 18.0) waypoints.push("105.681123,18.673412");
+          if (rgbLatNum > 20.0) waypoints.push("105.820421,20.251093");
         }
 
-        if (lastMileLng && lastMileLat) {
-          waypoints.push(`${lastMileLng},${lastMileLat}`);
-        }
-        waypoints.push(`${userLngNum},${userLatNum}`);
+        if (lastMileLng && lastMileLat) waypoints.push(`${lastMileLng},${lastMileLat}`);
+        waypoints.push(`${rgbLngNum},${rgbLatNum}`);
 
         const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
         const routeRes = await axios.get(osrmUrl);
@@ -345,7 +338,6 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
           const routeGeo = routeRes.data.routes[0];
           const coordinates = routeGeo.geometry.coordinates;
 
-          // 1. Thêm bưu cục gom hàng chặng đầu vào logs
           if (optimalFirstMileOffice) {
             stationsToSave.push({
               station_id: String(optimalFirstMileOffice.id),
@@ -362,14 +354,12 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
             });
           }
 
-          // [2] THÊM CÁC HUB TRUNG CHUYỂN DỌC ĐƯỜNG LIÊN TỈNH
           if (coordinates.length > 15) {
             const distributionRatios = [0.33, 0.66];
             distributionRatios.forEach((ratio, idx) => {
               const targetIndex = Math.floor(coordinates.length * ratio);
               if (coordinates[targetIndex]) {
                 const nodeCoord = coordinates[targetIndex];
-                
                 let nearestKmlToHub = null;
                 let minHubDistSq = Infinity;
                 rawPostOffices.forEach(office => {
@@ -397,7 +387,6 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
             });
           }
 
-          // [3] THÊM BƯU CỤC PHÁT CHẶNG CUỐI
           if (optimalLastMileOffice) {
             stationsToSave.push({
               station_id: String(optimalLastMileOffice.id),
@@ -416,7 +405,6 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
         }
       } 
 
-      // Lưu mảng logs hành trình vào PostgreSQL công khai
       const insertLogQuery = `
         INSERT INTO public.order_tracking_logs (
           order_id, ma_don_hang, station_id, station_name, 
@@ -445,8 +433,6 @@ console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_h
         if (db.query) await db.query(insertLogQuery, queryParams);
         else await db.execute(insertLogQuery, queryParams);
       }
-      console.log(`[🚀 AUTOMATION ENGINE]: Phân loại vùng bưu cục hoàn tất (${stationsToSave.length} điểm mốc được ghi nhận).`);
-
     } catch (logisticsErr) {
       console.error("⚠️ Cảnh báo lỗi cấu trúc hành trình:", logisticsErr.message);
     }
@@ -515,8 +501,8 @@ const getOrderStatistics = async (req, res) => {
     const statsRes = db.query ? await db.query(statsQuery) : await db.execute(statsQuery);
     const stats = statsRes.rows ? statsRes.rows[0] : statsRes[0];
 
-    const recentOrdersQuery = `SELECT ma_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, ngay_tao FROM public.orders ORDER BY ngay_tao DESC LIMIT 5`;
-    const recentRes = db.query ? await db.query(recentOrdersQuery) : await db.execute(recentOrdersQuery);
+    const gridQuery = `SELECT ma_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, ngay_tao FROM public.orders ORDER BY ngay_tao DESC LIMIT 5`;
+    const recentRes = db.query ? await db.query(gridQuery) : await db.execute(gridQuery);
     const recentOrders = recentRes.rows ? recentRes.rows : recentRes;
 
     const totalOrdersCount = Number(stats.total_orders || 0);
@@ -692,39 +678,70 @@ const getOrderDetailAdmin = async (req, res) => {
   }
 };
 
-// 8. Hủy đơn hàng và hoàn kho
+// 8. Hủy đơn hàng (Giữ lại lịch sử đơn, chỉ xóa sạch dữ liệu tracking lộ trình bản đồ)
 const cancelOrder = async (req, res) => {
   try {
     const { ma_don_hang } = req.params;
-    const checkOrderQuery = `SELECT id, trang_thai_don_hang, user_id FROM public.orders WHERE ma_don_hang = $1`;
+
+    // 1. Tìm đơn hàng
+    const checkOrderQuery = `SELECT id, ma_don_hang, trang_thai_don_hang FROM public.orders WHERE ma_don_hang = $1`;
     const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
     const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
 
-    if (!orderInfo) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
+    if (!orderInfo) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
+    }
     
-    const currentStatus = String(orderInfo.trang_thai_don_hang).trim();
-    if (currentStatus !== 'Chờ xử lý' && currentStatus !== 'pending' && currentStatus !== 'Chờ xác nhận') {
-        return res.status(400).json({ success: false, message: "Chỉ có thể hủy đơn hàng đang ở trạng thái chờ xử lý hoặc chờ xác nhận." });
+    const currentStatus = String(orderInfo.trang_thai_don_hang).trim().toLowerCase();
+    
+    // Nếu đơn hàng đã hủy trước đó, giữ nguyên trạng thái
+    if (currentStatus === 'đã hủy' || currentStatus === 'cancelled') {
+      return res.status(200).json({ success: true, message: "Đơn hàng này đã được hủy thành công." });
     }
 
+    if (currentStatus !== 'chờ xác nhận' && currentStatus !== 'pending' && currentStatus !== 'chờ xử lý') {
+      return res.status(400).json({ success: false, message: "Đơn hàng đã được bàn giao vận chuyển, không thể hủy." });
+    }
+
+    // 2. Hoàn lại số lượng sản phẩm vào kho
     const itemsQuery = `SELECT variant_id, quantity FROM public.order_items WHERE order_id = $1`;
     const itemsRes = db.query ? await db.query(itemsQuery, [orderInfo.id]) : await db.execute(itemsQuery, [orderInfo.id]);
     const orderItems = itemsRes.rows ? itemsRes.rows : itemsRes;
 
     if (orderItems.length > 0) {
-        const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
-        try {
-            await axios.post(`${productServiceUrl}/api/v1/products/internal/restore-stock`, { items: orderItems });
-        } catch (apiError) {
-            return res.status(500).json({ success: false, message: "Lỗi hệ thống: Không thể kết nối để hoàn kho." });
-        }
+      const productServiceUrl = process.env.INTERNAL_PRODUCT_URL || 'http://demi_product_service:5002';
+      try {
+        await axios.post(`${productServiceUrl}/api/v1/products/internal/restore-stock`, { items: orderItems }, { timeout: 4000 });
+      } catch (apiError) {
+        console.warn("⚠️ Cảnh báo: Không thể kết nối Service kho để hoàn hàng, vẫn tiếp tục luồng hủy đơn.");
+      }
     }
 
+    // 3. XÓA SẠCH TRACKING LOGS LOGISTICS
+    console.log(`[🚀 LOGISTICS CLEANUP]: Tiến hành xóa sạch lộ trình trạm trục của đơn hàng: ${ma_don_hang}`);
+    const deleteTrackingLogsQuery = `DELETE FROM public.order_tracking_logs WHERE order_id = $1 OR ma_don_hang = $2`;
+    if (db.query) {
+      await db.query(deleteTrackingLogsQuery, [orderInfo.id, String(ma_don_hang)]);
+    } else {
+      await db.execute(deleteTrackingLogsQuery, [orderInfo.id, String(ma_don_hang)]);
+    }
+
+    // 4. CẬP NHẬT TRẠNG THÁI VĨNH VIỄN SANG 'ĐÃ HỦY'
     const updateQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Đã hủy' WHERE ma_don_hang = $1`;
-    db.query ? await db.query(updateQuery, [ma_don_hang]) : await db.execute(updateQuery, [ma_don_hang]);
-    return res.status(200).json({ success: true, message: "Hủy đơn hàng thành công, số lượng đã được hoàn lại kho." });
+    if (db.query) {
+      await db.query(updateQuery, [ma_don_hang]);
+    } else {
+      await db.execute(updateQuery, [ma_don_hang]);
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Đơn hàng đã được hủy và lưu vào lịch sử giao dịch. Toàn bộ trạm trục định vị đã được xóa sạch." 
+    });
+
   } catch (err) {
-      return res.status(500).json({ success: false, message: "Lỗi máy chủ khi hủy đơn hàng." });
+    console.error("🔥 [LỖI HỦY ĐƠN HÀNG]:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi hủy đơn hàng." });
   }
 };
 
@@ -964,5 +981,5 @@ export {
   testReadKml,
   calculateShipping,
   getOrderTrackingLogs,
-  createOrderTrackingLogNode // 🌟 Đã đưa hàm vào danh sách export thành công
+  createOrderTrackingLogNode
 };

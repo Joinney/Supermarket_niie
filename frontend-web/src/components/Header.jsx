@@ -215,21 +215,22 @@ export default function Header({ onOpenMenu }) {
   }, []);
 
   const getAvatarSrc = (userObj) => {
-    if (!userObj)
-      return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
-    const url = userObj.avatar_url || userObj.avatar;
-    const name = userObj.full_name || "User";
+  if (!userObj)
+    return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
+  
+  const url = userObj.avatar_url || userObj.avatar;
+  const name = userObj.full_name || "User";
 
-    if (!url || url === "" || url.includes("unsplash.com")) {
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
-    }
-    const cleanUrl = url.split("?")[0];
-    if (cleanUrl.startsWith("http"))
-      return `${cleanUrl}?t=${new Date().getTime()}`;
-    const cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
-    return `${AUTH_BASE_URL}${cleanPath}?t=${new Date().getTime()}`;
-  };
+  if (!url || url === "" || url.includes("unsplash.com")) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
+  }
+  
+  const cleanUrl = url.split("?")[0];
+  if (cleanUrl.startsWith("http")) return cleanUrl; // 🛠️ Bỏ ?t=... ở đây
 
+  const cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
+  return `${AUTH_BASE_URL}${cleanPath}`; // 🛠️ Bỏ ?t=... ở đây
+};
   const handleLogout = async () => {
     try {
       await logout();
