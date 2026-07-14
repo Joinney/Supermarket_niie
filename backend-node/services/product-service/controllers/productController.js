@@ -2177,3 +2177,99 @@ export const getProductStatistics = async (req, res) => {
         return res.status(500).json({ success: false, message: "Lỗi hệ thống khi trích xuất dữ liệu sản phẩm!" });
     }
 };
+
+// =========================================================================
+// 20. API NỘI BỘ: ĐỒNG BỘ CHÍNH XÁC SỐ LƯỢNG TỒN KHO TỪ INVENTORY-SERVICE (CÁCH 1)
+// API này nhận số lượng TỔNG CHÍNH XÁC từ kho và ghi đè, không cộng dồn.
+// =========================================================================
+export const syncExactStockInternal = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { sku, total_quantity } = req.body;
+
+        if (!sku || total_quantity === undefined) {
+            return res.status(400).json({ success: false, message: 'Thiếu mã SKU hoặc số lượng để đồng bộ.' });
+        }
+
+        await client.query('BEGIN');
+
+        // Ghi đè tuyệt đối số lượng tồn kho theo số liệu của Inventory Service
+        const updateQuery = `
+            UPDATE public.bien_the_san_pham 
+            SET so_luong_ton = $1, ngay_cap_nhat = NOW() 
+            WHERE sku = $2
+            RETURNING ma_san_pham;
+        `;
+        const result = await client.query(updateQuery, [total_quantity, sku]);
+
+        if (result.rows.length > 0) {
+            // Cập nhật ngày thay đổi của sản phẩm cha để Web ưu tiên hiển thị hoặc re-cache
+            const ma_san_pham = result.rows[0].ma_san_pham;
+            await client.query(`UPDATE public.san_pham SET ngay_cap_nhat = NOW() WHERE ma_san_pham = $1`, [ma_san_pham]);
+        }
+
+        await client.query('COMMIT');
+
+        // Bắn Socket để trang Web/App của khách tự động cập nhật số lượng (Real-time)
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('stock_quantity_updated', { updated: true, sku: sku, new_quantity: total_quantity });
+        }
+
+        return res.status(200).json({ success: true, message: `Đã đồng bộ SKU ${sku} thành ${total_quantity} sản phẩm!` });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi API syncExactStockInternal:', error.message);
+        return res.status(500).json({ success: false, message: 'Lỗi server khi đồng bộ kho.' });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================================
+// 21. API NỘI BỘ: ĐỒNG BỘ HÀNG LOẠT TOÀN BỘ KHO (BULK RECONCILIATION)
+// =========================================================================
+export const bulkSyncStockInternal = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { sync_items } = req.body; // Mảng chứa các object: [{ sku: "SKU01", total_quantity: 50 }, ...]
+
+        if (!sync_items || !Array.isArray(sync_items) || sync_items.length === 0) {
+            return res.status(400).json({ success: false, message: 'Danh sách đồng bộ trống.' });
+        }
+
+        await client.query('BEGIN');
+
+        // Khởi tạo câu lệnh cập nhật hàng loạt bằng cách sử dụng hứa hẹn (Promise.all)
+        const updatePromises = sync_items.map(item => {
+            const query = `
+                UPDATE public.bien_the_san_pham 
+                SET so_luong_ton = $1, ngay_cap_nhat = NOW() 
+                WHERE sku = $2;
+            `;
+            return client.query(query, [item.total_quantity, item.sku]);
+        });
+
+        await Promise.all(updatePromises);
+        await client.query('COMMIT');
+
+        // Bắn Socket thông báo cho toàn bộ hệ thống cập nhật lại giao diện hiển thị tổng
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('stock_quantity_updated', { bulk_updated: true });
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: `Hệ thống đối soát hoàn tất. Đã đồng bộ khớp lại ${sync_items.length} mã hàng!` 
+		});
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Lỗi API bulkSyncStockInternal:', error.message);
+        return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi chạy đối soát hàng loạt.' });
+    } finally {
+        client.release();
+    }
+};

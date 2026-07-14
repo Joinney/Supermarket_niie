@@ -224,60 +224,69 @@ func CreateInventoryImport(c *gin.Context) {
 	// 🌟 GOROUTINE ĐỒNG BỘ TỒN KHO & BẮT LỖI
 	// ---------------------------------------------------------
 	go func(products []ImportProductPayload, warehouseID string) {
-		type SyncItem struct {
-			Sku      string `json:"sku"`
-			Quantity int    `json:"quantity"`
-		}
-		var syncList []SyncItem
-		
-		for _, p := range products {
-			syncList = append(syncList, SyncItem{Sku: p.Sku, Quantity: p.StandardQuantity})
-			
-			// 1. Kiểm tra tồn kho
-			var existStock int64
-			config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
-			
-			// 2. Thực thi lệnh DB và BẮT LỖI NẾU CÓ
-			if existStock == 0 {
-				errInsert := config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)", warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now()).Error
-				if errInsert != nil {
-					fmt.Printf("❌ [DB ERROR] LỖI THÊM MỚI TỒN KHO CHO SKU %s: %v\n", p.Sku, errInsert)
-				} else {
-					fmt.Printf("✅ [DB SUCCESS] Đã lưu thành công SKU %s vào bảng ton_kho.\n", p.Sku)
-				}
-			} else {
-				errUpdate := config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName).Error
-				if errUpdate != nil {
-					fmt.Printf("❌ [DB ERROR] LỖI CẬP NHẬT TỒN KHO CHO SKU %s: %v\n", p.Sku, errUpdate)
-				}
-			}
-		}
+        for _, p := range products {
+            // 1. Lưu hoặc Cập nhật bảng ton_kho cho lô hàng vừa nhập (Logic cũ của bạn giữ nguyên)
+            var existStock int64
+            config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
+            
+            if existStock == 0 {
+                errInsert := config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)", warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now()).Error
+                if errInsert != nil {
+                    fmt.Printf("❌ [DB ERROR] LỖI THÊM MỚI TỒN KHO CHO SKU %s: %v\n", p.Sku, errInsert)
+                }
+            } else {
+                errUpdate := config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName).Error
+                if errUpdate != nil {
+                    fmt.Printf("❌ [DB ERROR] LỖI CẬP NHẬT TỒN KHO CHO SKU %s: %v\n", p.Sku, errUpdate)
+                }
+            }
 
-		jsonData, _ := json.Marshal(map[string]interface{}{"items": syncList})
-		productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
-		if productServiceHost == "" {
-			productServiceHost = "http://localhost:5002"
-		}
-		
-		req, _ := http.NewRequest("PATCH", productServiceHost+"/api/v1/products/internal/update-stock", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		
-		if err != nil {
-			fmt.Printf("❌ [HTTP CRITICAL] GỌI API PRODUCT-SERVICE THẤT BẠI: %v\n", err)
-			return
-		}
-		defer resp.Body.Close()
+            // 🌟 2. Tính lại TỔNG tồn kho thực tế của SKU này (gom tất cả các lô lại)
+            var newTotal int
+            errSum := config.DB.Table("ton_kho").
+                Where("sku = ?", p.Sku).
+                Select("COALESCE(SUM(so_luong_thuc_te), 0)").
+                Scan(&newTotal).Error
 
-		if resp.StatusCode >= 400 {
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(resp.Body)
-			fmt.Printf("❌ [HTTP CRITICAL] PRODUCT-SERVICE TỪ CHỐI (Status: %d): %s\n", resp.StatusCode, buf.String())
-		} else {
-			fmt.Println("✅ [Sync] Đã đồng bộ tồn kho sang Product-Service thành công!")
-		}
-	}(input.Products, input.WarehouseID)
+            if errSum != nil {
+                fmt.Printf("❌ [DB ERROR] KHÔNG THỂ TÍNH TỔNG TỒN KHO SKU %s: %v\n", p.Sku, errSum)
+                continue // Bỏ qua đồng bộ SKU này nếu tính tổng lỗi
+            }
 
-	c.JSON(http.StatusCreated, gin.H{"message": "🎉 Lưu chứng từ nhập kho thành công!", "ma_phieu": maPhieuAuto})
+            // 🌟 3. Gọi API sang Product Service để ghi đè số lượng tuyệt đối
+            payload := map[string]interface{}{
+                "sku":            p.Sku,
+                "total_quantity": newTotal,
+            }
+            jsonData, _ := json.Marshal(payload)
+
+            productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
+            if productServiceHost == "" {
+                productServiceHost = "http://product-service:5002" // Nhớ sửa lại host này nếu bạn chạy docker-compose
+            }
+            
+            // Gọi API mới: sync-exact-stock
+            req, _ := http.NewRequest("PATCH", productServiceHost+"/api/v1/products/internal/sync-exact-stock", bytes.NewBuffer(jsonData))
+            req.Header.Set("Content-Type", "application/json")
+            
+            client := &http.Client{Timeout: 10 * time.Second}
+            resp, err := client.Do(req)
+            
+            if err != nil {
+                fmt.Printf("❌ [HTTP CRITICAL] ĐỒNG BỘ SKU %s SANG PRODUCT-SERVICE THẤT BẠI: %v\n", p.Sku, err)
+                continue
+            }
+            
+            if resp.StatusCode >= 400 {
+                buf := new(bytes.Buffer)
+                buf.ReadFrom(resp.Body)
+                fmt.Printf("❌ [HTTP CRITICAL] PRODUCT-SERVICE TỪ CHỐI ĐỒNG BỘ SKU %s (Status: %d): %s\n", p.Sku, resp.StatusCode, buf.String())
+            } else {
+                fmt.Printf("✅ [Sync] Đã báo Product-Service cập nhật SKU %s thành %d cái!\n", p.Sku, newTotal)
+            }
+            resp.Body.Close()
+        }
+    }(input.Products, input.WarehouseID)
+
+    c.JSON(http.StatusCreated, gin.H{"message": "🎉 Lưu chứng từ nhập kho thành công!", "ma_phieu": maPhieuAuto})
 }

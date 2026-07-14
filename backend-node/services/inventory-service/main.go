@@ -15,6 +15,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3" // 🌟 Thêm thư viện cron để lập lịch chạy ngầm
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -62,6 +63,27 @@ func main() {
 		}
 	}
 
+	// === ⏰ CẤU HÌNH CRONJOB TỰ ĐỘNG ĐỐI SOÁT LÚC 2H SÁNG ===
+	// Sử dụng định dạng 6 trường tiêu chuẩn bao gồm cả Giây
+	scheduler := cron.New(cron.WithSeconds())
+	// Chuỗi Định thời Cron: "0 0 2 * * *" tương ứng Đúng 02:00:00 sáng mỗi ngày
+	_, errCron := scheduler.AddFunc("0 0 2 * * *", func() {
+		log.Println("⏰ [Cronjob] Bắt đầu tiến trình đối soát toàn diện tự động định kỳ nửa đêm...")
+		errSync := controllers.ExecuteFullReconciliation()
+		if errSync != nil {
+			log.Printf("❌ [Cronjob Error] Thất bại khi đối soát tự động: %v\n", errSync)
+		} else {
+			log.Println("✅ [Cronjob Success] Tiến trình đối soát tự động hoàn tất, số liệu hai hệ thống khớp 100%!")
+		}
+	})
+
+	if errCron != nil {
+		log.Printf("❌ Lỗi thiết lập lịch Cronjob: %v", errCron)
+	} else {
+		scheduler.Start()
+		log.Println("🚀 Hệ thống Cronjob đối soát tự động lúc 2h sáng đã kích hoạt chạy ngầm!")
+	}
+
 	// ========================================================
 	// 📡 ĐỊNH TUYẾN NHÓM API V1 CHUẨN HÓA (REFACTORING GROUP)
 	// ========================================================
@@ -87,7 +109,8 @@ func main() {
 		api.GET("/inventory", controllers.GetInventory)
 		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
 		api.GET("/unit-conversions", controllers.GetUnitConversions) 
-		
+		api.POST("/inventory/reconcile", controllers.HandleManualReconcile) // 🌟 Tuyến đường mới phục vụ đối soát thủ công
+
 		// 🏭 5. NHÓM NHÀ CUNG CẤP & CÔNG NỢ (supplier_controller.go)
 		api.GET("/inventory/suppliers", controllers.GetSuppliers) 
 
