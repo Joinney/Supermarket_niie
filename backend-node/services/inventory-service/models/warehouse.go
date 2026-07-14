@@ -85,3 +85,20 @@ type NhaCungCap struct {
 func (NhaCungCap) TableName() string {
 	return "nha_cung_cap"
 }
+
+// ========================================================
+// BỔ SUNG MODEL CHO BẢNG TỒN KHO (ton_kho)
+// ========================================================
+type TonKho struct {
+	MaKho         string    `gorm:"primaryKey;column:ma_kho;type:varchar(20)" json:"ma_kho"`
+	Sku           string    `gorm:"primaryKey;column:sku;type:varchar(50)" json:"sku"`
+	MaLoHang      string    `gorm:"primaryKey;column:ma_lo_hang;type:varchar(20)" json:"ma_lo_hang"`
+	SoLuongThucTe int       `gorm:"column:so_luong_thuc_te;type:integer;default:0" json:"so_luong_thuc_te"`
+	SoLuongTamGiu int       `gorm:"column:so_luong_tam_giu;type:integer;default:0" json:"so_luong_tam_giu"`
+	NgayTao       time.Time `gorm:"column:ngay_tao;autoCreateTime" json:"ngay_tao"`
+	NgayCapNhat   time.Time `gorm:"column:ngay_cap_nhat;autoUpdateTime" json:"ngay_cap_nhat"`
+}
+
+func (TonKho) TableName() string {
+	return "ton_kho"
+}

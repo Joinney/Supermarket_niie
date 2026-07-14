@@ -13,65 +13,69 @@ export default function ChiTietPhieuNhap() {
   const [ticketInfo, setTicketInfo] = useState(null);
   const [importItems, setImportItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // ĐỒNG BỘ REAL-TIME DATA TỪ BACKEND WAREHOUSE-SERVICE
-  useEffect(() => {
+  // Hàm này dùng để gọi dữ liệu (bạn có thể gọi lại sau khi thanh toán)
+  const loadData = async () => {
     setLoading(true);
+    try {
+      const res = await warehouseApi.get(`/inventory-import/${id}`);
+      const data = res.data;
 
-    warehouseApi
-      .get(`/inventory-import/${id}`)
-      .then((res) => {
-        const data = res.data;
+      // Tính toán số nợ còn lại
+      const total = data.tong_tien || 0;
+      const paid = data.da_thanh_toan || 0;
+      const currentDebt = total - paid > 0 ? total - paid : 0;
 
-        // Tính toán số nợ còn lại
-        const total = data.tong_tien || 0;
-        const paid = data.da_thanh_toan || 0;
-        const currentDebt = total - paid > 0 ? total - paid : 0;
-
-        // 1. Gán thông tin chung của phiếu kho (Đọc live các cột tài chính mới)
-        setTicketInfo({
-          id: data.ma_phieu,
-          warehouse:
-            data.ma_kho === "KHO-001" || data.ma_kho === "1"
-              ? "Kho Tổng (Quận 1)"
-              : data.ma_kho,
-          supplier: data.nha_cung_cap || "Chưa xác định nhà cung cấp", // 🌟 LẤY NHÀ CUNG CẤP THẬT
-          status: data.trang_thai_thanh_toan || "UNPAID", // 🌟 LẤY TRẠNG THÁI CÔNG NỢ THẬT
-          date: data.ngay_tao,
-          creator:
-            data.nguoi_thuc_hien_id === 1
-              ? "Admin"
-              : `Nhân viên kho #${data.nguoi_thuc_hien_id}`,
-          note:
-            data.loai_phieu === "NHAP"
-              ? "Mua Hàng Từ Nhà Cung Cấp"
-              : data.loai_phieu,
-          ghiChuText: data.ghi_chu || "Nhập kho định kỳ hệ thống",
-          total: total,
-          paid: paid, // 🌟 SỐ TIỀN ĐÃ TRẢ THẬT
-          debt: currentDebt, // 🌟 SỐ TIỀN CÒN NỢ THẬT
-        });
-
-        // 2. Gán thông tin chi tiết sản phẩm
-        if (data.products && Array.isArray(data.products)) {
-          const mappedItems = data.products.map((item) => ({
-            name: item.name || "Sản phẩm Demi Mart",
-            sku: item.sku,
-            lot: item.ma_lo_hang,
-            qty: `${item.so_luong} Cái`,
-            price: item.gia_nhap,
-            total: item.total,
-            img: "📦",
-          }));
-          setImportItems(mappedItems);
-        }
-      })
-      .catch((err) => {
-        console.error("❌ Lỗi truy xuất dữ liệu thật từ Database kho:", err);
-      })
-      .finally(() => {
-        setLoading(false);
+      // 1. Gán thông tin chung
+      setTicketInfo({
+        id: data.ma_phieu,
+        warehouse:
+          data.ma_kho === "KHO-001" || data.ma_kho === "1"
+            ? "Kho Tổng (Quận 1)"
+            : data.ma_kho,
+        supplier: data.nha_cung_cap || "Chưa xác định nhà cung cấp",
+        status: data.trang_thai_thanh_toan || "UNPAID",
+        date: data.ngay_tao,
+        creator:
+          data.nguoi_thuc_hien_id === 1
+            ? "Admin"
+            : `Nhân viên kho #${data.nguoi_thuc_hien_id}`,
+        note:
+          data.loai_phieu === "NHAP"
+            ? "Mua Hàng Từ Nhà Cung Cấp"
+            : data.loai_phieu,
+        ghiChuText: data.ghi_chu || "Nhập kho định kỳ hệ thống",
+        total: total,
+        paid: paid,
+        debt: currentDebt,
       });
+
+      // 2. Gán thông tin chi tiết sản phẩm
+      if (data.products && Array.isArray(data.products)) {
+        const mappedItems = data.products.map((item) => ({
+          name: item.name || "Sản phẩm Demi Mart",
+          sku: item.sku,
+          lot: item.ma_lo_hang,
+          qty: `${item.so_luong} Cái`,
+          price: item.gia_nhap,
+          total: item.total,
+          img: "📦",
+        }));
+        setImportItems(mappedItems);
+      }
+    } catch (err) {
+      console.error("❌ Lỗi truy xuất dữ liệu thật từ Database kho:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [id]);
 
   // Nhật ký xử lý chứng từ vận hành kho
@@ -110,6 +114,28 @@ export default function ChiTietPhieuNhap() {
     ? mockPaymentHistory
     : mockPaymentHistory.slice(0, 3);
 
+  const handlePayment = async () => {
+    const amount = parseFloat(paymentAmount);
+    if (!amount || amount <= 0) return alert("Vui lòng nhập số tiền hợp lệ!");
+    if (amount > ticketInfo.debt)
+      return alert("Số tiền trả không được vượt quá số nợ!");
+
+    setSubmitting(true);
+    try {
+      await warehouseApi.post(`/inventory/import-receipts/${id}/pay`, {
+        amount,
+      });
+      alert("🎉 Thanh toán thành công!");
+      setIsPayModalOpen(false);
+      setPaymentAmount("");
+      loadData(); // Gọi lại hàm lấy dữ liệu để cập nhật số dư nợ
+    } catch (err) {
+      alert("Lỗi: " + (err.response?.data?.message || "Không thể thanh toán"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatCurrency = (num) => {
     return new Intl.NumberFormat("vi-VN").format(num) + " đ";
   };
@@ -134,13 +160,24 @@ export default function ChiTietPhieuNhap() {
           </h1>
           <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1 font-medium">
             <span>Dashboard</span> <span>❯</span>{" "}
-            <span>Danh sách nhập kho</span> <span>❯</span>{" "}
+            <span>Danh sách nhập kho</span> <span>❯</span>
             <span className="text-emerald-600 font-semibold">
               Chi tiết nhập kho
             </span>
           </div>
         </div>
+
+        {/* 🌟 Nút bấm nằm cùng hàng với nút Quay về */}
         <div className="flex items-center gap-2">
+          {ticketInfo?.debt > 0 && (
+            <button
+              onClick={() => setIsPayModalOpen(true)}
+              className="bg-[#006c49] text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-[#005237] shadow-sm cursor-pointer transition active:scale-95"
+            >
+              💰 Thanh toán
+            </button>
+          )}
+
           <button
             onClick={() => navigate("/admin/inventory/import-list")}
             className="flex items-center gap-1 bg-white border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-50 transition active:scale-95 cursor-pointer"
@@ -425,6 +462,59 @@ export default function ChiTietPhieuNhap() {
             </div>
           </div>
         </div>
+        {isPayModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white p-6 rounded-2xl w-96 shadow-2xl">
+              <h3 className="font-black text-lg mb-4">Thanh toán công nợ</h3>
+              <p className="text-xs text-gray-500 mb-1">Tổng còn nợ:</p>
+              <p className="text-xl font-mono font-bold text-rose-600 mb-4">
+                {formatCurrency(ticketInfo?.debt)}
+              </p>
+              <input
+                type="number"
+                placeholder="Nhập số tiền..."
+                value={paymentAmount}
+                min="0"
+                max={ticketInfo?.debt}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  // Kiểm tra nếu nhập quá số nợ
+                  if (val > ticketInfo.debt) {
+                    setPaymentAmount(ticketInfo.debt.toString());
+                    alert(
+                      `⚠️ Không được trả quá số nợ: ${formatCurrency(ticketInfo.debt)}`,
+                    );
+                  }
+                  // Kiểm tra nếu nhập số âm
+                  else if (val < 0) {
+                    setPaymentAmount("0");
+                  }
+                  // Nếu hợp lệ
+                  else {
+                    setPaymentAmount(e.target.value);
+                  }
+                }}
+                className="w-full p-3 border rounded-lg mb-4 outline-none focus:border-emerald-500"
+              />
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsPayModalOpen(false)}
+                  className="flex-1 py-2 bg-gray-100 rounded-lg font-bold text-xs hover:bg-gray-200 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handlePayment}
+                  disabled={submitting}
+                  className={`flex-1 py-2 rounded-lg font-bold text-xs text-white transition ${submitting ? "bg-gray-400" : "bg-[#006c49] hover:bg-[#005237]"}`}
+                >
+                  {submitting ? "Đang xử lý..." : "Xác nhận trả tiền"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

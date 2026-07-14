@@ -167,7 +167,7 @@ func UpdateStock(c *gin.Context) {
 }
 
 // ----------------------------------------------------------------------
-// 4. DeductStockFIFO (MỚI TÍCH HỢP): Trừ kho theo Lô (FIFO) khi có Order
+// 4. DeductStockFIFO
 // ----------------------------------------------------------------------
 func DeductStockFIFO(c *gin.Context) {
 	var input DeductStockInput
@@ -178,21 +178,23 @@ func DeductStockFIFO(c *gin.Context) {
 
 	remainingToDeduct := input.Quantity
 
-	// Sử dụng Database Transaction để khóa dòng, chống Race condition khi nhiều người mua cùng lúc
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		type CurrentStock struct {
-			Id            uint   `gorm:"column:id"`
+		type TonKhoSnapshot struct {
+			MaKho         string `gorm:"column:ma_kho"`
+			Sku           string `gorm:"column:sku"`
+			MaLoHang      string `gorm:"column:ma_lo_hang"`
 			SoLuongThucTe int    `gorm:"column:so_luong_thuc_te"`
 		}
-		var stocks []CurrentStock
+		var stocks []TonKhoSnapshot
 
-		// Tìm các lô chứa SKU này xếp từ cũ đến mới
-		err := tx.Table("ton_kho").
-			Where("sku = ? AND so_luong_thuc_te > 0", input.Sku).
-			Order("ngay_tao ASC"). 
-			Scan(&stocks).Error
-
-		if err != nil {
+		// 1. SELECT BẰNG RAW SQL
+		selectQuery := `
+			SELECT ma_kho, sku, ma_lo_hang, so_luong_thuc_te
+			FROM public.ton_kho
+			WHERE sku = ? AND so_luong_thuc_te > 0
+			ORDER BY ngay_tao ASC
+		`
+		if err := tx.Raw(selectQuery, input.Sku).Scan(&stocks).Error; err != nil {
 			return err
 		}
 
@@ -204,7 +206,7 @@ func DeductStockFIFO(c *gin.Context) {
 			return fmt.Errorf("không đủ hàng tồn kho thực tế cho mã SKU %s", input.Sku)
 		}
 
-		// Khấu trừ dần vào từng lô hàng
+		// 2. TRỪ DẦN VÀ UPDATE BẰNG RAW SQL
 		for _, stock := range stocks {
 			if remainingToDeduct <= 0 {
 				break
@@ -219,11 +221,14 @@ func DeductStockFIFO(c *gin.Context) {
 				remainingToDeduct -= stock.SoLuongThucTe
 			}
 
-			// Cập nhật lại số lượng thực tế của lô này
-			err := tx.Table("ton_kho").
-				Where("id = ?", stock.Id).
-				Update("so_luong_thuc_te", stock.SoLuongThucTe-deductAmount).Error
-			if err != nil {
+			newQuantity := stock.SoLuongThucTe - deductAmount
+
+			updateQuery := `
+				UPDATE public.ton_kho
+				SET so_luong_thuc_te = ?
+				WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?
+			`
+			if err := tx.Exec(updateQuery, newQuantity, stock.MaKho, stock.Sku, stock.MaLoHang).Error; err != nil {
 				return err
 			}
 		}
@@ -235,7 +240,6 @@ func DeductStockFIFO(c *gin.Context) {
 		return
 	}
 
-	// 🌟 ĐỒNG BỘ: Sau khi trừ kho thành công, tính tổng mới và bắn sang Product Service
 	go calculateAndSyncStock(input.Sku)
 
 	c.JSON(http.StatusOK, gin.H{

@@ -12,6 +12,7 @@ import (
 	"supermarket/warehouse-service/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type ImportProductPayload struct {
@@ -24,22 +25,26 @@ type ImportProductPayload struct {
 }
 
 type CreateInventoryImportInput struct {
-	WarehouseID string                 `json:"warehouse_id" binding:"required"`
-	ImportType  string                 `json:"import_type" binding:"required"`
-	Note        string                 `json:"note"`
-	UserId      int                    `json:"user_id"`
-	FullName    string                 `json:"full_name"`
-	AmountPaid  float64                `json:"amount_paid"`
+	WarehouseID  string                 `json:"warehouse_id" binding:"required"`
+	ImportType   string                 `json:"import_type" binding:"required"`
+	Note         string                 `json:"note"`
+	UserId       int                    `json:"user_id"`
+	FullName     string                 `json:"full_name"`
+	AmountPaid   float64                `json:"amount_paid"`
 	SupplierID   string                 `json:"supplier_id"`
 	SupplierName string                 `json:"supplier_name"`
-	Products    []ImportProductPayload `json:"products" binding:"required"`
+	Products     []ImportProductPayload `json:"products" binding:"required"`
+}
+
+// Data model cho API thanh toán
+type PaymentInput struct {
+	Amount float64 `json:"amount" binding:"required,gt=0"`
 }
 
 // ----------------------------------------------------------------------
 // 1. GetInventoryTickets: Lấy danh sách kèm số liệu Công Nợ
 // ----------------------------------------------------------------------
 func GetInventoryTickets(c *gin.Context) {
-	// Lấy trực tiếp thông tin từ bảng phieu_kho vì chúng ta đã lưu cứng tong_tien
 	var tickets []models.PhieuKho
 	
 	err := config.DB.Table("phieu_kho").
@@ -94,7 +99,7 @@ func GetInventoryImportDetail(c *gin.Context) {
 		"ma_kho":                phieu.MaKho,
 		"ghi_chu":               phieu.GhiChu,
 		"nguoi_thuc_hien_id":    phieu.NguoiThucHienID,
-		"nha_cung_cap":         phieu.NhaCungCap,
+		"nha_cung_cap":          phieu.NhaCungCap,
 		"ngay_tao":              phieu.NgayTao.Format("02/01/2006 15:04"),
 		"tong_tien":             phieu.TongTien,
 		"da_thanh_toan":         phieu.DaThanhToan,
@@ -113,6 +118,11 @@ func CreateInventoryImport(c *gin.Context) {
 		return
 	}
 
+	if input.AmountPaid < 0 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Số tiền thanh toán không được âm!"})
+        return
+    }
+	
 	// Đăng ký Sku mới (nếu chưa có)
 	for _, p := range input.Products {
 		var exists int64
@@ -146,17 +156,17 @@ func CreateInventoryImport(c *gin.Context) {
 
 	// 🌟 Tính TỔNG TIỀN (Giá vốn * Số lượng) của toàn bộ phiếu nhập
 	var totalMoney float64 = 0
-	for _, p := range input.Products {
-		totalMoney += float64(p.StandardQuantity) * p.Price
-	}
+    for _, p := range input.Products {
+        totalMoney += float64(p.StandardQuantity) * p.Price
+    }
 
 	// 🌟 XÁC ĐỊNH TRẠNG THÁI THANH TOÁN (Tự động)
 	paymentStatus := "UNPAID"
-	if input.AmountPaid >= totalMoney && totalMoney > 0 {
-		paymentStatus = "PAID" // Trả đủ
-	} else if input.AmountPaid > 0 {
-		paymentStatus = "PARTIAL" // Trả một phần (Còn nợ)
-	}
+    if input.AmountPaid >= totalMoney && totalMoney > 0 {
+        paymentStatus = "PAID"
+    } else if input.AmountPaid > 0 {
+        paymentStatus = "PARTIAL"
+    }
 
 	// 🌟 Lưu Tổng Tiền và Đã Thanh Toán vào Struct PhieuKho
 	phieuKho := models.PhieuKho{
@@ -167,7 +177,7 @@ func CreateInventoryImport(c *gin.Context) {
 		NguoiThucHienID:    executorID,
 		MaNhaCungCap:       input.SupplierID,
 		NhaCungCap:         input.SupplierName,
-		TongTien:           totalMoney,         
+		TongTien:           totalMoney,        
 		DaThanhToan:        input.AmountPaid,   
 		TrangThaiThanhToan: paymentStatus,     
 	}
@@ -224,69 +234,134 @@ func CreateInventoryImport(c *gin.Context) {
 	// 🌟 GOROUTINE ĐỒNG BỘ TỒN KHO & BẮT LỖI
 	// ---------------------------------------------------------
 	go func(products []ImportProductPayload, warehouseID string) {
-        for _, p := range products {
-            // 1. Lưu hoặc Cập nhật bảng ton_kho cho lô hàng vừa nhập (Logic cũ của bạn giữ nguyên)
-            var existStock int64
-            config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
-            
-            if existStock == 0 {
-                errInsert := config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)", warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now()).Error
-                if errInsert != nil {
-                    fmt.Printf("❌ [DB ERROR] LỖI THÊM MỚI TỒN KHO CHO SKU %s: %v\n", p.Sku, errInsert)
-                }
-            } else {
-                errUpdate := config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName).Error
-                if errUpdate != nil {
-                    fmt.Printf("❌ [DB ERROR] LỖI CẬP NHẬT TỒN KHO CHO SKU %s: %v\n", p.Sku, errUpdate)
-                }
-            }
+		for _, p := range products {
+			// 1. Lưu hoặc Cập nhật bảng ton_kho cho lô hàng vừa nhập 
+			var existStock int64
+			config.DB.Table("ton_kho").Where("ma_kho = ? AND sku = ? AND ma_lo_hang = ?", warehouseID, p.Sku, p.LotName).Count(&existStock)
+			
+			if existStock == 0 {
+				errInsert := config.DB.Exec("INSERT INTO ton_kho (ma_kho, sku, ma_lo_hang, so_luong_thuc_te, so_luong_tam_giu, ngay_tao, ngay_cap_nhat) VALUES (?, ?, ?, ?, 0, ?, ?)", warehouseID, p.Sku, p.LotName, p.StandardQuantity, time.Now(), time.Now()).Error
+				if errInsert != nil {
+					fmt.Printf("❌ [DB ERROR] LỖI THÊM MỚI TỒN KHO CHO SKU %s: %v\n", p.Sku, errInsert)
+				}
+			} else {
+				errUpdate := config.DB.Exec("UPDATE ton_kho SET so_luong_thuc_te = so_luong_thuc_te + ?, ngay_cap_nhat = ? WHERE ma_kho = ? AND sku = ? AND ma_lo_hang = ?", p.StandardQuantity, time.Now(), warehouseID, p.Sku, p.LotName).Error
+				if errUpdate != nil {
+					fmt.Printf("❌ [DB ERROR] LỖI CẬP NHẬT TỒN KHO CHO SKU %s: %v\n", p.Sku, errUpdate)
+				}
+			}
 
-            // 🌟 2. Tính lại TỔNG tồn kho thực tế của SKU này (gom tất cả các lô lại)
-            var newTotal int
-            errSum := config.DB.Table("ton_kho").
-                Where("sku = ?", p.Sku).
-                Select("COALESCE(SUM(so_luong_thuc_te), 0)").
-                Scan(&newTotal).Error
+			// 🌟 2. Tính lại TỔNG tồn kho thực tế của SKU này 
+			var newTotal int
+			errSum := config.DB.Table("ton_kho").
+				Where("sku = ?", p.Sku).
+				Select("COALESCE(SUM(so_luong_thuc_te), 0)").
+				Scan(&newTotal).Error
 
-            if errSum != nil {
-                fmt.Printf("❌ [DB ERROR] KHÔNG THỂ TÍNH TỔNG TỒN KHO SKU %s: %v\n", p.Sku, errSum)
-                continue // Bỏ qua đồng bộ SKU này nếu tính tổng lỗi
-            }
+			if errSum != nil {
+				fmt.Printf("❌ [DB ERROR] KHÔNG THỂ TÍNH TỔNG TỒN KHO SKU %s: %v\n", p.Sku, errSum)
+				continue 
+			}
 
-            // 🌟 3. Gọi API sang Product Service để ghi đè số lượng tuyệt đối
-            payload := map[string]interface{}{
-                "sku":            p.Sku,
-                "total_quantity": newTotal,
-            }
-            jsonData, _ := json.Marshal(payload)
+			// 🌟 3. Gọi API sang Product Service để ghi đè số lượng tuyệt đối
+			payload := map[string]interface{}{
+				"sku":            p.Sku,
+				"total_quantity": newTotal,
+			}
+			jsonData, _ := json.Marshal(payload)
 
-            productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
-            if productServiceHost == "" {
-                productServiceHost = "http://product-service:5002" // Nhớ sửa lại host này nếu bạn chạy docker-compose
-            }
-            
-            // Gọi API mới: sync-exact-stock
-            req, _ := http.NewRequest("PATCH", productServiceHost+"/api/v1/products/internal/sync-exact-stock", bytes.NewBuffer(jsonData))
-            req.Header.Set("Content-Type", "application/json")
-            
-            client := &http.Client{Timeout: 10 * time.Second}
-            resp, err := client.Do(req)
-            
-            if err != nil {
-                fmt.Printf("❌ [HTTP CRITICAL] ĐỒNG BỘ SKU %s SANG PRODUCT-SERVICE THẤT BẠI: %v\n", p.Sku, err)
-                continue
-            }
-            
-            if resp.StatusCode >= 400 {
-                buf := new(bytes.Buffer)
-                buf.ReadFrom(resp.Body)
-                fmt.Printf("❌ [HTTP CRITICAL] PRODUCT-SERVICE TỪ CHỐI ĐỒNG BỘ SKU %s (Status: %d): %s\n", p.Sku, resp.StatusCode, buf.String())
-            } else {
-                fmt.Printf("✅ [Sync] Đã báo Product-Service cập nhật SKU %s thành %d cái!\n", p.Sku, newTotal)
-            }
-            resp.Body.Close()
-        }
-    }(input.Products, input.WarehouseID)
+			productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
+			if productServiceHost == "" {
+				productServiceHost = "http://product-service:5002" 
+			}
+			
+			req, _ := http.NewRequest("PATCH", productServiceHost+"/api/v1/products/internal/sync-exact-stock", bytes.NewBuffer(jsonData))
+			req.Header.Set("Content-Type", "application/json")
+			
+			client := &http.Client{Timeout: 10 * time.Second}
+			resp, err := client.Do(req)
+			
+			if err != nil {
+				fmt.Printf("❌ [HTTP CRITICAL] ĐỒNG BỘ SKU %s SANG PRODUCT-SERVICE THẤT BẠI: %v\n", p.Sku, err)
+				continue
+			}
+			
+			if resp.StatusCode >= 400 {
+				buf := new(bytes.Buffer)
+				buf.ReadFrom(resp.Body)
+				fmt.Printf("❌ [HTTP CRITICAL] PRODUCT-SERVICE TỪ CHỐI ĐỒNG BỘ SKU %s (Status: %d): %s\n", p.Sku, resp.StatusCode, buf.String())
+			} else {
+				fmt.Printf("✅ [Sync] Đã báo Product-Service cập nhật SKU %s thành %d cái!\n", p.Sku, newTotal)
+			}
+			resp.Body.Close()
+		}
+	}(input.Products, input.WarehouseID)
 
-    c.JSON(http.StatusCreated, gin.H{"message": "🎉 Lưu chứng từ nhập kho thành công!", "ma_phieu": maPhieuAuto})
+	c.JSON(http.StatusCreated, gin.H{"message": "🎉 Lưu chứng từ nhập kho thành công!", "ma_phieu": maPhieuAuto})
+}
+
+// ----------------------------------------------------------------------
+// 4. PayImportReceipt: Thanh toán công nợ cho nhà cung cấp (MỚI)
+// ----------------------------------------------------------------------
+func PayImportReceipt(c *gin.Context) {
+	receiptID := c.Param("id")
+
+	var input PaymentInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Số tiền không hợp lệ"})
+		return
+	}
+
+	// Sử dụng Transaction để bảo vệ dữ liệu tiền bạc
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		var phieu models.PhieuKho
+		
+		if err := tx.Where("ma_phieu = ?", receiptID).First(&phieu).Error; err != nil {
+			return fmt.Errorf("không tìm thấy phiếu nhập kho %s", receiptID)
+		}
+
+		if phieu.DaThanhToan >= phieu.TongTien {
+			return fmt.Errorf("phiếu nhập kho này đã được thanh toán hoàn tất")
+		}
+
+		tienConNo := phieu.TongTien - phieu.DaThanhToan
+		if input.Amount > tienConNo {
+			return fmt.Errorf("số tiền thanh toán (%.2f) lớn hơn số tiền còn nợ (%.2f)", input.Amount, tienConNo)
+		}
+
+		// Cập nhật lại số tiền đã thanh toán
+		phieu.DaThanhToan += input.Amount
+		
+		if phieu.DaThanhToan >= phieu.TongTien {
+			phieu.TrangThaiThanhToan = "PAID" 
+		} else {
+			phieu.TrangThaiThanhToan = "PARTIAL"
+		}
+
+		if err := tx.Save(&phieu).Error; err != nil {
+			return fmt.Errorf("không thể cập nhật phiếu kho: %v", err)
+		}
+
+		// Giảm trừ công nợ cho Nhà cung cấp
+		if phieu.MaNhaCungCap != "" {
+			err := tx.Model(&models.NhaCungCap{}).
+				Where("ma_nha_cung_cap = ?", phieu.MaNhaCungCap).
+				UpdateColumn("cong_no_hien_tai", gorm.Expr("cong_no_hien_tai - ?", input.Amount)).Error
+			if err != nil {
+				return fmt.Errorf("lỗi cập nhật công nợ cho nhà cung cấp")
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true, 
+		"message": "Nộp tiền thanh toán công nợ thành công",
+	})
 }

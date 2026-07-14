@@ -1045,9 +1045,24 @@ export default function TaoPhieuNhapForm() {
                 <input
                   type="number"
                   min="0"
+                  max={grandTotal}
                   placeholder="Nhập số tiền đã trả..."
                   value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 0;
+
+                    if (val > grandTotal) {
+                      setAmountPaid(grandTotal.toString());
+                      showNotification(
+                        "Tiền trả trước không được vượt quá Tổng giá trị phiếu!",
+                        "error",
+                      );
+                    } else if (val < 0) {
+                      setAmountPaid("0");
+                    } else {
+                      setAmountPaid(e.target.value);
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold outline-none focus:border-emerald-500 transition"
                 />
               </div>

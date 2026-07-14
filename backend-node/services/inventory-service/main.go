@@ -100,7 +100,8 @@ func main() {
 		api.POST("/inventory", controllers.CreateInventoryImport)
 		api.GET("/inventory-tickets", controllers.GetInventoryTickets)
 		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
-
+		api.POST("/inventory/import-receipts/:id/pay", controllers.PayImportReceipt)
+		
 		// 📦 3. NHÓM QUẢN LÝ LÔ HÀNG & DATE (lot_controller.go)
 		api.GET("/lots/summary", controllers.GetLotsSummary)
 		api.POST("/lots", controllers.CreateLot)
@@ -109,7 +110,8 @@ func main() {
 		api.GET("/inventory", controllers.GetInventory)
 		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
 		api.GET("/unit-conversions", controllers.GetUnitConversions) 
-		api.POST("/inventory/reconcile", controllers.HandleManualReconcile) // 🌟 Tuyến đường mới phục vụ đối soát thủ công
+		api.POST("/inventory/reconcile", controllers.HandleManualReconcile) 
+		api.POST("/inventory/deduct-fifo", controllers.DeductStockFIFO)
 
 		// 🏭 5. NHÓM NHÀ CUNG CẤP & CÔNG NỢ (supplier_controller.go)
 		api.GET("/inventory/suppliers", controllers.GetSuppliers) 
