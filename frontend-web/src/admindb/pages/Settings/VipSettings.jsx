@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Save, Award, Loader2, Info, AlertCircle } from "lucide-react"; // 🌟 Đã fix: Bổ sung AlertCircle
+import { motion } from "framer-motion";
+import { Save, Award, Loader2, Info, AlertCircle } from "lucide-react"; 
 import { authApi } from "../../../api/axios";
 
 export default function VipSettings() {
@@ -16,7 +17,7 @@ export default function VipSettings() {
   useEffect(() => {
     const fetchVipConfig = async () => {
       try {
-        // 🌟 Đã fix: Thêm /auth/ vào trước để khớp với authRoutes.js của backend
+        setLoading(true);
         const res = await authApi.get("/auth/settings/vip");
         if (res.data && res.data.success) {
           setVipConfig({
@@ -26,7 +27,7 @@ export default function VipSettings() {
         }
       } catch (err) {
         console.error("Lỗi lấy cấu hình VIP:", err);
-        setMessage({ text: "Không thể tải cấu hình hiện tại.", type: "error" });
+        setMessage({ text: "Không thể nạp dữ liệu mốc cấu hình hiện tại từ máy chủ!", type: "error" });
       } finally {
         setLoading(false);
       }
@@ -50,7 +51,7 @@ export default function VipSettings() {
 
     if (Number(vipConfig.vang) >= Number(vipConfig.kimcuong)) {
       setMessage({
-        text: "Lỗi: Mức chi tiêu của Hạng Kim Cương phải lớn hơn Hạng Vàng!",
+        text: "Lỗi cấu trúc: Mức chi tiêu của Hạng Kim Cương phải lớn hơn Hạng Vàng!",
         type: "error",
       });
       setSaving(false);
@@ -58,7 +59,6 @@ export default function VipSettings() {
     }
 
     try {
-      // 🌟 Đã fix: Thêm /auth/ vào trước
       const res = await authApi.put("/auth/settings/vip", {
         vang: Number(vipConfig.vang),
         kimcuong: Number(vipConfig.kimcuong),
@@ -66,14 +66,14 @@ export default function VipSettings() {
 
       if (res.data.success) {
         setMessage({
-          text: "🎉 Cập nhật mốc thăng hạng thành công!",
+          text: "Cập nhật mốc thăng hạng thành viên tự động thành công!",
           type: "success",
         });
       }
     } catch (err) {
       console.error("Lỗi lưu cấu hình VIP:", err);
       setMessage({
-        text: err.response?.data?.message || "Lỗi hệ thống khi lưu cấu hình.",
+        text: err.response?.data?.message || "Lỗi đồng bộ hệ thống khi lưu cấu hình.",
         type: "error",
       });
     } finally {
@@ -83,120 +83,138 @@ export default function VipSettings() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64 text-[#006c49] font-bold">
-        <Loader2 className="animate-spin mr-2" size={24} /> Đang tải cấu hình hệ
-        thống...
+      <div className="p-10 flex justify-center text-emerald-600 font-bold text-sm animate-pulse">
+        <Loader2 className="animate-spin mr-2" size={20} /> Đang nạp dữ liệu cấu hình hệ thống...
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-slate-50 min-h-screen text-left">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <Award className="text-[#006c49]" /> Cấu hình Hạng thành viên VIP
-          </h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
-            Thiết lập mốc tổng chi tiêu tích lũy để khách hàng được thăng hạng
-            tự động.
-          </p>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      /* 🌟 ĐỒNG BỘ HOÀN HẢO: Trải phẳng bằng p-1, màu nền #fafafa giống hệt file Dashboard */
+      className="w-full min-h-screen bg-[#fafafa] font-sans text-left text-slate-700 selection:bg-emerald-100 p-1 antialiased overflow-y-auto"
+    >
+      <div className="w-full">
+        {/* ---------------- HEADER AREA ---------------- */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              Cấu hình Hạng VIP
+            </h1>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-1 select-none">
+              <span>Tổng hành dinh</span>
+              <span>❯</span>
+              <span>Cấu hình chung</span>
+              <span>❯</span>
+              <span className="text-emerald-700 font-bold">Mốc thành viên VIP</span>
+            </div>
+          </div>
         </div>
 
-        {/* Form Cấu hình */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
-          <div className="bg-blue-50 border border-blue-100 text-blue-700 p-4 rounded-xl mb-8 flex gap-3 text-sm font-medium">
-            <Info className="shrink-0 mt-0.5" size={18} />
+        {/* ---------------- FORM CONTENT BLOCK ---------------- */}
+        <div className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 relative">
+          
+          {/* Hộp thông tin ghi chú nghiệp vụ */}
+          <div className="bg-blue-50/50 border border-blue-100/60 text-blue-700 p-4 rounded-xl mb-6 flex gap-3 text-xs font-semibold leading-relaxed">
+            <Info className="shrink-0 mt-0.5 text-blue-500" size={16} />
             <p>
-              <strong>Lưu ý quan trọng:</strong> Khi bạn thay đổi mốc tiền ở
-              đây, các khách hàng đang ở hạng cao (vd: Kim Cương) sẽ{" "}
-              <strong>không bị giáng cấp</strong> ngay lập tức. Cấu hình này chỉ
-              áp dụng làm mốc xét duyệt cho những đơn đặt hàng mới phát sinh kể
-              từ lúc này.
+              <strong className="text-blue-900">Lưu ý nghiệp vụ vận hành:</strong> Khi bạn thay đổi mốc tiền chi tiêu tích lũy ở đây, các khách hàng hiện tại đang ở hạng cao (Ví dụ: Kim Cương) sẽ <strong className="text-blue-900">không bị giáng cấp ngược</strong> ngay lập tức. Cấu hình phân vị thăng hạng này chỉ áp dụng làm mốc xét duyệt thăng hạng tự động cho những hóa đơn đặt hàng mới phát sinh kể từ lúc này.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* HẠNG VÀNG */}
-              <div className="bg-gradient-to-b from-amber-50/50 to-white border border-amber-200 p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-amber-400 text-white text-[10px] font-black px-3 py-1 rounded-bl-lg uppercase tracking-wider">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* CARD: HẠNG VÀNG */}
+              <div className="bg-gradient-to-b from-amber-50/20 to-white border border-amber-200/60 p-5 rounded-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-amber-400 text-white text-[9px] font-black px-2.5 py-0.5 rounded-bl-lg uppercase tracking-wider select-none">
                   Mức 2
                 </div>
-                <h3 className="text-lg font-black text-amber-600 mb-4 flex items-center gap-2">
+                <h3 className="text-base font-black text-amber-600 mb-4 flex items-center gap-1.5 select-none">
                   ⭐ Hạng VÀNG
                 </h3>
-                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
-                  Mốc chi tiêu tối thiểu (VNĐ)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    name="vang"
-                    value={vipConfig.vang}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none font-black text-amber-700 text-lg transition shadow-sm"
-                    required
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-amber-400">
-                    VNĐ
-                  </span>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    Mốc chi tiêu tối thiểu cấu thành (VNĐ)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      name="vang"
+                      value={vipConfig.vang}
+                      onChange={handleChange}
+                      className="w-full pl-4 pr-14 py-2 bg-slate-50 border border-amber-200/80 rounded-xl font-mono font-black text-amber-700 text-base outline-none focus:bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition shadow-xs"
+                      required
+                    />
+                    <span className="absolute right-4 top-2 text-xs font-bold text-amber-500/60 select-none">
+                      VNĐ
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* HẠNG KIM CƯƠNG */}
-              <div className="bg-gradient-to-b from-[#006c49]/5 to-white border border-[#006c49]/20 p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-[#006c49] text-white text-[10px] font-black px-3 py-1 rounded-bl-lg uppercase tracking-wider">
+              {/* CARD: HẠNG KIM CƯƠNG */}
+              <div className="bg-gradient-to-b from-emerald-50/10 to-white border border-emerald-100 p-5 rounded-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-emerald-700 text-white text-[9px] font-black px-2.5 py-0.5 rounded-bl-lg uppercase tracking-wider select-none">
                   Mức 3 (Tối đa)
                 </div>
-                <h3 className="text-lg font-black text-[#006c49] mb-4 flex items-center gap-2">
+                <h3 className="text-base font-black text-emerald-700 mb-4 flex items-center gap-1.5 select-none">
                   💎 Hạng KIM CƯƠNG
                 </h3>
-                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">
-                  Mốc chi tiêu tối thiểu (VNĐ)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    name="kimcuong"
-                    value={vipConfig.kimcuong}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 bg-white border border-[#006c49]/20 rounded-xl focus:ring-2 focus:ring-[#006c49]/20 focus:border-[#006c49] outline-none font-black text-[#006c49] text-lg transition shadow-sm"
-                    required
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-[#006c49]/40">
-                    VNĐ
-                  </span>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    Mốc chi tiêu tối thiểu cấu thành (VNĐ)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      name="kimcuong"
+                      value={vipConfig.kimcuong}
+                      onChange={handleChange}
+                      className="w-full pl-4 pr-14 py-2 bg-slate-50 border border-emerald-200/60 rounded-xl font-mono font-black text-emerald-700 text-base outline-none focus:bg-white focus:border-emerald-600 focus:ring-4 focus:ring-emerald-50 transition shadow-xs"
+                      required
+                    />
+                    <span className="absolute right-4 top-2 text-xs font-bold text-emerald-600/60 select-none">
+                      VNĐ
+                    </span>
+                  </div>
                 </div>
               </div>
+
             </div>
 
-            {/* Thông báo trạng thái */}
+            {/* Thông báo trạng thái phản hồi biểu mẫu */}
             {message.text && (
               <div
-                className={`p-4 rounded-xl text-sm font-bold flex items-center gap-2 ${message.type === "error" ? "bg-red-50 text-red-600 border border-red-100" : "bg-emerald-50 text-emerald-700 border border-emerald-100"}`}
+                className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+                  message.type === "error" 
+                    ? "bg-red-50 text-red-600 border-red-100" 
+                    : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                }`}
               >
                 {message.type === "error" ? (
-                  <AlertCircle size={18} />
+                  <AlertCircle size={16} className="shrink-0" />
                 ) : (
-                  <Award size={18} />
+                  <Award size={16} className="shrink-0" />
                 )}
                 {message.text}
               </div>
             )}
 
-            {/* Nút Submit */}
-            <div className="pt-6 border-t border-slate-100 flex justify-end">
+            {/* Thanh điều khiển xác nhận */}
+            <div className="pt-4 border-t border-slate-100 flex justify-end text-xs font-bold">
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 bg-[#006c49] hover:bg-[#005237] text-white px-8 py-3 rounded-xl font-black uppercase tracking-wider transition-all shadow-md disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl uppercase tracking-wider shadow-sm hover:shadow transition transform active:scale-98 shrink-0 cursor-pointer"
               >
                 {saving ? (
-                  <Loader2 size={20} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
-                  <Save size={20} />
+                  <Save size={14} />
                 )}
                 Lưu cấu hình hệ thống
               </button>
@@ -204,6 +222,6 @@ export default function VipSettings() {
           </form>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
