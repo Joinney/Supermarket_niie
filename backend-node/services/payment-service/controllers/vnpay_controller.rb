@@ -20,15 +20,19 @@ class VnpayController
       uri_params = URI.decode_www_form(uri.query).to_h
       vnp_txn_ref = uri_params['vnp_TxnRef']
 
-      record = PaymentTransaction.create(
-        ma_don_hang: ma_don_hang,
-        phuong_thuc: 'VNPay',
-        so_tien: tong_thanh_toan.to_f,
-        tien_te: 'VND',
-        trang_thai: 'PENDING',
-        gateway_order_id: vnp_txn_ref,
-        client_ip: client_ip
-      )
+      # Tránh tạo trùng bản ghi PENDING nếu người dùng bấm thanh toán nhiều lần cho 1 đơn
+      record = PaymentTransaction.where(ma_don_hang: ma_don_hang, phuong_thuc: 'VNPay', trang_thai: 'PENDING').first
+      unless record
+        record = PaymentTransaction.create(
+          ma_don_hang: ma_don_hang,
+          phuong_thuc: 'VNPay',
+          so_tien: tong_thanh_toan.to_f,
+          tien_te: 'VND',
+          trang_thai: 'PENDING',
+          gateway_order_id: vnp_txn_ref,
+          client_ip: client_ip
+        )
+      end
 
       PaymentTransaction.db[
         "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
@@ -44,7 +48,7 @@ class VnpayController
   end
 
   # ============================================================================
-  # 2. Đối soát khi khách hàng được VNPay đá về Web (Đã gỡ bẫy setter raw_response)
+  # 2. Đối soát khi khách hàng được VNPay đá về Web (ĐÃ SỬA LỖI DOUBLE TRÙNG ĐƠN)
   # ============================================================================
   def self.verify_return(query_params)
     begin
@@ -68,12 +72,20 @@ class VnpayController
         return { success: false, message: 'Chữ ký bảo mật VNPay không hợp lệ!' }
       end
 
+      # 1. Kiểm tra xem đơn hàng này ĐÃ ĐƯỢC XỬ LÝ THÀNH CÔNG trước đó chưa (Tránh IPN & Return URL ghi đè nhau)
+      completed_record = PaymentTransaction.where(ma_don_hang: ma_don_hang, phuong_thuc: 'VNPay', trang_thai: 'COMPLETED').first
+      if completed_record
+        puts "🔒 [VNPAY ALREADY COMPLETED]: Đơn hàng #{ma_don_hang} đã được xử lý trước đó. Bỏ qua không tạo/update lại."
+        return { success: true, ma_don_hang: ma_don_hang, message: 'Thanh toán VNPay thành công (đã xử lý trước đó)!' }
+      end
+
+      # 2. Tìm bản ghi PENDING gốc
       record = PaymentTransaction.where(gateway_order_id: txn_ref, phuong_thuc: 'VNPay').first
       record ||= PaymentTransaction.where(ma_don_hang: ma_don_hang, phuong_thuc: 'VNPay').first
 
       if response_code == '00'
         if record
-          # 🎯 Cập nhật database nội bộ của Payment Service
+          # Cập nhật trạng thái từ PENDING sang COMPLETED
           record.update(
             trang_thai: 'COMPLETED',
             gateway_transaction_id: vnp_transaction_no
@@ -81,6 +93,7 @@ class VnpayController
           parent_id = record.id
           event_name = 'RETURN_URL_CALLBACK_SUCCESS'
         else
+          # Chỉ tạo mới nếu hoàn toàn không tìm thấy log PENDING khởi tạo trước đó (Trường hợp hy hữu)
           new_parent = PaymentTransaction.create(
             ma_don_hang: ma_don_hang,
             phuong_thuc: 'VNPay',
@@ -96,19 +109,18 @@ class VnpayController
         end
 
         # ============================================================================
-        # 🚀 BỔ SUNG: BẮN ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE (CỔNG 5005)
+        # 🚀 BẮN ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE (CỔNG 5005)
         # ============================================================================
         begin
           require 'net/http'
-          order_service_url = URI.parse('http://demi_order_service:5005/api/orders/internal/update-status')
+          order_service_url = URI.parse('http://localhost:5005/api/orders/internal/update-status')
           
           http = Net::HTTP.new(order_service_url.host, order_service_url.port)
           request = Net::HTTP::Post.new(order_service_url.path, { 'Content-Type' => 'application/json' })
           
-          # Payload gửi đi khớp hoàn toàn với hàm updateInternalOrderStatus bên Node.js
           request.body = {
             ma_don_hang: ma_don_hang.to_s,
-            trang_thai_thanh_toan: 'completed' # Trùng với chữ thường/hoa trong DB xử lý của bạn
+            trang_thai_thanh_toan: 'completed'
           }.to_json
 
           response = http.request(request)
@@ -118,7 +130,7 @@ class VnpayController
         end
         # ============================================================================
 
-        # Ghi vào bảng Hộp Đen log hệ thống
+        # Ghi log hộp đen
         PaymentTransaction.db[
           "INSERT INTO payment_gateway_logs (payment_transaction_id, gateway_name, event_type, http_status, request_payload, response_payload, ip_address) 
            VALUES (?, ?, ?, ?, cast(? as jsonb), cast(? as jsonb), ?)",
@@ -128,6 +140,7 @@ class VnpayController
         puts "🔒 [DATABASE VNPAY CHỐT ĐƠN]: Thành công rực rỡ đơn #{ma_don_hang} (ID Mẹ: #{parent_id})!"
         { success: true, ma_don_hang: ma_don_hang, message: 'Thanh toán VNPay thành công!' }
       else
+        # Xử lý khi giao dịch thất bại
         if record
           record.update(trang_thai: 'FAILED')
           parent_id = record.id
