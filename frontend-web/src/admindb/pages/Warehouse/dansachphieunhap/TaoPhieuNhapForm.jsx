@@ -23,6 +23,12 @@ export default function TaoPhieuNhapForm() {
   const [warehouse, setWarehouse] = useState("");
   const [importType, setImportType] = useState("NHAP");
   const [note, setNote] = useState("");
+
+  // 🌟 ĐÃ SỬA: Quản lý Nhà Cung Cấp bằng Danh sách API
+  const [amountPaid, setAmountPaid] = useState("");
+  const [supplierObj, setSupplierObj] = useState(null); // Lưu Object { id, name }
+  const [dbSuppliers, setDbSuppliers] = useState([]); // Lưu danh sách đổ từ BE
+
   const [submitting, setSubmitting] = useState(false);
 
   const [activeLotDropdownSku, setActiveLotDropdownSku] = useState(null);
@@ -41,6 +47,7 @@ export default function TaoPhieuNhapForm() {
 
   // 📡 ĐỒNG BỘ DỮ LIỆU TỪ BACKEND
   useEffect(() => {
+    // 1. Lấy danh sách Kho
     warehouseApi
       .get("/warehouses")
       .then((res) => {
@@ -49,6 +56,15 @@ export default function TaoPhieuNhapForm() {
       })
       .catch((err) => console.error("Lỗi tải danh sách kho nhận:", err));
 
+    // 🌟 2. LẤY DANH SÁCH NHÀ CUNG CẤP TỪ API MỚI
+    warehouseApi
+      .get("/inventory/suppliers")
+      .then((res) => {
+        setDbSuppliers(res.data || []);
+      })
+      .catch((err) => console.error("Lỗi tải danh sách NCC:", err));
+
+    // 3. Lấy Quy đổi đơn vị
     warehouseApi
       .get("/unit-conversions")
       .then((res) => {
@@ -64,6 +80,7 @@ export default function TaoPhieuNhapForm() {
       })
       .catch((err) => console.error("Lỗi tải danh mục quy đổi từ DB:", err));
 
+    // 4. Lấy Lô hàng
     warehouseApi
       .get("/lots/summary")
       .then((res) => {
@@ -200,7 +217,6 @@ export default function TaoPhieuNhapForm() {
     showNotification("Đã bỏ sản phẩm khỏi phiếu", "warning");
   };
 
-  // 🛡️ LÁ CHẮN 1: CẢNH BÁO KHI CỐ TÌNH CHỌN LÔ CŨ ĐÃ HẾT HẠN
   const handleSelectLotForProduct = (sku, lotId) => {
     const selectedLot = globalLots.find((l) => l.id === lotId);
     if (selectedLot && selectedLot.expiryDate) {
@@ -222,7 +238,6 @@ export default function TaoPhieuNhapForm() {
     setActiveLotDropdownSku(null);
   };
 
-  // 🛡️ LÁ CHẮN 2 & TỰ ĐỘNG ĐẾM SỐ: TẠO LÔ NHANH CHUẨN ERP
   const handleCreateFastLot = async (sku) => {
     if (!newLotExpiry)
       return showNotification("Vui lòng chọn Hạn sử dụng!", "error");
@@ -244,12 +259,10 @@ export default function TaoPhieuNhapForm() {
     const dd = String(today.getDate()).padStart(2, "0");
     const currentDateSign = `${yyyy}${mm}${dd}`;
 
-    // Tự động trích xuất mã Quốc gia/Tiền tố từ SKU (VD: "VN", "US")
     const skuPrefix =
       sku && sku.includes("-") ? sku.split("-")[0].toUpperCase() : "GEN";
     const baseLotCode = `LOT-${currentDateSign}-${skuPrefix}`;
 
-    // Đếm tự động các lô cùng tiền tố trong ngày
     const samePrefixLots = globalLots.filter((l) =>
       l.id.startsWith(baseLotCode),
     );
@@ -258,7 +271,7 @@ export default function TaoPhieuNhapForm() {
     const finalLotId =
       newLotName.trim() !== ""
         ? newLotName.trim().toUpperCase()
-        : `${baseLotCode}${nextSequence}`; // VD: LOT-20260712-VN01
+        : `${baseLotCode}${nextSequence}`;
 
     const currentProduct = selectedProducts.find((p) => p.sku === sku);
     const estimatedPrice = currentProduct ? currentProduct.price : 0;
@@ -374,12 +387,23 @@ export default function TaoPhieuNhapForm() {
 
   const { itemsWithTotals, grandTotal } = calculateTotals();
 
+  // 🌟 Logic tính Nợ
+  const parsedAmountPaid = parseInt(amountPaid || "0", 10);
+  const totalDebt =
+    grandTotal - parsedAmountPaid > 0 ? grandTotal - parsedAmountPaid : 0;
+
   const handleConfirmSubmit = async (e) => {
     e.preventDefault();
     if (selectedProducts.length === 0)
       return showNotification("Phiếu chưa có sản phẩm!", "error");
     if (selectedProducts.some((item) => !item.selectedLotId))
       return showNotification("Vui lòng điền đủ Số Lô & HSD!", "error");
+    if (parsedAmountPaid > grandTotal && grandTotal > 0) {
+      return showNotification(
+        "Tiền trả trước không được vượt quá Tổng giá trị phiếu!",
+        "error",
+      );
+    }
 
     setSubmitting(true);
     try {
@@ -397,12 +421,16 @@ export default function TaoPhieuNhapForm() {
         }
       }
 
+      // 🌟 ĐÃ SỬA: Gửi đúng supplier_id và supplier_name xuống API
       const payload = {
         warehouse_id: warehouse,
         import_type: importType,
         note: note || "",
         user_id: parseInt(currentUserId, 10),
         full_name: currentFullName,
+        amount_paid: parsedAmountPaid,
+        supplier_id: supplierObj ? supplierObj.id : "",
+        supplier_name: supplierObj ? supplierObj.name : "Chưa xác định",
         products: itemsWithTotals.map((item) => {
           const lotObj = globalLots.find((l) => l.id === item.selectedLotId);
           return {
@@ -534,7 +562,6 @@ export default function TaoPhieuNhapForm() {
                       const isLotOpen = activeLotDropdownSku === row.sku;
                       const isRatioOpen = activeRatioDropdownSku === row.sku;
 
-                      // LỌC RA 3 NHÓM LÔ THÔNG MINH
                       const todayTime = new Date().setHours(0, 0, 0, 0);
                       const validSuggestedLots = [];
                       const expiredSuggestedLots = [];
@@ -573,7 +600,6 @@ export default function TaoPhieuNhapForm() {
                             </div>
                           </td>
 
-                          {/* 🌟 CỘT CHỌN LÔ HÀNG THÔNG MINH */}
                           <td
                             className="py-3 px-2 relative"
                             style={{ overflow: "visible" }}
@@ -634,7 +660,6 @@ export default function TaoPhieuNhapForm() {
                                         </p>
                                       ) : (
                                         <>
-                                          {/* NHÓM 1: LÔ KHUYÊN DÙNG (CÒN HẠN) */}
                                           {validSuggestedLots.length > 0 && (
                                             <div className="px-2 py-1 bg-emerald-50 text-[9px] font-black text-emerald-700 uppercase sticky top-0 z-10">
                                               Khuyên dùng (Còn hạn)
@@ -661,7 +686,6 @@ export default function TaoPhieuNhapForm() {
                                             </button>
                                           ))}
 
-                                          {/* NHÓM 2: LÔ ĐÃ HẾT HẠN (DISABLE) */}
                                           {expiredSuggestedLots.length > 0 && (
                                             <div className="px-2 py-1 bg-rose-50 text-[9px] font-black text-rose-700 uppercase sticky top-0 z-10 mt-1">
                                               Lô cũ (Đã hết hạn)
@@ -683,7 +707,6 @@ export default function TaoPhieuNhapForm() {
                                             </button>
                                           ))}
 
-                                          {/* NHÓM 3: CÁC LÔ KHÁC (CÒN HẠN) */}
                                           {validOtherLots.length > 0 && (
                                             <div className="px-2 py-1 bg-slate-100 text-[9px] font-black text-slate-500 uppercase sticky top-0 z-10 mt-1">
                                               Các lô khác (Còn hạn)
@@ -763,7 +786,6 @@ export default function TaoPhieuNhapForm() {
                             )}
                           </td>
 
-                          {/* Các cột còn lại */}
                           <td
                             className="py-3 px-2 relative"
                             style={{ overflow: "visible" }}
@@ -941,6 +963,7 @@ export default function TaoPhieuNhapForm() {
           </div>
         </div>
 
+        {/* 🌟 BẢNG THÔNG TIN PHIẾU (CỘT PHẢI) */}
         <div className="lg:col-span-4 space-y-4">
           <div className="bg-[#006c49] text-white p-4 rounded-xl shadow-sm">
             <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-200">
@@ -950,7 +973,39 @@ export default function TaoPhieuNhapForm() {
               {formatVnCurrency(grandTotal)}
             </p>
           </div>
+
           <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-4">
+            {/* 🌟 ĐÃ SỬA: SỬ DỤNG SELECT ĐỂ CHỌN NHÀ CUNG CẤP TỪ API */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase">
+                Nhà cung cấp *
+              </label>
+              <select
+                value={supplierObj ? supplierObj.id : ""}
+                onChange={(e) => {
+                  const selSup = dbSuppliers.find(
+                    (s) => s.ma_nha_cung_cap === e.target.value,
+                  );
+                  setSupplierObj(
+                    selSup
+                      ? {
+                          id: selSup.ma_nha_cung_cap,
+                          name: selSup.ten_nha_cung_cap,
+                        }
+                      : null,
+                  );
+                }}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-slate-700 outline-none cursor-pointer focus:border-[#006c49]"
+              >
+                <option value="">-- Chọn Nhà cung cấp --</option>
+                {dbSuppliers.map((s) => (
+                  <option key={s.ma_nha_cung_cap} value={s.ma_nha_cung_cap}>
+                    {s.ten_nha_cung_cap}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">
                 Kho nhận hàng *
@@ -958,7 +1013,7 @@ export default function TaoPhieuNhapForm() {
               <select
                 value={warehouse}
                 onChange={(e) => setWarehouse(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-slate-700 outline-none cursor-pointer focus:border-[#006c49]"
               >
                 {dbWarehouses.map((w) => (
                   <option key={w.ma_kho} value={w.ma_kho}>
@@ -967,6 +1022,7 @@ export default function TaoPhieuNhapForm() {
                 ))}
               </select>
             </div>
+
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">
                 Hình thức kiểm duyệt *
@@ -980,6 +1036,34 @@ export default function TaoPhieuNhapForm() {
                 <option value="TRATON">Khách Trả Hàng Lưu Kho</option>
               </select>
             </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase">
+                  Đã thanh toán trước (VNĐ)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Nhập số tiền đã trả..."
+                  value={amountPaid}
+                  onChange={(e) => setAmountPaid(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold outline-none focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div className="flex justify-between items-center border-t border-slate-200 pt-2">
+                <span className="text-[10px] font-black text-slate-500 uppercase">
+                  Còn Nợ Lại:
+                </span>
+                <span
+                  className={`text-sm font-black font-mono ${totalDebt > 0 ? "text-rose-600" : "text-emerald-600"}`}
+                >
+                  {formatVnCurrency(totalDebt)}
+                </span>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase">
                 Ghi chú vận hành
@@ -992,6 +1076,7 @@ export default function TaoPhieuNhapForm() {
                 className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none resize-none focus:border-emerald-500 transition"
               ></textarea>
             </div>
+
             <div className="pt-2">
               <button
                 type="submit"

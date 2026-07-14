@@ -15,8 +15,9 @@ type InventoryStockResponse struct {
 	Quantity   int     `json:"quantity" gorm:"column:total_quantity"`
 	CostPrice  float64 `json:"costPrice" gorm:"column:total_cost_value"`
 	TotalValue float64 `json:"totalValue" gorm:"column:total_retail_value"`
-	CreatedAt  string  `json:"createdAt" gorm:"column:first_import_date"` // Ngày nhập kho lần đầu
-	UpdatedAt  string  `json:"updatedAt" gorm:"column:last_update_date"`  // Ngày cập nhật kho gần nhất
+	CreatedAt  string  `json:"createdAt" gorm:"column:first_import_date"`
+	UpdatedAt  string  `json:"updatedAt" gorm:"column:last_update_date"`  
+	Supplier   string  `json:"supplier" gorm:"column:supplier_name"`
 }
 
 // 🌟 GetInventory (ĐÃ NÂNG CẤP): Lọc theo Kho nguồn (nếu có) & Gom nhóm tồn kho
@@ -27,18 +28,23 @@ func GetInventory(c *gin.Context) {
 	maKho := c.Query("ma_kho")
 
 	// Khởi tạo câu truy vấn cơ bản
-	query := config.DB.Table("ton_kho").
-		Select(`
-			ton_kho.sku, 
-			COALESCE(MAX(items.name), 'Sản phẩm chưa xác định') AS name, 
-			SUM(ton_kho.so_luong_thuc_te) AS total_quantity,
-			SUM(ton_kho.so_luong_thuc_te * COALESCE(lo_hang.gia_nhap, 0)) AS total_cost_value,
-			SUM(ton_kho.so_luong_thuc_te * COALESCE(items.price, lo_hang.gia_nhap * 1.3, 0)) AS total_retail_value,
-			MIN(ton_kho.ngay_tao) AS first_import_date,
-			MAX(ton_kho.ngay_cap_nhat) AS last_update_date
-		`).
-		Joins("LEFT JOIN items ON ton_kho.sku = items.sku").
-		Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang")
+	// Sửa lại câu truy vấn để nối bảng qua phieu_kho
+    query := config.DB.Table("ton_kho").
+        Select(`
+            ton_kho.sku, 
+            COALESCE(MAX(items.name), 'Sản phẩm chưa xác định') AS name, 
+            SUM(ton_kho.so_luong_thuc_te) AS total_quantity,
+            SUM(ton_kho.so_luong_thuc_te * COALESCE(lo_hang.gia_nhap, 0)) AS total_cost_value,
+            SUM(ton_kho.so_luong_thuc_te * COALESCE(items.price, lo_hang.gia_nhap * 1.3, 0)) AS total_retail_value,
+            MIN(ton_kho.ngay_tao) AS first_import_date,
+            MAX(ton_kho.ngay_cap_nhat) AS last_update_date,
+            MAX(nha_cung_cap.ten_nha_cung_cap) AS supplier_name 
+        `).
+        Joins("LEFT JOIN items ON ton_kho.sku = items.sku").
+        Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang").
+        Joins("LEFT JOIN chi_tiet_phieu_kho ON ton_kho.sku = chi_tiet_phieu_kho.sku AND ton_kho.ma_lo_hang = chi_tiet_phieu_kho.ma_lo_hang").
+        Joins("LEFT JOIN phieu_kho ON chi_tiet_phieu_kho.ma_phieu = phieu_kho.ma_phieu").
+        Joins("LEFT JOIN nha_cung_cap ON phieu_kho.ma_nha_cung_cap = nha_cung_cap.ma_nha_cung_cap")
 
 	// 🌟 FIX LOGIC: Nếu FE truyền lên ma_kho thì chỉ lọc tồn kho của đúng kho đó!
 	if maKho != "" {
@@ -48,7 +54,7 @@ func GetInventory(c *gin.Context) {
 	// Thực thi gom nhóm và quét dữ liệu
 	err := query.
 		Group("ton_kho.sku").
-		Order("last_update_date DESC"). // Đưa mặt hàng mới có biến động kho lên đầu
+		Order("last_update_date DESC"). 
 		Scan(&inventoryList).Error
 
 	if err != nil {

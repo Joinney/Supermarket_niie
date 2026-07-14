@@ -18,7 +18,7 @@ type ImportProductPayload struct {
 	Sku              string  `json:"sku" binding:"required"`
 	Name             string  `json:"name"`
 	StandardQuantity int     `json:"standard_quantity" binding:"required"`
-	Price            float64 `json:"price" binding:"required"`
+	Price            float64 `json:"price" binding:"required"` // Giá nhập / Giá vốn
 	LotName          string  `json:"lot_name" binding:"required"`
 	ExpiryDate       string  `json:"expiry_date" binding:"required"`
 }
@@ -29,27 +29,21 @@ type CreateInventoryImportInput struct {
 	Note        string                 `json:"note"`
 	UserId      int                    `json:"user_id"`
 	FullName    string                 `json:"full_name"`
+	AmountPaid  float64                `json:"amount_paid"`
+	SupplierID   string                 `json:"supplier_id"`
+	SupplierName string                 `json:"supplier_name"`
 	Products    []ImportProductPayload `json:"products" binding:"required"`
 }
 
-// 🌟 FIX LỖI SWAGGER: Đưa Struct này ra ngoài scope của hàm
-type PhieuKhoWithTotal struct {
-	models.PhieuKho
-	TongTien float64 `json:"tong_tien" gorm:"column:tong_tien"`
-}
-
 // ----------------------------------------------------------------------
-// 1. GetInventoryTickets: Đã hỗ trợ tính Tổng tiền
+// 1. GetInventoryTickets: Lấy danh sách kèm số liệu Công Nợ
 // ----------------------------------------------------------------------
 func GetInventoryTickets(c *gin.Context) {
-	var tickets []PhieuKhoWithTotal
+	// Lấy trực tiếp thông tin từ bảng phieu_kho vì chúng ta đã lưu cứng tong_tien
+	var tickets []models.PhieuKho
 	
 	err := config.DB.Table("phieu_kho").
-		Select("phieu_kho.*, COALESCE(SUM(chi_tiet_phieu_kho.so_luong * lo_hang.gia_nhap), 0) AS tong_tien").
-		Joins("LEFT JOIN chi_tiet_phieu_kho ON phieu_kho.ma_phieu = chi_tiet_phieu_kho.ma_phieu").
-		Joins("LEFT JOIN lo_hang ON chi_tiet_phieu_kho.ma_lo_hang = lo_hang.ma_lo_hang").
-		Group("phieu_kho.ma_phieu").
-		Order("phieu_kho.ngay_tao DESC").
+		Order("ngay_tao DESC").
 		Find(&tickets).Error
 
 	if err != nil {
@@ -94,25 +88,23 @@ func GetInventoryImportDetail(c *gin.Context) {
 		return
 	}
 
-	var totalMoney float64 = 0
-	for _, item := range items {
-		totalMoney += item.Total
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"ma_phieu":           phieu.MaPhieu,
-		"loai_phieu":         phieu.LoaiPhieu,
-		"ma_kho":             phieu.MaKho,
-		"ghi_chu":            phieu.GhiChu,
-		"nguoi_thuc_hien_id": phieu.NguoiThucHienID,
-		"ngay_tao":           phieu.NgayTao.Format("02/01/2006 15:04"),
-		"tong_tien":          totalMoney,
-		"products":           items,
+		"ma_phieu":              phieu.MaPhieu,
+		"loai_phieu":            phieu.LoaiPhieu,
+		"ma_kho":                phieu.MaKho,
+		"ghi_chu":               phieu.GhiChu,
+		"nguoi_thuc_hien_id":    phieu.NguoiThucHienID,
+		"nha_cung_cap":         phieu.NhaCungCap,
+		"ngay_tao":              phieu.NgayTao.Format("02/01/2006 15:04"),
+		"tong_tien":             phieu.TongTien,
+		"da_thanh_toan":         phieu.DaThanhToan,
+		"trang_thai_thanh_toan": phieu.TrangThaiThanhToan,
+		"products":              items,
 	})
 }
 
 // ----------------------------------------------------------------------
-// 3. CreateInventoryImport: Tạo phiếu và báo lỗi đồng bộ Tồn kho
+// 3. CreateInventoryImport: Tạo phiếu, tính Tổng Tiền, và đồng bộ Tồn kho
 // ----------------------------------------------------------------------
 func CreateInventoryImport(c *gin.Context) {
 	var input CreateInventoryImportInput
@@ -121,6 +113,7 @@ func CreateInventoryImport(c *gin.Context) {
 		return
 	}
 
+	// Đăng ký Sku mới (nếu chưa có)
 	for _, p := range input.Products {
 		var exists int64
 		config.DB.Table("items").Where("sku = ?", p.Sku).Count(&exists)
@@ -151,12 +144,32 @@ func CreateInventoryImport(c *gin.Context) {
 		executorID = 1
 	}
 
+	// 🌟 Tính TỔNG TIỀN (Giá vốn * Số lượng) của toàn bộ phiếu nhập
+	var totalMoney float64 = 0
+	for _, p := range input.Products {
+		totalMoney += float64(p.StandardQuantity) * p.Price
+	}
+
+	// 🌟 XÁC ĐỊNH TRẠNG THÁI THANH TOÁN (Tự động)
+	paymentStatus := "UNPAID"
+	if input.AmountPaid >= totalMoney && totalMoney > 0 {
+		paymentStatus = "PAID" // Trả đủ
+	} else if input.AmountPaid > 0 {
+		paymentStatus = "PARTIAL" // Trả một phần (Còn nợ)
+	}
+
+	// 🌟 Lưu Tổng Tiền và Đã Thanh Toán vào Struct PhieuKho
 	phieuKho := models.PhieuKho{
-		MaPhieu:         maPhieuAuto,
-		LoaiPhieu:       input.ImportType,
-		MaKho:           input.WarehouseID,
-		GhiChu:          finalNote,
-		NguoiThucHienID: executorID,
+		MaPhieu:            maPhieuAuto,
+		LoaiPhieu:          input.ImportType,
+		MaKho:              input.WarehouseID,
+		GhiChu:             finalNote,
+		NguoiThucHienID:    executorID,
+		MaNhaCungCap:       input.SupplierID,
+		NhaCungCap:         input.SupplierName,
+		TongTien:           totalMoney,         
+		DaThanhToan:        input.AmountPaid,   
+		TrangThaiThanhToan: paymentStatus,     
 	}
 
 	if err := tx.Create(&phieuKho).Error; err != nil {
@@ -240,7 +253,6 @@ func CreateInventoryImport(c *gin.Context) {
 			}
 		}
 
-		// (Phần gọi HTTP request sang Product-Service giữ nguyên như cũ)
 		jsonData, _ := json.Marshal(map[string]interface{}{"items": syncList})
 		productServiceHost := os.Getenv("PRODUCT_SERVICE_URL")
 		if productServiceHost == "" {

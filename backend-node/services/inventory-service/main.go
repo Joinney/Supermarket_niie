@@ -53,6 +53,7 @@ func main() {
 			&models.Lot{},
 			&models.PhieuKho{},
 			&models.ChiTietPhieuKho{},
+			&models.NhaCungCap{}, // 🌟 BƯỚC 1: Bổ sung AutoMigrate cho bảng mới
 		)
 		if err != nil {
 			log.Fatalf("❌ Lỗi đồng bộ cấu trúc Database (AutoMigrate thất bại): %v", err)
@@ -66,31 +67,34 @@ func main() {
 	// ========================================================
 	api := r.Group("/api/v1")
 	{
-    // 🏢 1. NHÓM QUẢN LÝ KHO HÀNG (warehouse_controller.go)
-    api.GET("/warehouses", controllers.GetWarehouses)
-    api.PUT("/warehouses/:id/toggle-status", controllers.ToggleWarehouseStatus)
-    api.POST("/warehouses", controllers.CreateWarehouse)      
-    api.PUT("/warehouses/:id", controllers.UpdateWarehouse)    
-    api.DELETE("/warehouses/:id", controllers.DeleteWarehouse) 
+		// 🏢 1. NHÓM QUẢN LÝ KHO HÀNG (warehouse_controller.go)
+		api.GET("/warehouses", controllers.GetWarehouses)
+		api.PUT("/warehouses/:id/toggle-status", controllers.ToggleWarehouseStatus)
+		api.POST("/warehouses", controllers.CreateWarehouse)      
+		api.PUT("/warehouses/:id", controllers.UpdateWarehouse)    
+		api.DELETE("/warehouses/:id", controllers.DeleteWarehouse) 
 
-    // 🧾 2. NHÓM CHỨNG TỪ & PHIẾU NHẬP KHO (import_controller.go)
-    api.POST("/inventory", controllers.CreateInventoryImport)
-    api.GET("/inventory-tickets", controllers.GetInventoryTickets)
-    api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
+		// 🧾 2. NHÓM CHỨNG TỪ & PHIẾU NHẬP KHO (import_controller.go)
+		api.POST("/inventory", controllers.CreateInventoryImport)
+		api.GET("/inventory-tickets", controllers.GetInventoryTickets)
+		api.GET("/inventory-import/:id", controllers.GetInventoryImportDetail)
 
-    // 📦 3. NHÓM QUẢN LÝ LÔ HÀNG & DATE (lot_controller.go)
-    api.GET("/lots/summary", controllers.GetLotsSummary)
-    api.POST("/lots", controllers.CreateLot)
+		// 📦 3. NHÓM QUẢN LÝ LÔ HÀNG & DATE (lot_controller.go)
+		api.GET("/lots/summary", controllers.GetLotsSummary)
+		api.POST("/lots", controllers.CreateLot)
 
-    // 📊 4. NHÓM TỒN KHO VÀ ĐƠN VỊ VẬT TƯ (stock_controller.go)
-    api.GET("/inventory", controllers.GetInventory)
-    api.PUT("/inventory/:id/stock", controllers.UpdateStock)
-    api.GET("/unit-conversions", controllers.GetUnitConversions) 
+		// 📊 4. NHÓM TỒN KHO VÀ ĐƠN VỊ VẬT TƯ (stock_controller.go)
+		api.GET("/inventory", controllers.GetInventory)
+		api.PUT("/inventory/:id/stock", controllers.UpdateStock)
+		api.GET("/unit-conversions", controllers.GetUnitConversions) 
+		
+		// 🏭 5. NHÓM NHÀ CUNG CẤP & CÔNG NỢ (supplier_controller.go)
+		api.GET("/inventory/suppliers", controllers.GetSuppliers) 
 
-    // 🚚 5. NHÓM ĐIỀU CHUYỂN KHO (warehouse_controller.go)
-    api.GET("/transfers", controllers.GetTransferTickets)
-    api.POST("/transfers", controllers.CreateTransferTicket)
-    api.PATCH("/transfers/:id/approve", controllers.ApproveTransferTicket)
+		// 🚚 6. NHÓM ĐIỀU CHUYỂN KHO (warehouse_controller.go)
+		api.GET("/transfers", controllers.GetTransferTickets)
+		api.POST("/transfers", controllers.CreateTransferTicket)
+		api.PATCH("/transfers/:id/approve", controllers.ApproveTransferTicket)
 	}
 	
 	// Tài liệu API Swagger
