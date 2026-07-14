@@ -19,6 +19,7 @@ import HeaderKhachHang from "./components/Header";
 import SidebarKhachHang from "./components/Sidebar";
 import Footer from "./components/Footer";
 import Home from "./pages/Homeindex/Home";
+import Global from "./pages/Homeindex/global/global.jsx"; // 🌟 Bổ sung Import trang Global
 import Login from "./pages/Auth/Login";
 import Signup from "./pages/Auth/Signup";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
@@ -105,7 +106,7 @@ const SettingsGeneral = () => {
 
       {/* MAIN CONTENT GRID */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 items-start">
-        /* LEFT COLUMN */
+        {/* LEFT COLUMN */}
         <div className="space-y-6 lg:col-span-2">
           {/* SECTION 1: Thông tin cửa hàng & Chi nhánh */}
           <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -243,7 +244,7 @@ const SettingsGeneral = () => {
               </div>
               <div className="md:col-span-2 flex items-center justify-between rounded-xl bg-gray-50/70 p-3">
                 <div>
-                  <p className="text-xs font-semibold text-gray-800">
+                  <p className="text-xs font-semibold text-gray-880">
                     Giá đã bao gồm thuế
                   </p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
@@ -350,7 +351,7 @@ const SettingsGeneral = () => {
               </h2>
             </div>
             <div>
-              /* Webhook URL (Đồng bộ kho hàng) */
+              {/* Webhook URL (Đồng bộ kho hàng) */}
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                 Webhook URL (Đồng bộ kho hàng)
               </label>
@@ -401,7 +402,7 @@ const SettingsGeneral = () => {
 
             <div className="space-y-4">
               <div>
-                /* Tiền tệ mặc định */
+                {/* Tiền tệ mặc định */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Tiền tệ mặc định
                 </label>
@@ -410,7 +411,7 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                /* Múi giờ */
+                {/* Múi giờ */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Múi giờ
                 </label>
@@ -419,7 +420,7 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                /* Ngôn ngữ hệ thống */
+                {/* Ngôn ngữ hệ thống */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Ngôn ngữ hệ thống
                 </label>
@@ -428,7 +429,7 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                /* Định dạng ngày tháng */
+                {/* Định dạng ngày tháng */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Định dạng ngày tháng
                 </label>
@@ -554,7 +555,7 @@ const SettingsGeneral = () => {
 
             <div className="space-y-4">
               <div>
-                /* Logo cửa hàng */
+                {/* Logo cửa hàng */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                   Logo cửa hàng
                 </label>
@@ -584,7 +585,7 @@ const SettingsGeneral = () => {
               </div>
 
               <div>
-                /* Màu sắc thương hiệu */
+                {/* Màu sắc thương hiệu */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                   Màu sắc thương hiệu
                 </label>
@@ -736,6 +737,7 @@ const AppRoutes = () => (
     {/* ================= ROUTES CHO KHÁCH HÀNG ================= */}
     <Route element={<MainLayout />}>
       <Route path="/" element={<Home />} />
+      <Route path="/global" element={<Global />} /> {/* 🌟 Bổ sung Route trang Global khớp cấu hình */}
       <Route path="/:country_code" element={<Home />} />
       <Route
         path="/:country_code/category/khuyen-mai"

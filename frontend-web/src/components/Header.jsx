@@ -215,22 +215,23 @@ export default function Header({ onOpenMenu }) {
   }, []);
 
   const getAvatarSrc = (userObj) => {
-  if (!userObj)
-    return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
-  
-  const url = userObj.avatar_url || userObj.avatar;
-  const name = userObj.full_name || "User";
+    if (!userObj)
+      return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
+    
+    const url = userObj.avatar_url || userObj.avatar;
+    const name = userObj.full_name || "User";
 
-  if (!url || url === "" || url.includes("unsplash.com")) {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
-  }
-  
-  const cleanUrl = url.split("?")[0];
-  if (cleanUrl.startsWith("http")) return cleanUrl; // 🛠️ Bỏ ?t=... ở đây
+    if (!url || url === "" || url.includes("unsplash.com")) {
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
+    }
+    
+    const cleanUrl = url.split("?")[0];
+    if (cleanUrl.startsWith("http")) return cleanUrl;
 
-  const cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
-  return `${AUTH_BASE_URL}${cleanPath}`; // 🛠️ Bỏ ?t=... ở đây
-};
+    const cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
+    return `${AUTH_BASE_URL}${cleanPath}`;
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -249,7 +250,7 @@ export default function Header({ onOpenMenu }) {
   // 🌟 THÊM: HÀM RENDER HUY HIỆU VIP TRÊN HEADER
   const renderHeaderTierBadge = () => {
     const tier = getMembershipTier();
-    if (!tier) return null; // Ẩn nếu là Admin/Staff hoặc chưa có hạng
+    if (!tier) return null;
 
     const name = String(tier).toUpperCase();
     if (name === "KIM CƯƠNG") {
@@ -351,7 +352,7 @@ export default function Header({ onOpenMenu }) {
               type="text"
               placeholder={t("search_placeholder")}
               value={searchKeyword}
-              onFocus={() => setIsSuggestOpen(true)} // Mở bảng khi focus
+              onFocus={() => setIsSuggestOpen(true)}
               onChange={(e) => {
                 const v = e.target.value;
                 setSearchKeyword(v);
@@ -359,27 +360,22 @@ export default function Header({ onOpenMenu }) {
 
                 if (suggestTimer.current) clearTimeout(suggestTimer.current);
 
-                // Nếu người dùng xóa sạch ô tìm kiếm -> Trả về màn Phổ Biến
                 if (v.trim().length === 0) {
                   setSuggestions([]);
                   setCategorySuggestions([]);
                   return;
                 }
 
-                // Debounce gọi API 250ms
                 suggestTimer.current = setTimeout(async () => {
                   const currentCountryCode = currentStore?.code || "vn";
                   try {
-                    // Logic phân nhánh độ dài
                     if (v.trim().length > 0 && v.trim().length < 3) {
-                      // Gõ 1-2 ký tự: Gọi API Danh Mục
                       const res = await productApi.get(
                         `/products/categories/search?keyword=${encodeURIComponent(v)}&country=${currentCountryCode}`,
                       );
                       setCategorySuggestions(res.data || []);
                       setSuggestions([]);
                     } else if (v.trim().length >= 3) {
-                      // Gõ >= 3 ký tự: Gọi API Sản Phẩm
                       const res = await productApi.get(
                         `/products/search?keyword=${encodeURIComponent(v)}&limit=10&country=${currentCountryCode}`,
                       );
@@ -435,7 +431,7 @@ export default function Header({ onOpenMenu }) {
                   </div>
                 )}
 
-                {/* 2. GÕ TỪ 1 ĐẾN 2 KÝ TỰ -> Hiển thị Danh mục (Dạng Grid Icon) */}
+                {/* 2. GÕ TỪ 1 ĐẾN 2 KÝ TỰ -> Hiển thị Danh mục */}
                 {searchKeyword.trim().length > 0 &&
                   searchKeyword.trim().length < 3 && (
                     <div className="animate-fadeIn">
@@ -479,7 +475,7 @@ export default function Header({ onOpenMenu }) {
                     </div>
                   )}
 
-                {/* 3. GÕ TỪ 3 KÝ TỰ TRỞ LÊN -> Hiển thị Sản phẩm (Dạng Danh sách Dọc) */}
+                {/* 3. GÕ TỪ 3 KÝ TỰ TRỞ LÊN -> Hiển thị Sản phẩm */}
                 {searchKeyword.trim().length >= 3 && (
                   <div className="animate-fadeIn">
                     {suggestions.length > 0 ? (
@@ -496,7 +492,7 @@ export default function Header({ onOpenMenu }) {
                                 `/${country}/product/${category}/${s.ma_san_pham}`,
                               );
                               setIsSuggestOpen(false);
-                              SearchKeyword("");
+                              setSearchKeyword("");
                             }}
                             className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f8fafc] transition-colors text-left border border-transparent hover:border-slate-100"
                           >
@@ -594,7 +590,6 @@ export default function Header({ onOpenMenu }) {
                     }}
                   />
                 </Link>
-                {/* 🌟 CẬP NHẬT CHỖ NÀY: Hiển thị Tên và Huy hiệu VIP */}
                 <div className="hidden lg:flex flex-col justify-center text-left overflow-hidden min-w-[70px]">
                   <p className="text-[11px] font-black text-slate-900 leading-tight truncate max-w-[90px]">
                     {displayUser.full_name}
@@ -659,15 +654,25 @@ export default function Header({ onOpenMenu }) {
       {/* Thanh Menu Phụ */}
       <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto scrollbar-hide">
         <nav className="flex items-center gap-5 md:gap-8 whitespace-nowrap min-w-max">
-          {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => (
-            <Link
-              key={item}
-              to={country_code ? `/${country_code.toLowerCase()}` : "/vn"}
-              className="text-[10px] md:text-[11px] font-black text-slate-500 hover:text-[#006c49] uppercase tracking-widest transition-colors"
-            >
-              {item}
-            </Link>
-          ))}
+          {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => {
+            // 🌟 CẬP NHẬT: Định tuyến riêng cho "Toàn cầu+" để khớp với route /global
+            const targetPath =
+              item === "Toàn cầu+"
+                ? "/global"
+                : country_code
+                  ? `/${country_code.toLowerCase()}`
+                  : "/vn";
+
+            return (
+              <Link
+                key={item}
+                to={targetPath}
+                className="text-[10px] md:text-[11px] font-black text-slate-500 hover:text-[#006c49] uppercase tracking-widest transition-colors"
+              >
+                {item}
+              </Link>
+            );
+          })}
           <Link
             to="/"
             className="text-[10px] md:text-[11px] font-black text-[#a855f7] flex items-center gap-2"
