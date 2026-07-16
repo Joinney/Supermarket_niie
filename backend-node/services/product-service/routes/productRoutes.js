@@ -13,7 +13,6 @@ import {
     createProduct,
     toggleProductStatus,
     deleteProduct,
-    getReviewsByProduct,          
     getRelatedProducts,
     updateProduct,         
     getVariantById,
@@ -92,7 +91,6 @@ router.put('/:id/toggle-status', toggleProductStatus);
 router.delete('/:id', deleteProduct);
 
 // Các thông tin liên quan cụ thể của một sản phẩm
-router.get('/:id/reviews', getReviewsByProduct); 
 router.get('/:id/related', getRelatedProducts); 
 
 //xử lý mã thông minh

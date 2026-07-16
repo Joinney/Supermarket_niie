@@ -174,6 +174,17 @@ const placeOrder = async (req, res) => {
       const pName = String(item.name || item.product_name || "Sản phẩm Demi Mart").trim();
       let finalSku = item.sku || null;
       let finalMaSanPham = item.ma_san_pham || item.productId || null; 
+      let foundImage = item.image_url || "";
+      if (!foundImage && databaseVariants.length > 0) {
+        for (const prod of databaseVariants) {
+          if (prod.hinh_anh_chinh) foundImage = prod.hinh_anh_chinh;
+          
+          if (prod.bien_the_san_pham) {
+            const matched = prod.bien_the_san_pham.find(v => String(v.id) === vId);
+            if (matched && matched.image_url) foundImage = matched.image_url;
+          }
+        }
+      }
 
       // 👉 CÁCH 1: Tìm bằng Product Service
       if (!finalSku && databaseVariants.length > 0) {
@@ -197,7 +208,7 @@ const placeOrder = async (req, res) => {
 
       // 👉 CHỐT CHẶN CUỐI CÙNG TRÁNH LỖI 500 CHO GO
       if (!finalSku) {
-        finalSku = vId; // Nếu bí quá, lấy tạm Variant ID làm SKU để Go không bị chết
+        finalSku = vId;
       }
 
       console.log(`[DEBUG ITEM] Khách mua: ${pName} | Variant ID: ${vId} ---> Đã map ra SKU Kho: ${finalSku}`);
@@ -208,9 +219,9 @@ const placeOrder = async (req, res) => {
         price: Number(item.price || 0), 
         product_name: pName,
         variant_name: item.variant_name || item.phan_loai || "Mặc định",
-        image_url: item.image_url || "",
+        image_url: foundImage,
         ma_san_pham: finalMaSanPham, 
-        sku: finalSku // Chắc chắn 100% trường này không còn bị undefined!
+        sku: finalSku 
       };
     }).filter(i => i.variant_id && i.quantity > 0);
 

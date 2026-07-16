@@ -895,69 +895,7 @@ export const schedulePeriodicDescriptionGeneration = () => {
 
 
 // =========================================================================
-// 12. LẤY ĐÁNH GIÁ SẢN PHẨM (XỬ LÝ ĐỒNG BỘ MICROSERVICES GỌI SANG AUTH)
-// =========================================================================
-export const getReviewsByProduct = async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        const query = `
-            SELECT 
-                dg.ma_danh_gia, dg.user_id, dg.so_sao, dg.noi_dung, dg.ngay_tao,
-                dg.phan_hoi_nguoi_ban, dg.ngay_phan_hoi, dg.luot_huu_ich,
-                bt.ten_bien_the,
-                COALESCE(
-                    (SELECT json_agg(json_build_object('url', md.duong_dan_url, 'type', md.loai_media, 'duration', md.thoi_luong_video))
-                     FROM public.media_danh_gia md WHERE md.ma_danh_gia = dg.ma_danh_gia),
-                    '[]'
-                ) as media
-            FROM public.danh_gia_san_pham dg
-            LEFT JOIN public.bien_the_san_pham bt ON dg.ma_bien_the = bt.ma_bien_the
-            WHERE dg.ma_san_pham = $1 AND dg.trang_thai = true
-            ORDER BY dg.ngay_tao DESC;
-        `;
-        const { rows: reviews } = await pool.query(query, [id]);
-
-        if (reviews.length === 0) {
-            return res.status(200).json({ summary: { avgRating: 0, total: 0 }, reviews: [] });
-        }
-
-        const totalReviews = reviews.length;
-        const avgRating = (reviews.reduce((sum, r) => sum + r.so_sao, 0) / totalReviews).toFixed(1);
-        const starCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0, hasMedia: 0, hasComment: 0 };
-        
-        reviews.forEach(r => {
-            if (starCounts[r.so_sao] !== undefined) starCounts[r.so_sao]++;
-            if (r.media.length > 0) starCounts.hasMedia++;
-            if (r.noi_dung && r.noi_dung.trim() !== '') starCounts.hasComment++;
-        });
-
-        const userIds = [...new Set(reviews.map(r => r.user_id))];
-        const userInfoMap = {};
-        userIds.forEach(uid => {
-            userInfoMap[uid] = {
-                username: uid === 1 ? 'tukhanjluu' : `khachhang_${uid}`,
-                avatar_url: `https://ui-avatars.com/api/?name=User${uid}&background=f1f5f9&color=94a3b8`
-            };
-        });
-
-        const finalReviews = reviews.map(r => ({
-            ...r,
-            user: userInfoMap[r.user_id] || { username: 'Người dùng ẩn danh', avatar_url: null }
-        }));
-
-        res.status(200).json({
-            summary: { avgRating, total: totalReviews, ...starCounts },
-            reviews: finalReviews
-        });
-    } catch (error) {
-        console.error("❌ Lỗi API getReviewsByProduct:", error.message);
-        res.status(500).json({ error: "Lỗi lấy dữ liệu đánh giá." });
-    }
-};
-
-// =========================================================================
-// 13. LẤY SẢN PHẨM LIÊN QUAN (CÙNG DANH MỤC CON)
+// 12. LẤY SẢN PHẨM LIÊN QUAN (CÙNG DANH MỤC CON)
 // =========================================================================
 export const getRelatedProducts = async (req, res) => {
     const { id } = req.params;
@@ -985,7 +923,7 @@ export const getRelatedProducts = async (req, res) => {
 };
 
 // =========================================================================
-// 14. LẤY THÔNG TIN CHI TIẾT MỘT BIẾN THỂ (CHO TRANG QUẢN TRỊ ADMIN - DYNAMIC REAL DATA)
+// 13. LẤY THÔNG TIN CHI TIẾT MỘT BIẾN THỂ (CHO TRANG QUẢN TRỊ ADMIN - DYNAMIC REAL DATA)
 // =========================================================================
 export const getVariantById = async (req, res) => {
     try {
@@ -1073,7 +1011,7 @@ export const getVariantById = async (req, res) => {
 };
 
 // =========================================================================
-// 15. TẠO BIẾN THỂ MỚI 
+// 14. TẠO BIẾN THỂ MỚI 
 // =========================================================================
 export const createVariant = async (req, res) => {
     const client = await pool.connect(); 
@@ -1175,7 +1113,7 @@ export const createVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 15.1 TẠO BIẾN THỂ ĐƠN (SIMPLE VARIANT - KHÔNG THUỘC TÍNH)
+// 14.1 TẠO BIẾN THỂ ĐƠN (SIMPLE VARIANT - KHÔNG THUỘC TÍNH)
 // =========================================================================
 export const createSimpleVariant = async (req, res) => {
     const client = await pool.connect();
@@ -1246,7 +1184,7 @@ export const createSimpleVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 15.2 CẬP NHẬT BIẾN THỂ 
+// 14.2 CẬP NHẬT BIẾN THỂ 
 // =========================================================================
 export const updateVariant = async (req, res) => {
     const client = await pool.connect();
@@ -1337,7 +1275,7 @@ export const updateVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 15.5 XÓA TỪNG BIẾN THỂ (SOFT DELETE - TÔN TRỌNG LOGIC BẢO TOÀN ĐƠN HÀNG)
+// 14.3 XÓA TỪNG BIẾN THỂ (SOFT DELETE - TÔN TRỌNG LOGIC BẢO TOÀN ĐƠN HÀNG)
 // =========================================================================
 export const deleteVariant = async (req, res) => {
     try {
@@ -1377,7 +1315,7 @@ export const deleteVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 15.6 XÓA TẤT CẢ BIẾN THỂ (SOFT DELETE - ẨN HÀNG LOẠT BẢO TOÀN DỮ LIỆU)
+// 14.4 XÓA TẤT CẢ BIẾN THỂ (SOFT DELETE - ẨN HÀNG LOẠT BẢO TOÀN DỮ LIỆU)
 // =========================================================================
 export const deleteAllVariants = async (req, res) => {
     try {
@@ -1408,7 +1346,7 @@ export const deleteAllVariants = async (req, res) => {
 };
 
 // =========================================================================
-// 15.7 KHÔI PHỤC BIẾN THỂ ĐÃ XÓA MỀM (RESTORE SKU)
+// 14.5 KHÔI PHỤC BIẾN THỂ ĐÃ XÓA MỀM (RESTORE SKU)
 // =========================================================================
 export const restoreVariant = async (req, res) => {
     try {
@@ -1438,7 +1376,7 @@ export const restoreVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 15.8 XÓA CỨNG BIẾN THỂ (HARD DELETE - DỌN SẠCH DATABASE)
+// 14.6 XÓA CỨNG BIẾN THỂ (HARD DELETE - DỌN SẠCH DATABASE)
 // =========================================================================
 export const hardDeleteVariant = async (req, res) => {
     const client = await pool.connect();
@@ -1473,7 +1411,7 @@ export const hardDeleteVariant = async (req, res) => {
 };
 
 // =========================================================================
-// 16. LẤY TOÀN BỘ DANH MỤC THUỘC TÍNH VÀ GIÁ TRỊ KHẢ DỤNG (CHO FORM MA TRẬN)
+// 15. LẤY TOÀN BỘ DANH MỤC THUỘC TÍNH VÀ GIÁ TRỊ KHẢ DỤNG (CHO FORM MA TRẬN)
 // =========================================================================
 export const getAllAvailableAttributes = async (req, res) => {
     try {
@@ -1505,7 +1443,7 @@ export const getAllAvailableAttributes = async (req, res) => {
 };
 
 // =========================================================================
-// 17. TẠO THUỘC TÍNH MỚI (LƯU TÊN NHÓM THUỘC TÍNH MỚI KHI CLICK TẠO TRỰC TIẾP)
+// 16. TẠO THUỘC TÍNH MỚI (LƯU TÊN NHÓM THUỘC TÍNH MỚI KHI CLICK TẠO TRỰC TIẾP)
 // =========================================================================
 export const createAttribute = async (req, res) => {
     try {
@@ -1559,7 +1497,7 @@ export const createAttribute = async (req, res) => {
 };
 
 // =========================================================================
-// 18. TẢI FILE MINH HỌA LÊN CLOUDINARY (TRẢ VỀ SECURE URL CHO MÁY KHÁCH)
+// 17. TẢI FILE MINH HỌA LÊN CLOUDINARY (TRẢ VỀ SECURE URL CHO MÁY KHÁCH)
 // =========================================================================
 export const uploadImage = async (req, res) => {
     try {
@@ -1574,7 +1512,7 @@ export const uploadImage = async (req, res) => {
 };
 
 // =========================================================================
-// 18.5 UPLOAD VÀ CẬP NHẬT ẢNH NHANH CHO BIẾN THỂ (DÙNG TẠI TRANG CHI TIẾT)
+// 17.1 UPLOAD VÀ CẬP NHẬT ẢNH NHANH CHO BIẾN THỂ (DÙNG TẠI TRANG CHI TIẾT)
 // =========================================================================
 export const uploadVariantImage = async (req, res) => {
     try {

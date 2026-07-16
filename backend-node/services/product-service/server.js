@@ -25,6 +25,7 @@ import productRoutes from './routes/productRoutes.js';
 import chatbotRoutes from './routes/chatbotRoutes.js'; 
 import categoryRoutes from './routes/categoryRoutes.js';
 import { schedulePeriodicDescriptionGeneration } from './controllers/productController.js'; 
+import reviewRoutes from './routes/reviewRoutes.js';
 
 // --- KHỞI TẠO APP & SERVER SOCKET ---
 const app = express();
@@ -107,6 +108,7 @@ v1Router.use('/products/units', unitRoutes);
 v1Router.use('/products', productRoutes);
 v1Router.use('/categories', categoryRoutes);
 v1Router.use('/chatbot', chatbotRoutes);
+v1Router.use('/', reviewRoutes);
 
 // Bọc toàn bộ vào /api/v1
 app.use('/api/v1', v1Router);
