@@ -22,41 +22,55 @@ public class NotificationConsumer {
     private final NotificationRepository notificationRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @RabbitListener(queues = "${notification.rabbitmq.queue.login}")
+   @RabbitListener(queues = "${notification.rabbitmq.queue.login}")
     public void consumeLoginEvent(Map<String, Object> loginEvent) {
-        try {
-            log.info("Nhận sự kiện đăng nhập từ RabbitMQ: {}", loginEvent);
+    try {
+        log.info("Nhận sự kiện đăng nhập từ RabbitMQ: {}", loginEvent);
 
-            String username = (String) loginEvent.get("username");
-            String userId = (String) loginEvent.get("userId");
-            
-            String id = UUID.randomUUID().toString();
-            String title = "Thiết bị mới đăng nhập";
-            String desc = "Tài khoản " + username + " vừa đăng nhập thành công vào hệ thống.";
-
-            // 1. Lưu thông báo vào MongoDB
-            Notification notification = new Notification(
-                    id,
-                    userId,
-                    title,
-                    desc,
-                    LocalDateTime.now(),
-                    false,
-                    loginEvent // Lưu toàn bộ payload nhận được làm metadata
-            );
-            notificationRepository.save(notification);
-            log.info("Đã lưu thông báo đăng nhập vào MongoDB thành công với ID: {}", id);
-
-            // 2. Chuyển đổi định dạng và bắn tín hiệu qua WebSocket tới React Client
-            String formattedTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
-            NotificationResponse responseDto = new NotificationResponse(id, title, desc, formattedTime);
-            
-            // Đẩy dữ liệu qua kênh "/topic/notifications"
-           // Đẩy dữ liệu chính xác về kênh cá nhân của user (Ví dụ: /topic/user/1)
-                messagingTemplate.convertAndSend("/topic/user/" + userId, responseDto);
-                log.info("Đã gửi thông báo Real-time qua WebSocket tới user: {}", userId);
-        } catch (Exception e) {
-            log.error("Lỗi khi xử lý sự kiện thông báo đăng nhập: {}", e.getMessage(), e);
+        String username = (String) loginEvent.get("username");
+        String userId = (String) loginEvent.get("userId");
+        
+        if (userId == null || userId.trim().isEmpty()) {
+            log.warn("Sự kiện đăng nhập không có userId hợp lệ, bỏ qua.");
+            return;
         }
+
+        // 🌟 CHUẨN HÓA: Tìm và xóa toàn bộ thông báo đăng nhập cũ của User này trong MongoDB
+        // Tiêu đề để nhận diện là "Thiết bị mới đăng nhập"
+        try {
+            notificationRepository.deleteByUserIdAndTitle(userId, "Thiết bị mới đăng nhập");
+            log.info("🧹 Đã dọn dẹp các thông báo đăng nhập cũ của user: {}", userId);
+        } catch (Exception dbEx) {
+            log.error("Không thể xóa thông báo cũ: {}", dbEx.getMessage());
+        }
+
+        String id = UUID.randomUUID().toString();
+        String title = "Thiết bị mới đăng nhập";
+        String desc = "Tài khoản " + username + " vừa đăng nhập thành công vào hệ thống.";
+
+        // 1. Lưu thông báo mới duy nhất vào MongoDB
+        Notification notification = new Notification(
+                id,
+                userId,
+                title,
+                desc,
+                LocalDateTime.now(),
+                false,
+                loginEvent 
+        );
+        notificationRepository.save(notification);
+        log.info("Đã lưu thông báo đăng nhập mới nhất vào MongoDB với ID: {}", id);
+
+        // 2. Chuyển đổi định dạng và bắn tín hiệu qua WebSocket tới React Client
+        String formattedTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+        NotificationResponse responseDto = new NotificationResponse(id, title, desc, formattedTime);
+        
+        // Đẩy dữ liệu qua kênh cá nhân hóa của user
+        messagingTemplate.convertAndSend("/topic/user/" + userId, responseDto);
+        log.info("Đã gửi thông báo Real-time qua WebSocket tới user: {}", userId);
+
+    } catch (Exception e) {
+        log.error("Lỗi khi xử lý sự kiện thông báo đăng nhập: {}", e.getMessage(), e);
     }
+}
 }
