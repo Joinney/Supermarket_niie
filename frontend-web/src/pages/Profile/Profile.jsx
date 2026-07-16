@@ -137,24 +137,24 @@ export default function ProfilePage() {
   const activeOrderStep = orderSteps.find(s => s.queryValue === currentStatusQuery);
   const selectedOrderTab = activeOrderStep ? activeOrderStep.label : "Xác nhận";
 
-  useEffect(() => {
-    if (activeTab === "orders" || tab === "orders") {
-      const fetchRealOrders = async () => {
-        setLoadingOrders(true);
-        try {
-          const res = await orderApi.get("/orders/my-orders");
-          if (res.data && res.data.success) {
-            setOrdersList(res.data.data || []);
-          }
-        } catch (err) {
-          console.error("Lỗi lấy đơn hàng cá nhân:", err);
-        } finally {
-          setLoadingOrders(false);
-        }
-      };
-      fetchRealOrders();
+ // Gọi API lấy danh sách đơn hàng ngay khi component ProfilePage mount để luôn có số lượng count
+useEffect(() => {
+  const fetchRealOrders = async () => {
+    setLoadingOrders(true);
+    try {
+      const res = await orderApi.get("/orders/my-orders");
+      if (res.data && res.data.success) {
+        setOrdersList(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Lỗi lấy đơn hàng cá nhân:", err);
+    } finally {
+      setLoadingOrders(false);
     }
-  }, [activeTab, tab]);
+  };
+  
+  fetchRealOrders();
+}, []); // Chạy 1 lần duy nhất khi load trang Profile
 
   // 🌟 HÀM XỬ LÝ HỦY ĐƠN HÀNG
   const handleCancelOrder = async (orderTarget) => {
