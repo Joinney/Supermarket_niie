@@ -32,10 +32,10 @@ const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png";
 const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; 
 
 // Hình ảnh xe tải chạy đường trục chặng dài liên tỉnh
-const LIVE_ANIMATION_TRUCK_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783715858/xedemimart_gsyk3d.png";
+const LIVE_ANIMATION_TRUCK_URL = "https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226350/xedemimart_wqu5os.png";
 
 // Hình ảnh Xe máy Shipper giao hàng nội tỉnh hoặc chặng cuối nhà khách
-const LIVE_SHIPPER_MOTOR_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783716506/xemayshiper_zpydkt.png";
+const LIVE_SHIPPER_MOTOR_URL = "https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226352/xemayshiper_aq2r1l.png";
 
 function ChangeMapView({ bounds }) {
   const map = useMap();

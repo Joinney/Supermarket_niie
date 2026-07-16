@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
+import React, { useState, useEffect, useContext, useRef, useCallback } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { authApi, orderApi, cartApi } from "../../api/axios";
 import { AuthContext } from "../../context/AuthContext";
@@ -137,9 +137,8 @@ export default function ProfilePage() {
   const activeOrderStep = orderSteps.find(s => s.queryValue === currentStatusQuery);
   const selectedOrderTab = activeOrderStep ? activeOrderStep.label : "Xác nhận";
 
- // Gọi API lấy danh sách đơn hàng ngay khi component ProfilePage mount để luôn có số lượng count
-useEffect(() => {
-  const fetchRealOrders = async () => {
+  // Hàm fetch danh sách đơn hàng được bọc trong useCallback để làm Ref ổn định, tránh render thừa thãi
+  const fetchRealOrders = useCallback(async () => {
     setLoadingOrders(true);
     try {
       const res = await orderApi.get("/orders/my-orders");
@@ -151,10 +150,12 @@ useEffect(() => {
     } finally {
       setLoadingOrders(false);
     }
-  };
-  
-  fetchRealOrders();
-}, []); // Chạy 1 lần duy nhất khi load trang Profile
+  }, []);
+
+  // Gọi API lấy danh sách đơn hàng ngay khi component ProfilePage mount
+  useEffect(() => {
+    fetchRealOrders();
+  }, [fetchRealOrders]); // Chạy 1 lần duy nhất khi load trang Profile hoặc khi callback định nghĩa lại
 
   // 🌟 HÀM XỬ LÝ HỦY ĐƠN HÀNG
   const handleCancelOrder = async (orderTarget) => {
@@ -1275,6 +1276,7 @@ useEffect(() => {
                     currentTabLabel={selectedOrderTab}
                     onCancelOrder={handleCancelOrder}
                     onReorder={handleReorder}
+                    onRefreshData={fetchRealOrders} // 🌟 BỔ SUNG PROP cập nhật ngầm đồng bộ socket realtime
                   />
                 )}
                 

@@ -7,18 +7,12 @@ import path from 'path';
 // 1. Cố gắng đọc file .env từ thư mục gốc của service
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-// 🌟 2. CHỐT CHẶN BẢO MẬT (FALLBACK):
-// Nếu process.env có dữ liệu thì lấy, nếu Docker lỗi làm mất .env thì dùng key dự phòng.
-// Điều này ngắt triệt để lỗi "cloud_name is disabled".
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dm6fqzwhs';
-const apiKey = process.env.CLOUDINARY_API_KEY || '975713159799595';
-const apiSecret = process.env.CLOUDINARY_API_SECRET || 'xI3ZHkGT_I0wY1SD-66g9LYDMkA';
-
+ 
 // 3. Khởi tạo cấu hình Cloudinary
 cloudinary.config({
-  cloud_name: cloudName,
-  api_key: apiKey,
-  api_secret: apiSecret
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 // 4. Thiết lập kho lưu trữ Storage

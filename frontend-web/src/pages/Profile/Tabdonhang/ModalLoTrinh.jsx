@@ -37,8 +37,8 @@ const COORDINATOR_ICON_URL = "https://cdn-icons-png.flaticon.com/512/5643/564376
 const SHOP_ICON_URL = "https://cdn-icons-png.flaticon.com/512/869/869636.png"; 
 const ROUTE_STATION_ICON_URL = "https://cdn-icons-png.flaticon.com/512/2271/2271068.png"; 
 
-const LIVE_ANIMATION_TRUCK_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783715858/xedemimart_gsyk3d.png";
-const LIVE_SHIPPER_MOTOR_URL = "https://res.cloudinary.com/dm6fqzwhs/image/upload/v1783716506/xemayshiper_zpydkt.png";
+const LIVE_ANIMATION_TRUCK_URL = "https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226350/xedemimart_wqu5os.png";
+const LIVE_SHIPPER_MOTOR_URL = "https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226352/xemayshiper_aq2r1l.png";
 // =================================================================
 
 export default function ModalLoTrinh({ isOpen, onClose, order }) {

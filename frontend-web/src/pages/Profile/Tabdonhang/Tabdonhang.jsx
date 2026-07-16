@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Package,
   MapPin,
@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
 import ReviewModal from "../../../components/Reviews/ReviewModal";
-// 🌟 IMPORT THÊM API CỦA BẠN (Sửa đường dẫn cho đúng nếu cần)
 import { productApi } from "../../../api/axios";
+import io from "socket.io-client";
 
 const ORDER_STEPS = [
   {
@@ -34,21 +34,108 @@ const ORDER_STEPS = [
 ];
 
 export default function Tabdonhang({
-  orders,
+  orders: initialOrders, 
   currentTabLabel,
   onCancelOrder,
   onReviewOrder,
   onViewDetails,
   onReorder,
+  onRefreshData, // 🌟 Nhận prop từ component cha để re-fetch ngầm tránh reload F5
 }) {
+  const [orders, setOrders] = useState(initialOrders);
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
   const [expandedOrders, setExpandedOrders] = useState({});
   const [reviewModalData, setReviewModalData] = useState(null);
   const [reviewedOrderIds, setReviewedOrderIds] = useState([]);
+  
+  const socketRef = useRef(null);
+  const realtimeUpdatedOrdersRef = useRef({});
 
-  // 🌟 MỚI: FETCH TRẠNG THÁI ĐÁNH GIÁ TỪ BACKEND
+  // Đồng bộ hóa dữ liệu từ component cha nhưng giữ lại cập nhật realtime của Socket
   useEffect(() => {
-    // Chỉ check những đơn đã giao và chưa có trong danh sách đã check
+    if (!initialOrders) return;
+    setOrders(() => {
+      return initialOrders.map((incomingOrder) => {
+        const orderIdStr = String(incomingOrder.ma_don_hang || incomingOrder.id).trim();
+        if (realtimeUpdatedOrdersRef.current[orderIdStr]) {
+          return {
+            ...incomingOrder,
+            trang_thai_don_hang: realtimeUpdatedOrdersRef.current[orderIdStr],
+          };
+        }
+        return incomingOrder;
+      });
+    });
+  }, [initialOrders]);
+
+  // 🌟 KẾT NỐI REALTIME SOCKET.IO (Tối ưu hóa vòng đời kết nối tránh reconnect liên tục)
+  useEffect(() => {
+    socketRef.current = io("http://localhost:5005", {
+      transports: ["websocket"],
+    });
+
+    // Cho tất cả đơn hàng gia nhập vào Room
+    if (initialOrders && initialOrders.length > 0) {
+      initialOrders.forEach((order) => {
+        const roomId = String(order.ma_don_hang || "").trim();
+        if (roomId) {
+          socketRef.current.emit("join_order_room", roomId);
+        }
+      });
+    }
+
+    // Lắng nghe sự kiện truyền tải từ hệ thống Admin
+    socketRef.current.on("send_truck_location", (data) => {
+      if (!data) return;
+      const { ma_don_hang, isFullyDelivered, isArrived, currentStationIndex } = data;
+
+      // Tính toán trạng thái đồng bộ chuỗi hiển thị tương đương logic Backend
+      let newStatus = "Đang giao";
+      if (isFullyDelivered) {
+        newStatus = "Đã giao";
+      } else if (currentStationIndex === 0 && !isArrived) {
+        newStatus = "Lấy hàng";
+      } else if (currentStationIndex === -1) {
+        newStatus = "Xác nhận"; 
+      }
+
+      const cleanMaDonHang = String(ma_don_hang).trim();
+
+      // Sử dụng Functional Update của setOrders để tránh phụ thuộc vào biến state 'orders' bên ngoài
+      setOrders((prevOrders) => {
+        const targetOrder = prevOrders.find(o => String(o.ma_don_hang).trim() === cleanMaDonHang);
+        
+        // Chỉ tiến hành cập nhật nếu trạng thái thực tế có sự thay đổi
+        if (targetOrder && targetOrder.trang_thai_don_hang !== newStatus) {
+          // 1. Ghi đè vào bộ nhớ đệm Ref
+          realtimeUpdatedOrdersRef.current[cleanMaDonHang] = newStatus;
+
+          // 2. Kích hoạt lấy dữ liệu mới ngầm từ DB về tầng cha
+          if (onRefreshData) {
+            onRefreshData();
+          }
+
+          // 3. Trả về mảng orders mới cập nhật tức thì
+          return prevOrders.map((order) => {
+            if (String(order.ma_don_hang).trim() === cleanMaDonHang) {
+              return { ...order, trang_thai_don_hang: newStatus };
+            }
+            return order;
+          });
+        }
+        return prevOrders;
+      });
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, [initialOrders, onRefreshData]); // Loại bỏ hoàn toàn 'orders' khỏi đây để giữ kết nối socket ổn định
+
+  // FETCH TRẠNG THÁI ĐÁNH GIÁ TỪ BACKEND
+  useEffect(() => {
     const checkReviewStatuses = async () => {
       if (!orders || orders.length === 0) return;
 
@@ -59,7 +146,6 @@ export default function Tabdonhang({
 
       for (const order of deliveredOrders) {
         const orderIdStr = String(order.id || order.ma_don_hang);
-        // Nếu đã có trong state rồi thì bỏ qua không gọi API lại
         if (!reviewedOrderIds.includes(orderIdStr)) {
           try {
             const res = await productApi.get(
@@ -82,7 +168,7 @@ export default function Tabdonhang({
     };
 
     checkReviewStatuses();
-  }, [orders]); // Chạy lại khi mảng orders thay đổi
+  }, [orders, reviewedOrderIds]);
 
   const toggleOrderExpand = (orderId, e) => {
     if (e) e.stopPropagation();
@@ -189,11 +275,10 @@ export default function Tabdonhang({
 
           if (!firstGroup) return null;
 
-          // 🌟 SỬA ĐOẠN HIỂN THỊ NÚT ĐÁNH GIÁ (Khoảng dòng 270)
           return (
             <div
               key={orderIdStr}
-              className={`p-4 rounded-2xl bg-white border flex flex-col gap-3.5 shadow-xs hover:shadow-sm transition-all ${
+              className={`p-4 rounded-2xl bg-white border flex flex-col gap-3.5 shadow-xs hover:shadow-sm transition-all duration-300 ${
                 isCancelled
                   ? "border-red-100 bg-red-50/5 opacity-90"
                   : "border-slate-100"
@@ -213,7 +298,7 @@ export default function Tabdonhang({
                   </span>
                 </div>
                 <span
-                  className={`text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase border ${
+                  className={`text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase border transition-colors duration-300 ${
                     isCancelled
                       ? "bg-red-50 text-red-600 border-red-100"
                       : "bg-emerald-50 text-[#006c49] border-emerald-100/60"
@@ -421,7 +506,6 @@ export default function Tabdonhang({
                     </button>
                   )}
 
-                  {/* CHỈ HIỂN THỊ CÁC NÚT NÀY KHI "ĐÃ GIAO" */}
                   {normalizedStatus === "đã giao" && (
                     <div className="flex items-center gap-1.5">
                       <button
@@ -434,7 +518,6 @@ export default function Tabdonhang({
                         </span>
                       </button>
 
-                      {/* 🌟 KIỂM TRA MẢNG TRẠNG THÁI REVIEW TỪ API */}
                       {!reviewedOrderIds.includes(orderIdStr) ? (
                         <button
                           onClick={() => setReviewModalData(order)}
@@ -493,7 +576,6 @@ export default function Tabdonhang({
           reviewModalData?.danh_sach_san_pham || reviewModalData?.items || []
         }
         onSuccess={() => {
-          // Khi đánh giá xong, đẩy vào mảng state để UI thay đổi ngay lập tức không cần F5
           setReviewedOrderIds((prev) => [
             ...prev,
             String(reviewModalData?.id || reviewModalData?.ma_don_hang),
