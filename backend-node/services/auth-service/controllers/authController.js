@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pool from '../configs/database.js'; 
 import axios from 'axios';
+import amqp from 'amqplib'; // 🌟 ĐÃ THÊM: Thư viện kết nối RabbitMQ cho Node.js
 
 // 🌐 ĐỊA CHỈ KẾT NỐI MICROSERVICES (Dùng trong Docker network hoặc Localhost)
 const ORDER_SERVICE_URL = process.env.INTERNAL_ORDER_URL || 'http://localhost:5005';
@@ -22,6 +23,41 @@ const generateTokens = (user) => {
     );
 
     return { accessToken, refreshToken };
+};
+
+// --- HÀM HELPER GỬI TIN NHẮN TỚI RABBITMQ (REAL-TIME NOTIFICATION) ---
+const publishToRabbitMQ = async (exchange, routingKey, payload) => {
+    let connection;
+    try {
+        // Trỏ về 'amqp://guest:guest@rabbitmq:5672' khi chạy trong Docker Compose
+        const rabbitmqUrl = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
+        connection = await amqp.connect(rabbitmqUrl);
+        const channel = await connection.createChannel();
+
+        // Đảm bảo Exchange tồn tại trùng khớp cấu trúc Topic Exchange của Spring Boot
+        await channel.assertExchange(exchange, 'topic', { durable: true });
+
+        // Gửi tin nhắn dưới dạng JSON Buffer
+        channel.publish(
+            exchange,
+            routingKey,
+            Buffer.from(JSON.stringify(payload)),
+            { contentType: 'application/json' }
+        );
+
+        console.log(`✉️ [RabbitMQ] Đã gửi thành công sự kiện đăng nhập cho user: ${payload.username}`);
+        await channel.close();
+    } catch (error) {
+        console.error("⚠️ [RabbitMQ] Gặp lỗi khi gửi sự kiện thông báo đăng nhập:", error.message);
+    } finally {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {
+                // Ignore
+            }
+        }
+    }
 };
 
 // --- 1. ĐĂNG KÝ (SIGNUP) / THÊM NHÂN SỰ MỚI ---
@@ -106,6 +142,21 @@ export const signin = async (req, res) => {
         } catch (dbError) {
             console.error("❌ Lỗi khi cập nhật IP/Device vào CSDL:", dbError.message);
         }
+
+        // =======================================================================
+        // 🌟 TỰ ĐỘNG GỬI SỰ KIỆN ĐĂNG NHẬP SANG NOTIFICATION-SERVICE QUA RABBITMQ
+        // =======================================================================
+        const notificationExchange = process.env.NOTIFICATION_EXCHANGE || 'notification.exchange';
+        const loginRoutingKey = process.env.LOGIN_ROUTING_KEY || 'login.notification.routing';
+        
+        const loginPayload = {
+            userId: String(user.user_id),
+            username: user.full_name || user.username || "Khách hàng Demi"
+        };
+
+        // Gửi bất đồng bộ để bảo toàn hiệu năng tốc độ phản hồi API đăng nhập
+        publishToRabbitMQ(notificationExchange, loginRoutingKey, loginPayload);
+        // =======================================================================
 
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
@@ -257,7 +308,6 @@ export const getUserDetail = async (req, res) => {
         let orders = [];
         let payments = [];
 
-        // 🌟 ĐÃ SỬA: GỌI API SANG ORDER SERVICE BẰNG ĐƯỜNG DẪN v1
         try {
             const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/user-orders/${id}`);
             if (orderRes.data && orderRes.data.success) {
@@ -269,7 +319,6 @@ export const getUserDetail = async (req, res) => {
                     amount: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.tong_thanh_toan || 0).replace(/\s?₫/, ' VND')
                 }));
                 
-                // Nếu có mã đơn hàng, gọi tiếp sang Payment Service (Chuẩn v1)
                 const danhSachMaDonHang = rawOrders.map(o => o.ma_don_hang);
                 if (danhSachMaDonHang.length > 0) {
                     try {
@@ -377,7 +426,6 @@ export const getCustomerStatistics = async (req, res) => {
         let returnRate = "0.0";
         let topCustomers = [];
 
-        // 🌟 ĐÃ SỬA: GỌI API SANG ORDER SERVICE ĐỂ TRÍCH XUẤT (Chuẩn v1)
         try {
             const orderStatsRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/customer-stats`);
             if (orderStatsRes.data && orderStatsRes.data.success) {
@@ -431,7 +479,6 @@ export const syncMembershipTier = async (req, res) => {
             return res.status(200).json({ success: true, message: "Không phải Buyer, bỏ qua thăng hạng." });
         }
 
-        // 1. Lấy tổng chi tiêu của Khách từ Order Service (Chuẩn v1)
         let spent = 0;
         try {
             const orderRes = await axios.get(`${ORDER_SERVICE_URL}/api/v1/orders/internal/user-spent/${id}`);
@@ -460,7 +507,6 @@ export const syncMembershipTier = async (req, res) => {
         if (spent >= thresholdKimCuong) newTier = 'KIM CƯƠNG';
         else if (spent >= thresholdVang) newTier = 'VÀNG';
 
-        // 4. Nếu có thay đổi so với hạng cũ thì mới UPDATE vào Database
         if (userCheck.rows[0].membership_tier !== newTier) {
             await pool.query(`UPDATE public.users SET membership_tier = $1 WHERE user_id = $2`, [newTier, id]);
             console.log(`🎉 [VIP UPDATE] Khách hàng ${id} vừa thăng hạng lên: ${newTier} (Tổng chi tiêu: ${spent}đ)`);

@@ -169,12 +169,24 @@ services:
       - demi_network
     restart: always
 
-  # 13. NOTIFICATION SERVICE (Cổng 8085 - Viết bằng Java Spring Boot) ✉️
+  # =======================================================================
+# 13. NOTIFICATION SERVICE (Cổng 8085 - Viết bằng Java Spring Boot) ✉️
+# =======================================================================
   notification-service:
     build: ./backend-node/services/notification-service
     container_name: demi_notification_service
     ports:
       - "8085:8085"
+    environment:
+      # 🌟 Đồng bộ múi giờ Việt Nam (GMT+7) cho hệ thống và JVM
+      - TZ=Asia/Ho_Chi_Minh
+      - SPRING_JACKSON_TIME_ZONE=Asia/Ho_Chi_Minh
+      
+      # 🔌 Kết nối nội bộ Docker tới RabbitMQ Service
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
     # Bạn có thể bổ sung file .env nếu cấu hình tài khoản mail hoặc pass riêng biệt
     # env_file:
     #   - ./backend-node/services/notification-service/.env
@@ -183,7 +195,6 @@ services:
     networks:
       - demi_network
     restart: on-failure
-
 # 14. PROMOTION SERVICE
   promotion-service:
     build: ./backend-node/services/promotion-service

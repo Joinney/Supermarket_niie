@@ -5,13 +5,15 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true, // Tương đương với --host, cho phép truy cập từ ngoài
+    host: true, // Cho phép truy cập từ môi trường bên ngoài container
     port: 5173,
-    // --- THÊM ĐOẠN NÀY VÀO ---
     allowedHosts: [
       'host.docker.internal',
       'localhost'
     ]
-
+  },
+  // Khắc phục lỗi "Uncaught ReferenceError: global is not defined" khi dùng sockjs-client
+  define: {
+    global: 'window',
   }
 })

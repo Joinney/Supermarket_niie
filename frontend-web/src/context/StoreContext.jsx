@@ -55,18 +55,34 @@ export const StoreProvider = ({ children }) => {
     }
   }, [stores, window.location.pathname]);
 
-  // 3. Socket Real-time tự động nhận diện 100%
+  // 3. Socket Real-time tự động nhận diện 100% (Đã tối ưu dọn dẹp kết nối lỗi)
   useEffect(() => {
     const apiBaseUrl = productApi.defaults.baseURL || "";
+    let socketUrl = "";
+
+    try {
+      // Trích xuất chính xác Domain + Port (ví dụ: http://localhost:5002) bỏ qua phần path phía sau
+      socketUrl = new URL(apiBaseUrl).origin;
+    } catch (e) {
+      socketUrl = window.location.origin;
+    }
     
-    // Tự động bóc tách hậu tố '/api' để lấy domain gốc cho Socket.IO (Local hoặc Render)
-    const socketUrl = apiBaseUrl.replace(/\/api$/, '');
-    const socket = io(socketUrl);
+    if (!socketUrl) return;
+
+    // Khởi tạo kết nối với cấu hình tự động thử lại có giới hạn
+    const socket = io(socketUrl, {
+      reconnectionAttempts: 5, // Thử tối đa 5 lần để tránh spam log khi server bảo trì
+      timeout: 10000,
+    });
 
     socket.on("connect", () => {
       console.log(
-        `✅ StoreContext: Đã kết nối Socket tới Product Server thực tế!`,
+        `✅ StoreContext: Đã kết nối Socket tới Product Server thực tế tại: ${socketUrl}`,
       );
+    });
+
+    socket.on("connect_error", (error) => {
+      console.warn(`⚠️ StoreContext: Không thể kết nối tới Socket server tại ${socketUrl}. Hãy kiểm tra xem product-service đã bật chưa!`);
     });
 
     socket.on("store_status_changed", (data) => {
@@ -93,15 +109,21 @@ export const StoreProvider = ({ children }) => {
       );
     });
 
-    return () => socket.disconnect();
+    return () => {
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.off("store_status_changed");
+      socket.disconnect();
+    };
   }, [currentStore]);
 
-  // --- HÀM FORMAT ---
+  // --- HÀM FORMAT TIỀN TỆ ---
   const currencyMap = {
     vi: { currency: "VND", locale: "vi-VN", rate: 1 },
     en: { currency: "USD", locale: "en-US", rate: 0.00004 },
     zh: { currency: "CNY", locale: "zh-CN", rate: 0.00029 },
   };
+
   const currentCurrency = currencyMap[currentLanguage?.code] || currencyMap.vi;
 
   const formatPrice = (priceInVnd) => {
