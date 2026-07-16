@@ -1,7 +1,29 @@
-import React, { useState, useEffect } from "react";
-import { X, Camera, Video, Star, ChevronDown } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Camera, Video, Star, ChevronDown, Trash2 } from "lucide-react";
 import ReactDOM from "react-dom";
 import { productApi } from "../../api/axios";
+
+const StarInput = ({ rating, onChange, size = 28 }) => (
+  <div className="flex gap-1">
+    {[1, 2, 3, 4, 5].map((star) => (
+      <button
+        key={star}
+        type="button"
+        onClick={() => onChange(star)}
+        className="focus:outline-none transition-transform hover:scale-125 hover:-translate-y-1"
+      >
+        <Star
+          size={size}
+          className={`${
+            star <= rating
+              ? "fill-amber-400 text-amber-400"
+              : "fill-slate-200 text-slate-200"
+          } transition-colors drop-shadow-sm`}
+        />
+      </button>
+    ))}
+  </div>
+);
 
 export default function ReviewModal({
   isOpen,
@@ -11,33 +33,37 @@ export default function ReviewModal({
   onSuccess,
 }) {
   const [reviews, setReviews] = useState([]);
-  const [hoverRatings, setHoverRatings] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAnonymous, setShowAnonymous] = useState(false);
+  const [sellerRating, setSellerRating] = useState(5);
+  const [shippingRating, setShippingRating] = useState(5);
+
+  // Dùng mảng refs để điều khiển kích hoạt thẻ input file động theo từng sản phẩm
+  const fileInputRefs = useRef([]);
 
   useEffect(() => {
     if (isOpen && productsToReview && productsToReview.length > 0) {
-      console.log("Dữ liệu sản phẩm truyền vào Modal:", productsToReview);
       setReviews(
         productsToReview.map((p) => ({
           ma_san_pham: p.ma_san_pham || p.productId,
-          ma_bien_the: p.ma_bien_the || p.variantId,
+          ma_bien_the: p.ma_bien_the || p.variant_id || p.variantId || "",
           ten_san_pham: p.product_name || p.ten_san_pham || "Sản phẩm",
           ten_bien_the:
             p.variant_name || p.ten_bien_the || p.phan_loai || "Mặc định",
           hinh_anh:
             p.hinh_anh_chinh || p.image_url || p.image || p.hinh_anh || "",
           rating: 5,
-          // 🌟 THÊM STATE CHO CÁC TRƯỜNG ĐÁNH GIÁ CHI TIẾT
           chatLieu: "",
           mauSac: "",
           thietKe: "",
           comment: "",
-          media: [],
+          mediaFiles: [], // 🌟 Nơi lưu trữ file thật để gửi lên server
+          mediaPreviews: [], // 🌟 Nơi lưu url blob để hiển thị ảnh/video xem trước trên giao diện
         })),
       );
-      setHoverRatings({});
       setShowAnonymous(false);
+      setSellerRating(5);
+      setShippingRating(5);
     }
   }, [isOpen, productsToReview]);
 
@@ -51,10 +77,46 @@ export default function ReviewModal({
     setReviews(newReviews);
   };
 
-  // 🌟 HÀM DÙNG CHUNG ĐỂ UPDATE TEXT CHO TỪNG TRƯỜNG
   const handleFieldChange = (index, field, value) => {
     const newReviews = [...reviews];
     newReviews[index][field] = value;
+    setReviews(newReviews);
+  };
+
+  // 🌟 HÀM XỬ LÝ KHI NGƯỜI DÙNG CHỌN FILE (ẢNH HOẶC VIDEO)
+  const handleFileChange = (index, e, type) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newReviews = [...reviews];
+
+    files.forEach((file) => {
+      // Giới hạn dung lượng file nếu cần (Ví dụ: < 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`File ${file.name} quá lớn! Vui lòng chọn file dưới 10MB.`);
+        return;
+      }
+
+      newReviews[index].mediaFiles.push(file);
+      // Tạo đường dẫn blob nội bộ để làm hình hiển thị xem trước trực quan
+      newReviews[index].mediaPreviews.push({
+        url: URL.createObjectURL(file),
+        type: type, // 'image' hoặc 'video'
+      });
+    });
+
+    setReviews(newReviews);
+    e.target.value = ""; // Reset input để có thể chọn lại cùng 1 file nếu muốn
+  };
+
+  // 🌟 HÀM XÓA FILE ĐÃ CHỌN TRƯỚC KHI GỬI
+  const handleRemoveMedia = (reviewIndex, mediaIndex) => {
+    const newReviews = [...reviews];
+    // Thu hồi vùng nhớ blob để tránh rò rỉ bộ nhớ trình duyệt
+    URL.revokeObjectURL(newReviews[reviewIndex].mediaPreviews[mediaIndex].url);
+
+    newReviews[reviewIndex].mediaFiles.splice(mediaIndex, 1);
+    newReviews[reviewIndex].mediaPreviews.splice(mediaIndex, 1);
     setReviews(newReviews);
   };
 
@@ -79,22 +141,30 @@ export default function ReviewModal({
     setIsSubmitting(true);
     try {
       for (const review of reviews) {
-        // 🌟 GỘP CÁC TRƯỜNG LẠI THÀNH 1 CHUỖI ĐỂ GỬI LÊN BACKEND
         let finalNoiDung = "";
         if (review.chatLieu) finalNoiDung += `Chất liệu: ${review.chatLieu}\n`;
         if (review.mauSac) finalNoiDung += `Màu sắc: ${review.mauSac}\n`;
         if (review.thietKe) finalNoiDung += `Thiết kế: ${review.thietKe}\n`;
         if (review.comment) finalNoiDung += `\n${review.comment}`;
 
-        const payload = {
-          ma_san_pham: review.ma_san_pham,
-          ma_bien_the: review.ma_bien_the,
-          ma_don_hang: String(orderId),
-          so_sao: review.rating,
-          noi_dung: finalNoiDung.trim() || "Sản phẩm tuyệt vời!",
-          // an_danh: showAnonymous // Mở ra nếu Backend có hỗ trợ
-        };
-        await productApi.post("/reviews", payload);
+        // 🌟 CHUYỂN ĐỔI SANG FORMDATA ĐỂ TRUYỀN FILE LÊN SERVER
+        const formData = new FormData();
+        formData.append("ma_san_pham", review.ma_san_pham);
+        formData.append("ma_bien_the", review.ma_bien_the);
+        formData.append("ma_don_hang", String(orderId));
+        formData.append("so_sao", review.rating);
+        formData.append(
+          "noi_dung",
+          finalNoiDung.trim() || "Sản phẩm tuyệt vời!",
+        );
+
+        // Đóng gói toàn bộ file nhị phân đính kèm vào trường 'media'
+        review.mediaFiles.forEach((file) => {
+          formData.append("media", file);
+        });
+
+        // Gọi API đẩy dữ liệu đa phương tiện lên Product Service
+        await productApi.post("/reviews", formData);
       }
 
       alert("🎉 Đánh giá thành công! Cảm ơn bạn đã mua sắm tại Demi Mart.");
@@ -110,7 +180,7 @@ export default function ReviewModal({
   };
 
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up">
         {/* HEADER */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
@@ -127,22 +197,6 @@ export default function ReviewModal({
 
         {/* CONTENT */}
         <div className="p-6 overflow-y-auto bg-slate-50/50 flex-1 custom-scrollbar">
-          {/* Banner thưởng xu */}
-          <div className="mb-6 flex items-center justify-between p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <span className="w-6 h-6 bg-amber-400 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-sm">
-                D
-              </span>
-              <span>
-                Xem Hướng dẫn đánh giá chuẩn để nhận đến{" "}
-                <b className="text-amber-600 font-black">200 xu</b>!
-              </span>
-            </div>
-            <button className="text-amber-700 hover:text-amber-800 bg-amber-100/50 p-1 rounded-md">
-              <ChevronDown size={18} />
-            </button>
-          </div>
-
           {reviews.map((review, index) => (
             <div
               key={index}
@@ -156,11 +210,6 @@ export default function ReviewModal({
                     "https://images.unsplash.com/photo-1542838132-92c53300491e?w=150"
                   }
                   alt={review.ten_san_pham}
-                  onError={(e) => {
-                    e.target.onerror = null; // Tránh vòng lặp lỗi
-                    e.target.src =
-                      "https://images.unsplash.com/photo-1542838132-92c53300491e?w=150";
-                  }}
                   className="w-16 h-16 object-cover rounded-xl border border-slate-100 bg-slate-50 shrink-0"
                 />
                 <div>
@@ -178,38 +227,19 @@ export default function ReviewModal({
                 <span className="text-sm text-slate-700 font-bold ml-2">
                   Chất lượng sản phẩm
                 </span>
-                <div className="flex gap-1 ml-4">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => handleRatingChange(index, star)}
-                      onMouseEnter={() =>
-                        setHoverRatings({ ...hoverRatings, [index]: star })
-                      }
-                      onMouseLeave={() =>
-                        setHoverRatings({ ...hoverRatings, [index]: 0 })
-                      }
-                      className="focus:outline-none transition-transform hover:scale-125 hover:-translate-y-1"
-                    >
-                      <Star
-                        className={`w-8 h-8 ${
-                          star <= (hoverRatings[index] || review.rating)
-                            ? "fill-amber-400 text-amber-400"
-                            : "fill-slate-200 text-slate-200"
-                        } transition-colors drop-shadow-sm`}
-                      />
-                    </button>
-                  ))}
+                <div className="ml-4">
+                  <StarInput
+                    rating={review.rating}
+                    onChange={(val) => handleRatingChange(index, val)}
+                  />
                 </div>
                 <span className="text-sm font-black text-amber-500 w-24 ml-2">
-                  {getRatingText(hoverRatings[index] || review.rating)}
+                  {getRatingText(review.rating)}
                 </span>
               </div>
 
-              {/* 🌟 KHU VỰC NHẬP LIỆU GIỐNG SHOPEE */}
+              {/* Ô nhập thông tin đánh giá */}
               <div className="bg-white border border-slate-200 rounded-xl p-5 relative shadow-sm">
-                {/* 3 Trường chi tiết */}
                 <div className="flex flex-col gap-3 mb-4">
                   <div className="flex gap-3 items-start">
                     <span className="text-sm font-bold text-slate-700 min-w-[70px] mt-0.5">
@@ -257,7 +287,6 @@ export default function ReviewModal({
 
                 <div className="h-px bg-slate-100 my-4 w-full"></div>
 
-                {/* Bình luận chung */}
                 <textarea
                   rows="3"
                   placeholder="Hãy chia sẻ những điều bạn thích về sản phẩm này với những người mua khác nhé."
@@ -268,13 +297,75 @@ export default function ReviewModal({
                   className="w-full bg-transparent text-sm text-slate-800 outline-none resize-none placeholder-slate-300 font-medium"
                 />
 
-                {/* Nút thêm ảnh / video */}
+                {/* 🌟 KHU VỰC HIỂN THỊ FILE ẢNH/VIDEO XEM TRƯỚC (PREVIEW) */}
+                {review.mediaPreviews.length > 0 && (
+                  <div className="flex flex-wrap gap-3 mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    {review.mediaPreviews.map((media, mIdx) => (
+                      <div
+                        key={mIdx}
+                        className="relative w-20 h-24 border rounded-xl overflow-hidden shadow-xs bg-black flex items-center justify-center group"
+                      >
+                        {media.type === "image" ? (
+                          <img
+                            src={media.url}
+                            className="w-full h-full object-cover"
+                            alt="preview"
+                          />
+                        ) : (
+                          <video
+                            src={media.url}
+                            className="w-full h-full object-cover"
+                            controls={false}
+                          />
+                        )}
+                        {/* Nút xóa file nhanh */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMedia(index, mIdx)}
+                          className="absolute top-1 right-1 bg-black/70 text-white p-1 rounded-full hover:bg-rose-600 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* HÀO BẰNG THẺ INPUT ẨN ĐƯỢC ĐIỀU KHIỂN ĐỘNG */}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  ref={(el) => (fileInputRefs.current[`img-${index}`] = el)}
+                  onChange={(e) => handleFileChange(index, e, "image")}
+                />
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  ref={(el) => (fileInputRefs.current[`vid-${index}`] = el)}
+                  onChange={(e) => handleFileChange(index, e, "video")}
+                />
+
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
                   <div className="flex gap-2">
-                    <button className="flex items-center gap-1.5 px-3 py-2 border border-[#006c49] text-[#006c49] rounded-lg text-xs font-bold hover:bg-[#006c49] hover:text-white transition-colors">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        fileInputRefs.current[`img-${index}`].click()
+                      }
+                      className="flex items-center gap-1.5 px-3 py-2 border border-[#006c49] text-[#006c49] rounded-lg text-xs font-bold hover:bg-[#006c49] hover:text-white transition-colors cursor-pointer"
+                    >
                       <Camera size={14} /> Thêm Hình ảnh
                     </button>
-                    <button className="flex items-center gap-1.5 px-3 py-2 border border-[#006c49] text-[#006c49] rounded-lg text-xs font-bold hover:bg-[#006c49] hover:text-white transition-colors">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        fileInputRefs.current[`vid-${index}`].click()
+                      }
+                      className="flex items-center gap-1.5 px-3 py-2 border border-[#006c49] text-[#006c49] rounded-lg text-xs font-bold hover:bg-[#006c49] hover:text-white transition-colors cursor-pointer"
+                    >
                       <Video size={14} /> Thêm Video
                     </button>
                   </div>
@@ -286,6 +377,43 @@ export default function ReviewModal({
               </div>
             </div>
           ))}
+
+          {/* ĐÁNH GIÁ DỊCH VỤ VẬN CHUYỂN */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6">
+            <h4 className="font-black text-slate-800 mb-4 uppercase text-sm">
+              Đánh giá Dịch vụ
+            </h4>
+            <div className="flex items-center justify-between py-3 border-b border-slate-100">
+              <span className="text-sm font-bold text-slate-700">
+                Dịch vụ của người bán
+              </span>
+              <div className="flex items-center gap-3">
+                <StarInput
+                  rating={sellerRating}
+                  onChange={setSellerRating}
+                  size={24}
+                />
+                <span className="text-xs font-bold text-amber-500 w-20 text-right">
+                  {getRatingText(sellerRating)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between py-3">
+              <span className="text-sm font-bold text-slate-700">
+                Dịch vụ vận chuyển
+              </span>
+              <div className="flex items-center gap-3">
+                <StarInput
+                  rating={shippingRating}
+                  onChange={setShippingRating}
+                  size={24}
+                />
+                <span className="text-xs font-bold text-amber-500 w-20 text-right">
+                  {getRatingText(shippingRating)}
+                </span>
+              </div>
+            </div>
+          </div>
 
           {/* Tùy chọn Ẩn danh */}
           <div className="flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-2">

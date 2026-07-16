@@ -306,7 +306,9 @@ export default function Checkout() {
           price: Number(item.price),
           name: String(item.name || item.productName || "Sản phẩm Demi Mart"),
           variant_name: String(item.variantName || item.variant_name || ""),
-          image: String(item.image || item.imageUrl || item.image_url || ""),
+          image_url: String(
+            item.image || item.imageUrl || item.image_url || "",
+          ),
           ma_san_pham: String(item.ma_san_pham || item.productId || ""),
         };
       }),

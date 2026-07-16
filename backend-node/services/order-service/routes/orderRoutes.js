@@ -13,7 +13,8 @@ import {
   testReadKml,
   getOrderTrackingLogs,
   createOrderTrackingLogNode, 
-  calculateShipping 
+  calculateShipping,
+  getUserSpent
 } from '../controllers/orderController.js';
 import { protect } from '../middlewares/authMiddleware.js'; 
 
@@ -83,4 +84,6 @@ router.post('/shipping/tracking-logs/create-node', createOrderTrackingLogNode);
 // 13. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
 router.post('/test-kml', testReadKml);
 
+// 14. TÍNH TỔNG TIỀN CHI TIÊU CỦA KHÁCH HÀNG
+router.get('/internal/user-spent/:userId', getUserSpent);
 export default router;

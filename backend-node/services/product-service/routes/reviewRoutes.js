@@ -1,12 +1,18 @@
 import express from 'express';
-import { getReviewsByProduct, createReview } from '../controllers/reviewController.js';
+import upload from '../configs/cloudinary/cloudinary.js'; 
+import 
+{ 
+    getReviewsByProduct, 
+    createReview, 
+    checkReviewStatus 
+} 
+from '../controllers/reviewController.js';
 
 const router = express.Router();
 
-// Lấy danh sách đánh giá của một sản phẩm
 router.get('/products/:id/reviews', getReviewsByProduct);
 
-// Tạo đánh giá mới (Tạm thời không cần kẹp middleware auth)
-router.post('/reviews', createReview);
+router.post('/reviews', upload.array('media', 5), createReview);
 
+router.get('/orders/:orderId/check-review', checkReviewStatus);
 export default router;

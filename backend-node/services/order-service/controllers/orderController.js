@@ -964,6 +964,47 @@ const createOrderTrackingLogNode = async (req, res) => {
   }
 };
 
+// ========================================================
+// 💰 API 14: TÍNH TỔNG TIỀN CHI TIÊU CỦA KHÁCH HÀNG (VIP)
+// ========================================================
+const getUserSpent = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "Thiếu thông tin userId." });
+    }
+
+    // Thuật toán: Chỉ sum(tong_thanh_toan) của những đơn có trạng thái là "Đã giao"
+    const query = `
+      SELECT SUM(CAST(tong_thanh_toan AS numeric)) as total_spent
+      FROM public.orders
+      WHERE user_id = $1 
+      AND LOWER(TRIM(trang_thai_don_hang)) IN ('đã giao', 'delivered', 'hoàn thành')
+    `;
+
+    let result;
+    if (db.query) {
+      result = await db.query(query, [userId]);
+    } else {
+      result = await db.execute(query, [userId]);
+    }
+
+    const total = result.rows ? result.rows[0]?.total_spent : result[0]?.total_spent;
+
+    return res.status(200).json({
+      success: true,
+      total_spent: Number(total || 0)
+    });
+
+  } catch (err) {
+    console.error("🔥 Lỗi tính tổng chi tiêu KH:", err.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Lỗi máy chủ khi trích xuất tổng chi tiêu." 
+    });
+  }
+};
+
 export { 
   getShippingFee, 
   placeOrder, 
@@ -978,5 +1019,6 @@ export {
   testReadKml,
   calculateShipping,
   getOrderTrackingLogs,
-  createOrderTrackingLogNode
+  createOrderTrackingLogNode,
+  getUserSpent
 };

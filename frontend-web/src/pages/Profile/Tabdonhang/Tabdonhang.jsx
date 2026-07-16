@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Package,
   MapPin,
@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
 import ReviewModal from "../../../components/Reviews/ReviewModal";
+// 🌟 IMPORT THÊM API CỦA BẠN (Sửa đường dẫn cho đúng nếu cần)
+import { productApi } from "../../../api/axios";
 
 const ORDER_STEPS = [
   {
@@ -44,6 +46,44 @@ export default function Tabdonhang({
   const [reviewModalData, setReviewModalData] = useState(null);
   const [reviewedOrderIds, setReviewedOrderIds] = useState([]);
 
+  // 🌟 MỚI: FETCH TRẠNG THÁI ĐÁNH GIÁ TỪ BACKEND
+  useEffect(() => {
+    // Chỉ check những đơn đã giao và chưa có trong danh sách đã check
+    const checkReviewStatuses = async () => {
+      if (!orders || orders.length === 0) return;
+
+      const deliveredOrders = orders.filter((o) => {
+        const status = (o.trang_thai_don_hang || "").trim().toLowerCase();
+        return status === "đã giao";
+      });
+
+      for (const order of deliveredOrders) {
+        const orderIdStr = String(order.id || order.ma_don_hang);
+        // Nếu đã có trong state rồi thì bỏ qua không gọi API lại
+        if (!reviewedOrderIds.includes(orderIdStr)) {
+          try {
+            const res = await productApi.get(
+              `/orders/${orderIdStr}/check-review`,
+            );
+            if (res.data.success && res.data.hasReviewed) {
+              setReviewedOrderIds((prev) => {
+                if (!prev.includes(orderIdStr)) return [...prev, orderIdStr];
+                return prev;
+              });
+            }
+          } catch (error) {
+            console.warn(
+              "Không check được trạng thái đánh giá cho đơn",
+              orderIdStr,
+            );
+          }
+        }
+      }
+    };
+
+    checkReviewStatuses();
+  }, [orders]); // Chạy lại khi mảng orders thay đổi
+
   const toggleOrderExpand = (orderId, e) => {
     if (e) e.stopPropagation();
     setExpandedOrders((prev) => ({
@@ -61,7 +101,6 @@ export default function Tabdonhang({
     );
   }
 
-  // Lọc danh sách đơn hàng dựa vào tab đang active được chọn ở file cha
   const activeStepConfig = ORDER_STEPS.find(
     (step) => step.label === currentTabLabel,
   );
@@ -140,7 +179,6 @@ export default function Tabdonhang({
           const isConfirmed =
             normalizedStatus === "xác nhận" || normalizedStatus === "confirmed";
 
-          // Xác định vị trí tiến trình hiện tại (Loại trừ trạng thái hủy ra khỏi stepper ngang)
           const currentStepIndex = ORDER_STEPS.filter(
             (s) => s.label !== "Đã hủy",
           ).findIndex((step) =>
@@ -151,6 +189,7 @@ export default function Tabdonhang({
 
           if (!firstGroup) return null;
 
+          // 🌟 SỬA ĐOẠN HIỂN THỊ NÚT ĐÁNH GIÁ (Khoảng dòng 270)
           return (
             <div
               key={orderIdStr}
@@ -395,7 +434,7 @@ export default function Tabdonhang({
                         </span>
                       </button>
 
-                      {/* LOGIC NÚT ĐÁNH GIÁ (Ẩn đi và thay bằng lời cảm ơn nếu đã đánh giá) */}
+                      {/* 🌟 KIỂM TRA MẢNG TRẠNG THÁI REVIEW TỪ API */}
                       {!reviewedOrderIds.includes(orderIdStr) ? (
                         <button
                           onClick={() => setReviewModalData(order)}
@@ -440,7 +479,6 @@ export default function Tabdonhang({
         })}
       </div>
 
-      {/* COMPONENT POPUP / MODAL */}
       <ModalLoTrinh
         isOpen={!!selectedOrderForMap}
         order={selectedOrderForMap}
@@ -455,7 +493,7 @@ export default function Tabdonhang({
           reviewModalData?.danh_sach_san_pham || reviewModalData?.items || []
         }
         onSuccess={() => {
-          // Khi đánh giá thành công, nhét ID đơn hàng vào mảng state để ẩn nút Đánh giá
+          // Khi đánh giá xong, đẩy vào mảng state để UI thay đổi ngay lập tức không cần F5
           setReviewedOrderIds((prev) => [
             ...prev,
             String(reviewModalData?.id || reviewModalData?.ma_don_hang),
