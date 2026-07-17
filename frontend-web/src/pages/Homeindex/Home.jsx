@@ -13,6 +13,7 @@ import {
   Sparkles,
   TrendingUp,
   ShoppingBag,
+ 
 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useStore } from "../../context/StoreContext";
@@ -403,10 +404,8 @@ export default function Home() {
                 className="w-full bg-white rounded-[28px] border border-slate-100/80 p-1 hover:shadow-xl hover:border-slate-200/50 transition-all duration-300 hover:-translate-y-1 relative"
               >
                 <ProductCard p={p} />
-                {/* Huy hiệu thả tim đặt gọn gàng ở góc */}
-                <span className="absolute top-3 right-3 bg-red-500 text-white font-black text-[9px] px-2 py-0.5 rounded-full shadow-md z-10 pointer-events-none">
-                  ❤️ {p.total_likes}
-                </span>
+                
+                
               </div>
             ))
           )}

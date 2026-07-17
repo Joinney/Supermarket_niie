@@ -849,7 +849,7 @@ export default function ProductDetail() {
                       {isFlashSale ? "SL Mở Bán" : "Số lượng"}
                     </p>
                     <span className="text-[9px] text-[#006c49] font-bold">
-                      (Kho: {stockCount})
+                      {stockCount}
                     </span>
                   </div>
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 lg:p-1 shadow-sm">
