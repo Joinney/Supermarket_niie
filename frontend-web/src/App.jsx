@@ -739,6 +739,7 @@ const AppRoutes = () => (
       <Route path="/" element={<Home />} />
       <Route path="/global" element={<Global />} /> {/* 🌟 Bổ sung Route trang Global khớp cấu hình */}
       <Route path="/:country_code" element={<Home />} />
+      <Route path="/:country_code/:tabSlug" element={<Home />} />
       <Route
         path="/:country_code/category/khuyen-mai"
         element={<Promotion />}
