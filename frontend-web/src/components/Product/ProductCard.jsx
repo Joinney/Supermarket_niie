@@ -9,8 +9,9 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
   const { addToCart } = useCart();
   const navigate = useNavigate();
 
+  // 🌟 ĐÃ SỬA: Thay thế link ảnh bị lỗi mã hóa URL (400 Bad Request) bằng URL chuẩn của Unsplash
   const defaultImage =
-    "https://media.istockphoto.com/id/2209753844/vi/anh/mua-s%E1%BA%AFm-d%E1%BB%8Dc-theo-k%E1%BB%87-h%C3%A0ng-%E1%BB%9F-l%E1%BB%91i-%C4%91i-si%E1%AA%u-th%E1%BB%8B-hi%E1%BB%87n-%C4%91%E1%BA%A1i.jpg?s=612x612&w=0&k=20&c=lw3Ya3lz386J1OTWV_vsl4F9cl-YbGg6h1_PleW_0ZI=";
+    "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=612&auto=format&fit=crop";
 
   const mainImage = p.hinh_anh_chinh || defaultImage;
 
@@ -108,12 +109,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     // =====================================================================
     //  2. LOGIC THÊM VÀO GIỎ (CHỈ CHẠY VỚI SẢN PHẨM ĐƠN - KHÔNG BIẾN THỂ)
     // =====================================================================
-    const tuyChonObj = p.chi_tiet_bien_the?.[0]?.tuy_chon || p.tuy_chon || {};
-    const cleanEAVArray = Object.entries(tuyChonObj).map(([key, val]) => ({
-      ten_thuoc_tinh: String(key).trim(),
-      gia_tri: String(val).trim(),
-    }));
-
     let finalVariantName =
       p.ten_bien_the || p.chi_tiet_bien_the?.[0]?.ten_bien_the || "Mặc định";
     if (cleanEAVArray.length > 0) {
@@ -200,7 +195,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             </div>
           )}
 
-          {/* 🌟 ĐÃ FIX: Icon Hết Hàng dán góc trái */}
+          {/* Icon Hết Hàng dán góc trái */}
           {isOutOfStock && (
             <img 
               src="https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226343/icon_hethang_ojzmga.png" 

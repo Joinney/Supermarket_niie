@@ -42,12 +42,17 @@ services:
       - demi_network
     restart: on-failure
 
-  # 4. PRODUCT SERVICE
+
+# 4. PRODUCT SERVICE
   product-service:
     build: ./backend-node/services/product-service
     container_name: demi_product_service
     ports:
       - "5002:5002"
+    # --- SỬA CHÍNH XÁC DÒNG NÀY ---
+    extra_hosts:
+      - "localhost:host-gateway"
+    # ------------------------------
     env_file: 
       - ./backend-node/services/product-service/.env
     depends_on:

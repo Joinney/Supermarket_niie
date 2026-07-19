@@ -12,7 +12,7 @@ const router = express.Router();
 
 /**
  * @swagger
- * /api/chatbot/chat-recommend:
+ * /api/v1/chatbot/chat-recommend:
  *   post:
  *     summary: Trợ lý AI tư vấn và gợi ý sản phẩm Realtime
  *     description: API nhận tin nhắn từ người dùng, tự động nạp danh sách sản phẩm trong kho làm ngữ cảnh và trả về câu trả lời tư vấn từ mô hình DeepSeek
@@ -63,7 +63,13 @@ const router = express.Router();
  *       500:
  *         description: Lỗi hệ thống AI hoặc Database
  */
+
+// 🌟 ĐỊNH TUYẾN CHUẨN: Khớp với v1Router.use('/chatbot', chatbotRoutes) tạo thành /api/v1/chatbot/chat-recommend
 router.post('/chat-recommend', getAIChatRecommendation);
 
-export default router;
+// 🌟 ĐỊNH TUYẾN DỰ PHÒNG CHỐNG LỖI 404: Đề phòng trường hợp gọi trực tiếp qua các cấu hình middleware khác
+router.post('/chatbot/chat-recommend', getAIChatRecommendation);
+router.post('/api/chatbot/chat-recommend', getAIChatRecommendation);
+router.post('/api/v1/chatbot/chat-recommend', getAIChatRecommendation);
 
+export default router;

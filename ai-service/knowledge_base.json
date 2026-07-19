@@ -1,0 +1,34 @@
+[
+    {
+        "title": "Lẩu Thái Hải Sản Tươi Ngon",
+        "ingredients": [
+            "Gói cốt gia vị lẩu Thái",
+            "Tôm sú tươi",
+            "Mực ống",
+            "Nấm kim châm",
+            "Rau muống",
+            "Bún tươi hoặc mì gói"
+        ],
+        "steps": [
+            "Sơ chế sạch hải sản: tôm rút chỉ lưng, mực cắt miếng vừa ăn, nấm và rau rửa sạch để ráo.",
+            "Đun sôi 1.5 lít nước, cho gói cốt gia vị lẩu Thái vào khuấy đều cho thơm.",
+            "Thả hải sản vào nấu chín trước, sau đó nhúng rau nấm và thưởng thức kèm bún hoặc mì."
+        ]
+    },
+    {
+        "title": "Bánh Mì Kẹp Thịt Nướng Sài Gòn",
+        "ingredients": [
+            "Bánh mì ổ đặc ruột",
+            "Thịt ba chỉ hoặc thịt nạc vai",
+            "Sốt bơ trứng gà",
+            "Pate gan",
+            "Đồ chua (đu đủ, cà rốt)",
+            "Dưa leo, rau ngò, ớt"
+        ],
+        "steps": [
+            "Thịt cắt lát vừa ăn, ướp gia vị hành tỏi, sả băm rồi mang đi nướng vàng đều.",
+            "Xẻ dọc ổ bánh mì, phết một lớp bơ béo và pate gan vào hai bên mặt trong.",
+            "Kẹp thịt nướng vào giữa, thêm dưa leo cắt mỏng, đồ chua, rau ngò và rưới thêm chút nước sốt."
+        ]
+    }
+]

@@ -30,7 +30,7 @@ import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
 import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
-import ChatbotAI from "./components/chatbotai/ChatbotAI";
+import ChatbotAI from "./components/layout/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminProtect from "./admindb/components/AdminProtect";
@@ -741,7 +741,6 @@ const AppRoutes = () => (
       <Route path="/" element={<Home />} />
       <Route path="/global" element={<Global />} /> {/* 🌟 Bổ sung Route trang Global khớp cấu hình */}
       <Route path="/:country_code" element={<Home />} />
-      <Route path="/:country_code/:tabSlug" element={<Home />} />
       <Route
         path="/:country_code/category/khuyen-mai"
         element={<Promotion />}
@@ -813,6 +812,7 @@ const AppRoutes = () => (
   <Route path="thongkedonhang" element={<ThongKeDonHang />} />
   <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
 </Route>
+
 
       {/* 🛒 Bọc Danh sách sản phẩm */}
       <Route
