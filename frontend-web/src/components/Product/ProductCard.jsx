@@ -1,21 +1,54 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
+import { promotionApi } from "../../api/axios";
+
+// =========================================================================
+// 🌟 TỐI ƯU HÓA: CACHE BIẾN TOÀN CỤC (SINGLETON)
+// =========================================================================
+let globalActiveSales = null;
+let fetchSalesPromise = null;
+
+const fetchActiveSales = () => {
+  if (globalActiveSales) return Promise.resolve(globalActiveSales);
+  if (!fetchSalesPromise) {
+    fetchSalesPromise = promotionApi
+      .get("/client/flash-sale/active")
+      .then((res) => {
+        globalActiveSales = res.data?.success ? res.data.data : [];
+        return globalActiveSales;
+      })
+      .catch((err) => {
+        console.error("Lỗi lấy Flash Sale cho Card:", err);
+        globalActiveSales = [];
+        return globalActiveSales;
+      });
+  }
+  return fetchSalesPromise;
+};
 
 const ProductCard = ({ p, categoryName, categorySlug }) => {
   const { currentStore, formatPrice } = useStore();
   const { addToCart } = useCart();
   const navigate = useNavigate();
 
-  // 🌟 ĐÃ SỬA: Thay thế link ảnh bị lỗi mã hóa URL (400 Bad Request) bằng URL chuẩn của Unsplash
+  const [activeSales, setActiveSales] = useState(globalActiveSales || []);
+
+  useEffect(() => {
+    if (!globalActiveSales) {
+      fetchActiveSales().then((sales) => {
+        setActiveSales(sales);
+      });
+    }
+  }, []);
+
   const defaultImage =
     "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=612&auto=format&fit=crop";
 
   const mainImage = p.hinh_anh_chinh || defaultImage;
 
-  // 1. CHUẨN HÓA CÁC BIẾN CẦN THIẾT NGAY TỪ ĐẦU
   const parseNumber = (val) => {
     if (val === null || val === undefined || val === "") return 0;
     if (typeof val === "number") return val;
@@ -24,10 +57,9 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     return isNaN(num) ? 0 : num;
   };
 
-  // 2. TÍNH TOÁN CÁC THÔNG SỐ (GIÁ, TÊN, KHO)
-  const isFlashSale = !!p.thong_tin_sale;
   const flashSaleVariantId = p.chi_tiet_bien_the?.[0]?.ma_bien_the;
-  const targetVariantId = flashSaleVariantId || p.ma_bien_the || p.ma_sku;
+  const targetVariantId =
+    flashSaleVariantId || p.ma_bien_the || p.ma_sku || p.ma_bien_the_mac_dinh;
 
   const tuyChonObj = p.chi_tiet_bien_the?.[0]?.tuy_chon || p.tuy_chon || {};
   const cleanEAVArray = Object.entries(tuyChonObj).map(([key, val]) => ({
@@ -40,39 +72,84 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       ? cleanEAVArray.map((a) => a.gia_tri).join(" - ")
       : p.ten_bien_the || p.chi_tiet_bien_the?.[0]?.ten_bien_the || "";
 
-  const originalPrice =
+  // =========================================================================
+  // 🌟 LOGIC NHẬN DIỆN VÀ TÍNH TOÁN GIÁ KHUYẾN MÃI TỪ CACHE
+  // =========================================================================
+  let matchedSale = null;
+  if (activeSales && activeSales.length > 0) {
+    for (const promo of activeSales) {
+      const match = promo.products?.find(
+        (item) =>
+          item.ma_san_pham === p.ma_san_pham ||
+          item.ma_bien_the === targetVariantId,
+      );
+      if (match) {
+        matchedSale = match.thong_tin_sale || match; // Fix cấu trúc để tìm đúng dữ liệu sale
+        break;
+      }
+    }
+  }
+
+  const activeSaleInfo = p.thong_tin_sale || matchedSale;
+
+  // 1. Tính toán suất Sale CÒN LẠI
+  const remainingSaleQuantity = activeSaleInfo
+    ? Math.max(
+        0,
+        parseNumber(activeSaleInfo.so_luong_gioi_han) -
+          parseNumber(activeSaleInfo.da_ban),
+      )
+    : 0;
+
+  // 2. CHỐT CHẶN: Chỉ Flash Sale nếu VẪN CÒN SUẤT
+  const isValidFlashSale = !!activeSaleInfo && remainingSaleQuantity > 0;
+
+  // 3. Xử lý logic Giá hiển thị
+  const rawOriginalPrice =
     parseNumber(p.gia_ban_le) ||
     parseNumber(p.gia_goc) ||
     parseNumber(p.chi_tiet_bien_the?.[0]?.gia_ban_le) ||
     parseNumber(p.gia_ban_thap_nhat) ||
     0;
-  const salePrice = isFlashSale
-    ? parseNumber(p.thong_tin_sale.gia_khuyen_mai)
-    : originalPrice;
-  const currentPrice = isFlashSale ? salePrice : originalPrice;
 
+  const currentPrice = isValidFlashSale
+    ? parseNumber(activeSaleInfo.gia_khuyen_mai)
+    : rawOriginalPrice;
+
+  const originalPriceDisplay =
+    isValidFlashSale && rawOriginalPrice > currentPrice
+      ? rawOriginalPrice
+      : null;
+
+  // 4. Nhãn dán (Badge)
   let discountBadge = null;
-  if (isFlashSale && originalPrice > salePrice && salePrice > 0) {
+  if (originalPriceDisplay) {
     const percent = Math.round(
-      ((originalPrice - salePrice) / originalPrice) * 100,
+      ((rawOriginalPrice - currentPrice) / rawOriginalPrice) * 100,
     );
     discountBadge = `-${percent}%`;
-  } else if (isFlashSale) {
+  } else if (isValidFlashSale) {
     discountBadge = "SALE";
   } else if (p.is_hot || p.hot) {
     discountBadge = "HOT 🔥";
   }
 
-  const rawStock = parseNumber(p.tong_ton_kho ?? p.so_luong_ton ?? p.ton_kho);
-  const stockCount = isFlashSale
-    ? Math.max(
-        0,
-        parseNumber(p.thong_tin_sale.so_luong_gioi_han) -
-          parseNumber(p.thong_tin_sale.da_ban),
-      )
-    : rawStock;
+  // 5. TÍNH TOÁN KHO TỔNG HỢP ĐỂ KHÔNG BỊ "HẾT HÀNG" OAN
+  // Vét cạn tất cả các trường tồn kho có thể trả về từ API
+  const rawStock = parseNumber(
+    p.tong_ton_kho ??
+      p.so_luong_ton ??
+      p.ton_kho ??
+      p.chi_tiet_bien_the?.[0]?.so_luong_ton ??
+      p.bien_the?.[0]?.so_luong_ton ??
+      0,
+  );
+
+  // 🌟 NẾU LÀ FLASH SALE: Dùng thẳng số lượng suất Sale còn lại. Bỏ qua hàm so sánh Math.min() gây lỗi 0.
+  const stockCount = isValidFlashSale ? remainingSaleQuantity : rawStock;
 
   const isOutOfStock = stockCount <= 0;
+
   const rawCountryCode = currentStore?.code || p.country_code || "vn";
   const country = String(rawCountryCode).toLowerCase();
   const category = categorySlug || p.slug_danh_muc || "san-pham";
@@ -86,9 +163,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // =====================================================================
-    //  1. BỘ LỌC CHẶN TRIỆT ĐỂ SẢN PHẨM MẸ (BIẾN THỂ NHÓM)
-    // =====================================================================
     const isGroupedProduct =
       p.co_bien_the === true ||
       p.co_bien_the === "true" ||
@@ -96,7 +170,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       p.phan_loai_cau_truc === "Sản phẩm nhiều biến thể" ||
       (p.ma_bien_the_mac_dinh && !p.ten_bien_the && !p.chi_tiet_bien_the);
 
-    if (isGroupedProduct && !isFlashSale) {
+    if (isGroupedProduct && !isValidFlashSale) {
       navigate(linkUrl, { state: { categoryName, categorySlug } });
       return;
     }
@@ -106,22 +180,17 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       return;
     }
 
-    // =====================================================================
-    //  2. LOGIC THÊM VÀO GIỎ (CHỈ CHẠY VỚI SẢN PHẨM ĐƠN - KHÔNG BIẾN THỂ)
-    // =====================================================================
     let finalVariantName =
       p.ten_bien_the || p.chi_tiet_bien_the?.[0]?.ten_bien_the || "Mặc định";
     if (cleanEAVArray.length > 0) {
       finalVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
     }
 
-    // Lấy mã biến thể an toàn cho sản phẩm đơn
     let safeVariantId =
       targetVariantId ||
       p.chi_tiet_bien_the?.[0]?.ma_bien_the ||
       p.ma_bien_the_mac_dinh;
 
-    // Chốt chặn cuối cùng kiểm tra tính hợp lệ của biến thể
     if (!safeVariantId || String(safeVariantId).startsWith("MSP")) {
       navigate(linkUrl, { state: { categoryName, categorySlug } });
       return;
@@ -143,7 +212,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
 
     addToCart(itemToCart);
 
-    // Hiệu ứng bay vào giỏ hàng
     const startX = e.clientX;
     const startY = e.clientY;
     const cartIcon = document.getElementById("cart-icon");
@@ -195,10 +263,9 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             </div>
           )}
 
-          {/* Icon Hết Hàng dán góc trái */}
           {isOutOfStock && (
-            <img 
-              src="https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226343/icon_hethang_ojzmga.png" 
+            <img
+              src="https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226343/icon_hethang_ojzmga.png"
               alt="Tạm hết hàng"
               className="absolute top-2 left-2 w-14 md:w-16 h-auto z-40 pointer-events-none drop-shadow-md"
             />
@@ -232,11 +299,11 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
               </span>
             ) : (
               <div className="flex flex-col">
-                {isFlashSale && originalPrice > salePrice && (
+                {originalPriceDisplay && (
                   <span className="text-[10px] text-slate-400 line-through font-semibold mb-[-2px]">
                     {formatPrice
-                      ? formatPrice(originalPrice)
-                      : `${originalPrice.toLocaleString()}đ`}
+                      ? formatPrice(originalPriceDisplay)
+                      : `${originalPriceDisplay.toLocaleString()}đ`}
                   </span>
                 )}
                 <span className="font-black text-lg leading-none text-[#ff4d4f]">
@@ -263,10 +330,15 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             </span>
           </div>
 
+          {/* 🌟 ĐÃ KHÔI PHỤC LẠI GIAO DIỆN GỐC, KHÔNG BỊ TRÙNG LẶP NỮA */}
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest flex items-center justify-between">
             <span>
-              {isFlashSale ? "ĐÃ BÁN:" : "SỐ LƯỢNG:"}{" "}
-              <span className="text-slate-600">{stockCount}</span>
+              {isValidFlashSale ? "ĐÃ BÁN:" : "SỐ LƯỢNG:"}{" "}
+              <span className="text-slate-600">
+                {isValidFlashSale
+                  ? parseNumber(activeSaleInfo?.da_ban)
+                  : stockCount}
+              </span>
             </span>
           </p>
         </div>

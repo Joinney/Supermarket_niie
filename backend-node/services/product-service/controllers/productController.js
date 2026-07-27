@@ -183,10 +183,18 @@ export const getAllProducts = async (req, res) => {
                     (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh,
 
                     COALESCE(
-                        (SELECT json_agg(json_build_object('sku', bt.sku, 'ma_bien_the', bt.ma_bien_the)) 
-                         FROM public.bien_the_san_pham bt 
-                         WHERE bt.ma_san_pham = sp.ma_san_pham), 
-                    '[]'::json) AS variants
+                    (SELECT json_agg(
+                    json_build_object(
+                    'sku', bt.sku, 
+                    'ma_bien_the', bt.ma_bien_the,
+                    'ten_bien_the', bt.ten_bien_the,
+                    'gia_ban_le', bt.gia_ban_le,
+                    'so_luong_ton', bt.so_luong_ton
+                )
+            ) 
+            FROM public.bien_the_san_pham bt 
+            WHERE bt.ma_san_pham = sp.ma_san_pham), 
+            '[]'::json) AS variants
                     
                 FROM public.san_pham sp
                 LEFT JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
@@ -2343,10 +2351,12 @@ export const getUserFavorites = async (req, res) => {
         // 🌟 NÂNG CẤP SQL: Bốc thêm "Ảnh chính" từ bảng media và "Giá min" từ bảng biến thể
         const query = `
             SELECT 
-                p.*, 
+                p.ma_san_pham, p.ten_san_pham, p.mo_ta, p.trang_thai, p.ma_quoc_gia, p.co_bien_the,
                 f.ngay_cap_nhat as ngay_thich,
-                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = p.ma_san_pham AND la_anh_chinh = true LIMIT 1) as hinh_anh_chinh,
-                (SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham) as gia_ban_thap_nhat
+                COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham), 0) AS tong_ton_kho,
+                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh,
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = p.ma_san_pham AND la_anh_chinh = true LIMIT 1) as hinh_anh_chinh
             FROM public.san_pham p
             JOIN public.san_pham_yeu_thich f ON p.ma_san_pham = f.ma_san_pham
             WHERE f.user_id = $1 AND f.trang_thai = true
