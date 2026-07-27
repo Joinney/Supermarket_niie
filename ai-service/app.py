@@ -11,6 +11,9 @@ import httpx
 import json
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+import asyncio
+import math
+from collections import Counter
 
 # Nạp toàn bộ biến môi trường từ file .env vào os.environ
 load_dotenv()
@@ -91,17 +94,31 @@ async def home_page():
     """
     return HTMLResponse(content=html_content, status_code=200)
 
-def get_embedding_local(text: str) -> List[float]:
+def get_clean_words(text: str) -> set:
+    ignore_words = {"cách", "làm", "nấu", "món", "của", "cho", "các", "và", "những"}
     cleaned = text.lower().strip()
-    words = cleaned.split()
-    vector = np.zeros(128)
-    for i, word in enumerate(words):
-        idx = sum(ord(c) for c in word) % 128
-        vector[idx] += 1.0 + (i * 0.1)
-    norm = np.linalg.norm(vector)
-    if norm > 0:
-        vector = vector / norm
-    return vector.tolist()
+    words = re.findall(r'\b\w+\b', cleaned)
+    return set(w for w in words if w not in ignore_words and len(w) > 1)
+
+# Nâng cấp thuật toán chấm điểm bằng Jaccard Similarity kết hợp Keyword Match
+def compute_hybrid_score(query: str, document: str) -> float:
+    query_words = get_clean_words(query)
+    doc_words = get_clean_words(document)
+    
+    if not query_words or not doc_words:
+        return 0.0
+
+    # 1. Điểm Jaccard (Độ giao thoa tập hợp)
+    intersection = query_words.intersection(doc_words)
+    union = query_words.union(doc_words)
+    jaccard_score = len(intersection) / len(union) if union else 0.0
+    
+    # 2. Điểm Keyword Match (Tỉ lệ từ khóa của Query xuất hiện trong Document)
+    keyword_score = len(intersection) / len(query_words)
+    
+    # Kết hợp điểm (ưu tiên Keyword Match hơn)
+    final_score = (0.7 * keyword_score) + (0.3 * jaccard_score)
+    return final_score
 
 def text_match_score(query: str, product_text: str) -> float:
     query_words = query.lower().split()
@@ -146,6 +163,13 @@ async def execute_crawl_internal(keyword: str, pages: int = 1) -> int:
                 soup = BeautifulSoup(res.text, 'html.parser')
                 title_tag = soup.find('h1') or soup.find(attrs={"itemprop": "name"}) or soup.find('h2')
                 title = title_tag.text.strip() if title_tag else ""
+
+                img_url = ""
+                main_img = soup.find('picture')
+                if main_img and main_img.find('img'):
+                    img_url = main_img.find('img').get('src', '')
+                elif soup.find('img', class_=re.compile(r'photo', re.I)):
+                    img_url = soup.find('img', class_=re.compile(r'photo', re.I)).get('src', '')
                 
                 ingredients = []
                 ing_tags = soup.find_all(attrs={"itemprop": "recipeIngredient"}) or soup.find_all(class_=re.compile(r'ingredient', re.I))
@@ -155,6 +179,8 @@ async def execute_crawl_internal(keyword: str, pages: int = 1) -> int:
                         ingredients.append(txt)
                 
                 steps = []
+                if img_url and img_url.startswith('http'):
+                    steps.append(f"[IMAGE]{img_url}")
                 step_tags = soup.find_all(attrs={"itemprop": "recipeInstructions"}) or soup.find_all('li', class_=re.compile(r'step', re.I))
                 for i, p in enumerate(step_tags, 1):
                     p_text = p.find('p').text.strip() if p.find('p') else p.text.strip()
@@ -165,7 +191,7 @@ async def execute_crawl_internal(keyword: str, pages: int = 1) -> int:
                 
                 if title and steps:
                     new_recipes.append({"title": title, "ingredients": ingredients, "steps": steps})
-                time.sleep(0.3)  # Giảm delay tối đa để đảm bảo tốc độ phản hồi realtime
+                await asyncio.sleep(0.3) 
             except Exception:
                 continue
 
@@ -206,7 +232,6 @@ def run_hybrid_rag_clean(user_query: str, products: List[Dict], target_model: st
                 learned_recipes = json.load(f)
             
             scored_recipes = []
-            query_vector = get_embedding_local(user_query)
             
             for recipe in learned_recipes:
                 recipe_text = (
@@ -215,11 +240,7 @@ def run_hybrid_rag_clean(user_query: str, products: List[Dict], target_model: st
                     f"Các bước nấu: {' '.join(recipe.get('steps', []))}"
                 )
                 
-                recipe_vector = get_embedding_local(recipe_text)
-                semantic_score = np.dot(query_vector, recipe_vector)
-                keyword_score = text_match_score(user_query, recipe_text)
-                
-                final_recipe_score = (0.4 * keyword_score) + (0.6 * semantic_score)
+                final_recipe_score = compute_hybrid_score(user_query, recipe_text)
                 scored_recipes.append((final_recipe_score, recipe))
             
             if scored_recipes:
@@ -238,7 +259,6 @@ def run_hybrid_rag_clean(user_query: str, products: List[Dict], target_model: st
             print(f"⚠️ Không đọc được file tri thức món ăn: {str(e)}")
 
     scored_products = []
-    query_vector = get_embedding_local(user_query)
 
     for p in products:
         try:
@@ -248,38 +268,36 @@ def run_hybrid_rag_clean(user_query: str, products: List[Dict], target_model: st
             price_val = 0
 
         content = (
+            f"Mã ID: {p.get('id', '')}. "
             f"Tên: {p.get('name', '')}. "
-            f"Danh mục: {p.get('category', '')}. "
             f"Giá: {price_val:,} VNĐ. "  
-            f"Mô tả: {p.get('description', '')}. "
-            f"Kho: {'Còn hàng' if p.get('stock', 0) > 0 else 'Hết hàng'}."
+            f"Chi tiết & Quy cách đóng gói: {p.get('description', '')}. "
+            f"Tồn kho thực tế: {p.get('stock', 0)}."
         )
         
-        prod_vector = get_embedding_local(content)
-        semantic_score = np.dot(query_vector, prod_vector)
+        hybrid_score = compute_hybrid_score(user_query, content)
         keyword_score = text_match_score(user_query, content)
         
-        final_score = (0.3 * keyword_score) + (0.7 * semantic_score)
+        final_score = (0.3 * keyword_score) + (0.7 * hybrid_score)
         scored_products.append((final_score, content))
 
     scored_products.sort(key=lambda x: x[0], reverse=True)
-    top_products = scored_products[:3]
+    top_products = scored_products[:20]
     context_str = "\n---\n".join([item[1] for item in top_products])
 
     system_prompt = (
-        "Bạn là chuyên gia ẩm thực kiêm trợ lý bán hàng AI của siêu thị Demi Mart.\n\n"
+        "Bạn là chuyên gia ẩm thực kiêm trợ lý bán hàng AI xuất sắc của siêu thị Demi Mart.\n\n"
         "QUY TẮC PHÂN CHIA NGỮ CẢNH PHẢN HỒI:\n"
         "1. Trường hợp Khách hỏi mua sắm / tìm sản phẩm thông thường:\n"
-        "   - Bạn CHỈ trả lời ngắn gọn, lịch sự, xác nhận tình trạng hàng hóa hiện có trong kho.\n"
-        "   - KHÔNG viết hoa các đề mục lớn, KHÔNG tạo danh sách các bước nấu ăn.\n\n"
+        "   - Bạn CHỈ trả lời ngắn gọn, lịch sự, xác nhận tình trạng hàng hóa hiện có trong kho.\n\n"
         "2. Trường hợp Khách hỏi về công thức món ăn, cách chế biến:\n"
-        "   - Bạn BẮT BUỘC triển khai câu trả lời theo đúng cấu trúc tiêu chuẩn để hiển thị lên Giao diện Modal:\n"
-        "     + Tiêu đề phân đoạn lớn bắt đầu bằng cụm từ chính xác: 'Nguyên liệu có sẵn:' hoặc 'Cách làm:'\n"
-        "     + Liệt kê danh sách các bước thực hiện bằng định dạng số đầu dòng: 1., 2., 3.\n"
-        "     + Liệt kê thành phần phụ bằng dấu gạch đầu dòng (-).\n"
-        "   - Dựa vào phần MÓN ĂN ĐƯỢC TRÍCH XUẤT bên dưới (nếu có) để đưa ra câu trả lời thực tế và chuyên nghiệp nhất.\n\n"
+        "   - BẮT BUỘC triển khai câu trả lời theo đúng cấu trúc tiêu chuẩn: 'Nguyên liệu có sẵn:' và 'Cách làm:'\n"
+        "   - LƯU Ý TỐI QUAN TRỌNG VỀ NGUYÊN LIỆU: Ở mục 'Nguyên liệu có sẵn:', bạn CHỈ ĐƯỢC PHÉP liệt kê các sản phẩm thực sự khớp và liên quan trực tiếp đến món ăn từ 'DANH SÁCH SẢN PHẨM TRONG KHO'. \n"
+        "   - CÂN ĐỐI SỐ LƯỢNG & QUY CÁCH: Chú ý phần 'Chi tiết & Quy cách đóng gói' (VD: hộp 10 quả, lốc 6 lon, gói 500g). Chỉ lấy đúng lượng nguyên liệu vừa đủ cho công thức, tuyệt đối không lấy dư thừa lãng phí hay thiếu hụt vô lý.\n"
+        "   - BÁN CHÉO (CROSS-SELLING) THÔNG MINH: Để bữa ăn thêm trọn vẹn, hãy luôn chủ động phân tích 'DANH SÁCH SẢN PHẨM TRONG KHO' và tìm ra 1-2 món ăn kèm, thức uống (nước ngọt có gas, trà, nước ép...) phù hợp với món ăn chính để gợi ý thêm.\n"
+        "   - TUYỆT ĐỐI KHÔNG liệt kê bừa bãi các sản phẩm không liên quan. Nếu KHÔNG CÓ sản phẩm nào khớp, hãy ghi: 'Hiện tại siêu thị chưa có sẵn nguyên liệu cho món này.' và xuất mã [RECOMMEND: NONE].\n\n"
         "QUY TẮC ĐÍNH KÈM THẺ SẢN PHẨM:\n"
-        "Ở cuối câu trả lời của bạn, phải đính kèm chính xác mã ID sản phẩm được nhắc đến theo định dạng: [RECOMMEND: id1, id2]. Nếu không có, ghi [RECOMMEND: NONE].\n\n"
+        "Ở cuối câu trả lời của bạn, phải đính kèm chính xác Mã ID sản phẩm được nhắc đến theo định dạng: [RECOMMEND: id1, id2]. Nếu không có, ghi [RECOMMEND: NONE].\n\n"
         "=========================================\n"
         f"{best_recipe_content}\n"
         "=========================================\n"
@@ -304,44 +322,93 @@ def run_hybrid_rag_clean(user_query: str, products: List[Dict], target_model: st
         "temperature": 0.15
     }
 
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=25.0) as client:
         response = client.post(api_endpoint, headers=headers, json=payload)
         if response.status_code != 200:
             raise Exception(f"Lỗi gọi API Router: {response.text}")
         return response.json()["choices"][0]["message"]["content"]
 
 def run_local_rule_fallback(user_query: str, products: List[Dict]) -> str:
+    # 1. Quét tìm công thức trực tiếp trong knowledge_base.json (Không cần gọi LLM)
+    best_recipe = None
+    if os.path.exists(KNOWLEDGE_BASE_FILE):
+        try:
+            with open(KNOWLEDGE_BASE_FILE, "r", encoding="utf-8") as f:
+                learned_recipes = json.load(f)
+            
+            scored_recipes = []
+            
+            for recipe in learned_recipes:
+                recipe_text = f"{recipe.get('title', '')} {' '.join(recipe.get('ingredients', []))}"
+                final_recipe_score = compute_hybrid_score(user_query, recipe_text)
+                scored_recipes.append((final_recipe_score, recipe))
+            
+            if scored_recipes:
+                scored_recipes.sort(key=lambda x: x[0], reverse=True)
+                highest_score, best_recipe = scored_recipes[0]
+                
+                # 🌟 SỬA Ở ĐÂY: Bóc tách từ khóa và siết chặt điểm số
+                dish_kw = extract_dish_keyword(user_query)
+                
+                # Nếu điểm quá thấp HOẶC từ khóa món ăn không hề có trong tiêu đề công thức -> Hủy bỏ
+                if highest_score < 0.4 and (dish_kw not in best_recipe.get('title', '').lower()):
+                    best_recipe = None
+        except Exception as e:
+            print(f"Lỗi đọc JSON trong Fallback: {e}")
+
+    # 2. Lấy danh sách SẢN PHẨM (tên + ID) dựa trên từ khóa
     query_lower = user_query.lower()
-    matched_ids = []
-    ignore_words = {"cách", "làm", "nấu", "món", "bên", "mình", "ngon", "lẩu", "thái", "tìm", "mua", "những"}
+    matched_products = []
+    
+    # Lọc bỏ các từ vô nghĩa để tìm kiếm chuẩn xác hơn
+    ignore_words = {"cách", "làm", "nấu", "món", "bên", "mình", "ngon", "lẩu", "thái", "tìm", "mua", "những", "nguyên", "liệu", "cho", "các", "của"}
     keywords = [w for w in query_lower.split() if len(w) > 2 and w not in ignore_words]
     
     for p in products:
         p_name = str(p.get("name", "")).lower()
         if keywords and any(k in p_name for k in keywords):
-            if p.get("id"):
-                matched_ids.append(str(p.get("id")))
+            if p.get("id") and p not in matched_products:
+                matched_products.append(p)
 
-    if not matched_ids and products:
-        matched_ids = [str(p.get("id")) for p in products[:3] if p.get("id")]
-
+    matched_ids = [str(p.get("id")) for p in matched_products]
     recommend_tag = f"[RECOMMEND: {', '.join(matched_ids)}]" if matched_ids else "[RECOMMEND: NONE]"
-    is_recipe = bool(re.search(r"(cách\s+làm|nấu|công\s+thức|chế\s+biến|hướng\s+dẫn|làm\s+món|nguyên\s+liệu)", query_lower))
     
-    if is_recipe:
+    is_recipe = bool(re.search(r"(cách\s+làm|nấu|công\s+thức|chế\s+biến|hướng\s+dẫn|làm\s+món|nguyên\s+liệu)", query_lower))
+
+    # 3. Định dạng lại văn bản phản hồi
+    if is_recipe and best_recipe:
+        # Lấy sạch sẽ các bước hướng dẫn từ Cookpad
+        step_str = "\n".join([f"{step}" for step in best_recipe.get("steps", [])])
+        
+        # 🌟 ĐIỂM QUAN TRỌNG: Không dùng nguyên liệu rác của Cookpad nữa!
+        # Dùng trực tiếp tên sản phẩm của siêu thị Demi Mart để in ra danh sách bên trái
+        if matched_products:
+            ing_str = "\n".join([f"- {p.get('name', '')}" for p in matched_products])
+        else:
+            ing_str = "- Các gói nguyên liệu đi kèm hiện có sẵn tại siêu thị, bạn có thể kiểm tra trực tiếp qua công cụ tìm kiếm."
+        
+        fallback_text = (
+            f"Nguyên liệu có sẵn:\n{ing_str}\n\n"
+            f"Cách làm:\n{step_str}\n\n"
+            f"{recommend_tag}"
+        )
+    elif is_recipe:
+        # Nếu kho không có gì và cũng chưa cào kịp Cookpad
         fallback_text = (
             "Nguyên liệu có sẵn:\n"
-            "- Bạn có thể kiểm tra danh sách gói nguyên liệu sạch đi kèm ở phía dưới góc chat.\n\n"
+            "- Các gói nguyên liệu đi kèm hiện có sẵn tại siêu thị, bạn có thể kiểm tra trực tiếp qua công cụ tìm kiếm.\n\n"
             "Cách làm:\n"
-            "1. Sơ chế sạch toàn bộ nguyên liệu khi mua về.\n"
-            "2. Thực hiện nấu và nêm nếm gia vị vừa ăn tùy theo khẩu vị cá nhân.\n\n"
+            "1. Sơ chế sạch nguyên liệu tươi sống.\n"
+            "2. Thực hiện nấu chín và điều chỉnh gia vị vừa ăn phù hợp khẩu vị cá nhân.\n\n"
             f"{recommend_tag}"
         )
     else:
+        # Chat thông thường
         fallback_text = (
             "Chào bạn! Demi Mart hiện đang có sẵn một số mặt hàng thuộc nhóm sản phẩm bạn đang tìm kiếm ở danh sách bên dưới. "
             f"Bạn xem qua xem có đúng loại mình cần không nhé! 😊\n\n{recommend_tag}"
         )
+        
     return fallback_text
 
 @app.post("/ai/recommend")
@@ -354,7 +421,7 @@ async def ai_recommend_endpoint(request: RecommendRequest):
             
         chosen_model = request.model if request.model else DEFAULT_LLM_MODEL
         
-        # 🔥 ĐOẠN PHÁT TRIỂN NÂNG CẤP: TỰ ĐỘNG CÀO DỮ LIỆU CHƯA CÓ TRONG KNOWLEDGE BASE REALTIME
+        # Tự động cào dữ liệu Cookpad
         is_recipe = bool(re.search(r"(cách\s+làm|nấu|công\s+thức|chế\s+biến|hướng\s+dẫn|làm\s+món|nguyên\s+liệu)", request.message.lower()))
         if is_recipe:
             dish_keyword = extract_dish_keyword(request.message)
@@ -364,36 +431,32 @@ async def ai_recommend_endpoint(request: RecommendRequest):
                     try:
                         with open(KNOWLEDGE_BASE_FILE, "r", encoding="utf-8") as f:
                             kb_data = json.load(f)
-                        # Tìm kiếm tương đối xem từ khóa món ăn đã nằm trong tiêu đề bài học nào chưa
                         has_recipe = any(dish_keyword in r.get("title", "").lower() for r in kb_data)
                     except Exception:
                         has_recipe = False
                 
-                # Nếu chưa từng học món này, hệ thống tự động kích hoạt bộ cào ngầm ngay lập tức
                 if not has_recipe:
                     print(f"🚀 [Auto-Crawl]: Không tìm thấy món '{dish_keyword}' trong tri thức cục bộ. Kích hoạt cào Cookpad Realtime...")
                     await execute_crawl_internal(keyword=dish_keyword, pages=1)
 
-        try:
-            reply = run_hybrid_rag_clean(
-                user_query=request.message, 
-                products=request.products_data, 
-                target_model=chosen_model
-            )
-            
-            if "[RECOMMEND: NONE]" in reply and request.products_data:
-                backup_ids = [str(p.get("id")) for p in request.products_data[:3] if p.get("id")]
-                if backup_ids:
-                    reply = reply.replace("[RECOMMEND: NONE]", f"[RECOMMEND: {', '.join(backup_ids)}]")
-            
-            return {"reply": reply}
-            
-        except Exception as ai_err:
-            print(f"⚠️ [Mạch Python AI Gặp Sự Cố]: {str(ai_err)}. Đang chuyển hướng sang Rule Engine nội bộ...")
-            backup_reply = run_local_rule_fallback(user_query=request.message, products=request.products_data)
-            return {"reply": backup_reply}
+        # 🔥 BỎ TRY-EXCEPT, ÉP VĂNG LỖI ĐỂ NODEJS THẤY MÃ 500 VÀ ĐỔI MODEL
+        reply = run_hybrid_rag_clean(
+            user_query=request.message, 
+            products=request.products_data, 
+            target_model=chosen_model
+        )
+        
+        return {"reply": reply}
+        
     except Exception as e:
+        # Khi LLM hỏng, trả mã 500 cho Node.js bắt
         raise HTTPException(status_code=500, detail=str(e))
+
+# 🌟 ENDPOINT DỰ PHÒNG CHUYÊN DỤNG CHO NODEJS
+@app.post("/ai/fallback")
+async def ai_fallback_endpoint(request: RecommendRequest):
+    reply = run_local_rule_fallback(user_query=request.message, products=request.products_data)
+    return {"reply": reply}
 
 @app.get("/ai/crawl-knowledge")
 async def trigger_crawl_knowledge(keyword: str = "lẩu thái", pages: int = 1):

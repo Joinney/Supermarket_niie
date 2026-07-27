@@ -58,54 +58,77 @@ const RecipeModal = ({ show, onClose, data, onProductClick, onAddComboToCart }) 
     };
 
    const formatRecipeText = (text) => {
-        if (!text) return '';
-        let cleanText = text.replace(/\*\*/g, '');
-        const lines = cleanText.split('\n');
-        
-        return lines.map((line, index) => {
-            const trimmed = line.trim();
-            if (!trimmed) return <div key={index} className="h-2" />;
-
-            // 🔥 SỬA DÒNG NÀY: Mở rộng Regex để khớp với cả "Nguyên liệu chuẩn", "Cách làm:", "Hướng dẫn thực hiện",...
-            if (trimmed.match(/^(cách\s+làm|nguyên\s+liệu|bước\s+\d+|hướng\s+dẫn|tổng\s+kết)/i)) {
-                return (
-                    <h4 key={index} className="text-base font-bold text-[#006c49] mt-5 mb-2 flex items-center bg-emerald-50/60 px-3 py-1.5 rounded-xl border-l-4 border-[#006c49]">
-                        {trimmed}
-                    </h4>
-                );
+    if (!text) return '';
+    const lines = text.split('\n');
+    
+    // Hàm phụ trợ: Giữ lại in đậm thay vì xóa đi
+    const renderBoldText = (str) => {
+        const parts = str.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, i) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={i} className="font-extrabold text-gray-800">{part.slice(2, -2)}</strong>;
             }
-
-            if (/^\d+\./.test(trimmed)) {
-                return (
-                    <div key={index} className="flex items-start space-x-2.5 my-2 pl-1">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white mt-0.5 shadow-sm">
-                            {trimmed.match(/^\d+/)[0]}
-                        </span>
-                        <p className="text-gray-700 text-sm font-medium leading-relaxed flex-1">
-                            {trimmed.replace(/^\d+\.\s*/, '')}
-                        </p>
-                    </div>
-                );
-            }
-
-            if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                return (
-                    <div key={index} className="flex items-start space-x-2.5 my-1.5 pl-2">
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#006c49] mt-2" />
-                        <p className="text-gray-600 text-sm font-medium leading-relaxed">
-                            {trimmed.replace(/^[-\*]\s*/, '')}
-                        </p>
-                    </div>
-                );
-            }
-
-            return (
-                <p key={index} className="text-gray-600 text-sm font-medium leading-relaxed my-1.5">
-                    {trimmed}
-                </p>
-            );
+            return part;
         });
     };
+    
+    return lines.map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={index} className="h-2" />;
+
+        // Giữ nguyên logic render hình ảnh [IMAGE]
+        if (trimmed.startsWith('[IMAGE]')) {
+            const imageUrl = trimmed.replace('[IMAGE]', '').trim();
+            return (
+                <div key={index} className="my-4 w-full flex justify-center rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                    <img src={imageUrl} alt="Hình minh họa" className="w-full max-h-64 object-cover hover:scale-105 transition-transform duration-500" />
+                </div>
+            );
+        }
+
+        // Render các Heading chính
+        if (trimmed.match(/^(cách\s+làm|nguyên\s+liệu|bước\s+\d+|hướng\s+dẫn|tổng\s+kết)/i) || (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 50)) {
+            return (
+                <h4 key={index} className="text-base font-bold text-[#006c49] mt-5 mb-2 flex items-center bg-emerald-50/60 px-3 py-1.5 rounded-xl border-l-4 border-[#006c49]">
+                    {renderBoldText(trimmed)}
+                </h4>
+            );
+        }
+
+        // Render danh sách có đánh số (1., 2.)
+        if (/^\d+\./.test(trimmed)) {
+            return (
+                <div key={index} className="flex items-start space-x-2.5 my-2 pl-1">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white mt-0.5 shadow-sm">
+                        {trimmed.match(/^\d+/)[0]}
+                    </span>
+                    <p className="text-gray-700 text-sm font-medium leading-relaxed flex-1">
+                        {renderBoldText(trimmed.replace(/^\d+\.\s*/, ''))}
+                    </p>
+                </div>
+            );
+        }
+
+        // Render danh sách chấm bi (-, *)
+        if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+            return (
+                <div key={index} className="flex items-start space-x-2.5 my-1.5 pl-2">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#006c49] mt-2" />
+                    <p className="text-gray-600 text-sm font-medium leading-relaxed">
+                        {renderBoldText(trimmed.replace(/^[-\*]\s*/, ''))}
+                    </p>
+                </div>
+            );
+        }
+
+        // Văn bản thường
+        return (
+            <p key={index} className="text-gray-600 text-sm font-medium leading-relaxed my-1.5">
+                {renderBoldText(trimmed)}
+            </p>
+        );
+    });
+};
 
     // Chuẩn hóa và triệt tiêu sạch mọi từ mồi lặp lại ở đầu chuỗi tiêu đề từ Backend gửi sang
     const displayTitle = data && data.recipeTitle 
@@ -171,6 +194,15 @@ const RecipeModal = ({ show, onClose, data, onProductClick, onAddComboToCart }) 
                                         <div className="flex-1 min-w-0">
                                             <h4 className="text-xs font-bold text-gray-800 truncate group-hover:text-[#006c49] transition-colors">{prod.name}</h4>
                                             <p className="text-[11px] font-extrabold text-[#006c49] mt-0.5">{Number(prod.price || 0).toLocaleString('vi-VN')}đ</p>
+                                        {prod.attributes && prod.attributes.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+            {prod.attributes.map((attr, idx) => (
+                <span key={idx} className="text-[9px] font-medium bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md border border-emerald-100">
+                    {attr.ten_thuoc_tinh}: {attr.gia_tri}
+                </span>
+            ))}
+        </div>
+    )}
                                         </div>
                                     </div>
 
@@ -234,6 +266,24 @@ const ChatbotAI = () => {
         { role: 'assistant', content: 'Chào bạn! Mình là trợ lý ảo của Demi Mart. Bạn cần tìm kiếm món ăn hay sản phẩm nào hôm nay ạ? 🤖', products: [] }
     ]);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingText, setLoadingText] = useState('Demi AI đang phân tích...');
+    useEffect(() => {
+    let timer;
+    if (isLoading) {
+        setLoadingText('Demi AI đang phân tích yêu cầu...');
+        timer = setTimeout(() => {
+            setLoadingText('Hệ thống đang trích xuất công thức và tìm nguyên liệu, bạn đợi xíu nhé... 🍳🔍');
+        }, 4000);
+    }
+    return () => clearTimeout(timer);
+}, [isLoading]);
+    const AVAILABLE_MODELS = [
+        "DeepSeek-V4-Flash", "DeepSeek-V4-Pro", "glm-5.1", "glm-5.2",
+        "kat-coder-pro-v2.5", "Kimi-K2.6", "MiniMax-M3", "Qwen3.5-397B-A17B",
+        "Qwen3.6-35B-A3B", "sensenova-6.7-flash-lite", "sensenova-u1-fast",
+        "step-3.5-flash", "step-3.5-flash-2603", "step-3.7-flash", "step-router-v1"
+    ];
+    const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0]);
 
     const [showModal, setShowModal] = useState(false);
     const [modalData, setModalData] = useState({ recipeTitle: '', recipeText: '', products: [] });
@@ -280,8 +330,11 @@ const ChatbotAI = () => {
         const TARGET_ENDPOINT = `${BASE_SERVICE_URL}/api/v1/chatbot/chat-recommend`;
 
         try {
-            // 🔥 TĂNG TIMEOUT TẦNG FRONTEND LÊN 30 GIÂY ĐỂ ĐỒNG BỘ LUỒNG AUTO-CRAWL PHÍA BACKEND
-            const res = await axios.post(TARGET_ENDPOINT, { message: userMessage }, { timeout: 30000 });
+            // 🌟 CẬP NHẬT: Gửi thêm trường model xuống Node.js
+            const res = await axios.post(TARGET_ENDPOINT, { 
+                message: userMessage,
+                model: selectedModel 
+            }, { timeout: 120000 });
             
             if (res.status === 200 && res.data && res.data.success) {
                 const aiReply = res.data.reply;
@@ -297,9 +350,9 @@ const ChatbotAI = () => {
                     products: recommendedProducts
                 };
 
-                if (hasRecipeContent && recommendedProducts.length > 0 && isDirectActionQuery) {
-                    setModalData(newRecipeData);
-                    setShowModal(true); 
+                if (hasRecipeContent && isDirectActionQuery) {
+    setModalData(newRecipeData);
+    setShowModal(true);
 
                     setChatHistory(prev => [...prev, { 
                         role: 'assistant', 
@@ -369,14 +422,41 @@ const ChatbotAI = () => {
         setShowModal(false);
     };
 
-    const handleAddComboToCart = (productsList) => {
-        if (!productsList) return;
-        productsList.forEach(product => {
-            console.log(`🛒 Combo Add: ${product.name} - Số lượng: ${product.quantity}`);
-        });
-        alert(`🎉 Đã thêm thành công combo ${productsList.length} nguyên liệu sạch vào giỏ hàng Demi Mart!`);
-        setShowModal(false); 
-    };
+const handleAddComboToCart = async (productsList) => {
+    if (!productsList || productsList.length === 0) return;
+
+    try {
+        const itemsToMerge = productsList.map(product => ({
+            // Ưu tiên dùng variant_id nếu có, không có thì fallback về id sản phẩm
+            variantId: product.variant_id ? product.variant_id.toString() : product.id.toString(), 
+            productId: product.id.toString(),
+            name: product.name,
+            variantName: product.variant_name || '',
+            price: Number(product.price),
+            quantity: Number(product.quantity),
+            image: product.image_url || '',
+            categorySlug: product.category_slug || 'tat-ca',
+            countryCode: product.country_code || 'vn',
+            ten_don_vi: 'Gói',
+            // Truyền mảng thuộc tính hợp nhất (Vị, Dung tích...) vào đây
+            thuoc_tinh_hop_nhat: product.attributes || [] 
+        }));
+
+        // Gửi API call xuống Backend Giỏ hàng (Cổng 5003)
+        const response = await axios.post(
+            'http://localhost:5003/api/v1/cart/merge',
+            { items: itemsToMerge },
+            { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        );
+
+        if (response.status === 200) {
+            alert(`🎉 Đã thêm thành công combo ${productsList.length} nguyên liệu sạch vào giỏ hàng!`);
+            setShowModal(false);
+        }
+    } catch (error) {
+        console.error('Lỗi thêm giỏ hàng:', error);
+    }
+};
 
     const handleReopenModal = (savedData) => {
         if (!savedData) return;
@@ -535,33 +615,55 @@ const ChatbotAI = () => {
                             </div>
                         ))}
                         {isLoading && (
-                            <div className="flex justify-start">
-                                <div className="bg-white border border-gray-100 text-gray-400 rounded-2xl px-3 py-2 text-xs">
-                                    <span>Demi AI đang xử lý...</span>
-                                </div>
-                            </div>
-                        )}
+    <div className="flex justify-start mt-2">
+        <div className="bg-white border border-gray-100 text-emerald-700 rounded-2xl px-4 py-2.5 text-xs shadow-sm flex items-center space-x-2">
+            <svg className="animate-spin h-4 w-4 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="font-medium animate-pulse">{loadingText}</span>
+        </div>
+    </div>
+)}
                         <div ref={chatEndRef} />
                     </div>
 
-                    <form onSubmit={handleSendMessage} className="p-2 sm:p-3 border-t border-gray-100 flex bg-white flex-shrink-0">
-                        <input 
-                            type="text" 
-                            value={message} 
-                            onChange={(e) => setMessage(e.target.value)} 
-                            placeholder="Hỏi sản phẩm hoặc công thức món ăn..." 
-                            disabled={isLoading} 
-                            className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs sm:text-sm focus:border-emerald-700 focus:outline-none focus:bg-white transition-all disabled:opacity-60" 
-                        />
-                        <button 
-                            type="submit" 
-                            disabled={!message.trim() || isLoading} 
-                            className="ml-2 flex h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white disabled:opacity-40 transition-opacity"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="h-4 w-4 sm:h-5 sm:w-5 transform rotate-90">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A5.977 5.977 0 0 1 19.5 12c0 1.293-.41 2.5-1.11 3.492L12 21l-4.5-4.5" />
-                            </svg>
-                        </button>
+                    <form onSubmit={handleSendMessage} className="p-2 sm:p-3 border-t border-gray-100 flex flex-col gap-2 bg-white flex-shrink-0">
+                        {/* 🌟 NÚT CHỌN MODEL */}
+                        <div className="flex items-center px-1">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mr-2">AI Model:</span>
+                            <select 
+                                value={selectedModel}
+                                onChange={(e) => setSelectedModel(e.target.value)}
+                                disabled={isLoading}
+                                className="flex-1 bg-slate-50 border border-slate-200 text-slate-600 text-[11px] rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-700 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                {AVAILABLE_MODELS.map(m => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Ô NHẬP TIN NHẮN (Giữ nguyên giao diện cũ) */}
+                        <div className="flex w-full">
+                            <input 
+                                type="text" 
+                                value={message} 
+                                onChange={(e) => setMessage(e.target.value)} 
+                                placeholder="Hỏi sản phẩm hoặc công thức món ăn..." 
+                                disabled={isLoading} 
+                                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs sm:text-sm focus:border-emerald-700 focus:outline-none focus:bg-white transition-all disabled:opacity-60" 
+                            />
+                            <button 
+                                type="submit" 
+                                disabled={!message.trim() || isLoading} 
+                                className="ml-2 flex h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white disabled:opacity-40 transition-opacity"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="h-4 w-4 sm:h-5 sm:w-5 transform rotate-90">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A5.977 5.977 0 0 1 19.5 12c0 1.293-.41 2.5-1.11 3.492L12 21l-4.5-4.5" />
+                                </svg>
+                            </button>
+                        </div>
                     </form>
                 </div>
             )}
