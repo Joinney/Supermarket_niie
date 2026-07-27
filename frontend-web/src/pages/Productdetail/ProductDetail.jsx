@@ -378,6 +378,14 @@ export default function ProductDetail() {
     if (cleanEAVArray.length > 0) {
       targetVariantName = cleanEAVArray.map((a) => a.gia_tri).join(" - ");
     }
+
+    const finalImage =
+      selectedVariant.hinh_anh_url ||
+      selectedVariant.duong_dan_url ||
+      mainMedia?.duong_dan_url ||
+      product.hinh_anh_chinh ||
+      "";
+
     const itemToCheckout = {
       variantId: selectedVariant.ma_bien_the,
       productId: product.ma_san_pham,
@@ -385,11 +393,8 @@ export default function ProductDetail() {
       variantName: targetVariantName,
       price: currentPrice,
       quantity: quantity,
-      image:
-        selectedVariant.hinh_anh_url ||
-        selectedVariant.duong_dan_url ||
-        product.hinh_anh_chinh ||
-        "",
+      image: finalImage,
+      image_url: finalImage,
     };
 
     // 3. LƯU VÀO LOCALSTORAGE

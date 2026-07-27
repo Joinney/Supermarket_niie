@@ -125,7 +125,7 @@ const getShippingFee = async (req, res) => {
   }
 };
 
-// 2. Tiếp nhận đặt hàng (Kết hợp kiểm soát chặng vận chuyển Nội tỉnh / Ngoại tỉnh nâng cao)
+// 2. Tiếp nhận đặt hàng (Đã cập nhật liên kết sang Inventory Service theo cơ chế FIFO)
 const placeOrder = async (req, res) => {
   console.log("Dữ liệu nhận được từ client:", req.body);
   try {
@@ -175,7 +175,6 @@ const placeOrder = async (req, res) => {
       let finalSku = item.sku || null;
       let finalMaSanPham = item.ma_san_pham || item.productId || null; 
       let foundImage = item.image_url || "";
-      
       if (!foundImage && databaseVariants.length > 0) {
         for (const prod of databaseVariants) {
           if (prod.hinh_anh_chinh) foundImage = prod.hinh_anh_chinh;
@@ -193,7 +192,6 @@ const placeOrder = async (req, res) => {
           if (prod.bien_the_san_pham && Array.isArray(prod.bien_the_san_pham)) {
             const matched = prod.bien_the_san_pham.find(v => String(v.ma_bien_the) === vId || String(v.id) === vId);
             if (matched && matched.sku) finalSku = matched.sku;
-            if (matched && !finalMaSanPham) finalMaSanPham = prod.ma_san_pham;
           }
         }
       }
@@ -348,125 +346,64 @@ const placeOrder = async (req, res) => {
             }
           });
 
-          let clientZoneOffices = rawPostOffices.filter((office) =>
+          const clientZoneOffices = rawPostOffices.filter((office) =>
             Math.abs(office.location.lat - rgbLatNum) < 0.6 && Math.abs(office.location.lng - rgbLngNum) < 0.6
           );
-          if (clientZoneOffices.length === 0) {
-            clientZoneOffices = rawPostOffices.filter(o => Math.abs(o.location.lat - rgbLatNum) < 1.5 && Math.abs(o.location.lng - rgbLngNum) < 1.5);
-          }
+          const fallbackOffices = clientZoneOffices.length > 0 ? clientZoneOffices : rawPostOffices;
 
-          let minDistanceToClient = Infinity;
-          optimalLastMileOffice = clientZoneOffices[0] || rawPostOffices[0];
-          clientZoneOffices.forEach((office) => {
-            const distSq = ((office.location.lat - rgbLatNum) ** 2) + ((office.location.lng - rgbLngNum) ** 2);
-            if (distSq < minDistanceToClient) {
-              minDistanceToClient = distSq;
-              optimalLastMileOffice = office;
-            }
-          });
-          lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || rgbLatNum);
-          lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || rgbLngNum);
-        }
-
-        let waypoints = [`${storeLng},${storeLat}`];
-        if (optimalFirstMileOffice) waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
-
-        const isTayNguyenZone = rgbLngNum < 108.2 && rgbLatNum > 11.5 && rgbLatNum < 15.0;
-        if (isTayNguyenZone) {
-          waypoints.push("106.883412,11.521093");
-          waypoints.push("107.684125,12.001254");
-        } else if (rgbLatNum > 11.2) {
-          waypoints.push("107.234125,10.938512");
-          waypoints.push("108.106943,10.933391");
-          if (rgbLatNum > 12.0) waypoints.push("109.196749,12.245071");
-          if (rgbLatNum > 13.5) waypoints.push("109.219515,13.774697");
-          if (rgbLatNum > 16.0) waypoints.push("108.221464,16.059541");
-          if (rgbLatNum > 18.0) waypoints.push("105.681123,18.673412");
-          if (rgbLatNum > 20.0) waypoints.push("105.820421,20.251093");
-        }
-
-        if (lastMileLng && lastMileLat) waypoints.push(`${lastMileLng},${lastMileLat}`);
-        waypoints.push(`${rgbLngNum},${rgbLatNum}`);
-
-        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
-        const routeRes = await axios.get(osrmUrl);
-        
-        if (routeRes.data?.code === "Ok") {
-          const routeGeo = routeRes.data.routes[0];
-          const coordinates = routeGeo.geometry.coordinates;
-
-          if (optimalFirstMileOffice) {
-            stationsToSave.push({
-              station_id: String(optimalFirstMileOffice.id),
-              station_name: String(optimalFirstMileOffice.name),
-              tinh_thanh: String(optimalFirstMileOffice.provinceName || ''),
-              quan_huyen: String(optimalFirstMileOffice.districtName || ''),
-              phuong_xa: String(optimalFirstMileOffice.wardName || ''),
-              so_nha_duong: String(optimalFirstMileOffice.street || optimalFirstMileOffice.address || ''),
-              station_lat: parseFloat(optimalFirstMileOffice.location.lat),
-              station_lng: parseFloat(optimalFirstMileOffice.location.lng),
-              station_type: 'FIRST_MILE',
-              action_type: 'GOM_HANG_DIEU_PHOI',
-              trang_thai_hien_thi: 'Đã tiếp nhận hàng tại bưu cục điều phối chặng đầu'
-            });
-          }
-
-          if (coordinates.length > 15) {
-            const distributionRatios = [0.33, 0.66];
-            distributionRatios.forEach((ratio, idx) => {
-              const targetIndex = Math.floor(coordinates.length * ratio);
-              if (coordinates[targetIndex]) {
-                const nodeCoord = coordinates[targetIndex];
-                let nearestKmlToHub = null;
-                let minHubDistSq = Infinity;
-                rawPostOffices.forEach(office => {
-                  const distSq = ((office.location.lat - nodeCoord[1]) ** 2) + ((office.location.lng - nodeCoord[0]) ** 2);
-                  if (distSq < minHubDistSq) {
-                    minHubDistSq = distSq;
-                    nearestKmlToHub = office;
-                  }
-                });
-
-                stationsToSave.push({
-                  station_id: `HUB_${order.ma_don_hang}_${idx + 1}`,
-                  station_name: nearestKmlToHub?.name ? `${nearestKmlToHub.name} (${idx + 1})` : `Bưu cục Trung Chuyển (${idx + 1})`,
-                  tinh_thanh: nearestKmlToHub?.provinceName || '',
-                  quan_huyen: nearestKmlToHub?.districtName || '',
-                  phuong_xa: nearestKmlToHub?.wardName || '',
-                  so_nha_duong: nearestKmlToHub?.street || nearestKmlToHub?.address || '',
-                  station_lat: nodeCoord[1],
-                  station_lng: nodeCoord[0],
-                  station_type: 'HUB',
-                  action_type: 'TRUNG_CHUYEN',
-                  trang_thai_hien_thi: 'Đã qua trạm trung chuyển'
-                });
+          if (fallbackOffices.length > 0) {
+            let minDistanceToClient = Infinity;
+            optimalLastMileOffice = fallbackOffices[0];
+            fallbackOffices.forEach((office) => {
+              const distSq = ((office.location.lat - rgbLatNum) ** 2) + ((office.location.lng - rgbLngNum) ** 2);
+              if (distSq < minDistanceToClient) {
+                minDistanceToClient = distSq;
+                optimalLastMileOffice = office;
               }
             });
+            lastMileLat = parseFloat(optimalLastMileOffice.location?.lat || optimalLastMileOffice.latitude || rgbLatNum);
+            lastMileLng = parseFloat(optimalLastMileOffice.location?.lng || optimalLastMileOffice.longitude || rgbLngNum);
           }
+        }
 
-          if (optimalLastMileOffice) {
-            stationsToSave.push({
-              station_id: String(optimalLastMileOffice.id),
-              station_name: String(optimalLastMileOffice.name),
-              tinh_thanh: String(optimalLastMileOffice.provinceName || ''),
-              quan_huyen: String(optimalLastMileOffice.districtName || ''),
-              phuong_xa: String(optimalLastMileOffice.wardName || ''),
-              so_nha_duong: String(optimalLastMileOffice.street || optimalLastMileOffice.address || ''),
-              station_lat: lastMileLat,
-              station_lng: lastMileLng,
-              station_type: 'LAST_MILE',
-              action_type: 'DIEU_PHOI_PHAT',
-              trang_thai_hien_thi: 'Đã cập bưu cục phát chặng cuối'
-            });
-          }
+        if (optimalFirstMileOffice) {
+          stationsToSave.push({
+            station_id: String(optimalFirstMileOffice.id),
+            station_name: String(optimalFirstMileOffice.name),
+            tinh_thanh: String(optimalFirstMileOffice.provinceName || ''),
+            quan_huyen: String(optimalFirstMileOffice.districtName || ''),
+            phuong_xa: String(optimalFirstMileOffice.wardName || ''),
+            so_nha_duong: String(optimalFirstMileOffice.street || optimalFirstMileOffice.address || ''),
+            station_lat: parseFloat(optimalFirstMileOffice.location.lat),
+            station_lng: parseFloat(optimalFirstMileOffice.location.lng),
+            station_type: 'FIRST_MILE',
+            action_type: 'GOM_HANG_DIEU_PHOI',
+            trang_thai_hien_thi: 'Đã tiếp nhận hàng tại bưu cục điều phối chặng đầu'
+          });
+        }
+
+        if (optimalLastMileOffice) {
+          stationsToSave.push({
+            station_id: String(optimalLastMileOffice.id),
+            station_name: String(optimalLastMileOffice.name),
+            tinh_thanh: String(optimalLastMileOffice.provinceName || ''),
+            quan_huyen: String(optimalLastMileOffice.districtName || ''),
+            phuong_xa: String(optimalLastMileOffice.wardName || ''),
+            so_nha_duong: String(optimalLastMileOffice.street || optimalLastMileOffice.address || ''),
+            station_lat: lastMileLat,
+            station_lng: lastMileLng,
+            station_type: 'LAST_MILE',
+            action_type: 'DIEU_PHOI_PHAT',
+            trang_thai_hien_thi: 'Đã cập bưu cục phát chặng cuối'
+          });
         }
       }
 
       const insertLogQuery = `
         INSERT INTO public.order_tracking_logs (
-          order_id, ma_don_hang, station_id, station_name, 
-          tinh_thanh, quan_huyen, phuong_xa, so_nha_duong, 
-          station_lat, station_lng, station_type, action_type, 
+          order_id, ma_don_hang, station_id, station_name,
+          tinh_thanh, quan_huyen, phuong_xa, so_nha_duong,
+          station_lat, station_lng, station_type, action_type,
           trang_thai_hien_thi, ngay_tao
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
       `;
@@ -511,7 +448,7 @@ const placeOrder = async (req, res) => {
       } catch (syncErr) {}
     }
 
-    return res.status(201).json({ 
+   return res.status(201).json({ 
       success: true, 
       ma_don_hang: order.ma_don_hang, 
       tong_thanh_toan: finalTotal,
@@ -602,9 +539,11 @@ const getAllOrdersAdmin = async (req, res) => {
     const status = req.query.status || '';
     const payment = req.query.payment || '';
 
+
     let whereClause = `WHERE 1=1`;
     const queryParams = [];
     let pIdx = 1;
+
 
     if (search.trim() !== '') {
       whereClause += ` AND (o.ma_don_hang ILIKE $${pIdx} OR o.phuong_thuc_thanh_toan ILIKE $${pIdx})`;
@@ -1070,7 +1009,7 @@ export {
   getShippingFee, 
   placeOrder, 
   updateInternalOrderStatus, 
-  getOrderStatistics,  
+  getOrderStatistics, 
   getAllOrdersAdmin, 
   getMyOrders, 
   getOrdersByUserAdmin,
@@ -1082,4 +1021,4 @@ export {
   getOrderTrackingLogs,
   createOrderTrackingLogNode,
   getUserSpent
-};
+};  

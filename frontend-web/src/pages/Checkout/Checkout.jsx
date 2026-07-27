@@ -84,7 +84,13 @@ export default function Checkout() {
         groups[pId] = {
           productId: pId,
           name: item.name,
-          image: item.image,
+          // 🌟 ĐÃ SỬA: Fallback nhận diện mọi định dạng ảnh từ Mua ngay hoặc Giỏ hàng
+          image:
+            item.image_url ||
+            item.image ||
+            item.hinh_anh_chinh ||
+            item.imageUrl ||
+            "https://placehold.co/150x150?text=No+Image",
           subVariants: [],
         };
       }
@@ -306,8 +312,13 @@ export default function Checkout() {
           price: Number(item.price),
           name: String(item.name || item.productName || "Sản phẩm Demi Mart"),
           variant_name: String(item.variantName || item.variant_name || ""),
+          // 🌟 ĐÃ SỬA LẠI THỨ TỰ ƯU TIÊN HÌNH ẢNH KHI TRUYỀN XUỐNG BACKEND
           image_url: String(
-            item.image || item.imageUrl || item.image_url || "",
+            item.image_url ||
+              item.image ||
+              item.imageUrl ||
+              item.hinh_anh_chinh ||
+              "",
           ),
           ma_san_pham: String(item.ma_san_pham || item.productId || ""),
         };
@@ -530,8 +541,14 @@ export default function Checkout() {
                       className="flex items-center gap-4 bg-white border border-slate-100 p-4 rounded-2xl shadow-sm"
                     >
                       <div className="w-16 h-16 bg-slate-50 border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
+                        {/* 🌟 ĐÃ SỬA: Fallback nhận diện mọi định dạng ảnh hiển thị ra UI */}
                         <img
-                          src={getCleanImage(item.image)}
+                          src={getCleanImage(
+                            item.image_url ||
+                              item.image ||
+                              item.hinh_anh_chinh ||
+                              item.imageUrl,
+                          )}
                           className="w-full h-full object-contain"
                           alt={item.name}
                         />
@@ -602,7 +619,7 @@ export default function Checkout() {
                     <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 via-slate-50/30 to-white border-b border-slate-100">
                       <div className="w-16 h-16 bg-white border border-slate-200/60 rounded-xl overflow-hidden p-1.5 shadow-sm flex-shrink-0 flex items-center justify-center">
                         <img
-                          src={group.image}
+                          src={getCleanImage(group.image)}
                           alt={group.name}
                           className="w-full h-full object-contain"
                         />
@@ -626,8 +643,14 @@ export default function Checkout() {
                           className="flex items-center gap-4 p-4 pl-6 transition-all duration-200"
                         >
                           <div className="w-12 h-14 bg-slate-50 border border-slate-100 rounded-lg overflow-hidden p-1 flex-shrink-0 flex items-center justify-center shadow-sm">
+                            {/* 🌟 ĐÃ SỬA: Cập nhật fallback ảnh cho phân loại con (SubVariant) */}
                             <img
-                              src={getCleanImage(subItem.image)}
+                              src={getCleanImage(
+                                subItem.image_url ||
+                                  subItem.image ||
+                                  subItem.hinh_anh_chinh ||
+                                  subItem.imageUrl,
+                              )}
                               alt={subItem.variantName}
                               className="w-full h-full object-contain"
                             />
