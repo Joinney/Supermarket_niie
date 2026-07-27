@@ -1,3 +1,4 @@
+// File: backend/services/order-service/routes/orderRoutes.js
 import express from 'express';
 import { 
   getShippingFee, 
@@ -16,6 +17,16 @@ import {
   calculateShipping,
   getUserSpent
 } from '../controllers/orderController.js';
+
+// Đồng bộ import 2 hàm thống kê từ đúng tệp tin cấu hình statisticsController
+import { 
+  getMonthlyRevenue, 
+  getOrderOverviewStats,
+  getTopProducts
+  
+} from '../controllers/statisticsController.js';
+
+// Chỉ sử dụng middleware 'protect' đã được định nghĩa chắc chắn để chống lỗi requireAdmin undefined
 import { protect } from '../middlewares/authMiddleware.js'; 
 
 const router = express.Router();
@@ -70,7 +81,11 @@ router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder);
 // 9.1 Lấy danh sách đơn hàng theo user id (Admin) - để trang quản trị xem lịch sử đơn của 1 khách
 router.get('/admin/user-orders/:userId', protect, getOrdersByUserAdmin);
 
+// Các endpoint cung cấp chuỗi thời gian cho đồ thị và số liệu widgets tầng 1
+router.get('/admin/monthly-revenue', protect, getMonthlyRevenue);
+router.get('/admin/overview', protect, getOrderOverviewStats);
 
+router.get('/admin/top-products', protect, getTopProducts);
 // ========================================================
 // 🏁 ROUTE ĐỊNH TUYẾN LOGISTICS VÀ KIỂM THỬ (LOGISTICS ENDPOINTS)
 // ========================================================
@@ -86,4 +101,5 @@ router.post('/test-kml', testReadKml);
 
 // 14. TÍNH TỔNG TIỀN CHI TIÊU CỦA KHÁCH HÀNG
 router.get('/internal/user-spent/:userId', getUserSpent);
+
 export default router;

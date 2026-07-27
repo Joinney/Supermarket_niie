@@ -9,8 +9,9 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
   const { addToCart } = useCart();
   const navigate = useNavigate();
 
+  // 🌟 ĐÃ SỬA: Thay thế link ảnh bị lỗi mã hóa URL (400 Bad Request) bằng URL chuẩn của Unsplash
   const defaultImage =
-    "https://media.istockphoto.com/id/2209753844/vi/anh/mua-s%E1%BA%AFm-d%E1%BB%8Dc-theo-k%E1%BB%87-h%C3%A0ng-%E1%BB%9F-l%E1%BB%91i-%C4%91i-si%E1%AA%u-th%E1%BB%8B-hi%E1%BB%87n-%C4%91%E1%BA%A1i.jpg?s=612x612&w=0&k=20&c=lw3Ya3lz386J1OTWV_vsl4F9cl-YbGg6h1_PleW_0ZI=";
+    "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=612&auto=format&fit=crop";
 
   const mainImage = p.hinh_anh_chinh || defaultImage;
 
@@ -108,12 +109,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     // =====================================================================
     //  2. LOGIC THÊM VÀO GIỎ (CHỈ CHẠY VỚI SẢN PHẨM ĐƠN - KHÔNG BIẾN THỂ)
     // =====================================================================
-    const tuyChonObj = p.chi_tiet_bien_the?.[0]?.tuy_chon || p.tuy_chon || {};
-    const cleanEAVArray = Object.entries(tuyChonObj).map(([key, val]) => ({
-      ten_thuoc_tinh: String(key).trim(),
-      gia_tri: String(val).trim(),
-    }));
-
     let finalVariantName =
       p.ten_bien_the || p.chi_tiet_bien_the?.[0]?.ten_bien_the || "Mặc định";
     if (cleanEAVArray.length > 0) {
@@ -194,10 +189,19 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     >
       <div className="w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] transition-all duration-300 border border-transparent hover:shadow-2xl hover:shadow-slate-100 hover:border-slate-50">
         <div className="relative aspect-square bg-[#f8fafc] rounded-[24px] overflow-hidden mb-3 border border-slate-50 group-hover:border-[#e6f0ed] transition-all">
-          {discountBadge && (
+          {discountBadge && !isOutOfStock && (
             <div className="absolute top-3 left-3 z-30 bg-gradient-to-r from-red-500 to-orange-500 text-white font-black text-[10px] px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm border border-red-400">
               {discountBadge}
             </div>
+          )}
+
+          {/* Icon Hết Hàng dán góc trái */}
+          {isOutOfStock && (
+            <img 
+              src="https://res.cloudinary.com/qb6mcdtq/image/upload/v1784226343/icon_hethang_ojzmga.png" 
+              alt="Tạm hết hàng"
+              className="absolute top-2 left-2 w-14 md:w-16 h-auto z-40 pointer-events-none drop-shadow-md"
+            />
           )}
 
           <img
@@ -209,15 +213,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition duration-500 p-4"
             alt={p.ten_san_pham || "Sản phẩm"}
           />
-
-          {isOutOfStock && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-none">
-              <div className="w-12 h-4 border-t border-r border-l border-slate-300 rounded-t-full mb-[-6px]"></div>
-              <div className="bg-red-50 text-red-500 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-red-200 shadow-sm">
-                Tạm hết hàng
-              </div>
-            </div>
-          )}
 
           {!isOutOfStock && (
             <button
@@ -270,7 +265,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
 
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest flex items-center justify-between">
             <span>
-              {isFlashSale ? "SL MỞ BÁN:" : "TỒN KHO:"}{" "}
+              {isFlashSale ? "ĐÃ BÁN:" : "SỐ LƯỢNG:"}{" "}
               <span className="text-slate-600">{stockCount}</span>
             </span>
           </p>

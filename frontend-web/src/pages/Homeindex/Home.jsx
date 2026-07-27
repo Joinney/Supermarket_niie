@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useLocation } from "react-router-dom";
 import {
   ChevronRight,
   ArrowRight,
@@ -20,15 +20,26 @@ import { productApi, promotionApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
 import QuangCao from "./quangcao";
 
+// 🌟 IMPORT 5 COMPONENT TỪ THƯ MỤC KHÁM PHÁ BỘ SƯU TẬP
+import Goiychoban from "./khamphabosuutap/goiychoban";
+import Chungtoichon from "./khamphabosuutap/chungtoichon";
+import Hangmoive from "./khamphabosuutap/hangmoive";
+import Giatotmoingay from "./khamphabosuutap/giatotmoingay";
+import Moivetuannay from "./khamphabosuutap/moivetuannay";
+
 export default function Home() {
   const { t } = useLanguage();
   const { currentStore } = useStore();
   const { country_code } = useParams();
 
-  // State cho Sản phẩm thường
+  // State cho Sản phẩm thường (Bộ sưu tập)
   const [apiProducts, setApiProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productError, setProductError] = useState(null);
+
+  // State riêng cho Sản phẩm yêu thích (Top Favorites)
+  const [topFavoriteProducts, setTopFavoriteProducts] = useState([]);
+  const [loadingTopFavorites, setLoadingTopFavorites] = useState(true);
 
   // State riêng cho Flash Sale
   const [flashSaleData, setFlashSaleData] = useState([]);
@@ -36,7 +47,19 @@ export default function Home() {
 
   const favRef = useRef(null);
 
-  const [activeMainTab, setActiveMainTab] = useState("recommend");
+const location = useLocation();
+
+  const TABS = [
+    { id: "recommend", slug: "goi_y_cho_ban", label: "Gợi ý cho bạn" },
+    { id: "chosen", slug: "chung_toi_chon", label: "Chúng tôi chọn" },
+    { id: "new_release", slug: "hang_moi_ve", label: "Hàng mới về" },
+    { id: "good_price", slug: "gia_tot_moi_ngay", label: "Giá tốt mỗi ngày" },
+    { id: "week_new", slug: "moi_ve_tuan_nay", label: "Mới về tuần này" },
+  ];
+
+  const currentSlug = location.pathname.split("/").pop(); 
+  const activeTabObj = TABS.find(t => t.slug === currentSlug) || TABS[0];
+  const activeMainTab = activeTabObj.id;
   const [activeRankTab, setActiveRankTab] = useState("best");
 
   // ĐỒNG HỒ "NHỊP TIM" CHUNG CHO TOÀN BỘ COMPONENT
@@ -58,7 +81,6 @@ export default function Home() {
     (item) => new Date(item.chuong_trinh.thoi_gian_bat_dau) > currentTime,
   );
 
-  // 🌟 ĐÃ FIX: Hàm format thời gian (Có thêm Ngày)
   const formatTimeLeft = (endTime) => {
     const diff = new Date(endTime) - currentTime;
     if (diff <= 0) return { dd: "00", hh: "00", mm: "00", ss: "00" };
@@ -79,15 +101,6 @@ export default function Home() {
     };
   };
 
-  const calculateDiscount = (originalPrice, salePrice) => {
-    if (!originalPrice || !salePrice || originalPrice <= salePrice)
-      return "-HOT";
-    const percent = Math.round(
-      ((originalPrice - salePrice) / originalPrice) * 100,
-    );
-    return `-${percent}%`;
-  };
-
   useEffect(() => {
     window.scrollTo(0, 0);
     const targetCountry = country_code || currentStore?.code || "vn";
@@ -96,7 +109,7 @@ export default function Home() {
       try {
         setLoadingProducts(true);
         const response = await productApi.get(
-          `/products?role=client&limit=12&country=${targetCountry}`,
+          `/products?role=client&limit=100&country=${targetCountry}`,
         );
         setApiProducts(response.data);
         setProductError(null);
@@ -107,6 +120,20 @@ export default function Home() {
         );
       } finally {
         setLoadingProducts(false);
+      }
+    };
+
+    const fetchTopFavorites = async () => {
+      try {
+        setLoadingTopFavorites(true);
+        const res = await productApi.get('/products/top/favorites');
+        if (res.data?.success) {
+          setTopFavoriteProducts(res.data.data);
+        }
+      } catch (err) {
+        console.error("Lỗi API Top Yêu Thích:", err);
+      } finally {
+        setLoadingTopFavorites(false);
       }
     };
 
@@ -128,6 +155,7 @@ export default function Home() {
     };
 
     fetchGeneralProducts();
+    fetchTopFavorites();
     fetchFlashSale();
   }, [country_code, currentStore?.code]);
 
@@ -171,19 +199,34 @@ export default function Home() {
     };
   }, [flashSaleData]);
 
-  const getCleanProductList = () => {
+const getCleanProductList = () => {
+    let rawList = [];
     if (!apiProducts) return [];
-    if (Array.isArray(apiProducts)) return apiProducts;
-    if (apiProducts.data && Array.isArray(apiProducts.data))
-      return apiProducts.data;
-    if (apiProducts.products && Array.isArray(apiProducts.products))
-      return apiProducts.products;
-    return [];
+    
+    if (Array.isArray(apiProducts)) {
+      rawList = apiProducts;
+    } else if (apiProducts.data && Array.isArray(apiProducts.data)) {
+      rawList = apiProducts.data;
+    } else if (apiProducts.products && Array.isArray(apiProducts.products)) {
+      rawList = apiProducts.products;
+    }
+
+    // 🌟 LỌC TRÙNG LẶP: Dùng Set để chỉ giữ lại 1 đại diện duy nhất cho mỗi mã sản phẩm
+    const uniqueProducts = [];
+    const seenIds = new Set();
+    
+    for (const item of rawList) {
+      if (!seenIds.has(item.ma_san_pham)) {
+        seenIds.add(item.ma_san_pham);
+        uniqueProducts.push(item);
+      }
+    }
+    
+    return uniqueProducts;
   };
 
   const cleanProducts = getCleanProductList();
 
-  // Xác định prefix quốc gia cho các thẻ Link
   const currentPrefix = country_code
     ? `/${country_code.toLowerCase()}`
     : `/${currentStore?.code?.toLowerCase() || "vn"}`;
@@ -200,7 +243,6 @@ export default function Home() {
           <div className="h-40 bg-slate-100 rounded-[40px] animate-pulse"></div>
         ) : (
           <>
-            {/* 1.1 DANH SÁCH ĐANG CHẠY */}
             {runningPromos.length > 0 ? (
               runningPromos.map((promo, idx) => {
                 const timeLeft = formatTimeLeft(
@@ -233,7 +275,6 @@ export default function Home() {
                       </div>
 
                       <div className="flex items-center gap-4">
-                        {/* 🌟 ĐÃ FIX: Đồng hồ đếm ngược có hiển thị NGÀY */}
                         <div className="flex items-center gap-3 bg-[#fff1f0] px-5 py-2.5 rounded-2xl border border-orange-100">
                           <span className="text-xs font-bold text-[#f05a28] uppercase tracking-widest hidden sm:block">
                             Kết thúc sau
@@ -263,7 +304,6 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* Nút Xem thêm */}
                         <Link
                           to={`${currentPrefix}/category/khuyen-mai`}
                           className="text-xs font-black text-[#f05a28] bg-orange-50 hover:bg-[#f05a28] hover:text-white px-5 py-3 rounded-2xl transition-all shadow-sm active:scale-95 whitespace-nowrap hidden lg:flex items-center gap-2 border border-orange-100"
@@ -273,7 +313,6 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Carousel Sản phẩm của chương trình hiện tại */}
                     <div
                       ref={favRef}
                       className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 pt-2"
@@ -323,7 +362,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* 1.2 DANH SÁCH SẮP DIỄN RA */}
             {upcomingPromos.length > 0 && (
               <div className="bg-white border border-blue-100 rounded-[30px] p-6 shadow-sm">
                 <h3 className="font-black text-blue-900 mb-5 uppercase text-sm tracking-widest flex items-center gap-2">
@@ -361,7 +399,7 @@ export default function Home() {
       </section>
 
       {/* ========================================================== */}
-      {/* 3. SẢN PHẨM THỊNH HÀNH (SỬ DỤNG DỮ LIỆU SẢN PHẨM THƯỜNG) */}
+      {/* 🌟 KHỐI 2: SẢN PHẨM THỊNH HÀNH (TOP YÊU THÍCH CAO NHẤT) */}
       {/* ========================================================== */}
       <section className="px-6 md:px-10">
         <div className="flex items-center justify-between mb-6">
@@ -379,54 +417,34 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4">
-          {loadingProducts ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-6">
+          {loadingTopFavorites ? (
             [...Array(6)].map((_, i) => (
-              <div key={i} className="min-w-[170px] md:min-w-[210px] space-y-4">
-                <div className="aspect-square bg-slate-100 rounded-[32px] animate-pulse"></div>
-                <div className="h-4 bg-slate-100 rounded w-3/4 animate-pulse"></div>
-              </div>
+              <div
+                key={i}
+                className="aspect-[3/4] bg-slate-50 border border-slate-100 rounded-3xl animate-pulse"
+              ></div>
             ))
-          ) : productError ? (
-            <div className="w-full py-10 flex flex-col items-center text-slate-400 gap-2">
-              <AlertCircle size={40} />
-              <p className="font-bold">Ối! {productError}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="text-[#006c49] underline text-sm"
-              >
-                Thử lại
-              </button>
+          ) : topFavoriteProducts.length === 0 ? (
+            <div className="col-span-full py-10 flex flex-col items-center justify-center text-slate-400 gap-2 w-full">
+              <p className="font-bold">Chưa có sản phẩm yêu thích nào!</p>
             </div>
           ) : (
-            cleanProducts.map((p, idx) => (
+            topFavoriteProducts.map((p, idx) => (
               <div
-                key={`trending-${p.ma_san_pham || "empty"}-${idx}`}
-                className="min-w-[170px] md:min-w-[210px] transition-all duration-300 hover:-translate-y-1"
+                key={`top-fav-${p.ma_san_pham || "empty"}-${idx}`}
+                className="w-full bg-white rounded-[28px] border border-slate-100/80 p-1 hover:shadow-xl hover:border-slate-200/50 transition-all duration-300 hover:-translate-y-1 relative"
               >
-                {" "}
                 <ProductCard p={p} />
+                
               </div>
             ))
-          )}
-
-          {!loadingProducts && !productError && (
-            <Link
-              to={`${currentPrefix}/category/tat-ca`}
-              className="min-w-[120px] flex items-center justify-center text-[#006c49] font-black text-xs cursor-pointer hover:underline uppercase tracking-widest group"
-            >
-              Xem Tất Cả{" "}
-              <ArrowRight
-                size={16}
-                className="ml-2 group-hover:translate-x-2 transition-transform"
-              />
-            </Link>
           )}
         </div>
       </section>
 
       {/* ========================================================== */}
-      {/* KHỐI 2: KHÁM PHÁ BỘ SƯU TẬP */}
+      {/* 🌟 KHỐI 3: KHÁM PHÁ BỘ SƯU TẬP (ĐÃ TÁCH COMPONENT) */}
       {/* ========================================================== */}
       <section className="px-6 md:px-10">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-6">
@@ -440,16 +458,12 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1 bg-slate-100/70 border border-slate-200/40 p-1.5 rounded-2xl max-w-full">
-            {[
-              { id: "recommend", label: "Gợi ý cho bạn" },
-              { id: "chosen", label: "Chúng tôi chọn" },
-              { id: "new_release", label: "Hàng mới về" },
-              { id: "good_price", label: "Giá tốt mỗi ngày" },
-              { id: "week_new", label: "Mới về tuần này" },
-            ].map((tab) => (
-              <button
+            {TABS.map((tab) => (
+              <Link
                 key={tab.id}
-                onClick={() => setActiveMainTab(tab.id)}
+                to={`${currentPrefix}/${tab.slug}`} // 🌟 Tạo link có dạng /vn/goi_y_cho_ban
+                preventScrollReset={true}
+                replace={true}
                 className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 whitespace-nowrap ${
                   activeMainTab === tab.id
                     ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/15"
@@ -457,27 +471,18 @@ export default function Home() {
                 }`}
               >
                 {tab.label}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-5 md:gap-6">
-          {loadingProducts
-            ? [...Array(6)].map((_, i) => (
-                <div
-                  key={i}
-                  className="aspect-[3/4] bg-slate-50 border border-slate-100 rounded-3xl animate-pulse"
-                ></div>
-              ))
-            : cleanProducts.slice(0, 12).map((p, idx) => (
-                <div
-                  key={`collection-${p.ma_san_pham || "empty"}-${idx}`}
-                  className="w-full bg-white rounded-[28px] border border-slate-100/80 p-1 hover:shadow-xl hover:border-slate-200/50 transition-all duration-300 hover:-translate-y-1"
-                >
-                  <ProductCard p={p} />
-                </div>
-              ))}
+        {/* 🌟 GỌI CÁC COMPONENT CON TƯƠNG ỨNG VỚI TAB ĐANG CHỌN */}
+        <div className="mt-5">
+          {activeMainTab === "recommend" && <Goiychoban products={cleanProducts} loading={loadingProducts} />}
+          {activeMainTab === "chosen" && <Chungtoichon products={cleanProducts} loading={loadingProducts} />}
+          {activeMainTab === "new_release" && <Hangmoive products={cleanProducts} loading={loadingProducts} />}
+          {activeMainTab === "good_price" && <Giatotmoingay products={cleanProducts} loading={loadingProducts} />}
+          {activeMainTab === "week_new" && <Moivetuannay products={cleanProducts} loading={loadingProducts} />}
         </div>
       </section>
 
@@ -571,7 +576,6 @@ export default function Home() {
 
                 return (
                   <div
-                    network_id={p.ma_san_pham || index}
                     key={`rank-${p.ma_san_pham || "empty"}-${index}`}
                     className={`bg-gradient-to-b ${medalColors} border rounded-[36px] p-4 relative transition-all duration-300 hover:shadow-2xl hover:-translate-y-1.5 group text-left`}
                   >

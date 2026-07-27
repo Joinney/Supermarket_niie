@@ -30,7 +30,7 @@ import ProductDetail from "./pages/Productdetail/ProductDetail";
 import Cart from "./pages/Giohang/Cart";
 import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
-import ChatbotAI from "./components/chatbotai/ChatbotAI";
+import ChatbotAI from "./components/layout/ChatbotAI";
 
 // --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminProtect from "./admindb/components/AdminProtect";
@@ -38,6 +38,8 @@ import AdminProfile from "./admindb/pages/profile/AdminProfile.jsx";
 import AdminLogin from "./admindb/pages/auth/AdminLogin.jsx";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin from "./admindb/components/Header";
+// Thêm dòng này ngay dưới import HeaderAdmin từ "./admindb/components/Header";
+import AdminDashboardPage from "./admindb/pages/dashboard/AdminDashboardPage.jsx";
 import Dashboard from "./admindb/pages/dashboard/ThongKeSanPham.jsx";
 import ThongKeDonHang from "./admindb/pages/dashboard/ThongKeDonHang.jsx";
 import ThongKeKhachHang from "./admindb/pages/dashboard/ThongKeKhachHang.jsx";
@@ -799,11 +801,18 @@ const AppRoutes = () => (
           </AdminModuleGuard>
         }
       >
-        <Route index element={<Navigate to="thongkesanpham" replace />} />
-        <Route path="thongkesanpham" element={<Dashboard />} />
-        <Route path="thongkedonhang" element={<ThongKeDonHang />} />
-        <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
-      </Route>
+        {/* ❌ DÒNG CŨ: <Route index element={<Navigate to="thongkesanpham" replace />} /> */}
+  {/*  SỬA THÀNH: */}
+  <Route index element={<Navigate to="tongquan" replace />} />
+  
+  {/* 🌟 BỔ SUNG ROUTE CON CHO TRANG TỔNG QUAN KINH DOANH MỚI: */}
+  <Route path="tongquan" element={<AdminDashboardPage />} />
+  
+  <Route path="thongkesanpham" element={<Dashboard />} />
+  <Route path="thongkedonhang" element={<ThongKeDonHang />} />
+  <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
+</Route>
+
 
       {/* 🛒 Bọc Danh sách sản phẩm */}
       <Route

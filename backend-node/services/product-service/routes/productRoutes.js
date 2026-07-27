@@ -36,7 +36,11 @@ import {
     restoreStockInternal,
     getProductStatistics,
     syncExactStockInternal,
-    bulkSyncStockInternal
+    bulkSyncStockInternal,
+    getProductLikes,
+    toggleProductLike,
+    getUserFavorites,
+    getTopFavoriteProducts
 } from '../controllers/productController.js';
 
 const router = express.Router();
@@ -85,6 +89,7 @@ router.delete('/variants/:variantId/hard', hardDeleteVariant);
 // =========================================================================
 router.get('/category/:slug', getProductsByCategorySlug);
 router.get('/', getAllProducts);
+router.get('/favorites/me', getUserFavorites);
 router.post('/', createProduct);
 router.put('/:id', updateProduct);
 router.put('/:id/toggle-status', toggleProductStatus);
@@ -93,9 +98,14 @@ router.delete('/:id', deleteProduct);
 // Các thông tin liên quan cụ thể của một sản phẩm
 router.get('/:id/related', getRelatedProducts); 
 
+// ROUTE YÊU THÍCH (Bắt buộc đặt trước route get('/:id'))
+router.get('/:id/likes', getProductLikes);
+router.post('/:id/likes', toggleProductLike);
+
 //xử lý mã thông minh
 router.post('/generate-sku', generateSafeSku);
-
+// Lấy danh sách sản phẩm được yêu thích nhiều nhất
+router.get('/top/favorites', getTopFavoriteProducts);
 // Lấy chi tiết sản phẩm
 router.get('/:id', getProductById);
 router.post('/:id/media', addProductMedia);

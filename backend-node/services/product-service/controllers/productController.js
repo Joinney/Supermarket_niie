@@ -2211,3 +2211,186 @@ export const bulkSyncStockInternal = async (req, res) => {
         client.release();
     }
 };
+
+// =========================================================================
+// 22 API: LẤY SỐ LƯỢT YÊU THÍCH & TRẠNG THÁI CỦA USER
+// =========================================================================
+export const getProductLikes = async (req, res) => {
+    try {
+        const { id } = req.params; 
+        let userId = null;
+
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                userId = payload.id || payload.user_id;
+            } catch (e) {}
+        }
+
+        const countQuery = `SELECT COUNT(*) FROM public.san_pham_yeu_thich WHERE ma_san_pham = $1 AND trang_thai = true`;
+        // Thay db thành pool
+        const countResult = pool.query ? await pool.query(countQuery, [id]) : await pool.execute(countQuery, [id]);
+        
+        const countRow = countResult.rows ? countResult.rows[0] : countResult[0];
+        const totalLikes = parseInt(countRow?.count || 0, 10);
+
+        let isLikedByUser = false;
+        if (userId) {
+            const userQuery = `SELECT trang_thai FROM public.san_pham_yeu_thich WHERE ma_san_pham = $1 AND user_id = $2 LIMIT 1`;
+            // Thay db thành pool
+            const userResult = pool.query ? await pool.query(userQuery, [id, userId]) : await pool.execute(userQuery, [id, userId]);
+            const userRow = userResult.rows ? userResult.rows[0] : userResult[0];
+            
+            if (userRow) {
+                isLikedByUser = userRow.trang_thai;
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                total_likes: totalLikes,
+                is_liked_by_user: isLikedByUser
+            }
+        });
+
+    } catch (error) {
+        console.error("🔥 Lỗi getProductLikes:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi lấy dữ liệu yêu thích." });
+    }
+};
+
+// =========================================================================
+// 23 API: THÊM / BỎ YÊU THÍCH SẢN PHẨM (TOGGLE)
+// =========================================================================
+export const toggleProductLike = async (req, res) => {
+    try {
+        const { id } = req.params; 
+        const { trang_thai } = req.body; 
+        let userId = req.user?.id || req.user?.user_id; 
+
+        if (!userId) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer')) {
+                const token = authHeader.split(' ')[1];
+                try {
+                    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                    userId = payload.id || payload.user_id;
+                } catch (e) {}
+            }
+        }
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Bạn cần đăng nhập để thực hiện chức năng này!" });
+        }
+
+        const checkQuery = `SELECT ma_yeu_thich FROM public.san_pham_yeu_thich WHERE ma_san_pham = $1 AND user_id = $2 LIMIT 1`;
+        // Thay db thành pool
+        const checkResult = pool.query ? await pool.query(checkQuery, [id, userId]) : await pool.execute(checkQuery, [id, userId]);
+        const exists = checkResult.rows ? checkResult.rows.length > 0 : checkResult.length > 0;
+
+        if (exists) {
+            const updateQuery = `
+                UPDATE public.san_pham_yeu_thich 
+                SET trang_thai = $1, ngay_cap_nhat = NOW() 
+                WHERE ma_san_pham = $2 AND user_id = $3
+            `;
+            // Thay db thành pool
+            pool.query ? await pool.query(updateQuery, [trang_thai, id, userId]) : await pool.execute(updateQuery, [trang_thai, id, userId]);
+        } else {
+            const insertQuery = `
+                INSERT INTO public.san_pham_yeu_thich (ma_san_pham, user_id, trang_thai, ngay_tao, ngay_cap_nhat) 
+                VALUES ($1, $2, $3, NOW(), NOW())
+            `;
+            // Thay db thành pool
+            pool.query ? await pool.query(insertQuery, [id, userId, trang_thai]) : await pool.execute(insertQuery, [id, userId, trang_thai]);
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: trang_thai ? "Đã thêm vào danh sách yêu thích!" : "Đã bỏ yêu thích!" 
+        });
+
+    } catch (error) {
+        console.error("🔥 Lỗi toggleProductLike:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi cập nhật trạng thái yêu thích." });
+    }
+};
+
+// =========================================================================
+// 24 API: LẤY DANH SÁCH TOÀN BỘ SẢN PHẨM YÊU THÍCH CỦA 1 USER
+// =========================================================================
+export const getUserFavorites = async (req, res) => {
+    try {
+        let userId = req.user?.id || req.user?.user_id;
+
+        // Bóc tách token
+        if (!userId) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer')) {
+                const token = authHeader.split(' ')[1];
+                try {
+                    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+                    userId = payload.id || payload.user_id;
+                } catch (e) {}
+            }
+        }
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Bạn cần đăng nhập để xem danh sách này!" });
+        }
+
+        // 🌟 NÂNG CẤP SQL: Bốc thêm "Ảnh chính" từ bảng media và "Giá min" từ bảng biến thể
+        const query = `
+            SELECT 
+                p.*, 
+                f.ngay_cap_nhat as ngay_thich,
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = p.ma_san_pham AND la_anh_chinh = true LIMIT 1) as hinh_anh_chinh,
+                (SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham) as gia_ban_thap_nhat
+            FROM public.san_pham p
+            JOIN public.san_pham_yeu_thich f ON p.ma_san_pham = f.ma_san_pham
+            WHERE f.user_id = $1 AND f.trang_thai = true
+            ORDER BY f.ngay_cap_nhat DESC
+        `;
+        
+        const result = pool.query ? await pool.query(query, [userId]) : await pool.execute(query, [userId]);
+        const favorites = result.rows ? result.rows : result;
+
+        return res.status(200).json({ success: true, data: favorites });
+    } catch (error) {
+        console.error("🔥 Lỗi getUserFavorites:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải danh sách yêu thích." });
+    }
+};
+
+// =========================================================================
+// 25 API: LẤY TOP SẢN PHẨM ĐƯỢC YÊU THÍCH NHẤT (SẮP XẾP TỪ CAO XUỐNG THẤP)
+// =========================================================================
+export const getTopFavoriteProducts = async (req, res) => {
+    try {
+        // Truy vấn đếm số lượt yêu thích, kèm theo ảnh chính và giá bán thấp nhất
+        const query = `
+            SELECT 
+                p.*, 
+                COUNT(f.ma_yeu_thich) as total_likes,
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = p.ma_san_pham AND la_anh_chinh = true LIMIT 1) as hinh_anh_chinh,
+                (SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham) as gia_ban_thap_nhat
+            FROM public.san_pham p
+            JOIN public.san_pham_yeu_thich f ON p.ma_san_pham = f.ma_san_pham
+            WHERE f.trang_thai = true
+            GROUP BY p.ma_san_pham
+            ORDER BY total_likes DESC
+            LIMIT 10; -- Lấy top 10 sản phẩm
+        `;
+        
+        const result = pool.query ? await pool.query(query) : await pool.execute(query);
+        const products = result.rows ? result.rows : result;
+
+        return res.status(200).json({ success: true, data: products });
+    } catch (error) {
+        console.error("🔥 Lỗi getTopFavoriteProducts:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống khi tải top sản phẩm yêu thích." });
+    }
+};

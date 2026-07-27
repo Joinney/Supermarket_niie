@@ -156,7 +156,7 @@ export default function Sidebar() {
     }));
 
     if (menuKey === "dashboard" && hasAccess("dashboard")) {
-      navigate("/admin/dashboard/thongkesanpham");
+      navigate("/admin/dashboard/tongquan");
     } else if (menuKey === "khuyenMai" && hasAccess("promotions")) {
       navigate("/admin/promotions/danh-sach");
     } else if (menuKey === "donHang" && hasAccess("orders")) {
@@ -336,18 +336,23 @@ export default function Sidebar() {
                 </button>
 
                 {openDropdowns.dashboard && !isCollapsed && (
-                  <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-                    <button
-                      onClick={() =>
-                        handleSubMenuClick("/admin/dashboard/thongkesanpham")
-                      }
-                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}
-                      ></span>
-                      <span>Thống kê sản phẩm</span>
-                    </button>
+  <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+    {/* 🌟 NÚT MỚI THÊM VÀO ĐẦU DROPDOWN ĐỂ ĐIỀU HƯỚNG SANG TRANG CÓ BIỂU ĐỒ BAR/LINE */}
+    <button
+      onClick={() => handleSubMenuClick("/admin/dashboard/tongquan")}
+      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/tongquan")}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/tongquan") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+      <span>Tổng quan kinh doanh</span>
+    </button>
+
+    <button
+      onClick={() => handleSubMenuClick("/admin/dashboard/thongkesanpham")}
+      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+      <span>Thống kê sản phẩm</span>
+    </button>
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/dashboard/thongkedonhang")

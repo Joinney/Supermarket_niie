@@ -26,6 +26,7 @@
     "react-i18next": "^17.0.4",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.14.2",
+    "recharts": "^3.9.2",
     "socket.io-client": "^4.8.3",
     "sockjs-client": "^1.6.1"
   },

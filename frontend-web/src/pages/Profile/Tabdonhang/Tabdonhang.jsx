@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
+import ModalChiTietDonHang from "./ModalChiTietDonHang"; // 🌟 Import component Modal vừa tách
 import ReviewModal from "../../../components/Reviews/ReviewModal";
 import { productApi } from "../../../api/axios";
 import io from "socket.io-client";
@@ -40,10 +41,11 @@ export default function Tabdonhang({
   onReviewOrder,
   onViewDetails,
   onReorder,
-  onRefreshData, // 🌟 Nhận prop từ component cha để re-fetch ngầm tránh reload F5
+  onRefreshData, 
 }) {
   const [orders, setOrders] = useState(initialOrders);
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState(null); // Quản lý hiển thị chi tiết đơn hàng
   const [expandedOrders, setExpandedOrders] = useState({});
   const [reviewModalData, setReviewModalData] = useState(null);
   const [reviewedOrderIds, setReviewedOrderIds] = useState([]);
@@ -51,7 +53,6 @@ export default function Tabdonhang({
   const socketRef = useRef(null);
   const realtimeUpdatedOrdersRef = useRef({});
 
-  // Đồng bộ hóa dữ liệu từ component cha nhưng giữ lại cập nhật realtime của Socket
   useEffect(() => {
     if (!initialOrders) return;
     setOrders(() => {
@@ -68,13 +69,11 @@ export default function Tabdonhang({
     });
   }, [initialOrders]);
 
-  // 🌟 KẾT NỐI REALTIME SOCKET.IO (Tối ưu hóa vòng đời kết nối tránh reconnect liên tục)
   useEffect(() => {
     socketRef.current = io("http://localhost:5005", {
       transports: ["websocket"],
     });
 
-    // Cho tất cả đơn hàng gia nhập vào Room
     if (initialOrders && initialOrders.length > 0) {
       initialOrders.forEach((order) => {
         const roomId = String(order.ma_don_hang || "").trim();
@@ -84,12 +83,10 @@ export default function Tabdonhang({
       });
     }
 
-    // Lắng nghe sự kiện truyền tải từ hệ thống Admin
     socketRef.current.on("send_truck_location", (data) => {
       if (!data) return;
       const { ma_don_hang, isFullyDelivered, isArrived, currentStationIndex } = data;
 
-      // Tính toán trạng thái đồng bộ chuỗi hiển thị tương đương logic Backend
       let newStatus = "Đang giao";
       if (isFullyDelivered) {
         newStatus = "Đã giao";
@@ -101,21 +98,16 @@ export default function Tabdonhang({
 
       const cleanMaDonHang = String(ma_don_hang).trim();
 
-      // Sử dụng Functional Update của setOrders để tránh phụ thuộc vào biến state 'orders' bên ngoài
       setOrders((prevOrders) => {
         const targetOrder = prevOrders.find(o => String(o.ma_don_hang).trim() === cleanMaDonHang);
         
-        // Chỉ tiến hành cập nhật nếu trạng thái thực tế có sự thay đổi
         if (targetOrder && targetOrder.trang_thai_don_hang !== newStatus) {
-          // 1. Ghi đè vào bộ nhớ đệm Ref
           realtimeUpdatedOrdersRef.current[cleanMaDonHang] = newStatus;
 
-          // 2. Kích hoạt lấy dữ liệu mới ngầm từ DB về tầng cha
           if (onRefreshData) {
             onRefreshData();
           }
 
-          // 3. Trả về mảng orders mới cập nhật tức thì
           return prevOrders.map((order) => {
             if (String(order.ma_don_hang).trim() === cleanMaDonHang) {
               return { ...order, trang_thai_don_hang: newStatus };
@@ -132,9 +124,8 @@ export default function Tabdonhang({
         socketRef.current.disconnect();
       }
     };
-  }, [initialOrders, onRefreshData]); // Loại bỏ hoàn toàn 'orders' khỏi đây để giữ kết nối socket ổn định
+  }, [initialOrders, onRefreshData]);
 
-  // FETCH TRẠNG THÁI ĐÁNH GIÁ TỪ BACKEND
   useEffect(() => {
     const checkReviewStatuses = async () => {
       if (!orders || orders.length === 0) return;
@@ -508,8 +499,12 @@ export default function Tabdonhang({
 
                   {normalizedStatus === "đã giao" && (
                     <div className="flex items-center gap-1.5">
+                      {/* BẤM NÚT SẼ MỞ MODAL CHI TIẾT */}
                       <button
-                        onClick={() => onViewDetails && onViewDetails(order)}
+                        onClick={() => {
+                          setSelectedOrderDetail(order);
+                          if (onViewDetails) onViewDetails(order);
+                        }}
                         className="bg-slate-50 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 border border-slate-200 cursor-pointer h-8"
                       >
                         <FileText size={12} className="shrink-0" />{" "}
@@ -562,12 +557,21 @@ export default function Tabdonhang({
         })}
       </div>
 
+      {/* MODAL LỘ TRÌNH BẢN ĐỒ */}
       <ModalLoTrinh
         isOpen={!!selectedOrderForMap}
         order={selectedOrderForMap}
         onClose={() => setSelectedOrderForMap(null)}
       />
 
+      {/* MODAL CHI TIẾT ĐƠN HÀNG (Sử dụng component tách riêng) */}
+      <ModalChiTietDonHang
+        isOpen={!!selectedOrderDetail}
+        order={selectedOrderDetail}
+        onClose={() => setSelectedOrderDetail(null)}
+      />
+
+      {/* MODAL ĐÁNH GIÁ SẢN PHẨM */}
       <ReviewModal
         isOpen={!!reviewModalData}
         onClose={() => setReviewModalData(null)}

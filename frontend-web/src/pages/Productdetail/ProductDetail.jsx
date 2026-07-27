@@ -8,15 +8,13 @@ import {
   Plus,
   ChevronRight,
   CreditCard,
+  Heart,
 } from "lucide-react";
 import { io } from "socket.io-client";
-
 import { useLanguage } from "../../context/LanguageContext";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
-
 import { productApi, promotionApi } from "../../api/axios";
-
 import Feedback from "./Feedback";
 import RelatedProducts from "./RelatedProducts";
 import RecommendedProducts from "./RecommendedProducts";
@@ -47,6 +45,11 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
   const [selectedAttributes, setSelectedAttributes] = useState({});
+
+  // THÊM STATE YÊU THÍCH
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [isLiking, setIsLiking] = useState(false);
 
   // STATE CHỨA DỮ LIỆU FLASH SALE TRỰC TIẾP TỪ FRONTEND
   const [activeFlashSales, setActiveFlashSales] = useState([]);
@@ -198,6 +201,62 @@ export default function ProductDetail() {
       if (variantMedia) setMainMedia(variantMedia);
     }
   }, [variantId, product, selectedVariant]);
+
+  useEffect(() => {
+    if (!id || id === "undefined") return;
+
+    const fetchLikeData = async () => {
+      try {
+        const res = await productApi.get(`/products/${id}/likes`);
+        if (res.data?.success) {
+          setLikeCount(res.data.data.total_likes || 0);
+          setIsLiked(res.data.data.is_liked_by_user || false);
+        }
+      } catch (error) {
+        console.error("Lỗi lấy dữ liệu yêu thích:", error);
+      }
+    };
+
+    fetchLikeData();
+  }, [id]);
+
+  // Xử lý sự kiện bấm nút Yêu Thích
+  const handleToggleLike = async () => {
+    if (!checkIsLoggedIn()) {
+      alert("Bạn cần đăng nhập để thêm sản phẩm vào danh sách yêu thích!");
+      navigate("/login");
+      return;
+    }
+
+    if (isLiking || !product) return;
+    setIsLiking(true);
+
+    // Cập nhật UI ngay lập tức (Optimistic UI update)
+    const newLikedState = !isLiked;
+    setIsLiked(newLikedState);
+    setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
+
+    try {
+      // Gọi API POST để lưu/xóa trạng thái yêu thích vào bảng san_pham_yeu_thich
+      const res = await productApi.post(`/products/${id}/likes`, {
+        ma_san_pham: product.ma_san_pham,
+        trang_thai: newLikedState // true: thích, false: bỏ thích
+      });
+      
+      if (!res.data?.success) {
+        // Nếu API lỗi, revert lại UI
+        setIsLiked(!newLikedState);
+        setLikeCount(prev => !newLikedState ? prev + 1 : Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Lỗi cập nhật yêu thích:", error);
+      // Revert UI nếu lỗi mạng
+      setIsLiked(!newLikedState);
+      setLikeCount(prev => !newLikedState ? prev + 1 : Math.max(0, prev - 1));
+    } finally {
+      setIsLiking(false);
+    }
+  };
 
   const nhomPhanLoai = useMemo(() => {
     if (!product?.bien_the) return {};
@@ -626,14 +685,32 @@ export default function ProductDetail() {
           {/* PRODUCT INFO SECTION */}
           <div className="lg:col-span-6 xl:col-span-5 text-left space-y-4 lg:space-y-5 lg:sticky lg:top-4 px-1">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="bg-[#006c49] text-white text-[7px] 2xl:text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter italic">
-                  Demi Fresh
-                </span>
-                <p className="text-[9px] 2xl:text-[11px] text-slate-400 font-bold uppercase tracking-widest pt-1">
-                  SKU: {selectedVariant?.sku || "N/A"}
-                </p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="bg-[#006c49] text-white text-[7px] 2xl:text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter italic">
+                    Demi Fresh
+                  </span>
+                  <p className="text-[9px] 2xl:text-[11px] text-slate-400 font-bold uppercase tracking-widest pt-1">
+                    SKU: {selectedVariant?.sku || "N/A"}
+                  </p>
+                </div>
+                
+                {/* NÚT YÊU THÍCH BÊN GÓC PHẢI */}
+                <button 
+                  onClick={handleToggleLike}
+                  disabled={isLiking}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-100 bg-white hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Heart 
+                    size={16} 
+                    className={`transition-colors ${isLiked ? "fill-red-500 text-red-500" : "text-slate-400"}`} 
+                  />
+                  <span className="text-[10px] font-bold text-slate-600">
+                    {likeCount}
+                  </span>
+                </button>
               </div>
+              
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>
@@ -777,7 +854,7 @@ export default function ProductDetail() {
                       {isFlashSale ? "SL Mở Bán" : "Số lượng"}
                     </p>
                     <span className="text-[9px] text-[#006c49] font-bold">
-                      (Kho: {stockCount})
+                      {stockCount}
                     </span>
                   </div>
                   <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 lg:p-1 shadow-sm">
