@@ -234,25 +234,29 @@ export default function ProductDetail() {
     // Cập nhật UI ngay lập tức (Optimistic UI update)
     const newLikedState = !isLiked;
     setIsLiked(newLikedState);
-    setLikeCount(prev => newLikedState ? prev + 1 : Math.max(0, prev - 1));
+    setLikeCount((prev) => (newLikedState ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
       // Gọi API POST để lưu/xóa trạng thái yêu thích vào bảng san_pham_yeu_thich
       const res = await productApi.post(`/products/${id}/likes`, {
         ma_san_pham: product.ma_san_pham,
-        trang_thai: newLikedState // true: thích, false: bỏ thích
+        trang_thai: newLikedState, // true: thích, false: bỏ thích
       });
-      
+
       if (!res.data?.success) {
         // Nếu API lỗi, revert lại UI
         setIsLiked(!newLikedState);
-        setLikeCount(prev => !newLikedState ? prev + 1 : Math.max(0, prev - 1));
+        setLikeCount((prev) =>
+          !newLikedState ? prev + 1 : Math.max(0, prev - 1),
+        );
       }
     } catch (error) {
       console.error("Lỗi cập nhật yêu thích:", error);
       // Revert UI nếu lỗi mạng
       setIsLiked(!newLikedState);
-      setLikeCount(prev => !newLikedState ? prev + 1 : Math.max(0, prev - 1));
+      setLikeCount((prev) =>
+        !newLikedState ? prev + 1 : Math.max(0, prev - 1),
+      );
     } finally {
       setIsLiking(false);
     }
@@ -448,6 +452,7 @@ export default function ProductDetail() {
     const itemToCheckout = {
       variantId: selectedVariant.ma_bien_the,
       productId: product.ma_san_pham,
+      sku: selectedVariant.sku || "", // 🌟 ĐÃ BỔ SUNG SKU CHUẨN XÁC
       name: product.ten_san_pham,
       variantName: targetVariantName,
       price: currentPrice,
@@ -496,6 +501,8 @@ export default function ProductDetail() {
 
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
+      productId: product.ma_san_pham,
+      sku: selectedVariant.sku || "", // 🌟 ĐÃ BỔ SUNG SKU CHUẨN XÁC
       name: product.ten_san_pham,
       price: currentPrice,
       quantity: quantity,
@@ -505,7 +512,6 @@ export default function ProductDetail() {
         selectedVariant.duong_dan_url ||
         mainMedia?.duong_dan_url ||
         "",
-      productId: product.ma_san_pham,
       categorySlug: product.slug_danh_muc || category_slug,
       countryCode: product.country_code || country,
       variantName: targetVariantName,
@@ -694,23 +700,23 @@ export default function ProductDetail() {
                     SKU: {selectedVariant?.sku || "N/A"}
                   </p>
                 </div>
-                
+
                 {/* NÚT YÊU THÍCH BÊN GÓC PHẢI */}
-                <button 
+                <button
                   onClick={handleToggleLike}
                   disabled={isLiking}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-100 bg-white hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
                 >
-                  <Heart 
-                    size={16} 
-                    className={`transition-colors ${isLiked ? "fill-red-500 text-red-500" : "text-slate-400"}`} 
+                  <Heart
+                    size={16}
+                    className={`transition-colors ${isLiked ? "fill-red-500 text-red-500" : "text-slate-400"}`}
                   />
                   <span className="text-[10px] font-bold text-slate-600">
                     {likeCount}
                   </span>
                 </button>
               </div>
-              
+
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>

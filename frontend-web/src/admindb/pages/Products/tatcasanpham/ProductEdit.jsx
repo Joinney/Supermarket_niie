@@ -52,11 +52,12 @@ export default function ProductEdit() {
       try {
         setLoading(true);
 
+        // 🌟 ĐÃ SỬA: Thêm /v1/ vào toàn bộ đường dẫn API
         const [resProduct, resCat, resParents, resNations] = await Promise.all([
-          axios.get(`${apiUrl}/api/products/${id}?role=admin`),
-          axios.get(`${apiUrl}/api/categories/children?country=ALL`),
-          axios.get(`${apiUrl}/api/categories/parents?country=ALL`),
-          axios.get(`${apiUrl}/api/nations`),
+          axios.get(`${apiUrl}/api/v1/products/${id}?role=admin`),
+          axios.get(`${apiUrl}/api/v1/categories/children?country=ALL`),
+          axios.get(`${apiUrl}/api/v1/categories/parents?country=ALL`),
+          axios.get(`${apiUrl}/api/v1/nations`),
         ]);
 
         const product = resProduct.data;
@@ -121,7 +122,8 @@ export default function ProductEdit() {
     e.preventDefault();
     setSubmitLoading(true);
     try {
-      await axios.put(`${apiUrl}/api/products/${id}`, {
+      // 🌟 ĐÃ SỬA: Thêm /v1/ vào đường dẫn cập nhật sản phẩm
+      await axios.put(`${apiUrl}/api/v1/products/${id}`, {
         ten_san_pham: formData.ten_san_pham,
         ma_dm_con: formData.ma_dm_con,
         mo_ta: formData.mo_ta,
@@ -141,8 +143,9 @@ export default function ProductEdit() {
         navigate(`/admin/products/create-variant/${id}`);
       } else {
         if (formData.ma_bien_the_an) {
+          // 🌟 ĐÃ SỬA: Thêm /v1/ vào đường dẫn cập nhật biến thể ẩn
           await axios.put(
-            `${apiUrl}/api/products/variants/${formData.ma_bien_the_an}`,
+            `${apiUrl}/api/v1/products/variants/${formData.ma_bien_the_an}`,
             {
               ma_san_pham: id,
               ten_bien_the: "Mặc định",

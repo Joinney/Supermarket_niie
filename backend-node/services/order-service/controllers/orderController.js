@@ -172,41 +172,46 @@ const placeOrder = async (req, res) => {
     const normalizedItems = danh_sach_san_pham.map(item => {
       const vId = String(item.variant_id || item.variantId);
       const pName = String(item.name || item.product_name || "Sản phẩm Demi Mart").trim();
-      let finalSku = item.sku || null;
+      
+      // Lấy SKU từ client gửi lên (nếu có)
+      let finalSku = item.sku && String(item.sku).trim() !== "" ? String(item.sku).trim() : null;
       let finalMaSanPham = item.ma_san_pham || item.productId || null; 
       let foundImage = item.image_url || "";
+
       if (!foundImage && databaseVariants.length > 0) {
         for (const prod of databaseVariants) {
           if (prod.hinh_anh_chinh) foundImage = prod.hinh_anh_chinh;
-          
           if (prod.bien_the_san_pham) {
-            const matched = prod.bien_the_san_pham.find(v => String(v.id) === vId);
+            const matched = prod.bien_the_san_pham.find(v => String(v.id) === vId || String(v.ma_bien_the) === vId);
             if (matched && matched.image_url) foundImage = matched.image_url;
           }
         }
       }
 
-      // 👉 CÁCH 1: Tìm bằng Product Service
+      // 🌟 LUỒNG FIX LỖI: NẾU CLIENT KHÔNG TRUYỀN SKU, TỰ ĐỘNG MÓC TỪ PRODUCT SERVICE ĐỂ BÙ VÀO
       if (!finalSku && databaseVariants.length > 0) {
         for (const prod of databaseVariants) {
           if (prod.bien_the_san_pham && Array.isArray(prod.bien_the_san_pham)) {
             const matched = prod.bien_the_san_pham.find(v => String(v.ma_bien_the) === vId || String(v.id) === vId);
-            if (matched && matched.sku) finalSku = matched.sku;
+            if (matched && matched.sku) {
+              finalSku = matched.sku;
+              console.log(`✅ [ORDER FIX] Tự động khôi phục SKU từ Product Service cho biến thể ${vId} -> SKU: ${finalSku}`);
+            }
           }
         }
       }
 
-      // 👉 CÁCH 2 (LUỒNG CỨU HỘ): Nếu Cách 1 thất bại, tìm trực tiếp trong Kho bằng Tên Sản Phẩm
+      // 🌟 LUỒNG CỨU HỘ 2: NẾU VẪN KHÔNG CÓ SKU, TÌM TRONG KHO BẰNG TÊN SẢN PHẨM
       if (!finalSku && inventoryCatalog.length > 0) {
         const matchedStock = inventoryCatalog.find(stock => 
           String(stock.name).toLowerCase().trim() === pName.toLowerCase()
         );
         if (matchedStock) {
-          finalSku = matchedStock.id; // API Kho trả về SKU trong trường 'id'
+          finalSku = matchedStock.id || matchedStock.sku;
         }
       }
 
-      // 👉 CHỐT CHẶN CUỐI CÙNG TRÁNH LỖI 500 CHO GO
+      // 👉 CHỐT CHẶN CUỐI CÙNG (Tránh lỗi null cho Go)
       if (!finalSku) {
         finalSku = vId;
       }

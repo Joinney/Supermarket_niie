@@ -800,7 +800,7 @@ export const toggleProductStatus = async (req, res) => {
 };
 
 // =========================================================================
-// 8.6 DELETE PRODUCT (HARD DELETE - CÓ BẢO VỆ SKU & REAL-TIME SOCKET)
+// 8.6 DELETE PRODUCT (HARD DELETE - TỰ ĐỘNG DỌN DẸP SKU ẨN & CASCADE)
 // =========================================================================
 export const deleteProduct = async (req, res) => {
     const client = await pool.connect();
@@ -808,26 +808,23 @@ export const deleteProduct = async (req, res) => {
         const { id } = req.params;
         await client.query('BEGIN');
 
-        // 1. LÁ CHẮN BẢO VỆ: KIỂM TRA SỐ LƯỢNG SKU (BIẾN THỂ)
-        const checkVariants = await client.query(
-            'SELECT COUNT(*) FROM public.bien_the_san_pham WHERE ma_san_pham = $1',
-            [id]
-        );
-        
-        const skuCount = parseInt(checkVariants.rows[0].count);
+        // 1. DỌN DẸP DỮ LIỆU PHỤ THUỘC (CASCADE DELETE)
+        // 1.1 Xóa chi tiết thuộc tính EAV của tất cả biến thể thuộc sản phẩm này
+        await client.query(`
+            DELETE FROM public.chi_tiet_bien_the_thuoc_tinh 
+            WHERE ma_bien_the IN (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = $1)
+        `, [id]);
 
-        if (skuCount > 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                success: false, 
-                message: `Từ chối xóa! Sản phẩm này đang chứa ${skuCount} phiên bản (SKU). Vui lòng vào chi tiết sản phẩm, xóa hết các SKU trước khi xóa sản phẩm gốc.` 
-            });
-        }
-
-        // 2. Nếu đã sạch SKU, tiến hành dọn dẹp các dữ liệu rác còn lại (như hình ảnh media)
+        // 1.2 Xóa toàn bộ ảnh/media của sản phẩm và biến thể
         await client.query('DELETE FROM public.media_san_pham WHERE ma_san_pham = $1', [id]);
 
-        // 3. Xóa Sản phẩm gốc
+        // 1.3 Xóa danh sách yêu thích liên quan đến sản phẩm
+        await client.query('DELETE FROM public.san_pham_yeu_thich WHERE ma_san_pham = $1', [id]);
+
+        // 1.4 Xóa toàn bộ các biến thể (Bao gồm cả SKU ẩn của Sản phẩm Đơn)
+        await client.query('DELETE FROM public.bien_the_san_pham WHERE ma_san_pham = $1', [id]);
+
+        // 2. XÓA SẢN PHẨM GỐC
         const result = await client.query('DELETE FROM public.san_pham WHERE ma_san_pham = $1 RETURNING *', [id]);
 
         if (result.rows.length === 0) {
@@ -837,21 +834,22 @@ export const deleteProduct = async (req, res) => {
 
         await client.query('COMMIT');
 
-        // 🌟 NÂNG CẤP REAL-TIME: Báo cho Client văng trang vì SP đã bị xóa vĩnh viễn
+        // 3. 🌟 NÂNG CẤP REAL-TIME: Báo cho Client văng trang vì SP đã bị xóa vĩnh viễn
         const io = req.app.get('io');
         if (io) {
             io.emit('product_status_changed', {
                 ma_san_pham: id,
-                trang_thai: false // Truyền false để Client hiểu là SP không còn khả dụng và tự động văng về trang chủ
+                trang_thai: false // Truyền false để Client tự động văng về trang chủ
             });
             console.log(`📡 Socket Emit: Đã báo Client SP [${id}] bị xóa vĩnh viễn`);
         }
 
-        res.status(200).json({ success: true, message: "Đã xóa vĩnh viễn sản phẩm khỏi hệ thống!" });
+        res.status(200).json({ success: true, message: "Đã xóa vĩnh viễn sản phẩm và dọn sạch các SKU ẩn!" });
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Lỗi API deleteProduct:', error.message);
-        res.status(500).json({ success: false, message: "Xóa thất bại! Sản phẩm này đang dính lịch sử đơn hàng." });
+        // Lỗi 500 xảy ra khi Database từ chối xóa do dính Foreign Key (ví dụ: SP đã từng có người mua, dính vào bảng Order_Items)
+        res.status(500).json({ success: false, message: "Xóa thất bại! Sản phẩm này đã phát sinh lịch sử đơn hàng trong hệ thống." });
     } finally {
         client.release();
     }
