@@ -43,5 +43,6 @@ router.get('/admin/flash-sale/:ma_khuyen_mai', getFlashSaleByIdAdmin);
 router.post('/internal/check-variant-promotion', checkInternalVariantPromotion);
 
 // 8. Cập nhật số lượng đã bán khi có đơn hàng thành công 
-router.post('/internal/update-sold', updateFlashSaleSoldQuantity);
+router.post('/internal/update-sold-count', updateFlashSaleSoldQuantity);
+
 export default router;

@@ -247,6 +247,21 @@ const placeOrder = async (req, res) => {
       });
     }
 
+    try {
+      const promotionServiceUrl = process.env.PROMOTION_SERVICE_URL || 'http://demi_promotion_service:5007';
+      const itemsToUpdateSale = normalizedItems.map(item => ({
+        ma_bien_the: item.variant_id,
+        so_luong_mua: item.quantity
+      }));
+
+      await axios.post(`${promotionServiceUrl}/api/v1/promotions/internal/update-sold-count`, {
+        items: itemsToUpdateSale
+      });
+      console.log("✅ Đã báo cáo số lượng bán sang Promotion Service thành công.");
+    } catch (promoErr) {
+      console.warn("⚠️ Cảnh báo: Lỗi kết nối Promotion Service (Không thể cập nhật số lượng đã bán):", promoErr.message);
+    }
+
     const clientShippingFee = Number(req.body.phi_van_chuyen);
     const validShippingCost = (!isNaN(clientShippingFee) && clientShippingFee >= 0) ? clientShippingFee : 25000;
     req.body.phi_van_chuyen = validShippingCost;

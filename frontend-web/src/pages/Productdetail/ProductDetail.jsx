@@ -46,15 +46,12 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedAttributes, setSelectedAttributes] = useState({});
 
-  // THÊM STATE YÊU THÍCH
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
 
-  // STATE CHỨA DỮ LIỆU FLASH SALE TRỰC TIẾP TỪ FRONTEND
   const [activeFlashSales, setActiveFlashSales] = useState([]);
 
-  // Đồng bộ quốc gia/cửa hàng URL
   useEffect(() => {
     const storeCodeLowerCase = String(currentStore?.code || "vn").toLowerCase();
     if (currentStore?.code && storeCodeLowerCase !== country && product) {
@@ -65,7 +62,6 @@ export default function ProductDetail() {
     }
   }, [currentStore, country, id, category_slug, navigate, product]);
 
-  // Gọi API Flash Sale độc lập để bọc lót cho Backend
   useEffect(() => {
     promotionApi
       .get("/client/flash-sale/active")
@@ -77,10 +73,8 @@ export default function ProductDetail() {
       .catch((err) => console.error("Lỗi lấy Flash Sale bọc lót:", err));
   }, []);
 
-  // HỆ THỐNG KẾT NỐI REAL-TIME TỰ ĐỘNG NHẬN DIỆN
   useEffect(() => {
     const apiBaseUrl = productApi.defaults.baseURL || "";
-    // Tự động bóc tách và gỡ bỏ hậu tố '/api' để lấy domain gốc cho Socket.IO
     const socketUrl = apiBaseUrl.replace(/\/api$/, "");
     const socket = io(socketUrl);
 
@@ -89,7 +83,6 @@ export default function ProductDetail() {
     };
   }, []);
 
-  // Lấy dữ liệu chi tiết sản phẩm
   useEffect(() => {
     if (!id || id === "undefined") {
       setLoading(false);
@@ -181,7 +174,6 @@ export default function ProductDetail() {
       });
   }, [id, country, category_slug, navigate]);
 
-  // Theo dõi sự thay đổi của variantId từ URL
   useEffect(() => {
     if (!product || !variantId) return;
     const targetVariant = product.bien_the?.find(
@@ -220,7 +212,6 @@ export default function ProductDetail() {
     fetchLikeData();
   }, [id]);
 
-  // Xử lý sự kiện bấm nút Yêu Thích
   const handleToggleLike = async () => {
     if (!checkIsLoggedIn()) {
       alert("Bạn cần đăng nhập để thêm sản phẩm vào danh sách yêu thích!");
@@ -231,20 +222,17 @@ export default function ProductDetail() {
     if (isLiking || !product) return;
     setIsLiking(true);
 
-    // Cập nhật UI ngay lập tức (Optimistic UI update)
     const newLikedState = !isLiked;
     setIsLiked(newLikedState);
     setLikeCount((prev) => (newLikedState ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
-      // Gọi API POST để lưu/xóa trạng thái yêu thích vào bảng san_pham_yeu_thich
       const res = await productApi.post(`/products/${id}/likes`, {
         ma_san_pham: product.ma_san_pham,
-        trang_thai: newLikedState, // true: thích, false: bỏ thích
+        trang_thai: newLikedState,
       });
 
       if (!res.data?.success) {
-        // Nếu API lỗi, revert lại UI
         setIsLiked(!newLikedState);
         setLikeCount((prev) =>
           !newLikedState ? prev + 1 : Math.max(0, prev - 1),
@@ -252,7 +240,6 @@ export default function ProductDetail() {
       }
     } catch (error) {
       console.error("Lỗi cập nhật yêu thích:", error);
-      // Revert UI nếu lỗi mạng
       setIsLiked(!newLikedState);
       setLikeCount((prev) =>
         !newLikedState ? prev + 1 : Math.max(0, prev - 1),
@@ -294,23 +281,64 @@ export default function ProductDetail() {
     });
   };
 
+  const isOptionInStock = (key, value) => {
+    if (!product?.bien_the) return false;
+    const cleanValue = typeof value === "string" ? value.trim() : value;
+    return product.bien_the.some((bt) => {
+      if (!bt.thuoc_tinh) return false;
+      const targetVal = bt.thuoc_tinh[key];
+      if (!targetVal) return false;
+      const isMatch =
+        String(targetVal).trim().toLowerCase() ===
+        String(cleanValue).toLowerCase();
+      return isMatch && Number(bt.so_luong_ton || 0) > 0;
+    });
+  };
+
+  // =========================================================================
+  // 🚨 THUẬT TOÁN CHỐNG KẸT MA TRẬN (AUTO-RESOLVE SHOPEE)
+  // =========================================================================
   const handleAttributeSelect = (key, value) => {
     if (!product?.bien_the) return;
-    const nextAttributes = { ...selectedAttributes, [key]: value };
-    setSelectedAttributes(nextAttributes);
 
-    const matchedVariant = product.bien_the.find((bt) => {
+    // 1. Giả lập việc kết hợp thuộc tính mới với các thuộc tính đang chọn hiện tại
+    const nextAttributes = { ...selectedAttributes, [key]: value };
+
+    // 2. Tìm xem có biến thể nào khớp 100% với cấu hình này không
+    let matchedVariant = product.bien_the.find((bt) => {
       if (!bt.thuoc_tinh) return false;
       return Object.keys(nhomPhanLoai).every((k) => {
-        const val1 = bt.thuoc_tinh[k];
-        const val2 = nextAttributes[k];
-        if (!val1 || !val2) return false;
+        if (!nextAttributes[k]) return true;
         return (
-          String(val1).trim().toLowerCase() ===
-          String(val2).trim().toLowerCase()
+          String(bt.thuoc_tinh[k]).trim().toLowerCase() ===
+          String(nextAttributes[k]).trim().toLowerCase()
         );
       });
     });
+
+    // 3. NẾU KHÔNG CÓ (TỨC LÀ BỊ LỆCH PHA DO BẤM NHẦM):
+    // Hệ thống tự động bẻ lái sang 1 biến thể hợp lệ có chứa thuộc tính vừa bấm.
+    if (!matchedVariant) {
+      const fallbackVariants = product.bien_the.filter((bt) => {
+        if (!bt.thuoc_tinh) return false;
+        return (
+          String(bt.thuoc_tinh[key]).trim().toLowerCase() ===
+          String(value).trim().toLowerCase()
+        );
+      });
+
+      // Ưu tiên nảy sang biến thể còn hàng
+      matchedVariant =
+        fallbackVariants.find((v) => Number(v.so_luong_ton || 0) > 0) ||
+        fallbackVariants[0];
+
+      // Ép State UI đi theo biến thể mới để tránh bị rỗng gây lỗi "Tạm hết hàng" sai lệch
+      if (matchedVariant) {
+        setSelectedAttributes(matchedVariant.thuoc_tinh);
+      }
+    } else {
+      setSelectedAttributes(nextAttributes);
+    }
 
     if (matchedVariant) {
       setSelectedVariant(matchedVariant);
@@ -325,14 +353,9 @@ export default function ProductDetail() {
         `/${country}/product/${realSlug}/${id}/${matchedVariant.ma_bien_the}`,
         { replace: true },
       );
-    } else {
-      setSelectedVariant(null);
     }
   };
 
-  // =========================================================================
-  // 🚨 LOGIC FLASH SALE & TÍNH GIÁ (ĐÃ VÁ LỖ HỔNG)
-  // =========================================================================
   const activeSaleItem = useMemo(() => {
     if (!selectedVariant || !activeFlashSales.length) return null;
     for (const promo of activeFlashSales) {
@@ -345,7 +368,6 @@ export default function ProductDetail() {
     return null;
   }, [selectedVariant, activeFlashSales]);
 
-  // 1. Tính toán suất Sale CÒN LẠI
   const remainingSaleQuantity = activeSaleItem
     ? Math.max(
         0,
@@ -360,14 +382,12 @@ export default function ProductDetail() {
         )
       : 0;
 
-  // 2. CHỐT CHẶN: Chỉ được tính là Flash Sale nếu VẪN CÒN SUẤT
   const isFlashSale =
     (!!activeSaleItem ||
       !!selectedVariant?.thong_tin_sale ||
       !!selectedVariant?.is_flash_sale) &&
     remainingSaleQuantity > 0;
 
-  // 3. Tính Giá Bán (Hết suất tự động trả về giá gốc)
   const currentPrice = isFlashSale
     ? Number(
         activeSaleItem?.gia_khuyen_mai ||
@@ -378,7 +398,6 @@ export default function ProductDetail() {
       )
     : Number(selectedVariant?.gia_ban_le || product?.gia_ban_thap_nhat || 0);
 
-  // 4. Tính Giá Gốc (Dùng để hiển thị gạch ngang)
   const rawOriginalPrice = Number(
     selectedVariant?.gia_goc ||
       selectedVariant?.gia_ban_le ||
@@ -388,21 +407,18 @@ export default function ProductDetail() {
   const originalPrice =
     isFlashSale && rawOriginalPrice > currentPrice ? rawOriginalPrice : null;
 
-  // 5. Lấy số lượng tồn kho hiển thị (Ưu tiên suất Flash sale, nếu hết lấy tồn kho thực để bán giá gốc)
   const rawStock = Number(selectedVariant?.so_luong_ton || 0);
   const stockCount = isFlashSale
-    ? Math.min(remainingSaleQuantity, rawStock) // Không cho vượt quá tồn kho thực tế
+    ? Math.min(remainingSaleQuantity, rawStock)
     : rawStock;
 
   const isOutOfStock = !selectedVariant || stockCount <= 0;
 
-  // Hàm kiểm tra đăng nhập DÀNH RIÊNG CHO NÚT MUA NGAY
   const checkIsLoggedIn = () => {
     const token = localStorage.getItem("token");
     return !!token;
   };
 
-  // NÚT MUA NGAY: CẦN ĐĂNG NHẬP ĐỂ ĐẾN TRANG THANH TOÁN
   const handleBuyNow = () => {
     if (!checkIsLoggedIn()) {
       const confirmLogin = window.confirm(
@@ -414,7 +430,6 @@ export default function ProductDetail() {
 
     if (!product || !selectedVariant || isOutOfStock) return;
 
-    // 1. TẠO TÊN PHÂN LOẠI CHUẨN
     let cleanEAVArray = [];
     if (
       Array.isArray(selectedVariant.thuoc_tinh_hop_nhat) &&
@@ -452,7 +467,7 @@ export default function ProductDetail() {
     const itemToCheckout = {
       variantId: selectedVariant.ma_bien_the,
       productId: product.ma_san_pham,
-      sku: selectedVariant.sku || "", // 🌟 ĐÃ BỔ SUNG SKU CHUẨN XÁC
+      sku: selectedVariant.sku || "",
       name: product.ten_san_pham,
       variantName: targetVariantName,
       price: currentPrice,
@@ -461,14 +476,10 @@ export default function ProductDetail() {
       image_url: finalImage,
     };
 
-    // 3. LƯU VÀO LOCALSTORAGE
     localStorage.setItem("checkoutItems", JSON.stringify([itemToCheckout]));
-
-    // 4. CHUYỂN HƯỚNG
     navigate("/checkout");
   };
 
-  // NÚT THÊM VÀO GIỎ HÀNG: THOẢI MÁI, KHÔNG CẦN ĐĂNG NHẬP
   const handleAddToCart = (e) => {
     if (!product || !selectedVariant || isOutOfStock) return;
 
@@ -502,7 +513,7 @@ export default function ProductDetail() {
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
       productId: product.ma_san_pham,
-      sku: selectedVariant.sku || "", // 🌟 ĐÃ BỔ SUNG SKU CHUẨN XÁC
+      sku: selectedVariant.sku || "",
       name: product.ten_san_pham,
       price: currentPrice,
       quantity: quantity,
@@ -522,7 +533,7 @@ export default function ProductDetail() {
     };
 
     addToCart(itemToCart);
-    // Hiệu ứng Flying Dot
+
     const startX = e.clientX;
     const startY = e.clientY;
     const cartIcon = document.getElementById("cart-icon");
@@ -548,7 +559,6 @@ export default function ProductDetail() {
     }, 10);
     setTimeout(() => dot.remove(), 800);
 
-    // Hiệu ứng Toast
     const toast = document.createElement("div");
     toast.className = "custom-toast";
     toast.innerHTML = `
@@ -601,7 +611,6 @@ export default function ProductDetail() {
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-[#006c49] selection:text-white pb-16 text-left">
       <div className="w-full max-w-[1150px] 2xl:max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-10 pt-4 lg:pt-10">
-        {/* Breadcrumbs */}
         <nav className="flex items-center gap-2 text-[10px] 2xl:text-[11px] font-bold text-slate-400 mb-3 lg:mb-6 uppercase tracking-wider overflow-hidden px-1">
           <Link
             to={`/${country}`}
@@ -630,7 +639,6 @@ export default function ProductDetail() {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 2xl:gap-16 items-start">
-          {/* MEDIA SECTION */}
           <div className="lg:col-span-6 xl:col-span-7 flex flex-col-reverse sm:flex-row gap-2 lg:gap-4">
             <div className="flex sm:flex-col gap-2 w-full sm:w-16 2xl:w-20 flex-shrink-0 overflow-x-auto sm:overflow-y-auto thumb-scrollbar py-1 sm:max-h-[280px] 2xl:max-h-[350px] pr-1">
               {product.media?.map((m, i) => (
@@ -688,7 +696,6 @@ export default function ProductDetail() {
             </div>
           </div>
 
-          {/* PRODUCT INFO SECTION */}
           <div className="lg:col-span-6 xl:col-span-5 text-left space-y-4 lg:space-y-5 lg:sticky lg:top-4 px-1">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
@@ -701,7 +708,6 @@ export default function ProductDetail() {
                   </p>
                 </div>
 
-                {/* NÚT YÊU THÍCH BÊN GÓC PHẢI */}
                 <button
                   onClick={handleToggleLike}
                   disabled={isLiking}
@@ -720,18 +726,18 @@ export default function ProductDetail() {
               <h1 className="text-xl lg:text-2xl 2xl:text-4xl font-black text-[#1a1a1a] leading-tight tracking-tight uppercase italic">
                 {product.ten_san_pham}
               </h1>
-              {isMultiTier &&
-                selectedVariant &&
-                selectedVariant.ten_bien_the && (
+
+              {selectedVariant &&
+                selectedVariant.ten_bien_the &&
+                selectedVariant.ten_bien_the !== "Mặc định" && (
                   <h2 className="text-sm lg:text-base font-bold text-[#006c49] mt-1.5 inline-block bg-[#006c49]/10 px-3 py-1 rounded-md">
                     Phân loại: {selectedVariant.ten_bien_the}
                   </h2>
                 )}
             </div>
 
-            {/* Price section */}
             <div className="flex items-baseline gap-3 border-b border-slate-100 pb-3 lg:pb-4">
-              {selectedVariant ? (
+              {selectedVariant && !isOutOfStock ? (
                 <div className="flex flex-col">
                   {originalPrice && (
                     <span
@@ -762,7 +768,6 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Description & Variant Attributes Selection */}
             <div className="space-y-3 lg:space-y-4">
               <p className="text-[10px] lg:text-[11px] 2xl:text-[13px] text-slate-500 leading-relaxed italic border-l-4 border-[#006c49] pl-3">
                 "{product.mo_ta || "Sản phẩm tuyển chọn từ Demi Mart."}"
@@ -786,8 +791,13 @@ export default function ProductDetail() {
                                     .toLowerCase() ===
                                   giaTri.trim().toLowerCase()
                                 : selectedAttributes[tenThuocTinh] === giaTri;
-                            const isValid = isOptionValid(tenThuocTinh, giaTri);
 
+                            const isValid = isOptionValid(tenThuocTinh, giaTri);
+                            const inStock =
+                              isValid && isOptionInStock(tenThuocTinh, giaTri);
+
+                            // 🌟 CHO PHÉP BẤM NGAY CẢ KHI HẾT HÀNG ĐỂ XEM ĐƯỢC CHỮ "TẠM HẾT HÀNG"
+                            // 🌟 NHƯNG ĐỔI GIAO DIỆN MỜ CÓ VIỀN ĐỨT NÉT
                             return (
                               <button
                                 type="button"
@@ -796,13 +806,15 @@ export default function ProductDetail() {
                                   isValid &&
                                   handleAttributeSelect(tenThuocTinh, giaTri)
                                 }
-                                disabled={!isValid}
+                                disabled={!isValid} // Chỉ khóa khi cái nút này ko tồn tại trong CSDL
                                 className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 cursor-pointer ${
                                   isSelected
                                     ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
-                                    : isValid
-                                      ? "border-slate-200 bg-white text-slate-500 hover:border-[#006c49]/50"
-                                      : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-50"
+                                    : isValid && inStock
+                                      ? "border-slate-200 bg-white text-slate-600 hover:border-[#006c49]/50"
+                                      : isValid && !inStock
+                                        ? "border-slate-200 bg-slate-50 text-slate-400 opacity-50 border-dashed" // Hết hàng thì mờ và đứt nét
+                                        : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-30"
                                 }`}
                               >
                                 {giaTri}
@@ -815,43 +827,52 @@ export default function ProductDetail() {
                   )
                 ) : product.bien_the?.length > 1 ? (
                   <div className="flex flex-wrap gap-1.5 lg:gap-2">
-                    {product.bien_the?.map((v, i) => (
-                      <button
-                        type="button"
-                        key={i}
-                        onClick={() => {
-                          setSelectedVariant(v);
-                          const vMedia = product.media?.find(
-                            (m) =>
-                              String(m.ma_bien_the) === String(v.ma_bien_the),
-                          );
-                          if (vMedia) setMainMedia(vMedia);
+                    {product.bien_the?.map((v, i) => {
+                      const vStock = Number(v.so_luong_ton || 0);
+                      const vIsOutOfStock = vStock <= 0;
+                      const isSelected =
+                        String(selectedVariant?.ma_bien_the) ===
+                        String(v.ma_bien_the);
 
-                          const realSlug =
-                            product?.slug_danh_muc ||
-                            product?.ma_dm_con ||
-                            "san-pham";
-                          navigate(
-                            `/${country}/product/${realSlug}/${id}/${v.ma_bien_the}`,
-                            { replace: true },
-                          );
-                        }}
-                        className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all border-2 cursor-pointer ${
-                          String(selectedVariant?.ma_bien_the) ===
-                          String(v.ma_bien_the)
-                            ? "border-[#006c49] bg-[#006c49] text-white shadow-md"
-                            : "border-slate-100 bg-[#fcfcfc] text-slate-400 hover:border-slate-200"
-                        }`}
-                      >
-                        {v.ten_bien_the}
-                      </button>
-                    ))}
+                      // 🌟 TƯƠNG TỰ VỚI SẢN PHẨM KHÔNG CÓ MA TRẬN, CHO BẤM NHƯNG MỜ ĐI
+                      return (
+                        <button
+                          type="button"
+                          key={i}
+                          onClick={() => {
+                            setSelectedVariant(v);
+                            const vMedia = product.media?.find(
+                              (m) =>
+                                String(m.ma_bien_the) === String(v.ma_bien_the),
+                            );
+                            if (vMedia) setMainMedia(vMedia);
+
+                            const realSlug =
+                              product?.slug_danh_muc ||
+                              product?.ma_dm_con ||
+                              "san-pham";
+                            navigate(
+                              `/${country}/product/${realSlug}/${id}/${v.ma_bien_the}`,
+                              { replace: true },
+                            );
+                          }}
+                          className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all border-2 cursor-pointer ${
+                            isSelected
+                              ? "border-[#006c49] bg-[#006c49] text-white shadow-md"
+                              : vIsOutOfStock
+                                ? "border-slate-200 bg-[#fcfcfc] text-slate-400 opacity-50 border-dashed"
+                                : "border-slate-100 bg-[#fcfcfc] text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          {v.ten_bien_the}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
             </div>
 
-            {/* QUANTITY & ACTIONS */}
             <div className="bg-[#fcfcfc] p-4 lg:p-6 2xl:p-8 rounded-[20px] lg:rounded-[24px] border border-slate-100 shadow-xl space-y-4 lg:space-y-6 mt-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -868,7 +889,7 @@ export default function ProductDetail() {
                       type="button"
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
                       disabled={isOutOfStock}
-                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-20 cursor-pointer"
+                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
                     >
                       <Minus size={14} />
                     </button>
@@ -883,7 +904,7 @@ export default function ProductDetail() {
                           alert(`Kho chỉ còn tối đa ${stockCount} sản phẩm!`);
                       }}
                       disabled={isOutOfStock || quantity >= stockCount}
-                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="w-8 h-8 lg:w-10 flex items-center justify-center hover:bg-slate-50 rounded-lg text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
                     >
                       <Plus size={14} />
                     </button>
@@ -907,12 +928,13 @@ export default function ProductDetail() {
                 </div>
               </div>
 
+              {/* 🌟 ĐÃ FIX: CHẶN CHUỘT (pointer-events-none) NÚT MUA VÀ THÊM GIỎ HÀNG */}
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <button
                   type="button"
                   onClick={handleAddToCart}
                   disabled={isOutOfStock}
-                  className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="flex items-center justify-center gap-2 bg-white text-[#006c49] border-2 border-[#006c49] py-3 lg:py-4 rounded-xl font-bold uppercase tracking-wider text-[10px] transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer active:scale-95"
                 >
                   <ShoppingCart size={16} strokeWidth={2.5} /> GIỎ HÀNG
                 </button>
@@ -920,7 +942,7 @@ export default function ProductDetail() {
                   type="button"
                   onClick={handleBuyNow}
                   disabled={isOutOfStock}
-                  className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] active:scale-95 shadow-lg transition-transform disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="flex items-center justify-center gap-2 bg-[#ffb800] text-black py-3 lg:py-4 rounded-xl font-black uppercase tracking-wider text-[10px] shadow-lg transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer active:scale-95"
                 >
                   <CreditCard size={16} strokeWidth={2.5} /> MUA NGAY
                 </button>
@@ -938,7 +960,6 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* RELATED & FEEDBACKS SECTION */}
         <div className="mt-12 lg:mt-16 pt-8 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
           <div className="lg:col-span-8">
             <Feedback selectedVariant={selectedVariant} mainMedia={mainMedia} />

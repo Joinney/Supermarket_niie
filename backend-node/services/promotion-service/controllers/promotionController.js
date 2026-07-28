@@ -374,8 +374,8 @@ export const checkInternalVariantPromotion = async (req, res) => {
 export const updateFlashSaleSoldQuantity = async (req, res) => {
     const client = await pool.connect();
     try {
-        // Nhận mảng các sản phẩm vừa được thanh toán thành công
-        const { items } = req.body; // Cấu trúc mong đợi: [{ ma_bien_the: "...", so_luong: 2 }]
+        // Nhận mảng các sản phẩm vừa được thanh toán thành công từ Order Service
+        const { items } = req.body; 
 
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ success: false, message: "Danh sách sản phẩm trống." });
@@ -383,9 +383,12 @@ export const updateFlashSaleSoldQuantity = async (req, res) => {
 
         await client.query('BEGIN');
 
+        let totalUpdated = 0;
         for (const item of items) {
-            // Câu lệnh này sẽ tự động tìm chương trình Flash Sale đang chạy chứa biến thể này
-            // và cộng dồn số lượng vừa mua vào cột da_ban
+            // 🌟 ĐÃ SỬA LỖI 1: Bắt đúng biến 'so_luong_mua' từ Order Service gửi sang
+            const quantityToUpdate = Number(item.so_luong_mua || item.so_luong || item.quantity || 0);
+            if (quantityToUpdate <= 0) continue;
+
             const query = `
                 UPDATE public.flash_sale_items fsi
                 SET da_ban = fsi.da_ban + $1
@@ -396,10 +399,12 @@ export const updateFlashSaleSoldQuantity = async (req, res) => {
                   AND NOW() >= fs.thoi_gian_bat_dau 
                   AND NOW() <= fs.thoi_gian_ket_thuc;
             `;
-            await client.query(query, [item.so_luong, item.ma_bien_the]);
+            const result = await client.query(query, [quantityToUpdate, item.ma_bien_the]);
+            if(result.rowCount > 0) totalUpdated++;
         }
 
         await client.query('COMMIT');
+        console.log(`✅ [PROMOTION] Đã đồng bộ số lượng bán Flash Sale thành công cho ${totalUpdated} biến thể.`);
         res.status(200).json({ success: true, message: "Đã đồng bộ số lượng bán Flash Sale thành công." });
     } catch (error) {
         await client.query('ROLLBACK');
