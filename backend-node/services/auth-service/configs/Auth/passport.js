@@ -1,13 +1,13 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import pool from '../database.js';
+import pool from '../database.js'; // Hoặc '../configs/database.js' tùy vào cấu trúc thư mục của bạn
 
 // Cấu hình Google OAuth Strategy
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    // FIX: Linh động giữa Local và Render. Nếu không có biến môi trường thì dùng localhost
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5000/api/auth/google/callback",
+    // Cập nhật port thành 5001 và đúng chuẩn prefix /api/v1/
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5001/api/v1/auth/google/callback",
     // CỰC KỲ QUAN TRỌNG: Phải có proxy: true để chạy được trên Render (HTTPS)
     proxy: true 
 }, async (accessToken, refreshToken, profile, done) => {
@@ -15,6 +15,9 @@ passport.use(new GoogleStrategy({
         const email = profile.emails[0].value;
         const displayName = profile.displayName;
         const avatar = profile.photos[0]?.value || null;
+        
+        // Cắt phần trước @ của email làm username mặc định
+        const username = email.split('@')[0];
 
         // 1. Tìm user theo email
         const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -23,9 +26,12 @@ passport.use(new GoogleStrategy({
         if (!user) {
             // 2. Nếu chưa có -> Tạo mới 
             console.log("==> [Google Auth] Tạo mới user:", email);
+            
+            // 🌟 FIX LỖI: Thêm cột password_hash, full_name và username
             const newUser = await pool.query(
-                'INSERT INTO users (email, username, avatar_url, role, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-                [email, displayName, avatar, 'Buyer', 'active']
+                `INSERT INTO users (full_name, username, email, avatar_url, role, status, password_hash, created_at, updated_at) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING *`,
+                [displayName, username, email, avatar, 'buyer', 'active', 'GOOGLE_OAUTH_NO_PASSWORD']
             );
             user = newUser.rows[0];
         }

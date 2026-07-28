@@ -1,6 +1,8 @@
 import express from 'express';
 import { signup, signin, logout, refreshToken, getAllInternalUsers,getAllBuyers, getUserDetail, getUserRoleGroup, updateUserDetail, getCustomerStatistics, syncMembershipTier, getVipSettings, updateVipSettings } from '../controllers/authController.js';
 import upload from '../configs/cloudinary/cloudinary.js';
+import passport from '../configs/Auth/passport.js';
+import { generateTokens } from '../controllers/authController.js';
 const router = express.Router();
 
 /**
@@ -125,5 +127,48 @@ router.get('/admin/statistics/customers', getCustomerStatistics);
 router.post('/admin/internal/users/:id/sync-tier', syncMembershipTier);
 router.get('/settings/vip', getVipSettings);
 router.put('/settings/vip', updateVipSettings);
+
+// ==========================================
+// 🌟 API ĐĂNG NHẬP GOOGLE OAUTH2
+// ==========================================
+
+// 1. API chuyển hướng người dùng sang trang Đăng nhập của Google
+router.get('/google', passport.authenticate('google', { 
+    scope: ['profile', 'email'] 
+}));
+
+// 2. API Callback - Nơi Google trả dữ liệu về sau khi đăng nhập thành công
+router.get('/google/callback', 
+    passport.authenticate('google', { 
+        session: false, 
+        failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=google_failed` 
+    }),
+    (req, res) => {
+        try {
+            // Lấy thông tin user do Passport trả về (từ DB)
+            const user = req.user;
+            
+            // Cấp Token giống hệt như hàm Signin thông thường
+            const { accessToken, refreshToken } = generateTokens(user);
+
+            // Cài đặt Refresh Token vào HTTP-Only Cookie
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000 
+            });
+
+            // Lấy URL Frontend (Cổng 5173 của ReactJS)
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            
+            // Chuyển hướng người dùng về Frontend kèm theo Access Token trên thanh URL
+            res.redirect(`${frontendUrl}/login?token=${accessToken}`);
+        } catch (error) {
+            console.error("Lỗi cấp token Google:", error);
+            res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
+        }
+    }
+);
 
 export default router;

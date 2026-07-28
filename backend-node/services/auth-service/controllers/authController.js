@@ -9,7 +9,7 @@ const ORDER_SERVICE_URL = process.env.INTERNAL_ORDER_URL || 'http://localhost:50
 const PAYMENT_SERVICE_URL = process.env.INTERNAL_PAYMENT_URL || 'http://localhost:5004';
 
 // --- HÀM TẠO TOKEN ---
-const generateTokens = (user) => {
+export const generateTokens = (user) => {
     const accessToken = jwt.sign(
         { id: user.user_id, role: user.role },
         process.env.JWT_ACCESS_SECRET || 'vdt_secret_2026',

@@ -1,8 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
-import { useNavigate, Link } from "react-router-dom";
-// 🌟 SỬA CHUẨN: Import chính xác authApi để nhận diện domain động
+import { useNavigate, Link, useSearchParams } from "react-router-dom"; // 🌟 THÊM useSearchParams
 import { authApi } from "../../api/axios"; 
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
@@ -16,17 +15,44 @@ export default function Login() {
     const { login, user } = useContext(AuthContext);
     const { mergeCart } = useCart();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams(); // 🌟 LẤY THÔNG TIN TỪ THANH URL
 
     const stats = [
         { value: "15k+", label: "Happy Clients" },
         { value: "30m", label: "Fast Delivery" },
     ];
 
+    // ========================================================
+    // 🌟 XỬ LÝ ĐÓN TOKEN DO GOOGLE TRẢ VỀ TRÊN URL
+    // ========================================================
     useEffect(() => {
-        if (user) {
+        const token = searchParams.get("token");
+        const googleError = searchParams.get("error");
+
+        if (token) {
+            setLoading(true);
+            
+            // 🌟 FIX Ở ĐÂY: Lưu token bằng nhiều định dạng tên phổ biến
+            // Để chắc chắn khớp với tên mà AuthContext và Axios của bạn đang dùng
+            localStorage.setItem("token", token); 
+            localStorage.setItem("accessToken", token); 
+            
+            window.location.href = "/"; 
+        }
+
+        if (googleError === "google_failed") {
+            setError("Đăng nhập Google thất bại. Vui lòng thử lại!");
+        }
+    }, [searchParams]);
+
+    // ========================================================
+
+    useEffect(() => {
+        // Tránh điều hướng nếu đang trong quá trình lấy token Google
+        if (user && !searchParams.get("token")) {
             navigate("/", { replace: true });
         }
-    }, [user, navigate]);
+    }, [user, navigate, searchParams]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -68,11 +94,9 @@ export default function Login() {
         localStorage.removeItem("adminRole");
         localStorage.removeItem("adminInfo");
 
-        // 🚀 TỐI ƯU: Đọc trực tiếp baseURL từ authApi để tự động nhảy sang Render khi deploy
         const apiBaseUrl = authApi.defaults.baseURL;
         
         setTimeout(() => {
-            // Sẽ tự động thành https://authservice-sz4p.onrender.com/api/auth/google khi lên Render
             window.location.href = `${apiBaseUrl}/auth/google`;
         }, 500);
     };
