@@ -30,7 +30,7 @@ import Moivetuannay from "./khamphabosuutap/moivetuannay";
 export default function Home() {
   const { t } = useLanguage();
   const { currentStore } = useStore();
-  const { country_code } = useParams();
+const { country_code, tabSlug } = useParams();
 
   // State cho Sản phẩm thường (Bộ sưu tập)
   const [apiProducts, setApiProducts] = useState([]);
@@ -57,8 +57,7 @@ const location = useLocation();
     { id: "week_new", slug: "moi_ve_tuan_nay", label: "Mới về tuần này" },
   ];
 
-  const currentSlug = location.pathname.split("/").pop(); 
-  const activeTabObj = TABS.find(t => t.slug === currentSlug) || TABS[0];
+  const activeTabObj = TABS.find(t => t.slug === tabSlug) || TABS[0];
   const activeMainTab = activeTabObj.id;
   const [activeRankTab, setActiveRankTab] = useState("best");
 
@@ -461,9 +460,9 @@ const getCleanProductList = () => {
             {TABS.map((tab) => (
               <Link
                 key={tab.id}
-                to={`${currentPrefix}/${tab.slug}`} // 🌟 Tạo link có dạng /vn/goi_y_cho_ban
+                to={`${currentPrefix}/${tab.slug}`} 
                 preventScrollReset={true}
-                replace={true}
+                replace={true} // Bật replace để người dùng bấm nút "Back" trên trình duyệt không bị kẹt lùi lại từng tab một
                 className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 whitespace-nowrap ${
                   activeMainTab === tab.id
                     ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/15"
