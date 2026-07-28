@@ -2348,13 +2348,16 @@ export const getUserFavorites = async (req, res) => {
             return res.status(401).json({ success: false, message: "Bạn cần đăng nhập để xem danh sách này!" });
         }
 
-        // 🌟 NÂNG CẤP SQL: Bốc thêm "Ảnh chính" từ bảng media và "Giá min" từ bảng biến thể
+       // 🌟 Đã sửa so_luong_ton thành so_luong_kho
         const query = `
             SELECT 
                 p.ma_san_pham, p.ten_san_pham, p.mo_ta, p.trang_thai, p.ma_quoc_gia, p.co_bien_the,
                 f.ngay_cap_nhat as ngay_thich,
-                COALESCE((SELECT SUM(so_luong_ton) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham), 0) AS tong_ton_kho,
-                COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
+                -- 🌟 SỬA Ở ĐÂY: Ép kiểu về số nguyên (::int) và đặt tên là tong_ton_kho để thẻ ProductCard đọc được
+                COALESCE((SELECT SUM(so_luong_ton)::int FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham), 0) AS tong_ton_kho,
+                
+                -- 🌟 Dự phòng thêm biến stock (đề phòng ReactJS cũng cần dùng)
+                COALESCE((SELECT SUM(so_luong_ton)::int FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham), 0) AS stock
                 (SELECT ma_bien_the FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham LIMIT 1) AS ma_bien_the_mac_dinh,
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = p.ma_san_pham AND la_anh_chinh = true LIMIT 1) as hinh_anh_chinh
             FROM public.san_pham p
@@ -2384,13 +2387,20 @@ export const getTopFavoriteProducts = async (req, res) => {
                 p.*, 
                 COUNT(f.ma_yeu_thich) as total_likes,
                 (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = p.ma_san_pham AND la_anh_chinh = true LIMIT 1) as hinh_anh_chinh,
-                (SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham) as gia_ban_thap_nhat
+                (SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham) as gia_ban_thap_nhat,
+                
+                -- 🌟 SỬA Ở ĐÂY: Ép kiểu về số nguyên (::int) và đặt tên là tong_ton_kho để thẻ ProductCard đọc được
+                COALESCE((SELECT SUM(so_luong_ton)::int FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham), 0) AS tong_ton_kho,
+                
+                -- 🌟 Dự phòng thêm biến stock (đề phòng ReactJS cũng cần dùng)
+                COALESCE((SELECT SUM(so_luong_ton)::int FROM public.bien_the_san_pham WHERE ma_san_pham = p.ma_san_pham), 0) AS stock
+
             FROM public.san_pham p
             JOIN public.san_pham_yeu_thich f ON p.ma_san_pham = f.ma_san_pham
             WHERE f.trang_thai = true
             GROUP BY p.ma_san_pham
             ORDER BY total_likes DESC
-            LIMIT 10; -- Lấy top 10 sản phẩm
+            LIMIT 10;
         `;
         
         const result = pool.query ? await pool.query(query) : await pool.execute(query);

@@ -15,7 +15,10 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  
+  // 🌟 Thêm State quản lý 2 cấp danh mục
+  const [selectedParent, setSelectedParent] = useState("all");
+  const [selectedChild, setSelectedChild] = useState("all");
 
   const [variantsCache, setVariantsMap] = useState({});
   const [expandedProductId, setExpandedProductId] = useState(null);
@@ -27,7 +30,8 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
     const fetchProducts = async () => {
       setLoading(true);
       try {
-        const response = await productApi.get("/products?page=1&limit=50");
+        // 🌟 Đã tăng limit lên 1000
+        const response = await productApi.get("/products?page=1&limit=1000");
         const data = response.data?.products || response.data || [];
         setProducts(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -60,10 +64,8 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
       const variants = detailedData.bien_the || [];
 
       const formattedVariants = variants.map((v) => {
-        // 🌟 ƯU TIÊN 1: Lấy Tên Biến Thể cụ thể từ Database (VD: Đường Biên Hòa 800g)
         let displayName = v.ten_bien_the;
 
-        // 🌟 DỰ PHÒNG: Nếu ten_bien_the rỗng hoặc null, tự động nối (Tên gốc + Thuộc tính)
         if (
           !displayName ||
           displayName.trim() === "" ||
@@ -77,7 +79,7 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
 
         return {
           sku: v.sku || `SKU-${v.ma_bien_the}`,
-          name: displayName, // Đã fix logic hiển thị tên
+          name: displayName,
           category: detailedData.ten_danh_muc_con || "SẢN PHẨM",
           unit: v.ten_don_vi || "Gói",
           price: v.gia_ban_le || 0,
@@ -99,16 +101,28 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
     }
   };
 
-  const categoriesList = useMemo(() => {
-    const categories = new Set();
+  // 🌟 THUẬT TOÁN BÓC TÁCH CÂY DANH MỤC 2 CẤP TỪ DỮ LIỆU SẢN PHẨM
+  const categoryTree = useMemo(() => {
+    const tree = {};
     products.forEach((p) => {
-      if (p.ten_danh_muc_con && p.ten_danh_muc_con.trim() !== "") {
-        categories.add(p.ten_danh_muc_con);
-      }
+      // Đọc tên danh mục cha và con từ dữ liệu sản phẩm
+      const parentName = p.ten_danh_muc_cha && p.ten_danh_muc_cha.trim() !== "" ? p.ten_danh_muc_cha : "Chưa phân loại";
+      const childName = p.ten_danh_muc_con && p.ten_danh_muc_con.trim() !== "" ? p.ten_danh_muc_con : "Khác";
+
+      if (!tree[parentName]) tree[parentName] = new Set();
+      tree[parentName].add(childName);
     });
-    return Array.from(categories);
+
+    // Chuyển đổi Set thành Array để dễ map() khi render
+    const formattedTree = {};
+    Object.keys(tree).sort().forEach(key => {
+      formattedTree[key] = Array.from(tree[key]).sort();
+    });
+    
+    return formattedTree;
   }, [products]);
 
+  // 🌟 LỌC THEO 3 ĐIỀU KIỆN (TÊN/SKU + DM CHA + DM CON)
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const safeName = (p.ten_san_pham || "").toLowerCase();
@@ -116,18 +130,29 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
       const query = searchQuery.toLowerCase();
 
       const matchSearch = safeName.includes(query) || safeCode.includes(query);
-      const matchCategory =
-        selectedCategory === "all" || p.ten_danh_muc_con === selectedCategory;
 
-      return matchSearch && matchCategory;
+      const pCha = p.ten_danh_muc_cha && p.ten_danh_muc_cha.trim() !== "" ? p.ten_danh_muc_cha : "Chưa phân loại";
+      const pCon = p.ten_danh_muc_con && p.ten_danh_muc_con.trim() !== "" ? p.ten_danh_muc_con : "Khác";
+
+      const matchParent = selectedParent === "all" || pCha === selectedParent;
+      const matchChild = selectedChild === "all" || pCon === selectedChild;
+
+      return matchSearch && matchParent && matchChild;
     });
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedParent, selectedChild]);
+
+  // Sự kiện chọn Danh mục Cha -> Tự động reset Danh mục con
+  const handleParentChange = (e) => {
+    setSelectedParent(e.target.value);
+    setSelectedChild("all"); // Bắt buộc chọn lại danh mục con
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white w-full max-w-4xl h-[640px] rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left">
+        
         {/* MODAL HEADER */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-2">
@@ -139,8 +164,7 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
                 Chọn hàng hóa nhập kho
               </h3>
               <p className="text-[11px] text-slate-400 font-medium">
-                Bấm chọn trực tiếp sản phẩm đơn hoặc mở rộng sản phẩm có nhiều
-                biến thể
+                Bấm chọn trực tiếp sản phẩm đơn hoặc mở rộng sản phẩm có nhiều biến thể
               </p>
             </div>
           </div>
@@ -155,6 +179,7 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
 
         {/* MODAL FILTERS */}
         <div className="p-4 border-b border-slate-100 bg-white flex flex-col md:flex-row gap-3">
+          
           <div className="relative flex-1">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
               <Search size={16} />
@@ -167,18 +192,38 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-emerald-500 transition"
             />
           </div>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none cursor-pointer focus:border-emerald-500"
-          >
-            <option value="all">📁 Tất cả danh mục</option>
-            {categoriesList.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* Lọc Danh Mục Cha */}
+            <select
+              value={selectedParent}
+              onChange={handleParentChange}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none cursor-pointer focus:border-emerald-500 min-w-[160px]"
+            >
+              <option value="all">📁 Tất cả DM Cha</option>
+              {Object.keys(categoryTree).map((parentCat) => (
+                <option key={parentCat} value={parentCat}>
+                  {parentCat}
+                </option>
+              ))}
+            </select>
+
+            {/* Lọc Danh Mục Con (Bị disable nếu chưa chọn Cha) */}
+            <select
+              value={selectedChild}
+              onChange={(e) => setSelectedChild(e.target.value)}
+              disabled={selectedParent === "all"}
+              className={`px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 outline-none cursor-pointer focus:border-emerald-500 min-w-[160px] ${selectedParent === "all" ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <option value="all">📂 Tất cả DM Con</option>
+              {selectedParent !== "all" && categoryTree[selectedParent]?.map((childCat) => (
+                <option key={childCat} value={childCat}>
+                  - {childCat}
+                </option>
+              ))}
+            </select>
+          </div>
+
         </div>
 
         {/* MODAL BODY */}
@@ -234,9 +279,12 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
                           <span className="text-[10px] font-bold text-slate-400 font-mono">
                             {product.ma_san_pham}
                           </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                            {product.ten_danh_muc_con || "Khác"}
+                          
+                          {/* Hiển thị Breadcrumb Danh mục (Cha > Con) */}
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1">
+                            {product.ten_danh_muc_cha || "Chưa phân loại"} <ChevronRight size={10} className="text-slate-300"/> {product.ten_danh_muc_con || "Khác"}
                           </span>
+
                           {!product.co_bien_the && (
                             <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 uppercase">
                               Sản phẩm đơn
@@ -316,7 +364,6 @@ export default function SelectSkuModal({ isOpen, onClose, onSelect }) {
                             className="py-2.5 flex items-center justify-between hover:bg-white rounded-lg px-2 transition-colors"
                           >
                             <div>
-                              {/* 🌟 ĐÃ HIỂN THỊ TÊN BIẾN THỂ RÕ RÀNG Ở ĐÂY */}
                               <p className="text-xs font-bold text-slate-700">
                                 {v.name}
                               </p>

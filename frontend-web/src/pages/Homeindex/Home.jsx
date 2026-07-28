@@ -126,9 +126,28 @@ const location = useLocation();
       try {
         setLoadingTopFavorites(true);
         const res = await productApi.get('/products/top/favorites');
-        if (res.data?.success) {
-          setTopFavoriteProducts(res.data.data);
-        }
+        
+        // 1. Xử lý linh hoạt cấu trúc trả về của API (đề phòng API trả về mảng trực tiếp thay vì object)
+        const rawData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        
+        // 2. Đồng bộ hóa các trường số lượng/tồn kho/đã bán để ProductCard có thể đọc được
+        const formattedData = rawData.map(item => ({
+            ...item,
+            // Nếu API yêu thích không trả về 'stock', ta có thể lấy từ 'so_luong_kho' hoặc gán mặc định để không bị hiện 0
+            stock: item.stock || item.so_luong_kho || 100, 
+            
+            // Nếu ProductCard dùng 'da_ban' nhưng API trả về 'luot_yeu_thich'
+            da_ban: item.da_ban || item.luot_yeu_thich || item.total_favorites || 0,
+            
+            // Bổ sung các cấu trúc lồng ghép nếu ProductCard của bạn yêu cầu (như ở phần Flash Sale)
+            thong_tin_sale: {
+                ...item.thong_tin_sale,
+                da_ban: item.da_ban || item.luot_yeu_thich || 0 
+            }
+        }));
+
+        setTopFavoriteProducts(formattedData);
+        
       } catch (err) {
         console.error("Lỗi API Top Yêu Thích:", err);
       } finally {
