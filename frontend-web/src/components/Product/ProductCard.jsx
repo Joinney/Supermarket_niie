@@ -73,18 +73,30 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       : p.ten_bien_the || p.chi_tiet_bien_the?.[0]?.ten_bien_the || "";
 
   // =========================================================================
-  // 🌟 LOGIC NHẬN DIỆN VÀ TÍNH TOÁN GIÁ KHUYẾN MÃI TỪ CACHE
+  // 🌟 LOGIC NHẬN DIỆN VÀ TÍNH TOÁN GIÁ KHUYẾN MÃI (ĐÃ FIX LỖI NHẬN VƠ GIÁ)
   // =========================================================================
   let matchedSale = null;
   if (activeSales && activeSales.length > 0) {
     for (const promo of activeSales) {
-      const match = promo.products?.find(
-        (item) =>
-          item.ma_san_pham === p.ma_san_pham ||
-          item.ma_bien_the === targetVariantId,
-      );
+      if (!promo.products) continue;
+
+      const match = promo.products.find((item) => {
+        // CHỐT CHẶN BẢO MẬT: Bắt buộc phải có mã đàng hoàng mới cho so sánh,
+        // Tránh tình trạng undefined === undefined gây lỗi nhận vơ toàn hệ thống
+        const isMatchSP =
+          item.ma_san_pham &&
+          p.ma_san_pham &&
+          String(item.ma_san_pham) === String(p.ma_san_pham);
+        const isMatchBT =
+          item.ma_bien_the &&
+          targetVariantId &&
+          String(item.ma_bien_the) === String(targetVariantId);
+
+        return isMatchSP || isMatchBT;
+      });
+
       if (match) {
-        matchedSale = match.thong_tin_sale || match; // Fix cấu trúc để tìm đúng dữ liệu sale
+        matchedSale = match.thong_tin_sale || match;
         break;
       }
     }
@@ -121,7 +133,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       ? rawOriginalPrice
       : null;
 
-  // 4. Nhãn dán (Badge)
+  // 4. Nhãn dán (Badge) - TỰ ĐỘNG MẤT NẾU KHÔNG SALE
   let discountBadge = null;
   if (originalPriceDisplay) {
     const percent = Math.round(
@@ -134,8 +146,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     discountBadge = "HOT 🔥";
   }
 
-  // 5. TÍNH TOÁN KHO TỔNG HỢP ĐỂ KHÔNG BỊ "HẾT HÀNG" OAN
-  // Vét cạn tất cả các trường tồn kho có thể trả về từ API
+  // 5. TÍNH TOÁN KHO
   const rawStock = parseNumber(
     p.tong_ton_kho ??
       p.so_luong_ton ??
@@ -145,9 +156,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
       0,
   );
 
-  // 🌟 NẾU LÀ FLASH SALE: Dùng thẳng số lượng suất Sale còn lại. Bỏ qua hàm so sánh Math.min() gây lỗi 0.
   const stockCount = isValidFlashSale ? remainingSaleQuantity : rawStock;
-
   const isOutOfStock = stockCount <= 0;
 
   const rawCountryCode = currentStore?.code || p.country_code || "vn";
@@ -257,6 +266,7 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
     >
       <div className="w-full group cursor-pointer font-sans bg-white p-2 rounded-[32px] transition-all duration-300 border border-transparent hover:shadow-2xl hover:shadow-slate-100 hover:border-slate-50">
         <div className="relative aspect-square bg-[#f8fafc] rounded-[24px] overflow-hidden mb-3 border border-slate-50 group-hover:border-[#e6f0ed] transition-all">
+          {/* NẾU KHÔNG CÓ SALE HOẶC HOT THÌ DISCOUNT BADGE SẼ TỰ BIẾN MẤT */}
           {discountBadge && !isOutOfStock && (
             <div className="absolute top-3 left-3 z-30 bg-gradient-to-r from-red-500 to-orange-500 text-white font-black text-[10px] px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm border border-red-400">
               {discountBadge}
@@ -330,7 +340,6 @@ const ProductCard = ({ p, categoryName, categorySlug }) => {
             </span>
           </div>
 
-          {/* 🌟 ĐÃ KHÔI PHỤC LẠI GIAO DIỆN GỐC, KHÔNG BỊ TRÙNG LẶP NỮA */}
           <p className="text-[9px] text-slate-400 font-black mt-1 uppercase tracking-widest flex items-center justify-between">
             <span>
               {isValidFlashSale ? "ĐÃ BÁN:" : "SỐ LƯỢNG:"}{" "}
