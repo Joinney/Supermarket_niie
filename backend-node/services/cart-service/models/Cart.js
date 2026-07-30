@@ -8,6 +8,7 @@ const cartSchema = new mongoose.Schema({
   },
   items: [{
     variantId: { type: String, required: true },
+    sku: { type: String, default: '' }, // 🌟 ĐÃ BỔ SUNG: Chốt chặn quan trọng để MongoDB chịu lưu SKU
     productId: { type: String, default: '' }, 
     name: { type: String, required: true },
     variantName: { type: String, default: '' }, 
@@ -17,7 +18,7 @@ const cartSchema = new mongoose.Schema({
     categorySlug: { type: String, default: 'san-pham' },
     countryCode: { type: String, default: 'vn' },
 
-    // 🚀 BỔ SUNG CẤU TRÚC ĐỂ LƯU VÀO DATABASE MONGODB
+    // 🚀 BỔ SUNG CẤU TRÚC EAV ĐỂ LƯU VÀO DATABASE MONGODB
     ten_don_vi: { type: String, default: 'Gói' },
     thuoc_tinh_hop_nhat: [{
       ten_thuoc_tinh: { type: String },

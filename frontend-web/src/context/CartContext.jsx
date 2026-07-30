@@ -15,7 +15,6 @@ export const CartProvider = ({ children }) => {
     const formatItem = useCallback((item) => {
         if (!item) return null;
 
-        // Phẳng hóa thuộc tính EAV từ PostgreSQL nếu có
         let flattenAttributes = item.thuoc_tinh || {};
         if (Array.isArray(item.thuoc_tinh_hop_nhat)) {
             flattenAttributes = {};
@@ -24,15 +23,17 @@ export const CartProvider = ({ children }) => {
             });
         }
 
-        // Giải quyết tận gốc lỗi không lấy được mã sản phẩm (productId)
         const resolvedProductId = item.productId || item.product_id || item.id || item.ma_san_pham || item.id_san_pham || "";
 
         return {
-            // Đảm bảo cả hai trường này đều nhận giá trị chuẩn để Backend MongoDB không chê
             productId: resolvedProductId,
             id: resolvedProductId, 
 
             variantId: item.variantId || item.variant_id || item.ma_bien_the,
+            
+            // 🌟 ĐÃ BỔ SUNG CHỐT CHẶN CUỐI CÙNG: Không cho phép rớt SKU nữa!
+            sku: item.sku || item.ma_sku || item.variantId || item.variant_id || "", 
+
             name: item.name || item.ten_san_pham || "Sản phẩm",
             variantName: item.variantName || item.ten_bien_the || "",
             price: Number(item.price || item.gia_ban_le || item.gia_khuyen_mai || 0),

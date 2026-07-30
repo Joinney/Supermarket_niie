@@ -513,7 +513,8 @@ export default function ProductDetail() {
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
       productId: product.ma_san_pham,
-      sku: selectedVariant.sku || "",
+      // 🌟 ĐÃ SỬA: Đảm bảo SKU luôn được chắp vá, nếu rỗng thì lấy ma_bien_the làm dự phòng
+      sku: selectedVariant.sku || selectedVariant.ma_bien_the || "", 
       name: product.ten_san_pham,
       price: currentPrice,
       quantity: quantity,
