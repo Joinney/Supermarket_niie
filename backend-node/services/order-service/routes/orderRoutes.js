@@ -53,6 +53,10 @@ router.get('/my-orders', protect, getMyOrders);
 // 5.1 Khách hàng tự hủy đơn hàng đang ở trạng thái chờ xử lý (Tự động hoàn kho & xóa sạch trạm trục)
 router.put('/orders/:ma_don_hang/cancel', protect, cancelOrder);
 
+// 5.2 Kiểm tra xem khách hàng đã đánh giá đơn hàng này chưa (Dữ liệu tạm để không báo 404)
+router.get('/:id/check-review', (req, res) => {
+    res.status(200).json({ hasReviewed: false }); 
+});
 
 // ========================================================
 // 🔒 ROUTE ĐỒNG BỘ NỘI BỘ (INTERNAL SERVICE ENDPOINTS)

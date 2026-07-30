@@ -42,7 +42,10 @@ router.get('/internal/:userId', getCartByUserId); // 🌟 Thêm Route này để
 router.post('/add', protect, addToCart);
 router.delete('/remove/:productId', protect, removeFromCart);
 router.post('/merge', protect, mergeCart);
+
+
 router.post('/remove-selected', protect, removeSelectedFromCart);
 router.post('/orders/:orderId/payment-proof', protect, uploadReceipt.single('receiptFile'), uploadPaymentProof);
+
 
 export default router;

@@ -21,11 +21,10 @@ const createInstance = (baseURL) => {
 
     // --- INTERCEPTOR REQUEST: Tự động đồng bộ mã Token mới nhất ---
     instance.interceptors.request.use((config) => {
-        // Ưu tiên adminToken của trang quản trị trước, nếu không có mới lấy token thường
         let token = localStorage.getItem("adminToken") || localStorage.getItem("token");
     
         if (token) {
-            token = token.replace(/^"|"$/g, ''); // Xóa dấu nháy kép thừa nếu có
+            token = token.replace(/^"|"$/g, ''); 
             config.headers.Authorization = `Bearer ${token}`;
         }
 
@@ -45,12 +44,10 @@ const createInstance = (baseURL) => {
             const originalRequest = error.config;
             const currentPath = window.location.pathname;
 
-            // Chặn đứng: Đang ở màn hình đăng nhập thì không can thiệp xóa session
             if (currentPath.includes('/login') || currentPath.includes('/signin')) {
                 return Promise.reject(error);
             }
 
-            // Xử lý bẫy lỗi 401 Unauthorized
             if (error.response?.status === 401) {
                 const localRefreshToken = localStorage.getItem("refreshToken");
                 
@@ -60,14 +57,15 @@ const createInstance = (baseURL) => {
                         console.warn(`⚠️ Đang tiến hành gia hạn mã truy cập ngầm cho mạng lưới dịch vụ...`);
 
                         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                        const authUrl = isLocalHost ? 'http://localhost:5001/api/v1' : 'https://authservice-sz4p.onrender.com/api/v1';
+                        
+                        // 🌟 ĐÃ SỬA LẠI: Trỏ thẳng về Gateway 5000 giống hệt cấu hình bên dưới
+                        const authUrl = isLocalHost ? 'http://localhost:5000/api/v1' : 'https://authservice-sz4p.onrender.com/api/v1';
 
                         axios.post(`${authUrl}/auth/refresh-token`, { refreshToken: localRefreshToken })
                             .then(refreshResponse => {
                                 isRefreshing = false;
                                 const newToken = refreshResponse.data.token;
                                 
-                                // Cập nhật lại vào cả 2 vùng nhớ tránh lệch chặng
                                 if (localStorage.getItem("adminToken")) {
                                     localStorage.setItem("adminToken", newToken);
                                 }
@@ -86,7 +84,6 @@ const createInstance = (baseURL) => {
                             });
                     }
 
-                    // Đồng bộ xếp hàng: Các request 401 chạy sau sẽ đợi request đầu lấy token xong rồi chạy tiếp
                     const retryOriginalRequest = new Promise((resolve) => {
                         subscribeTokenRefresh((token) => {
                             originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -95,7 +92,6 @@ const createInstance = (baseURL) => {
                     });
                     return retryOriginalRequest;
                 } else {
-                    // Không có cả refreshToken, dọn dẹp sạch sẽ kho nhớ để tránh kẹt trạng thái
                     localStorage.removeItem("adminToken");
                     localStorage.removeItem("token");
                     localStorage.removeItem("user");
@@ -108,16 +104,20 @@ const createInstance = (baseURL) => {
     return instance;
 };
 
-// --- GIỮ NGUYÊN DANH SÁCH CÁC CỔNG INSTANCE CỦA BẠN ---
+// =========================================================================
+// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY (5000)
+// =========================================================================
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const gateway = 'http://localhost:5000/api/v1';
 
-export const authApi = createInstance(isLocal ? 'http://localhost:5001/api/v1' : 'https://authservice-sz4p.onrender.com/api/v1');
-export const productApi = createInstance(isLocal ? 'http://localhost:5002/api/v1' : 'https://productservice-n87v.onrender.com/api/v1');
-export const cartApi = createInstance(isLocal ? 'http://localhost:5003/api/v1' : 'https://cartservice-i6s1.onrender.com/api/v1');
-export const orderApi = createInstance(isLocal ? 'http://localhost:5005/api/v1' : 'https://orderservice-n0z1.onrender.com/api/v1');
-export const paymentApi = createInstance(isLocal ? 'http://localhost:5004/api/v1' : 'https://payment-service-opea.onrender.com/api/v1');
-export const warehouseApi = createInstance(isLocal ? 'http://localhost:5006/api/v1' : 'https://inventory-service-mjzr.onrender.com/api/v1');
-export const promotionApi = createInstance(isLocal ? 'http://localhost:5007/api/v1/promotions' : 'https://promotion-service-r5zx.onrender.com/api/v1/promotions');
-export const couponApi = createInstance(isLocal ? 'http://localhost:5007/api/v1/coupons' : 'https://promotion-service-r5zx.onrender.com/api/v1/coupons');
+export const authApi = createInstance(isLocal ? gateway : 'https://authservice-sz4p.onrender.com/api/v1');
+export const productApi = createInstance(isLocal ? gateway : 'https://productservice-n87v.onrender.com/api/v1');
+export const cartApi = createInstance(isLocal ? gateway : 'https://cartservice-i6s1.onrender.com/api/v1');
+export const orderApi = createInstance(isLocal ? gateway : 'https://orderservice-n0z1.onrender.com/api/v1');
+export const paymentApi = createInstance(isLocal ? gateway : 'https://payment-service-opea.onrender.com/api/v1');
+export const warehouseApi = createInstance(isLocal ? gateway : 'https://inventory-service-mjzr.onrender.com/api/v1');
 
+export const promotionApi = createInstance(isLocal ? `${gateway}/promotions` : 'https://promotion-service-r5zx.onrender.com/api/v1/promotions');
+export const couponApi = createInstance(isLocal ? `${gateway}/coupons` : 'https://promotion-service-r5zx.onrender.com/api/v1/coupons');
+ 
 export default authApi;

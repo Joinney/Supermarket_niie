@@ -215,6 +215,19 @@ services:
       - db
     networks:
       - demi_network
+# 15. API GATEWAY
+  api-gateway:
+    build: ./backend-node/services/api-gateway
+    container_name: demi_api_gateway
+    ports:
+      - "5000:5000"
+    extra_hosts:
+      - "localhost:host-gateway"
+    env_file:
+      - ./backend-node/services/api-gateway/.env
+    networks:
+      - demi_network
+    restart: always
 
 networks:
   demi_network:
