@@ -152,48 +152,56 @@ export default function TaoPhieuNhapForm() {
     }, 4000);
   };
 
-  const handleSelectProductFromModal = (product) => {
-    const targetSku = product.ma_san_pham || product.sku;
-    const targetName = product.ten_san_pham || product.name;
-    const baseUnitFromDb = product.ma_don_vi_co_so || product.unit || "Cái";
+const handleSelectMultipleProducts = (selectedItems) => {
+    if (!selectedItems || selectedItems.length === 0) return;
 
-    const numericPrice =
-      parseInt(
-        (product.price || product.gia_von || 0)
-          .toString()
-          .replace(/[.\sđ]/g, ""),
-        10,
-      ) || 0;
-    const estimatedCostPrice = numericPrice > 0 ? numericPrice : 50000;
+    setSelectedProducts((prev) => {
+      let updatedList = [...prev];
+      let addedCount = 0;
 
-    const isExisted = selectedProducts.some((item) => item.sku === targetSku);
-    if (isExisted) {
-      setSelectedProducts((prev) =>
-        prev.map((item) =>
-          item.sku === targetSku
-            ? { ...item, quantity: item.quantity + 1 }
-            : item,
-        ),
-      );
-      showNotification(`Đã tăng số lượng nhập của ${targetName}`);
-    } else {
-      const matchedRatio = globalRatios.find((r) => r.maSanPham === targetSku);
-      const newRow = {
-        sku: targetSku,
-        name: targetName,
-        category: product.category || "Hàng hóa",
-        unit: matchedRatio ? matchedRatio.baseUnit : baseUnitFromDb,
-        tradeUnit: matchedRatio ? matchedRatio.tradeUnit : "Thùng",
-        ratio: matchedRatio ? matchedRatio.ratio : 1,
-        quantity: 1,
-        price: estimatedCostPrice,
-        icon: product.icon || "📦",
-        selectedLotId: "",
-        selectedRatioId: matchedRatio ? matchedRatio.id : "",
-      };
-      setSelectedProducts((prev) => [...prev, newRow]);
-      showNotification(`Đã thêm ${targetName} vào danh sách phiếu nhập`);
-    }
+      selectedItems.forEach((product) => {
+        const targetSku = product.ma_san_pham || product.sku;
+        const targetName = product.ten_san_pham || product.name;
+        const baseUnitFromDb = product.ma_don_vi_co_so || product.unit || "Cái";
+
+        const numericPrice = parseInt(
+          (product.price || product.gia_von || 0).toString().replace(/[.\sđ]/g, ""), 10
+        ) || 0;
+        const estimatedCostPrice = numericPrice > 0 ? numericPrice : 50000;
+
+        const existingIndex = updatedList.findIndex((item) => item.sku === targetSku);
+
+        if (existingIndex !== -1) {
+          // Nếu đã có trong bảng -> Tăng số lượng lên 1
+          updatedList[existingIndex] = {
+            ...updatedList[existingIndex],
+            quantity: updatedList[existingIndex].quantity + 1,
+          };
+        } else {
+          // Nếu chưa có -> Thêm dòng mới
+          const matchedRatio = globalRatios.find((r) => r.maSanPham === targetSku);
+          updatedList.push({
+            sku: targetSku,
+            name: targetName,
+            category: product.category || "Hàng hóa",
+            unit: matchedRatio ? matchedRatio.baseUnit : baseUnitFromDb,
+            tradeUnit: matchedRatio ? matchedRatio.tradeUnit : "Thùng",
+            ratio: matchedRatio ? matchedRatio.ratio : 1,
+            quantity: 1,
+            price: estimatedCostPrice,
+            icon: product.icon || "📦",
+            selectedLotId: "",
+            selectedRatioId: matchedRatio ? matchedRatio.id : "",
+          });
+          addedCount++;
+        }
+      });
+
+      showNotification(`Đã đưa ${selectedItems.length} sản phẩm vào phiếu nhập!`);
+      return updatedList;
+    });
+
+    setIsSkuModalOpen(false); // Đóng modal sau khi xác nhận
   };
 
   const handleQuantityChange = (sku, val) => {
@@ -1111,7 +1119,7 @@ export default function TaoPhieuNhapForm() {
       <SelectSkuModal
         isOpen={isSkuModalOpen}
         onClose={() => setIsSkuModalOpen(false)}
-        onSelect={handleSelectProductFromModal}
+        onSelectMultiple={handleSelectMultipleProducts} 
       />
       <ProductDetailModal
         isOpen={isDetailModalOpen}
