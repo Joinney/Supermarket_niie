@@ -308,7 +308,8 @@ export default function Checkout() {
 
         return {
           variant_id: vId,
-          sku: String(item.sku || ""), // 🌟 ĐÃ BỔ SUNG SKU ĐỂ TRỪ KHO ĐÚNG MÃ
+          // 🌟 ĐÃ SỬA: Quét mọi key chứa SKU, nếu vẫn rỗng thì lấy luôn mã biến thể (vId) làm dự phòng để Backend tra cứu
+          sku: String(item.sku || item.ma_sku || item.variant_sku || vId), 
           quantity: Number(item.quantity),
           price: Number(item.price),
           name: String(item.name || item.productName || "Sản phẩm Demi Mart"),

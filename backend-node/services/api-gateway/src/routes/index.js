@@ -61,6 +61,8 @@ router.use('/api/v1/shipping', setupProxy(services.order));
 // 8. Bổ sung API Quy đổi đơn vị tính (Trỏ về Product Service)
 router.use('/api/v1/unit-conversions', setupProxy(services.product));
 
+// 9. Nhóm Đánh giá sản phẩm (Trỏ về Product Service)
+router.use('/api/v1/reviews', setupProxy(services.product));
 
 // Health Check
 router.get('/health', (req, res) => {
