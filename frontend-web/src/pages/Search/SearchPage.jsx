@@ -39,7 +39,7 @@ export default function SearchPage() {
         if ((!results || results.length === 0) && keyword.trim()) {
           try {
             // Truyền country vào cả API dự phòng
-            const allResp = await productApi.get(`/products?limit=200&country=${currentCountry}`);
+            const allResp = await productApi.get(`/products?limit=200&country=${currentCountry}&role=client`);
             const all = allResp.data || [];
             const q = keyword.trim().toLowerCase();
             results = all.filter(p => {

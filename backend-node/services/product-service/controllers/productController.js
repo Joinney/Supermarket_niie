@@ -12,7 +12,7 @@ const generateUniqueId = (prefix) => {
 
 const sanitizePagination = (pageInput, limitInput) => {
     const page = Math.max(1, parseInt(pageInput) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(limitInput) || 12));
+    const limit = Math.min(2000, Math.max(1, parseInt(limitInput) || 12));
     const offset = (page - 1) * limit;
     return { limit, offset };
 };
@@ -332,7 +332,7 @@ export const getProductsByCategorySlug = async (req, res) => {
     const sort = req.query.sort || 'noi-bat';
     const price = req.query.price || 'tat-ca';
     const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit) || 20)); 
     const offset = (page - 1) * limit;
 
     try {
@@ -410,7 +410,12 @@ export const searchProducts = async (req, res) => {
                 sp.ma_san_pham, sp.ten_san_pham, sp.mo_ta, sp.trang_thai, sp.ngay_tao,
                 dmc.ten_danh_muc_con, dmc.duong_dan_seo AS slug_danh_muc, LOWER(sp.ma_quoc_gia) AS country_code,
                 COALESCE((SELECT MIN(gia_ban_le) FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham AND trang_thai = true), 0) AS gia_ban_thap_nhat,
-                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh
+                (SELECT duong_dan_url FROM public.media_san_pham WHERE ma_san_pham = sp.ma_san_pham AND la_anh_chinh = true AND trang_thai = true LIMIT 1) AS hinh_anh_chinh,
+                
+                -- 🌟 THÊM 2 DÒNG NÀY ĐỂ TRUYỀN SỐ LƯỢNG TỒN KHO XUỐNG FRONTEND
+                COALESCE((SELECT SUM(so_luong_ton)::int FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS tong_ton_kho,
+                COALESCE((SELECT SUM(so_luong_ton)::int FROM public.bien_the_san_pham WHERE ma_san_pham = sp.ma_san_pham), 0) AS stock
+
             FROM public.san_pham sp
             INNER JOIN public.danh_muc_con dmc ON sp.ma_dm_con = dmc.ma_dm_con
             WHERE sp.trang_thai = true 
