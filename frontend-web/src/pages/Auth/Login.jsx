@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
-import { useNavigate, Link, useSearchParams } from "react-router-dom"; // 🌟 THÊM useSearchParams
+import { useNavigate, Link, useSearchParams } from "react-router-dom"; 
 import { authApi } from "../../api/axios"; 
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
@@ -15,7 +15,7 @@ export default function Login() {
     const { login, user } = useContext(AuthContext);
     const { mergeCart } = useCart();
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams(); // 🌟 LẤY THÔNG TIN TỪ THANH URL
+    const [searchParams] = useSearchParams(); 
 
     const stats = [
         { value: "15k+", label: "Happy Clients" },
@@ -23,32 +23,32 @@ export default function Login() {
     ];
 
     // ========================================================
-    // 🌟 XỬ LÝ ĐÓN TOKEN DO GOOGLE TRẢ VỀ TRÊN URL
+    // 🌟 XỬ LÝ ĐÓN TOKEN DO OAUTH (GOOGLE / FACEBOOK) TRẢ VỀ TRÊN URL
     // ========================================================
     useEffect(() => {
         const token = searchParams.get("token");
-        const googleError = searchParams.get("error");
+        const oauthError = searchParams.get("error"); // 🌟 Đổi tên biến để dùng chung cho cả FB và Google
 
         if (token) {
             setLoading(true);
             
-            // 🌟 FIX Ở ĐÂY: Lưu token bằng nhiều định dạng tên phổ biến
-            // Để chắc chắn khớp với tên mà AuthContext và Axios của bạn đang dùng
             localStorage.setItem("token", token); 
             localStorage.setItem("accessToken", token); 
             
             window.location.href = "/"; 
         }
 
-        if (googleError === "google_failed") {
+        // Bắt lỗi từ OAuth
+        if (oauthError === "google_failed") {
             setError("Đăng nhập Google thất bại. Vui lòng thử lại!");
+        } else if (oauthError === "facebook_failed") {
+            setError("Đăng nhập Facebook thất bại. Vui lòng thử lại!");
         }
     }, [searchParams]);
 
     // ========================================================
 
     useEffect(() => {
-        // Tránh điều hướng nếu đang trong quá trình lấy token Google
         if (user && !searchParams.get("token")) {
             navigate("/", { replace: true });
         }
@@ -88,16 +88,29 @@ export default function Login() {
 
     const handleGoogleLogin = () => {
         setLoading(true);
-
         localStorage.removeItem("adminToken");
         localStorage.removeItem("adminRefreshToken");
         localStorage.removeItem("adminRole");
         localStorage.removeItem("adminInfo");
 
         const apiBaseUrl = authApi.defaults.baseURL;
-        
         setTimeout(() => {
             window.location.href = `${apiBaseUrl}/auth/google`;
+        }, 500);
+    };
+
+    // 🌟 THÊM HÀM XỬ LÝ ĐĂNG NHẬP FACEBOOK
+    const handleFacebookLogin = () => {
+        setLoading(true);
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("adminRefreshToken");
+        localStorage.removeItem("adminRole");
+        localStorage.removeItem("adminInfo");
+
+        const apiBaseUrl = authApi.defaults.baseURL;
+        setTimeout(() => {
+            // Chuyển hướng trình duyệt đến API Facebook ở Backend
+            window.location.href = `${apiBaseUrl}/auth/facebook`;
         }, 500);
     };
 
@@ -235,7 +248,12 @@ export default function Login() {
                         >
                             <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-4 h-4" alt="G" /> Google
                         </button>
-                        <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-slate-700 text-xs cursor-pointer bg-white shadow-2xs">
+                        {/* 🌟 NÚT FACEBOOK ĐÃ ĐƯỢC GẮN SỰ KIỆN */}
+                        <button 
+                            type="button"
+                            onClick={handleFacebookLogin}
+                            className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all font-bold text-slate-700 text-xs cursor-pointer bg-white shadow-2xs"
+                        >
                             <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" className="w-4 h-4" alt="F" /> Facebook
                         </button>
                     </div>

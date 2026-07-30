@@ -171,4 +171,35 @@ router.get('/google/callback',
     }
 );
 
+// ==========================================
+// 🌟 API ĐĂNG NHẬP FACEBOOK
+// ==========================================
+router.get('/facebook', passport.authenticate('facebook', { scope: ['email', 'public_profile'] }));
+
+router.get('/facebook/callback', 
+    passport.authenticate('facebook', { 
+        session: false, 
+        failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=facebook_failed` 
+    }),
+    (req, res) => {
+        try {
+            const user = req.user;
+            const { accessToken, refreshToken } = generateTokens(user);
+
+            res.cookie('refreshToken', refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000 
+            });
+
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            res.redirect(`${frontendUrl}/login?token=${accessToken}`);
+        } catch (error) {
+            console.error("Lỗi cấp token Facebook:", error);
+            res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
+        }
+    }
+);
+
 export default router;
