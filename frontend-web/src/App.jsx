@@ -6,6 +6,7 @@ import {
   Outlet,
   Navigate,
 } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { OrderProvider } from "./context/OrderContext";
@@ -1006,11 +1007,13 @@ const AppRoutes = () => (
   </Routes>
 );
 
+
 /**
  * 3. COMPONENT ĐIỀU PHỐI
  */
 const AppContent = () => {
   const { loading } = useContext(AuthContext);
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
@@ -1018,7 +1021,21 @@ const AppContent = () => {
       </div>
     );
   }
-  return <AppRoutes />;
+
+  return (
+    <>
+      {/* 🔔 BỔ SUNG CONTAINER TOASTER ĐỂ HIỂN THỊ THÔNG BÁO POPUP TOÀN MÀN HÌNH */}
+      <Toaster 
+          position="top-right" 
+          reverseOrder={false}
+          containerStyle={{
+            top: 20,
+            zIndex: 999999, // Nổi lên trên toàn bộ Header
+          }}
+        />
+      <AppRoutes />
+    </>
+  );
 };
 
 /**

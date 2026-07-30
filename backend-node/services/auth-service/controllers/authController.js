@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pool from '../configs/database.js'; 
 import axios from 'axios';
-import amqp from 'amqplib'; // 🌟 ĐÃ THÊM: Thư viện kết nối RabbitMQ cho Node.js
+import amqp from 'amqplib'; // 🌟 Thư viện kết nối RabbitMQ cho Node.js
 
 // 🌐 ĐỊA CHỈ KẾT NỐI MICROSERVICES (Dùng trong Docker network hoặc Localhost)
 const ORDER_SERVICE_URL = process.env.INTERNAL_ORDER_URL || 'http://localhost:5005';
@@ -29,7 +29,6 @@ export const generateTokens = (user) => {
 const publishToRabbitMQ = async (exchange, routingKey, payload) => {
     let connection;
     try {
-        // Trỏ về 'amqp://guest:guest@rabbitmq:5672' khi chạy trong Docker Compose
         const rabbitmqUrl = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
         connection = await amqp.connect(rabbitmqUrl);
         const channel = await connection.createChannel();
@@ -45,7 +44,7 @@ const publishToRabbitMQ = async (exchange, routingKey, payload) => {
             { contentType: 'application/json' }
         );
 
-        console.log(`✉️ [RabbitMQ] Đã gửi thành công sự kiện đăng nhập cho user: ${payload.username}`);
+        console.log(`✉️ [RabbitMQ] Đã gửi thành công sự kiện đăng nhập cho user: ${payload.username} (${payload.email})`);
         await channel.close();
     } catch (error) {
         console.error("⚠️ [RabbitMQ] Gặp lỗi khi gửi sự kiện thông báo đăng nhập:", error.message);
@@ -94,7 +93,7 @@ export const signup = async (req, res) => {
     }
 };
 
-// --- 2. ĐĂNG NHẬP (SIGNIN) - BẢN ĐỒNG BỘ IP TRỰC TIẾP TỪ TRÌNH DUYỆT ---
+// --- 2. ĐĂNG NHẬP (SIGNIN) ---
 export const signin = async (req, res) => {
     const { username, password } = req.body;
     try {
@@ -151,7 +150,9 @@ export const signin = async (req, res) => {
         
         const loginPayload = {
             userId: String(user.user_id),
-            username: user.full_name || user.username || "Khách hàng Demi"
+            username: user.full_name || user.username || "Khách hàng Demi",
+            email: user.email,       // 👈 ĐÃ BỔ SUNG: Truyền email của user sang Spring Boot
+            recipient: user.email    // 👈 ĐÃ BỔ SUNG: Trường dự phòng
         };
 
         // Gửi bất đồng bộ để bảo toàn hiệu năng tốc độ phản hồi API đăng nhập
@@ -221,9 +222,7 @@ export const logout = async (req, res) => {
     }
 };
 
-// ========================================================
-// 🌟 4B. LẤY HỒ SƠ CÁ NHÂN (GET PROFILE HO SO)
-// ========================================================
+// --- 4B. LẤY HỒ SƠ CÁ NHÂN ---
 export const getProfileHoSo = async (req, res) => {
     try {
         const userId = req.user?.id; 
@@ -258,7 +257,7 @@ export const getAllInternalUsers = async (req, res) => {
     }
 };
 
-// --- 5b. LẤY TOÀN BỘ DANH SÁCH KHÁCH HÀNG BUYER THỰC TẾ ---
+// --- 5b. LẤY TOÀN BỘ DANH SÁCH KHÁCH HÀNG BUYER ---
 export const getAllBuyers = async (req, res) => {
     try {
         const search = req.query.search || "";
@@ -296,7 +295,7 @@ export const getAllBuyers = async (req, res) => {
     }
 };
 
-// --- 6. LẤY CHI TIẾT 1 KHÁCH HÀNG (SỬ DỤNG GIAO TIẾP HTTP CHUẨN MICROSERVICES) ---
+// --- 6. LẤY CHI TIẾT 1 KHÁCH HÀNG ---
 export const getUserDetail = async (req, res) => {
     const { id } = req.params;
     try {
@@ -369,7 +368,7 @@ export const getUserRoleGroup = async (req, res) => {
     }
 };
 
-// --- 8. CẬP NHẬT THÔNG TIN VÀ MA TRẬN PHÂN QUYỀN  ---
+// --- 8. CẬP NHẬT THÔNG TIN VÀ MA TRẬN PHÂN QUYỀN ---
 export const updateUserDetail = async (req, res) => {
     const { id } = req.params;
     if (!id || id === "undefined") return res.status(400).json({ success: false, message: "ID nhân sự không hợp lệ!" });
@@ -411,9 +410,7 @@ export const updateUserDetail = async (req, res) => {
     }
 };
 
-// ========================================================
-// 🌟 API 9: THỐNG KÊ KHÁCH HÀNG (SỬ DỤNG GIAO TIẾP HTTP CHUẨN v1)
-// ========================================================
+// --- API 9: THỐNG KÊ KHÁCH HÀNG ---
 export const getCustomerStatistics = async (req, res) => {
     try {
         const authStatsQuery = `
@@ -468,9 +465,7 @@ export const getCustomerStatistics = async (req, res) => {
     }
 };
 
-// ========================================================
-// 🌟 API 10: TỰ ĐỘNG THĂNG HẠNG VIP ĐỘNG (CHUẨN v1)
-// ========================================================
+// --- API 10: TỰ ĐỘNG THĂNG HẠNG VIP ĐỘNG ---
 export const syncMembershipTier = async (req, res) => {
     const { id } = req.params;
     try {
@@ -519,9 +514,7 @@ export const syncMembershipTier = async (req, res) => {
     }
 };
 
-// ========================================================
-// ⚙️ API 11: LẤY CẤU HÌNH HẠNG MỨC VIP (Dành cho Admin)
-// ========================================================
+// --- API 11: LẤY CẤU HÌNH VIP ---
 export const getVipSettings = async (req, res) => {
     try {
         const query = `SELECT value FROM public.system_settings WHERE key = 'vip_threshold'`;
@@ -536,9 +529,7 @@ export const getVipSettings = async (req, res) => {
     }
 };
 
-// ========================================================
-// ⚙️ API 12: CẬP NHẬT CẤU HÌNH HẠNG MỨC VIP (Dành cho Admin)
-// ========================================================
+// --- API 12: CẬP NHẬT CẤU HÌNH VIP ---
 export const updateVipSettings = async (req, res) => {
     try {
         const { vang, kimcuong } = req.body;

@@ -6,6 +6,7 @@ import Logo from "../assets/Demi Mart.png";
 import { productApi } from "../api/axios";
 import { useLanguage } from "../context/LanguageContext";
 import { useStore } from "../context/StoreContext";
+import NotificationDropdown from "./thongbao/NotificationDropdown";
 import {
   Globe,
   ChevronDown,
@@ -29,7 +30,6 @@ const AUTH_BASE_URL = isLocalhost
   : "https://authservice-sz4p.onrender.com";
 
 export default function Header({ onOpenMenu }) {
-  // 🌟 CẬP NHẬT: Lấy thêm getMembershipTier từ AuthContext
   const { user: authUser, logout, getMembershipTier } = useContext(AuthContext);
   const { cart } = useCart();
   const navigate = useNavigate();
@@ -217,14 +217,14 @@ export default function Header({ onOpenMenu }) {
   const getAvatarSrc = (userObj) => {
     if (!userObj)
       return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
-    
+
     const url = userObj.avatar_url || userObj.avatar;
     const name = userObj.full_name || "User";
 
     if (!url || url === "" || url.includes("unsplash.com")) {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
     }
-    
+
     const cleanUrl = url.split("?")[0];
     if (cleanUrl.startsWith("http")) return cleanUrl;
 
@@ -247,7 +247,6 @@ export default function Header({ onOpenMenu }) {
     location.pathname,
   );
 
-  // 🌟 THÊM: HÀM RENDER HUY HIỆU VIP TRÊN HEADER
   const renderHeaderTierBadge = () => {
     const tier = getMembershipTier();
     if (!tier) return null;
@@ -400,13 +399,12 @@ export default function Header({ onOpenMenu }) {
               <Search size={16} strokeWidth={3} />
             </button>
 
-            {/* Bảng Gợi Ý Tìm Kiếm (3 Trạng thái) */}
+            {/* Bảng Gợi Ý Tìm Kiếm */}
             {isSuggestOpen && (
               <div
                 ref={suggestRef}
                 className="absolute left-0 right-0 mt-3 bg-white border border-slate-100 rounded-3xl shadow-xl z-50 p-4 max-h-[450px] overflow-y-auto overscroll-contain scrollbar-hide"
               >
-                {/* 1. KHI CHƯA GÕ GÌ -> Hiển thị Tìm kiếm phổ biến */}
                 {searchKeyword.trim().length === 0 && (
                   <div className="animate-fadeIn">
                     <h4 className="text-[13px] font-bold text-slate-800 mb-3 ml-1">
@@ -431,7 +429,6 @@ export default function Header({ onOpenMenu }) {
                   </div>
                 )}
 
-                {/* 2. GÕ TỪ 1 ĐẾN 2 KÝ TỰ -> Hiển thị Danh mục */}
                 {searchKeyword.trim().length > 0 &&
                   searchKeyword.trim().length < 3 && (
                     <div className="animate-fadeIn">
@@ -475,7 +472,6 @@ export default function Header({ onOpenMenu }) {
                     </div>
                   )}
 
-                {/* 3. GÕ TỪ 3 KÝ TỰ TRỞ LÊN -> Hiển thị Sản phẩm */}
                 {searchKeyword.trim().length >= 3 && (
                   <div className="animate-fadeIn">
                     {suggestions.length > 0 ? (
@@ -504,7 +500,7 @@ export default function Header({ onOpenMenu }) {
                               alt={s.ten_san_pham}
                             />
                             <div className="flex-1 overflow-hidden">
-                              <div className="font-bold text-sm text-slate-800 truncate mb-0.5">
+                              <div className="font-bold text-sm text-[#006c49] truncate mb-0.5">
                                 {s.ten_san_pham}
                               </div>
                               <div className="text-xs font-black text-[#006c49] bg-[#e6f0ed] inline-block px-2 py-0.5 rounded-md">
@@ -526,12 +522,13 @@ export default function Header({ onOpenMenu }) {
           </div>
         )}
 
-        {/* Khối Giao diện Phải (Ngôn ngữ, User, Giỏ hàng) */}
-        <div className="flex items-center gap-2 md:gap-6 flex-shrink-0 min-w-[160px] md:min-w-[300px] justify-end">
+        {/* Khối Giao diện Phải (Ngôn ngữ, User, Thông báo, Giỏ hàng) */}
+        <div className="flex items-center gap-2 md:gap-4 flex-shrink-0 justify-end">
+          {/* Chọn Ngôn ngữ */}
           <div className="relative" ref={langRef}>
             <button
               onClick={() => setIsLangOpen(!isLangOpen)}
-              className="flex items-center gap-1 text-slate-600 hover:text-[#006c49] transition-colors"
+              className="flex items-center gap-1 text-slate-600 hover:text-[#006c49] transition-colors p-1.5 rounded-lg hover:bg-slate-50"
             >
               <Globe size={18} />
               <span className="text-[11px] font-black uppercase hidden md:block">
@@ -544,7 +541,7 @@ export default function Header({ onOpenMenu }) {
             </button>
 
             {isLangOpen && (
-              <div className="absolute right-0 mt-4 w-48 bg-white border border-slate-100 rounded-xl shadow-2xl p-1 animate-fadeIn border-t-4 border-t-[#006c49]">
+              <div className="absolute right-0 mt-4 w-48 bg-white border border-slate-100 rounded-xl shadow-2xl p-1 animate-fadeIn border-t-4 border-t-[#006c49] z-50">
                 {sortedStores.map((store) => {
                   let langCode = store.code.toLowerCase();
                   if (langCode === "vn") langCode = "vi";
@@ -576,7 +573,8 @@ export default function Header({ onOpenMenu }) {
             )}
           </div>
 
-          <div className="flex items-center min-w-[100px] md:min-w-[140px] justify-end">
+          {/* User Info / Đăng nhập */}
+          <div className="flex items-center">
             {displayUser ? (
               <div className="flex items-center gap-2 md:gap-3 bg-[#f8fafc] p-1 md:p-1.5 rounded-full border border-slate-100 md:pr-3 group transition-all">
                 <Link to="/profile" className="flex-shrink-0">
@@ -599,6 +597,7 @@ export default function Header({ onOpenMenu }) {
                 <button
                   onClick={handleLogout}
                   className="text-slate-300 hover:text-red-500 transition-all ml-1 active:scale-90"
+                  title="Đăng xuất"
                 >
                   <LogOut size={16} />
                 </button>
@@ -627,6 +626,10 @@ export default function Header({ onOpenMenu }) {
             )}
           </div>
 
+          {/* 🔔 COMPONENT THÔNG BÁO TÁCH RIÊNG - Chỉ hiển thị khi ĐÃ ĐĂNG NHẬP */}
+          {displayUser && <NotificationDropdown />}
+
+          {/* Cart Icon */}
           <Link
             id="cart-icon"
             to="/cart"
@@ -655,7 +658,6 @@ export default function Header({ onOpenMenu }) {
       <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto scrollbar-hide">
         <nav className="flex items-center gap-5 md:gap-8 whitespace-nowrap min-w-max">
           {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => {
-            // 🌟 CẬP NHẬT: Định tuyến riêng cho "Toàn cầu+" để khớp với route /global
             const targetPath =
               item === "Toàn cầu+"
                 ? "/global"
