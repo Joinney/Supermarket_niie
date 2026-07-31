@@ -82,6 +82,7 @@ func GetInventory(c *gin.Context) {
 	var inventoryList []InventoryStockResponse
 	maKho := c.Query("ma_kho")
 
+	// 🌟 FIX: Bỏ các JOIN gây nhân bản dòng, dùng Subquery để lấy supplier_name an toàn
 	query := config.DB.Table("ton_kho").
 		Select(`
 			ton_kho.sku, 
@@ -91,13 +92,17 @@ func GetInventory(c *gin.Context) {
 			SUM(ton_kho.so_luong_thuc_te * COALESCE(items.price, lo_hang.gia_nhap * 1.3, 0)) AS total_retail_value,
 			MIN(ton_kho.ngay_tao) AS first_import_date,
 			MAX(ton_kho.ngay_cap_nhat) AS last_update_date,
-			MAX(nha_cung_cap.ten_nha_cung_cap) AS supplier_name 
+			MAX((
+				SELECT ncc.ten_nha_cung_cap 
+				FROM chi_tiet_phieu_kho ctpk 
+				JOIN phieu_kho pk ON ctpk.ma_phieu = pk.ma_phieu 
+				JOIN nha_cung_cap ncc ON pk.ma_nha_cung_cap = ncc.ma_nha_cung_cap 
+				WHERE ctpk.sku = ton_kho.sku AND ctpk.ma_lo_hang = ton_kho.ma_lo_hang 
+				LIMIT 1
+			)) AS supplier_name 
 		`).
 		Joins("LEFT JOIN items ON ton_kho.sku = items.sku").
-		Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang").
-		Joins("LEFT JOIN chi_tiet_phieu_kho ON ton_kho.sku = chi_tiet_phieu_kho.sku AND ton_kho.ma_lo_hang = chi_tiet_phieu_kho.ma_lo_hang").
-		Joins("LEFT JOIN phieu_kho ON chi_tiet_phieu_kho.ma_phieu = phieu_kho.ma_phieu").
-		Joins("LEFT JOIN nha_cung_cap ON phieu_kho.ma_nha_cung_cap = nha_cung_cap.ma_nha_cung_cap")
+		Joins("LEFT JOIN lo_hang ON ton_kho.ma_lo_hang = lo_hang.ma_lo_hang")
 
 	if maKho != "" {
 		query = query.Where("ton_kho.ma_kho = ?", maKho)

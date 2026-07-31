@@ -3,6 +3,7 @@ import { signup, signin, logout, refreshToken, getAllInternalUsers,getAllBuyers,
 import upload from '../configs/cloudinary/cloudinary.js';
 import passport from '../configs/Auth/passport.js';
 import { generateTokens } from '../controllers/authController.js';
+import { getWalletTransactions, refundToWallet } from '../controllers/walletController.js';
 const router = express.Router();
 
 /**
@@ -127,6 +128,10 @@ router.get('/admin/statistics/customers', getCustomerStatistics);
 router.post('/admin/internal/users/:id/sync-tier', syncMembershipTier);
 router.get('/settings/vip', getVipSettings);
 router.put('/settings/vip', updateVipSettings);
+
+// Ví DemiPay
+router.get('/wallet/transactions/:userId', getWalletTransactions);
+router.post('/internal/wallet/refund', refundToWallet);
 
 // ==========================================
 // 🌟 API ĐĂNG NHẬP GOOGLE OAUTH2

@@ -41,6 +41,7 @@ import Tabthongbao from "./Tabthongbao/Tabthongbao";
 import Tabdonhang from "./Tabdonhang/Tabdonhang";
 import Tabvoucher from "./Tabvoucher/Tabvoucher";
 import Tabdathich from "./Tabdathich/Tabdathich";
+import Tabvidemipay from "./Tabvidemipay/Tabvidemipay";
 
 // Fix lỗi icon mặc định Leaflet
 import iconMarker from "leaflet/dist/images/marker-icon.png";
@@ -175,6 +176,7 @@ export default function ProfilePage() {
               : order
           )
         );
+        await fetchProfileData();
       }
     } catch (err) {
       console.error("Lỗi thực thi gửi API hủy đơn từ phía Client:", err);
@@ -272,6 +274,7 @@ export default function ProfilePage() {
 
   const mobileTabs = [
     { id: "profile", path: "", label: "Hồ sơ", icon: <User size={14} /> },
+    
     {
       id: "notifications",
       path: "notifications",
@@ -346,19 +349,28 @@ export default function ProfilePage() {
     }
   }, [tab]);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        const response = await authApi.get("/profile/hoso");
-        if (response.data.success) setProfile(response.data.data);
-      } catch (error) {
-        console.error("Lỗi kết nối API hồ sơ:", error);
-      } finally {
-        setLoading(false);
+  // 1. TÁCH HÀM RA NGOÀI ĐỂ DÙNG CHUNG Ở NHIỀU NƠI
+  const fetchProfileData = async () => {
+    try {
+      // Bỏ setLoading(true) ở đây để khi bấm Hủy đơn, giao diện lấy lại tiền ngầm không bị chớp giật màn hình
+      const response = await authApi.get("/profile/hoso");
+      if (response.data.success) {
+        setProfile(response.data.data);
+        if (updateUser) updateUser(response.data.data);
       }
+    } catch (error) {
+      console.error("Lỗi kết nối API hồ sơ:", error);
+    }
+  };
+
+  // 2. USEEFFECT LÚC LOAD TRANG CHỈ CẦN GỌI LẠI HÀM TRÊN
+  useEffect(() => {
+    const initFetch = async () => {
+      setLoading(true);
+      await fetchProfileData();
+      setLoading(false);
     };
-    fetchProfile();
+    initFetch();
   }, []);
 
   useEffect(() => {
@@ -1099,14 +1111,17 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex items-end justify-between">
                     <h2 className="text-2xl md:text-xl font-black tracking-tight">
-                      2.450.000đ
-                    </h2>
+      {Number(profile?.wallet_balance || 0).toLocaleString("vi-VN")}đ
+    </h2>
                     <button
-                      onClick={() => showToast("Hệ thống nạp ví đang bảo trì")}
-                      className="bg-white text-[#006c49] px-4 py-1.5 rounded-xl font-black text-[9px] shadow-sm cursor-pointer"
-                    >
-                      Nạp tiền
-                    </button>
+  onClick={() => {
+    setActiveTab("wallet");
+    navigate("/profile/wallet");
+  }}
+  className="bg-white text-[#006c49] px-4 py-1.5 rounded-xl font-black text-[9px] shadow-sm cursor-pointer hover:bg-slate-50 transition-all"
+>
+  Xem ví & Nạp tiền
+</button>
                   </div>
                 </div>
                 <CreditCard className="absolute -right-4 -bottom-4 w-20 h-20 opacity-10 -rotate-12" />
@@ -1282,6 +1297,7 @@ export default function ProfilePage() {
                 
                 {activeTab === "vouchers" && <Tabvoucher />}
                 {activeTab === "favorites" && <Tabdathich />}
+                {activeTab === "wallet" && <Tabvidemipay profile={profile} />}
               </div>
             </div>
           </div>

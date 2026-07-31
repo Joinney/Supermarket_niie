@@ -7,7 +7,7 @@ export const getHoso = async (req, res) => {
         
         // 🌟 CẬP NHẬT: Select thêm role và membership_tier
         const query = `
-            SELECT user_id, username, email, full_name, phone_number, gender, birthday, avatar_url, role, membership_tier 
+            SELECT user_id, username, email, full_name, phone_number, gender, birthday, avatar_url, role, membership_tier, wallet_balance 
             FROM users 
             WHERE user_id = $1
         `;
@@ -35,7 +35,7 @@ export const updateHoso = async (req, res) => {
             UPDATE users 
             SET full_name = $1, phone_number = $2, gender = $3, birthday = $4
             WHERE user_id = $5 
-            RETURNING user_id, username, email, full_name, avatar_url, role, membership_tier
+            RETURNING user_id, username, email, full_name, avatar_url, role, membership_tier, wallet_balance
         `;
         const result = await pool.query(query, [full_name, phone_number, gender, birthday, userId]);
 

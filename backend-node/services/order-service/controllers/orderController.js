@@ -752,7 +752,7 @@ const cancelOrder = async (req, res) => {
     const { ma_don_hang } = req.params;
 
     // 🌟 ĐÃ SỬA: Thêm user_id vào câu lệnh SELECT
-    const checkOrderQuery = `SELECT id, user_id, ma_don_hang, trang_thai_don_hang FROM public.orders WHERE ma_don_hang = $1`;
+    const checkOrderQuery = `SELECT id, user_id, ma_don_hang, trang_thai_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan FROM public.orders WHERE ma_don_hang = $1`;
     const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
     const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
 
@@ -797,6 +797,31 @@ const cancelOrder = async (req, res) => {
       await db.execute(updateQuery, [ma_don_hang]);
     }
 
+    // =========================================================================
+    // 💰 HOÀN TIỀN VÀO VÍ DEMIPAY (NẾU ĐÃ THANH TOÁN VNPAY/PAYPAL)
+    // =========================================================================
+    try {
+      const paymentStatus = String(orderInfo.trang_thai_thanh_toan).trim().toLowerCase();
+      const paymentMethod = String(orderInfo.phuong_thuc_thanh_toan).trim().toUpperCase();
+      
+      const isPaid = ['completed', 'da_thanh_toan', 'đã thanh toán', 'success'].includes(paymentStatus);
+      const isPrepaid = ['VNPAY', 'PAYPAL'].includes(paymentMethod);
+
+      if (isPaid && isPrepaid && orderInfo.user_id) {
+        // Gọi API nội bộ sang Auth Service để cộng tiền
+        await axios.post('http://auth-service:5001/api/v1/auth/internal/wallet/refund', {
+          userId: orderInfo.user_id,
+          amount: Number(orderInfo.tong_thanh_toan),
+          orderId: orderInfo.ma_don_hang,
+          method: paymentMethod
+        });
+        console.log(`💰 Đã hoàn ${orderInfo.tong_thanh_toan}đ vào ví DemiPay cho đơn ${orderInfo.ma_don_hang}`);
+      }
+    } catch (refundErr) {
+      console.warn("⚠️ Hoàn tiền ví thất bại:", refundErr.message);
+    }
+    // =========================================================================
+    
     // =========================================================================
     // 🌟 BẮN THÔNG BÁO HỦY ĐƠN HÀNG
     // =========================================================================
