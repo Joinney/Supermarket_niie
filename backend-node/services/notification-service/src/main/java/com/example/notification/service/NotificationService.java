@@ -29,12 +29,24 @@ public class NotificationService {
      * Đưa yêu cầu thông báo bất đồng bộ vào hàng đợi RabbitMQ (Gửi Mail)
      */
     public void queueNotification(NotificationRequest request) {
-        if ("email".equalsIgnoreCase(request.getChannel())) {
-            log.info("-> Đang xếp hàng đợi gửi email cho: {}", request.getRecipient());
+        String channel = request.getChannel() != null ? request.getChannel().toLowerCase() : "all";
+
+        if ("email".equals(channel)) {
+            log.info("-> Đang xếp hàng đợi gửi email cho: {}", request.getTargetEmail());
             rabbitTemplate.convertAndSend(exchange, emailRoutingKey, request);
+            
+        } else if ("websocket".equals(channel) || "inapp".equals(channel)) {
+            log.info("-> Đang xếp hàng gửi thông báo in-app cho user: {}", request.getUserId());
+            rabbitTemplate.convertAndSend(exchange, "inapp.notification.routing", request);
+            
+        } else if ("all".equals(channel)) {
+            log.info("-> Đang xếp hàng gửi đa kênh (email + in-app) cho user: {}", request.getUserId());
+            rabbitTemplate.convertAndSend(exchange, emailRoutingKey, request);
+            rabbitTemplate.convertAndSend(exchange, "inapp.notification.routing", request);
+            
         } else {
-            log.error("Kênh này chưa được cấu hình queue: {}", request.getChannel());
-            throw new IllegalArgumentException("Kênh này chưa được cấu hình queue: " + request.getChannel());
+            log.error("Kênh này chưa được cấu hình queue: {}", channel);
+            throw new IllegalArgumentException("Kênh này chưa được cấu hình queue: " + channel);
         }
     }
 

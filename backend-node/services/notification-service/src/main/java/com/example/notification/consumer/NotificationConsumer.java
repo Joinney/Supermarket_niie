@@ -1,9 +1,11 @@
 package com.example.notification.consumer;
 
+import com.example.notification.dto.NotificationRequest;
 import com.example.notification.dto.NotificationResponse;
 import com.example.notification.entity.Notification;
 import com.example.notification.repository.NotificationRepository;
 import com.example.notification.service.EmailService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -87,6 +89,51 @@ public class NotificationConsumer {
 
         } catch (Exception e) {
             log.error("💥 Lỗi nghiêm trọng khi xử lý sự kiện đăng nhập: {}", e.getMessage(), e);
+        }
+    }
+
+@RabbitListener(queues = "${notification.rabbitmq.queue.inapp:inappQueue}")
+    public void consumeInAppNotification(NotificationRequest request) {
+        try {
+            log.info("📩 Nhận thông báo In-App từ RabbitMQ: {}", request.getTitle());
+
+            String userId = request.getUserId();
+            if (userId == null || userId.trim().isEmpty()) {
+                log.warn("⚠️ Bỏ qua thông báo vì không có userId hợp lệ");
+                return;
+            }
+
+            String id = UUID.randomUUID().toString();
+            String title = request.getTitle();
+            String desc = request.getContent(); // Dùng hàm tiện ích cực hay từ DTO của bạn
+            String type = request.getType() != null ? request.getType() : "system";
+
+            // Đưa thông tin type vào Map để tương thích với cấu trúc lưu MongoDB
+            Map<String, Object> additionalData = new java.util.HashMap<>();
+            additionalData.put("type", type);
+
+            // 1. Lưu MongoDB
+            Notification notification = new Notification(
+                    id, userId, title, desc, LocalDateTime.now(), false, additionalData
+            );
+            notificationRepository.save(notification);
+            log.info("💾 Đã lưu thông báo In-App vào MongoDB (ID: {})", id);
+
+            // 2. Bắn Realtime qua WebSocket cho React Client
+            // Tạo Map payload khớp 100% với giao diện Frontend cần để hiện đúng Icon
+            Map<String, Object> wsPayload = new java.util.HashMap<>();
+            wsPayload.put("id", id);
+            wsPayload.put("title", title);
+            wsPayload.put("description", desc);
+            wsPayload.put("type", type);
+            wsPayload.put("isRead", false);
+            wsPayload.put("createdAt", LocalDateTime.now().toString());
+
+            messagingTemplate.convertAndSend("/topic/user/" + userId, wsPayload);
+            log.info("📡 Đã gửi WebSocket In-App thành công tới /topic/user/{}", userId);
+
+        } catch (Exception e) {
+            log.error("💥 Lỗi khi xử lý thông báo In-App: {}", e.getMessage(), e);
         }
     }
 

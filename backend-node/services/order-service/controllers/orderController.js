@@ -500,6 +500,22 @@ const placeOrder = async (req, res) => {
       } catch (syncErr) {}
     }
 
+    // =========================================================================
+    // 🌟 BẮN THÔNG BÁO ĐẶT HÀNG THÀNH CÔNG (KHÔNG ẢNH HƯỞNG LUỒNG LOGISTICS)
+    // =========================================================================
+    try {
+      await axios.post('http://notification-service:8085/api/v1/notifications/send', {
+        userId: String(userId),
+        channel: "websocket",
+        title: "🎉 Đặt hàng thành công",
+        description: `Đơn hàng ${order.ma_don_hang} của bạn đã được hệ thống ghi nhận và đang chờ giao cho đơn vị vận chuyển.`,
+        type: "order" 
+      });
+    } catch (notiError) {
+      console.warn("⚠️ Gửi thông báo thất bại:", notiError.message);
+    }
+    // =========================================================================
+
     return res.status(201).json({ 
       success: true, 
       ma_don_hang: order.ma_don_hang, 
@@ -735,7 +751,8 @@ const cancelOrder = async (req, res) => {
   try {
     const { ma_don_hang } = req.params;
 
-    const checkOrderQuery = `SELECT id, ma_don_hang, trang_thai_don_hang FROM public.orders WHERE ma_don_hang = $1`;
+    // 🌟 ĐÃ SỬA: Thêm user_id vào câu lệnh SELECT
+    const checkOrderQuery = `SELECT id, user_id, ma_don_hang, trang_thai_don_hang FROM public.orders WHERE ma_don_hang = $1`;
     const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
     const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
 
@@ -779,6 +796,24 @@ const cancelOrder = async (req, res) => {
     } else {
       await db.execute(updateQuery, [ma_don_hang]);
     }
+
+    // =========================================================================
+    // 🌟 BẮN THÔNG BÁO HỦY ĐƠN HÀNG
+    // =========================================================================
+    try {
+      if (orderInfo.user_id) {
+        await axios.post('http://notification-service:8085/api/v1/notifications/send', {
+          userId: String(orderInfo.user_id),
+          channel: "websocket",
+          title: "🚫 Đơn hàng đã bị hủy",
+          description: `Đơn hàng ${ma_don_hang} của bạn đã được hủy thành công.`,
+          type: "system"
+        });
+      }
+    } catch (notiError) {
+      console.warn("⚠️ Gửi thông báo hủy thất bại:", notiError.message);
+    }
+    // =========================================================================
 
     return res.status(200).json({ 
       success: true, 
@@ -953,6 +988,32 @@ const createOrderTrackingLogNode = async (req, res) => {
       trang_thai_hien_thi
     } = req.body;
 
+    // =========================================================================
+    // 🛡️ BƯỚC 1: KHIÊN CHỐNG SPAM (CHẶN GHI TRÙNG TRẠNG THÁI)
+    // =========================================================================
+    const checkDuplicateQuery = `
+      SELECT id FROM public.order_tracking_logs 
+      WHERE order_id = $1 AND trang_thai_hien_thi = $2 
+      LIMIT 1
+    `;
+    let checkRes;
+    if (db.query) {
+      checkRes = await db.query(checkDuplicateQuery, [Number(order_id), trang_thai_hien_thi]);
+    } else {
+      checkRes = await db.execute(checkDuplicateQuery, [Number(order_id), trang_thai_hien_thi]);
+    }
+    
+    const isDuplicate = checkRes.rows ? checkRes.rows.length > 0 : checkRes.length > 0;
+    
+    if (isDuplicate) {
+      console.log(`⚠️ Bỏ qua spam: Đơn ${ma_don_hang} đã có trạng thái "${trang_thai_hien_thi}"`);
+      return res.status(200).json({ 
+        success: true, 
+        message: "Trạng thái này đã được cập nhật trước đó, bỏ qua ghi trùng." 
+      });
+    }
+    // =========================================================================
+
     const insertLogQuery = `
       INSERT INTO public.order_tracking_logs (
         order_id, ma_don_hang, station_id, station_name, 
@@ -985,6 +1046,28 @@ const createOrderTrackingLogNode = async (req, res) => {
     } else {
       result = await db.execute(insertLogQuery, queryParams);
     }
+
+    // =========================================================================
+    // 🌟 TRUY VẤN CHỦ NHÂN ĐƠN HÀNG VÀ BẮN THÔNG BÁO CẬP NHẬT TRẠM
+    // =========================================================================
+    try {
+      const getUserQuery = `SELECT user_id FROM public.orders WHERE id = $1`;
+      const userRes = db.query ? await db.query(getUserQuery, [Number(order_id)]) : await db.execute(getUserQuery, [Number(order_id)]);
+      const orderUser = userRes.rows ? userRes.rows[0] : userRes[0];
+
+      if (orderUser && orderUser.user_id) {
+        await axios.post('http://notification-service:8085/api/v1/notifications/send', {
+          userId: String(orderUser.user_id),
+          channel: "websocket",
+          title: "🚚 Cập nhật vận đơn",
+          description: `Đơn hàng ${ma_don_hang}: ${trang_thai_hien_thi}`,
+          type: "order"
+        });
+      }
+    } catch (notiError) {
+      console.warn("⚠️ Gửi thông báo nhảy trạm thất bại:", notiError.message);
+    }
+    // =========================================================================
 
     return res.status(201).json({
       success: true,

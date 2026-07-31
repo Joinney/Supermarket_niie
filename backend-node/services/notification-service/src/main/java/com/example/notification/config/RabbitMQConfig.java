@@ -78,4 +78,22 @@ public class RabbitMQConfig {
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
+
+    // --- CẤU HÌNH CHO THÔNG BÁO TRONG APP (IN-APP) ---
+    @Value("${notification.rabbitmq.queue.inapp:inappQueue}")
+    private String inappQueue;
+
+    private final String inappRoutingKey = "inapp.notification.routing";
+
+    @Bean
+    public Queue inappQueue() {
+        return new Queue(inappQueue, true);
+    }
+
+    @Bean
+    public Binding bindingInApp() {
+        return BindingBuilder.bind(inappQueue())
+                .to(notificationExchange())
+                .with(inappRoutingKey);
+    }
 }
