@@ -109,24 +109,27 @@ class VnpayController
         end
 
         # ============================================================================
-        # 🚀 BẮN ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE (CỔNG 5005)
+        # 🚀 BẮN ĐỒNG BỘ TRẠNG THÁI SANG ORDER-SERVICE (ĐÃ SỬA CHUẨN DOCKER HOST & PORT 5005)
         # ============================================================================
         begin
           require 'net/http'
-          order_service_url = URI.parse('http://localhost:5005/api/orders/internal/update-status')
           
+          # 🌟 Dùng host.docker.internal để Container Ruby gọi ra ngoài máy thật (Host Machine)
+          order_service_url = URI.parse('http://host.docker.internal:5005/api/v1/orders/internal/update-status')
+
           http = Net::HTTP.new(order_service_url.host, order_service_url.port)
-          request = Net::HTTP::Post.new(order_service_url.path, { 'Content-Type' => 'application/json' })
+          http.read_timeout = 5
           
+          request = Net::HTTP::Post.new(order_service_url.path, { 'Content-Type' => 'application/json' })
           request.body = {
             ma_don_hang: ma_don_hang.to_s,
             trang_thai_thanh_toan: 'completed'
           }.to_json
 
           response = http.request(request)
-          puts "🔒 [VNPAY MICROSERVICE SYNC]: Đã đồng bộ sang Order-Service. Kết quả: #{response.code} - #{response.body}"
+          puts "🔒 [VNPAY MICROSERVICE SYNC]: Đồng bộ Order-Service thành công. Code: #{response.code} - Body: #{response.body}"
         rescue => sync_err
-          puts "⚠️ [VNPAY SYNC WARNING]: Không thể kết nối để đồng bộ trạng thái sang Order-Service: #{sync_err.message}"
+          puts "⚠️ [VNPAY SYNC WARNING]: Lỗi kết nối Order-Service: #{sync_err.message}"
         end
         # ============================================================================
 

@@ -72,6 +72,7 @@ class PaymentController
   # 🛡️ 2. ĐỐI SOÁT & CẬP NHẬT KẾT QUẢ VNPAY CALLBACK
   # ========================================================
   def self.handle_vnpay_callback(query_params)
+    puts "📩 [VNPAY CALLBACK INCOMING]: #{query_params.inspect}"
     params_clean = query_params.dup
     secure_hash = params_clean.delete('vnp_SecureHash')
     params_clean.delete('vnp_SecureHashType')
@@ -130,10 +131,9 @@ class PaymentController
   # ========================================================
   def self.sync_order_status_to_completed(ma_don_hang, phuong_thuc)
     begin
-      # 🌟 ĐÃ SỬA: Thêm /v1 vào đường dẫn gọi chéo sang Order Service
-      # Bạn nên dùng ENV cho URL để dễ thay đổi trong Docker
-      base_url = ENV['ORDER_SERVICE_URL'] || 'http://localhost:5005'
-      uri = URI("#{base_url}/api/v1/orders/internal/update-status")
+      # Đổi localhost thành host.docker.internal
+base_url = ENV['ORDER_SERVICE_URL'] || 'http://host.docker.internal:5005'
+uri = URI("#{base_url}/api/v1/orders/internal/update-status")
       
       req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/json')
       req.body = { 

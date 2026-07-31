@@ -124,19 +124,21 @@ export default function Danhsachdonhang() {
     const s = String(status || "").toLowerCase().trim();
     const m = String(method || "").toLowerCase().trim();
 
-    // Bổ sung thêm "đã thanh toán" (có dấu)
-    const isCompleted = ["completed", "da_thanh_toan", "đã thanh toán", "success"].includes(s);
+    // Các từ khóa xác định đã thanh toán thành công
+    const isCompleted = ["completed", "da_thanh_toan", "đã thanh toán", "success", "paid"].includes(s);
 
     if (isCompleted) {
       if (m === "demipay") {
-        return "bg-emerald-50 text-emerald-600 border border-emerald-200";
+        return "bg-emerald-50 text-emerald-600 border border-emerald-200"; // DemiPay - Xanh lá
       }
-      return "bg-blue-50 text-blue-600 border border-blue-200";
+      if (m === "vnpay") {
+        return "bg-orange-50 text-orange-500 border border-orange-200";
+      }
+      return "bg-blue-50 text-blue-600 border border-blue-200"; // PayPal / mặc định - Xanh dương
     }
 
     return "bg-slate-50 text-slate-600 border border-slate-200";
   };
-
   const formatOrderDate = (dateString) => {
     if (!dateString) return "N/A";
     try {
@@ -495,8 +497,7 @@ export default function Danhsachdonhang() {
                         <span
                           className={`px-2.5 py-1 rounded-[6px] text-[9px] font-black uppercase tracking-wider ${getPaymentBadgeClass(order.trang_thai_thanh_toan, order.phuong_thuc_thanh_toan)}`}
                         >
-                          {/* Kiểm tra thêm cả chữ có dấu "đã thanh toán" */}
-                          {["completed", "da_thanh_toan", "đã thanh toán", "success"].includes(String(order.trang_thai_thanh_toan || "").toLowerCase().trim())
+                          {["completed", "da_thanh_toan", "đã thanh toán", "success", "paid"].includes(String(order.trang_thai_thanh_toan || "").toLowerCase().trim())
                             ? "COMPLETED"
                             : order.trang_thai_thanh_toan || "PENDING"}
                         </span>
