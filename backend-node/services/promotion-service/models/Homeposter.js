@@ -10,6 +10,8 @@ const HomeposterSchema = new mongoose.Schema(
       giftBadgeValue: { type: String, default: '$25' },
       giftBadgeText: { type: String, default: 'Trị giá*' },
       truckImage: { type: String, default: 'https://res.cloudinary.com/dm6fqzwhs/image/upload/v1781632779/Screenshot_2026-06-17_005741_zlraht.png' },
+      // 🌟 ĐÃ BỔ SUNG TRƯỜNG qrImage ĐỂ LƯU VÀO DATABASE MONGO
+      qrImage: { type: String, default: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://demimart.com/app' },
       qrText: { type: String, default: 'Quét mã để tải app' },
       appReviewCount: { type: String, default: 'Hơn 1 triệu lượt review' }
     },

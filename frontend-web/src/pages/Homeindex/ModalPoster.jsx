@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import { Link } from "react-router-dom";
-import { X } from "lucide-react";
+import { X, Sparkles, ArrowUpRight } from "lucide-react";
 
 export default function ModalPoster({ country_code, currentStore }) {
   const [showPoster, setShowPoster] = useState(true);
@@ -17,21 +17,24 @@ export default function ModalPoster({ country_code, currentStore }) {
   // Dữ liệu 3 poster
   const posterItems = {
     leftTop: {
-      image: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=600&q=80",
+      image: "https://cdn.tgdd.vn/Files/2022/04/05/1424038/tu-4-4-11-4-2022-mung-gio-to-sale-du-cho-den-50-tai-bach-hoa-xanh-202204050949239955.jpg",
       title: "Sản phẩm khuyến mãi",
       subtitle: "Giảm đến 50%",
+      tag: "⚡ HOT SALE",
       link: `${currentPrefix}/category/khuyen-mai-1`,
     },
     leftBottom: {
-      image: "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+      image: "https://res.cloudinary.com/qb6mcdtq/image/upload/v1785527963/032e9180-d976-4e7d-b611-daef00665807_abqmbj.jpg",
       title: "Bộ sưu tập mới",
       subtitle: "Xem chi tiết ưu đãi",
+      tag: "NEW Arrival",
       link: `${currentPrefix}/category/san-pham-moi`,
     },
     rightMain: {
-      image: "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?auto=format&fit=crop&w=800&q=80",
+      image: "https://res.cloudinary.com/qb6mcdtq/image/upload/v1785527988/aed29690-e9d4-4b06-94d7-7a3d9358b93d_etlpys.jpg",
       title: "Chương trình khuyến mãi cuối năm",
-      subtitle: "Áp dụng toàn bộ hệ thống",
+      subtitle: "Áp dụng toàn bộ hệ thống siêu thị Demi Mart",
+      tag: "🎁 ĐẶC QUYỀN",
       link: `${currentPrefix}/category/khuyen-mai-chinh`,
     },
   };
@@ -39,111 +42,144 @@ export default function ModalPoster({ country_code, currentStore }) {
   if (!showPoster) return null;
 
   return ReactDOM.createPortal(
-    /* Đã giảm độ mờ nền: Dùng bg-black/40 thay vì bg-black/75 và bỏ backdrop-blur hoàn toàn */
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/40 transition-all duration-300">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-transparent pointer-events-none transition-all duration-300">
       
       {/* Layer nền trong suốt: Click ra ngoài để đóng modal */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 pointer-events-auto"
         onClick={handleClosePoster}
         aria-hidden="true"
       />
 
-      {/* Khung Bento Grid Modal */}
-      <div className="relative z-10 w-full max-w-[720px] bg-white rounded-3xl p-3 sm:p-4 shadow-2xl transition-all border border-slate-100">
+      {/* Khung chứa tổng thể */}
+      <div className="relative z-10 w-full max-w-[850px] pointer-events-auto">
         
-        {/* Nút đóng X nổi bật */}
+        {/* Nút đóng X nằm bên ngoài góc trên bên phải */}
         <button
           onClick={handleClosePoster}
-          className="absolute -top-3 -right-3 z-30 w-9 h-9 rounded-full bg-slate-900 hover:bg-black text-white flex items-center justify-center shadow-lg transition-all active:scale-95 border-2 border-white"
+          className="absolute -top-12 right-0 z-40 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/90 hover:bg-[#006c49] text-white backdrop-blur-md flex items-center justify-center shadow-2xl transition-all duration-300 hover:rotate-90 active:scale-95 border-2 border-white"
           aria-label="Đóng"
         >
-          <X size={18} />
+          <X size={22} strokeWidth={2.5} />
         </button>
 
-        {/* Bố cục Bento Grid 3 ảnh */}
-        <div className="grid grid-cols-12 gap-2.5 sm:gap-3 aspect-[4/3] sm:aspect-[16/10] w-full">
+        {/* Khung Bento Grid Modal chính */}
+        <div className="bg-transparent rounded-[32px] overflow-visible transition-all">
           
-          {/* Cột trái: 2 ảnh nhỏ */}
-          <div className="col-span-5 flex flex-col gap-2.5 sm:gap-3 h-full">
+          {/* Bố cục Bento Grid tràn viền */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 sm:gap-4 w-full md:h-[420px]">
             
-            {/* Ảnh nhỏ góc trên trái */}
-            <Link
-              to={posterItems.leftTop.link}
-              onClick={handleClosePoster}
-              className="relative flex-1 rounded-2xl overflow-hidden group bg-slate-100 border border-slate-200/60 shadow-sm hover:shadow-md transition-all"
-            >
-              <img
-                src={posterItems.leftTop.image}
-                alt={posterItems.leftTop.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-3 flex flex-col justify-end text-white">
-                <span className="font-bold text-xs sm:text-sm leading-tight line-clamp-1">
-                  {posterItems.leftTop.title}
+            {/* Cột trái: 2 ảnh nhỏ */}
+            <div className="col-span-12 md:col-span-5 flex flex-col gap-3.5 sm:gap-4 h-[260px] md:h-full">
+              
+              {/* Ảnh nhỏ góc trên trái */}
+              <Link
+                to={posterItems.leftTop.link}
+                onClick={handleClosePoster}
+                className="relative flex-1 rounded-2xl overflow-hidden group bg-white shadow-2xl border-2 border-white/90 hover:border-[#006c49] transition-all duration-300 block"
+              >
+                <img
+                  src={posterItems.leftTop.image}
+                  alt={posterItems.leftTop.title}
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                />
+                
+                <span className="absolute top-2.5 left-2.5 z-10 bg-black/60 backdrop-blur-md text-amber-300 text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-white/20 shadow-md">
+                  {posterItems.leftTop.tag}
                 </span>
-                <span className="text-[10px] sm:text-xs text-slate-200 mt-0.5">
-                  {posterItems.leftTop.subtitle}
-                </span>
-              </div>
-            </Link>
 
-            {/* Ảnh nhỏ góc dưới trái */}
-            <Link
-              to={posterItems.leftBottom.link}
-              onClick={handleClosePoster}
-              className="relative flex-1 rounded-2xl overflow-hidden group bg-slate-100 border border-slate-200/60 shadow-sm hover:shadow-md transition-all"
-            >
-              <img
-                src={posterItems.leftBottom.image}
-                alt={posterItems.leftBottom.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-3 flex flex-col justify-end text-white">
-                <span className="font-bold text-xs sm:text-sm leading-tight line-clamp-1">
-                  {posterItems.leftBottom.title}
+                <div className="absolute inset-0 p-3 sm:p-3.5 flex flex-col justify-end text-white z-10">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-black text-xs sm:text-sm leading-tight line-clamp-1 group-hover:text-emerald-300 transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                      {posterItems.leftTop.title}
+                    </span>
+                    <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-300 flex-shrink-0 drop-shadow" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-slate-100 mt-0.5 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                    {posterItems.leftTop.subtitle}
+                  </span>
+                </div>
+              </Link>
+
+              {/* Ảnh nhỏ góc dưới trái */}
+              <Link
+                to={posterItems.leftBottom.link}
+                onClick={handleClosePoster}
+                className="relative flex-1 rounded-2xl overflow-hidden group bg-white shadow-2xl border-2 border-white/90 hover:border-[#006c49] transition-all duration-300 block"
+              >
+                <img
+                  src={posterItems.leftBottom.image}
+                  alt={posterItems.leftBottom.title}
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                />
+
+                <span className="absolute top-2.5 left-2.5 z-10 bg-black/60 backdrop-blur-md text-emerald-300 text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-white/20 shadow-md">
+                  {posterItems.leftBottom.tag}
                 </span>
-                <span className="text-[10px] sm:text-xs text-slate-200 mt-0.5">
-                  {posterItems.leftBottom.subtitle}
+
+                <div className="absolute inset-0 p-3 sm:p-3.5 flex flex-col justify-end text-white z-10">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-black text-xs sm:text-sm leading-tight line-clamp-1 group-hover:text-emerald-300 transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                      {posterItems.leftBottom.title}
+                    </span>
+                    <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-300 flex-shrink-0 drop-shadow" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs text-slate-100 mt-0.5 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                    {posterItems.leftBottom.subtitle}
+                  </span>
+                </div>
+              </Link>
+            </div>
+
+            {/* Cột phải: 1 ảnh lớn chiếm trọn chiều cao */}
+            <div className="col-span-12 md:col-span-7 h-[280px] md:h-full">
+              <Link
+                to={posterItems.rightMain.link}
+                onClick={handleClosePoster}
+                className="relative block h-full rounded-2xl overflow-hidden group bg-white shadow-2xl border-2 border-white/90 hover:border-[#006c49] transition-all duration-300"
+              >
+                <img
+                  src={posterItems.rightMain.image}
+                  alt={posterItems.rightMain.title}
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                />
+
+                <span className="absolute top-3.5 left-3.5 z-10 bg-[#006c49] text-white text-[10px] sm:text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-lg border border-emerald-400/30 flex items-center gap-1">
+                  <Sparkles size={12} /> {posterItems.rightMain.tag}
                 </span>
-              </div>
-            </Link>
+
+                <div className="absolute inset-0 p-4 sm:p-6 flex flex-col justify-end text-white z-10">
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <h3 className="font-black text-sm sm:text-xl leading-snug tracking-tight group-hover:text-emerald-300 transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] line-clamp-2">
+                        {posterItems.rightMain.title}
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-100 mt-1 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] line-clamp-1">
+                        {posterItems.rightMain.subtitle}
+                      </p>
+                    </div>
+                    
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white group-hover:bg-[#006c49] transition-all flex-shrink-0 shadow-md">
+                      <ArrowUpRight size={18} strokeWidth={2.5} />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </div>
+
           </div>
 
-          {/* Cột phải: 1 ảnh lớn chiếm trọn chiều cao */}
-          <div className="col-span-7 h-full">
-            <Link
-              to={posterItems.rightMain.link}
+          {/* Thanh chân Modal */}
+          <div className="mt-4 text-center">
+            <button
               onClick={handleClosePoster}
-              className="relative block h-full rounded-2xl overflow-hidden group bg-slate-100 border border-slate-200/60 shadow-sm hover:shadow-md transition-all"
+              className="text-xs text-slate-700 hover:text-slate-900 bg-white/90 hover:bg-white px-4 py-1.5 rounded-full shadow-lg font-black uppercase tracking-wider transition-all border border-slate-200"
             >
-              <img
-                src={posterItems.rightMain.image}
-                alt={posterItems.rightMain.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent p-4 sm:p-5 flex flex-col justify-end text-white">
-                <span className="font-black text-sm sm:text-lg leading-snug">
-                  {posterItems.rightMain.title}
-                </span>
-                <span className="text-xs text-slate-200 mt-1">
-                  {posterItems.rightMain.subtitle}
-                </span>
-              </div>
-            </Link>
+              Bỏ qua lần này
+            </button>
           </div>
-
         </div>
 
-        {/* Nút bỏ qua nhẹ nhàng phía dưới */}
-        <div className="mt-2.5 text-center">
-          <button
-            onClick={handleClosePoster}
-            className="text-[11px] sm:text-xs text-slate-400 hover:text-slate-700 font-medium uppercase tracking-wider py-1 transition-colors"
-          >
-            Bỏ qua lần này
-          </button>
-        </div>
       </div>
     </div>,
     document.body

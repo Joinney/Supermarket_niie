@@ -1,17 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { ArrowRight, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function QuangCao({ t }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Chỉ số slider
-  const [catSliderIndex, setCatSliderIndex] = useState(0);
+  // Ref và State phục vụ trượt từng banner + Nhấn giữ kéo chuột
+  const catScrollRef = useRef(null);
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  // Chỉ số slider SNAP EBT
   const [ebtCurrentIndex, setEbtCurrentIndex] = useState(0);
 
-  // 1. TẢI CẤU HÌNH DỮ LIỆU QUẢNG CÁO TỪ PROMOTION SERVICE (API V1/HOMEPOSTERS)
+  // 1. TẢI CẤU HÌNH BAN ĐẦU & KẾT NỐI REALTIME SOCKET.IO
   useEffect(() => {
+    // Fetch dữ liệu khởi tạo từ Backend API
     const fetchAds = async () => {
       try {
         const res = await axios.get('http://localhost:5007/api/v1/homeposters');
@@ -25,14 +32,41 @@ export default function QuangCao({ t }) {
       }
     };
     fetchAds();
+
+    // Kết nối Socket.IO Realtime tới Promotion Service (Port 5007)
+    const socket = io('http://localhost:5007', {
+      transports: ['websocket'],
+      withCredentials: true
+    });
+
+    socket.on('homeposter_updated', (updatedData) => {
+      console.log('⚡ Realtime Update Received:', updatedData);
+      setData(updatedData);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
-  // 2. TỰ ĐỘNG CHUYỂN SLIDE BANNER DANH MỤC (AUTOPLAY)
+  // 2. TỰ ĐỘNG CHUYỂN SLIDE BANNER DANH MỤC (AUTOPLAY TỪNG BANNER)
   useEffect(() => {
-    if (!data || !data.catAutoPlay || (data.categoryBanners && data.categoryBanners.length <= 4)) return;
+    if (!data || !data.catAutoPlay || !data.categoryBanners || data.categoryBanners.length <= 4) return;
     const timer = setInterval(() => {
-      setCatSliderIndex((prev) => (prev >= data.categoryBanners.length - 4 ? 0 : prev + 1));
+      if (catScrollRef.current) {
+        const container = catScrollRef.current;
+        const cardWidth = container.firstElementChild?.offsetWidth || 260;
+        const gap = 16; // tương ứng gap-4
+        const maxScrollLeft = container.scrollWidth - container.clientWidth;
+
+        if (container.scrollLeft >= maxScrollLeft - 5) {
+          container.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          container.scrollBy({ left: cardWidth + gap, behavior: 'smooth' });
+        }
+      }
     }, (data.catInterval || 4) * 1000);
+
     return () => clearInterval(timer);
   }, [data]);
 
@@ -45,7 +79,41 @@ export default function QuangCao({ t }) {
     return () => clearInterval(timer);
   }, [data]);
 
-  // DỮ LIỆU BÌNH THƯỜNG / FALLBACK NẾU BAN ĐẦU CHƯA CÓ DATA HOẶC MỎI KẾT NỐI API
+  // HÀM XỬ LÝ BẤM MŨI TÊN TRƯỢT TỪNG BANNER
+  const handleScrollCategory = (direction) => {
+    if (!catScrollRef.current) return;
+    const container = catScrollRef.current;
+    const cardWidth = container.firstElementChild?.offsetWidth || 260;
+    const gap = 16;
+    const scrollAmount = cardWidth + gap;
+
+    if (direction === 'left') {
+      container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    } else {
+      container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  // CÁC HÀM XỬ LÝ NHẤN GIỮ KÉO CHUỘT
+  const handleMouseDown = (e) => {
+    setIsMouseDown(true);
+    setStartX(e.pageX - catScrollRef.current.offsetLeft);
+    setScrollLeft(catScrollRef.current.scrollLeft);
+  };
+
+  const handleMouseLeaveOrUp = () => {
+    setIsMouseDown(false);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isMouseDown || !catScrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - catScrollRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5; // Hệ số tốc độ cuộn
+    catScrollRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  // DỮ LIỆU DỰ PHÒNG (FALLBACK NẾU CHƯA CÓ DATA HOẶC MẤT KẾT NỐI API)
   const heroBanner = data?.heroBanner || {
     titleMain: 'Chợ Việt Nam & Châu Á',
     titleHighlight: 'trực tuyến lớn nhất Mỹ',
@@ -54,6 +122,7 @@ export default function QuangCao({ t }) {
     giftBadgeValue: '$25',
     giftBadgeText: 'Trị giá*',
     truckImage: 'https://res.cloudinary.com/dm6fqzwhs/image/upload/v1781632779/Screenshot_2026-06-17_005741_zlraht.png',
+    qrImage: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://demimart.com/app',
     qrText: 'Quét mã để tải app',
     appReviewCount: 'Hơn 1 triệu lượt review'
   };
@@ -92,11 +161,11 @@ export default function QuangCao({ t }) {
           </div>
         </div>
 
-        {/* Giữa & Phải: Hình ảnh minh họa + QR Code tải app */}
-        <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-12">
+        {/* Giữa & Phải: Hình ảnh minh họa + Khối QR Code To Rõ */}
+        <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-10">
           <div className="relative flex items-center gap-4 pl-4">
             
-            {/* Badge $25 Trị giá* */}
+            {/* Badge quà tặng $25 */}
             <div className="relative w-20 h-20 flex items-center justify-center filter drop-shadow-md select-none rotate-[-5deg]">
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-0 scale-105"></div>
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-12 scale-105"></div>
@@ -114,7 +183,7 @@ export default function QuangCao({ t }) {
               </div>
             </div>
 
-            {/* Bóng tròn 1: Quả bưởi */}
+            {/* Bóng quả bưởi */}
             <div className="w-16 h-16 rounded-full bg-sky-200/70 border border-sky-100 flex items-center justify-center p-1 shadow-inner relative overflow-hidden transform translate-y-2">
               <img 
                 src="https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=80&h=80&q=80" 
@@ -123,7 +192,7 @@ export default function QuangCao({ t }) {
               />
             </div>
 
-            {/* Bóng tròn 2: Chai nước */}
+            {/* Bóng chai nước */}
             <div className="w-14 h-14 rounded-full bg-purple-100/80 border border-purple-50 flex items-center justify-center p-1 shadow-inner absolute -top-8 left-20 z-0">
               <img 
                 src="https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=80&h=80&q=80" 
@@ -146,59 +215,68 @@ export default function QuangCao({ t }) {
 
           </div>
 
-          {/* QR Code */}
-          <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center p-1 border border-[#d6ede4]">
-              <div className="w-full h-full bg-[radial-gradient(#006c49_2px,transparent_2px)] [background-size:4px_4px]"></div>
+          {/* KHỐI QR CODE CÓ HÌNH ẢNH (KÍCH THƯỚC TO RÕ w-28 h-28 DỄ QUÉT) */}
+          <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-slate-100 shadow-md">
+            <div className="w-28 h-28 bg-white rounded-xl flex items-center justify-center p-1.5 border border-[#d6ede4] shadow-inner overflow-hidden flex-shrink-0">
+              {heroBanner.qrImage ? (
+                <img src={heroBanner.qrImage} alt="QR Code" className="w-full h-full object-contain" />
+              ) : (
+                <div className="w-full h-full bg-[radial-gradient(#006c49_3px,transparent_3px)] [background-size:6px_6px]"></div>
+              )}
             </div>
-            <div className="space-y-0.5">
-              <p className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-700 flex items-center gap-1">
                 {heroBanner.qrText} <span className="text-[#006c49]">&rarr;</span>
               </p>
-              <div className="flex gap-0.5 text-[#fea619]">
-                {[...Array(5)].map((_, i) => <Star key={i} size={10} fill="currentColor" />)}
+              <div className="flex gap-1 text-[#fea619]">
+                {[...Array(5)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
               </div>
-              <p className="text-[9px] text-[#006c49] font-black uppercase tracking-tight">{heroBanner.appReviewCount}</p>
+              <p className="text-[10px] text-[#006c49] font-black uppercase tracking-tight">{heroBanner.appReviewCount}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. BANNER DANH MỤC */}
-      <div className="px-6 md:px-10 relative group">
-        {categoryBanners.length > 4 && (
-          <button
-            type="button"
-            onClick={() => setCatSliderIndex(Math.max(0, catSliderIndex - 1))}
-            disabled={catSliderIndex === 0}
-            className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#006c49] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 disabled:opacity-0 active:scale-95"
-            title="Xem banner trước"
-          >
-            <ChevronLeft size={26} strokeWidth={3} />
-          </button>
-        )}
+      {/* 2. BANNER DANH MỤC TRƯỢT TỪNG BANNER & KÉO CHUỘT LƯỚT MƯỢT MÀ */}
+      <div className="px-6 md:px-10 relative group select-none">
+        <button
+          type="button"
+          onClick={() => handleScrollCategory('left')}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#006c49] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-95"
+          title="Xem banner trước"
+        >
+          <ChevronLeft size={26} strokeWidth={3} />
+        </button>
 
-        {categoryBanners.length > 4 && (
-          <button
-            type="button"
-            onClick={() => setCatSliderIndex(Math.min(categoryBanners.length - 4, catSliderIndex + 1))}
-            disabled={catSliderIndex >= categoryBanners.length - 4}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#006c49] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 disabled:opacity-0 active:scale-95"
-            title="Xem banner tiếp theo"
-          >
-            <ChevronRight size={26} strokeWidth={3} />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => handleScrollCategory('right')}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#006c49] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-95"
+          title="Xem banner tiếp theo"
+        >
+          <ChevronRight size={26} strokeWidth={3} />
+        </button>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-500 ease-in-out">
-          {categoryBanners.slice(catSliderIndex, catSliderIndex + 4).map((item, idx) => (
+        {/* KHUNG TRƯỢT NHẤN GIỮ KÉO CHUỘT (DRAG TO SCROLL) */}
+        <div
+          ref={catScrollRef}
+          onMouseDown={handleMouseDown}
+          onMouseLeave={handleMouseLeaveOrUp}
+          onMouseUp={handleMouseLeaveOrUp}
+          onMouseMove={handleMouseMove}
+          className={`flex gap-4 overflow-x-auto scrollbar-none scroll-smooth pb-2 pt-1 ${
+            isMouseDown ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {categoryBanners.map((item, idx) => (
             <div
               key={item.id || item._id || idx}
-              className="h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group/card cursor-pointer shadow-sm hover:shadow-lg transition-all duration-500"
+              className="w-[calc(100%/1-12px)] sm:w-[calc(100%/2-12px)] lg:w-[calc(100%/4-12px)] flex-shrink-0 h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group/card cursor-pointer shadow-sm hover:shadow-lg transition-all duration-500"
             >
               <img 
                 src={item.image} 
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105" 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105 pointer-events-none" 
                 alt={item.title} 
               />
               
@@ -206,7 +284,7 @@ export default function QuangCao({ t }) {
                 <>
                   <div className={`absolute inset-0 bg-gradient-to-t ${item.gradient || 'from-pink-950/95 via-pink-700/60 to-pink-600/20'} transition-opacity duration-300`}></div>
                   
-                  <div className="space-y-1 relative z-10">
+                  <div className="space-y-1 relative z-10 pointer-events-none">
                     <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
                       {item.tag}
                     </span>
@@ -219,7 +297,7 @@ export default function QuangCao({ t }) {
                   </div>
 
                   {item.showButton && (
-                    <button className={`w-7 h-7 rounded-full bg-white ${item.btnColor || 'text-pink-600'} flex items-center justify-center shadow-md transition-transform group-hover/card:scale-110 relative z-10`}>
+                    <button className={`w-7 h-7 rounded-full bg-white ${item.btnColor || 'text-pink-600'} flex items-center justify-center shadow-md transition-transform group-hover/card:scale-110 relative z-10 self-end`}>
                       <ArrowRight size={14} strokeWidth={3} />
                     </button>
                   )}
