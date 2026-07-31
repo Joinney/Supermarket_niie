@@ -1,18 +1,25 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy } from 'passport-facebook';
-import pool from '../database.js'; // Điều chỉnh path tùy theo cấu trúc dự án của bạn
+import pool from '../database.js'; // Đảm bảo đúng vị trí file database.js và có đuôi .js
 
 // =========================================================================
 // 1. CẤU HÌNH GOOGLE OAUTH STRATEGY
 // =========================================================================
+const googleClientId = process.env.GOOGLE_CLIENT_ID || 'DUMMY_GOOGLE_CLIENT_ID';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || 'DUMMY_GOOGLE_CLIENT_SECRET';
+
 passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5000/api/v1/auth/google/callback",
+    clientID: googleClientId,
+    clientSecret: googleClientSecret,
+    callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5001/api/v1/auth/google/callback",
     proxy: true 
 }, async (accessToken, refreshToken, profile, done) => {
     try {
+        if (!process.env.GOOGLE_CLIENT_ID) {
+            return done(new Error("GOOGLE_CLIENT_ID chưa được cấu hình trong .env"), null);
+        }
+
         const email = profile.emails[0].value;
         const displayName = profile.displayName;
         const avatar = profile.photos[0]?.value || null;
@@ -55,15 +62,21 @@ passport.use(new GoogleStrategy({
 // =========================================================================
 // 2. CẤU HÌNH FACEBOOK OAUTH STRATEGY
 // =========================================================================
+const fbClientId = process.env.FACEBOOK_CLIENT_ID || 'DUMMY_FACEBOOK_CLIENT_ID';
+const fbClientSecret = process.env.FACEBOOK_CLIENT_SECRET || 'DUMMY_FACEBOOK_CLIENT_SECRET';
+
 passport.use(new FacebookStrategy({
-    // Sử dụng chính xác 100% tên biến trong file .env của bạn
-    clientID: process.env.FACEBOOK_CLIENT_ID,
-    clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-    callbackURL: process.env.FACEBOOK_CALLBACK_URL,
+    clientID: fbClientId,
+    clientSecret: fbClientSecret,
+    callbackURL: process.env.FACEBOOK_CALLBACK_URL || "http://localhost:5001/api/v1/auth/facebook/callback",
     profileFields: ['id', 'displayName', 'photos', 'email'],
     proxy: true 
 }, async (accessToken, refreshToken, profile, done) => {
     try {
+        if (!process.env.FACEBOOK_CLIENT_ID) {
+            return done(new Error("FACEBOOK_CLIENT_ID chưa được cấu hình trong .env"), null);
+        }
+
         // Xử lý trường hợp người dùng tạo account FB bằng SĐT (không có email)
         const email = (profile.emails && profile.emails.length > 0) 
             ? profile.emails[0].value 
