@@ -11,7 +11,6 @@ export default function PaymentModal({
 }) {
   if (!isOpen) return null;
 
-// 🌟 ĐỒNG BỘ ĐỔI HẾT THÀNH "icon:" ĐỂ KHÔNG BỊ TRẮNG XÓA NỮA THUẬN ƠI
   const paymentMethods = [
     { 
       id: 'COD', 
@@ -93,33 +92,33 @@ export default function PaymentModal({
     }
   ];
 
-  // 2. 🌟 TỰ ĐỘNG CHÈN VÍ VÀO ĐẦU DANH SÁCH NẾU SỐ DƯ ĐỦ
-  if (Number(walletBalance) >= Number(finalTotal) && Number(finalTotal) > 0) {
-    paymentMethods.unshift({
-      id: 'DemiPay',
-      name: 'Ví DemiPay',
-      description: `Thanh toán ngay bằng số dư ví. (Khả dụng: ${Number(walletBalance).toLocaleString('vi-VN')}đ)`,
-      icon: <Wallet className="w-7 h-7 text-[#006c49]" strokeWidth={2} />,
-      defaultBg: 'bg-[#e6f0ed]/60 hover:bg-[#e6f0ed]',
-      activeBorder: 'border-[#006c49]',
-      activeBg: 'bg-[#006c49]/15',
-      textColor: 'text-[#006c49]'
-    });
-  }
+  // 🌟 LUÔN LUÔN THÊM VÍ VÀO DANH SÁCH NHƯNG CÓ BIẾN ĐIỀU KIỆN
+  const isWalletEligible = Number(walletBalance) >= Number(finalTotal) && Number(finalTotal) > 0;
+
+  paymentMethods.unshift({
+    id: 'DemiPay',
+    name: 'Ví DemiPay',
+    // Đổi câu chữ nếu không đủ tiền
+    description: isWalletEligible 
+      ? `Thanh toán ngay bằng số dư ví. (Khả dụng: ${Number(walletBalance).toLocaleString('vi-VN')}đ)`
+      : `Số dư ví không đủ. (Khả dụng: ${Number(walletBalance).toLocaleString('vi-VN')}đ)`,
+    icon: <Wallet className="w-7 h-7 text-[#006c49]" strokeWidth={2} />,
+    defaultBg: 'bg-[#e6f0ed]/60 hover:bg-[#e6f0ed]',
+    activeBorder: 'border-[#006c49]',
+    activeBg: 'bg-[#006c49]/15',
+    textColor: 'text-[#006c49]',
+    disabled: !isWalletEligible // 🌟 Đánh dấu cờ disabled
+  });
 
   return (
-    // 🎯 ĐẨY XUỐNG THÊM: Tăng khoảng cách từ đỉnh lên pt-[175px] để popup né xa hẳn Header
     <div className="fixed inset-0 z-[999] flex items-start justify-center p-4 overflow-y-auto pt-[175px]">
-      {/* LỚP NỀN MỜ CỦA MODAL */}
       <div 
         className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300" 
         onClick={onClose}
       ></div>
 
-      {/* KHUNG POPUP CHÍNH */}
       <div className="bg-white rounded-2xl w-full max-w-[420px] shadow-2xl relative z-10 flex flex-col max-h-[68vh] overflow-hidden border border-slate-100 animate-in fade-in slide-in-from-top-5 duration-200">
         
-        {/* TIÊU ĐỀ POPUP */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
           <div className="flex items-center gap-2 text-[#006c49]">
             <CreditCard size={18} className="stroke-[2.5]" />
@@ -133,52 +132,58 @@ export default function PaymentModal({
           </button>
         </div>
 
-{/* DANH SÁCH PHƯƠNG THỨC THANH TOÁN SẶC SỠ ĐỒNG BỘ THƯƠNG HIỆU */}
-<div className="p-4 overflow-y-auto space-y-2.5 text-left flex-1">
-  {paymentMethods.map((method) => {
-    const isSelected = selectedMethod === method.id;
-    return (
-      <button
-        key={method.id}
-        onClick={() => {
-          onSelect(method.id);
-          onClose();
-        }}
-        className={`w-full p-3.5 rounded-xl border-2 text-left transition-all duration-200 flex items-center gap-3.5 shadow-sm group active:scale-[0.99] ${
-          isSelected 
-            ? `${method.activeBorder} ${method.activeBg} shadow-md` 
-            : `border-slate-200/60 ${method.defaultBg}`
-        }`}
-      >
-        {/* 🎯 ĐÃ ĐỔI THÀNH METHOD.ICON & THÊM BACKGROUND HỒNG NẾU LÀ MOMO */}
-        <div className={`w-10 h-10 border border-slate-200/60 rounded-xl overflow-hidden shadow-inner flex-shrink-0 flex items-center justify-center transition-transform group-hover:scale-105 ${
-          method.id === 'MoMo' ? 'bg-[#a50064] p-1.5' : 'bg-white'
-        }`}>
-          {method.icon}
+        <div className="p-4 overflow-y-auto space-y-2.5 text-left flex-1">
+          {paymentMethods.map((method) => {
+            const isSelected = selectedMethod === method.id;
+            const isDisabled = method.disabled;
+
+            return (
+              <button
+                key={method.id}
+                disabled={isDisabled}
+                onClick={() => {
+                  if (!isDisabled) {
+                    onSelect(method.id);
+                    onClose();
+                  }
+                }}
+                // 🌟 THÊM CSS LÀM MỜ VÀ CHẶN CLICK KHI BỊ DISABLED
+                className={`w-full p-3.5 rounded-xl border-2 text-left transition-all duration-200 flex items-center gap-3.5 shadow-sm group 
+                  ${isDisabled 
+                    ? 'opacity-60 grayscale-[50%] pointer-events-none border-slate-200/50 bg-slate-50' 
+                    : `active:scale-[0.99] ${isSelected ? `${method.activeBorder} ${method.activeBg} shadow-md` : `border-slate-200/60 ${method.defaultBg}`}`
+                  }
+                `}
+              >
+                <div className={`w-10 h-10 border rounded-xl overflow-hidden shadow-inner flex-shrink-0 flex items-center justify-center transition-transform ${!isDisabled && 'group-hover:scale-105'} ${
+                  method.id === 'MoMo' 
+                    ? 'bg-[#a50064] p-1.5' 
+                    : (isDisabled ? 'bg-slate-100 border-slate-200/50' : 'bg-white border-slate-200/60')
+                }`}>
+                  {method.icon}
+                </div>
+
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between w-full">
+                    <span className={`text-[11px] font-black uppercase tracking-wide transition-colors ${
+                      isDisabled ? 'text-slate-400' : (isSelected ? method.textColor : 'text-slate-700')
+                    }`}>
+                      {method.name}
+                    </span>
+                    {isSelected && !isDisabled && (
+                      <span className="w-2 h-2 bg-current rounded-full shadow-sm animate-pulse" style={{ color: method.textColor }}></span>
+                    )}
+                  </div>
+                  {/* Nếu bị disabled thì chữ description chuyển sang đỏ nhạt để cảnh báo */}
+                  <p className={`text-[10px] font-bold leading-relaxed pr-2 ${isDisabled ? 'text-red-400' : 'text-gray-500'}`}>
+                    {method.description}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* KHỐI CHỮ MÔ TẢ */}
-        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-          <div className="flex items-center justify-between w-full">
-            <span className={`text-[11px] font-black uppercase tracking-wide transition-colors ${
-              isSelected ? method.textColor : 'text-slate-700'
-            }`}>
-              {method.name}
-            </span>
-            {isSelected && (
-              <span className="w-2 h-2 bg-current rounded-full shadow-sm animate-pulse" style={{ color: method.textColor }}></span>
-            )}
-          </div>
-          <p className="text-[10px] text-gray-500 font-bold leading-relaxed pr-2">
-            {method.description}
-          </p>
-        </div>
-      </button>
-    );
-  })}
-</div>
-
-        {/* FOOTER POPUP */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 text-right flex-shrink-0">
           <button 
             onClick={onClose}
