@@ -21,11 +21,12 @@ import MoMoButton from "./MoMoButton";
 import VNPAYButton from "./VNPAYButton";
 import CODButton from "./CODButton";
 import VietQRButton from "./VietQRButton";
+import DemiPayButton from "./DemiPayButton";
 
 export default function Checkout() {
   const { cart: contextCart, clearCart, clearPurchasedItems } = useCart();
   const { placeOrder, loading: orderContextLoading } = useOrder();
-  const { getMembershipTier } = useContext(AuthContext);
+  const { getMembershipTier, user } = useContext(AuthContext);
   const tier = getMembershipTier ? getMembershipTier() : "BẠC";
   const navigate = useNavigate();
 
@@ -43,6 +44,25 @@ export default function Checkout() {
   const [availableVouchers, setAvailableVouchers] = useState([]);
   const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
 
+  // 🌟 THÊM STATE QUẢN LÝ SỐ DƯ VÍ
+  const [walletBalance, setWalletBalance] = useState(0);
+
+  // 🌟 GỌI API LẤY SỐ DƯ CHÍNH XÁC NHẤT KHI VÀO TRANG CHECKOUT
+  useEffect(() => {
+    const fetchWalletBalance = async () => {
+      try {
+        const response = await authApi.get("/profile/hoso");
+        if (response.data && response.data.success) {
+          // Lấy đúng trường wallet_balance từ database
+          setWalletBalance(Number(response.data.data.wallet_balance || 0));
+        }
+      } catch (err) {
+        console.error("Lỗi tải số dư ví DemiPay:", err);
+      }
+    };
+    fetchWalletBalance();
+  }, []);
+  
   const mockCart = [
     {
       variantId: "v1",
@@ -128,6 +148,7 @@ export default function Checkout() {
 
   const discountAmount = appliedCoupon ? appliedCoupon.discount_amount : 0;
   const finalTotal = Math.max(0, itemTotal + shippingFee - discountAmount);
+  console.log("Tổng đơn hàng:", finalTotal, "|| Số dư ví thực tế:", walletBalance);
 
   useEffect(() => {
     const fetchDistanceShipping = async () => {
@@ -415,6 +436,46 @@ export default function Checkout() {
     setIsPlacing(false);
   };
 
+  // 🌟 HÀM XỬ LÝ ĐẶT HÀNG RIÊNG CHO VÍ DEMIPAY
+  const handleDemiPayCheckout = async () => {
+    if (!address) return alert("Vui lòng chọn địa chỉ giao hàng!");
+    if (!selectedShipping) return alert("Vui lòng đợi hệ thống tính toán phí vận chuyển!");
+    if (checkoutCart.length === 0) return alert("Giỏ hàng thanh toán đang trống!");
+
+    setIsPlacing(true);
+    try {
+      // 1. Tạo đơn hàng (Đơn hàng tạo ra lúc này sẽ ở trạng thái Pending/Chờ thanh toán)
+      const maDonHangText = await executePlaceOrder({
+        trang_thai_thanh_toan: "pending",
+        phuong_thuc_thanh_toan: "DemiPay"
+      });
+
+      if (maDonHangText) {
+        // 2. Gọi API trừ tiền trong ví (Auth Service)
+        await authApi.post("/auth/wallet/pay", {
+          amount: finalTotal,
+          orderId: maDonHangText
+        });
+
+        // 🌟 3. BỔ SUNG: Báo cho Order Service cập nhật trạng thái đơn thành "Đã thanh toán"
+        // (Sử dụng hàm updateInternalOrderStatus sẵn có trong orderController.js)
+        await orderApi.post("/orders/internal-status", {
+          ma_don_hang: maDonHangText,
+          trang_thai_thanh_toan: "Đã thanh toán" // Hoặc "completed" tùy quy chuẩn UI của bạn
+        });
+
+        alert(`🎉 Thanh toán qua Ví DemiPay thành công! Mã đơn: ${maDonHangText}`);
+        await finalizeOrderCleanup();
+        navigate("/profile/orders"); // 4. Đá về trang lịch sử đơn hàng
+      }
+    } catch (error) {
+      console.error("Lỗi thanh toán DemiPay:", error);
+      alert(error.response?.data?.message || "Giao dịch bị gián đoạn, vui lòng kiểm tra lại số dư ví!");
+    } finally {
+      setIsPlacing(false);
+    }
+  };
+
   const handlePayPalSuccess = async (details) => {
     try {
       setIsPlacing(true);
@@ -465,6 +526,7 @@ export default function Checkout() {
     if (id === "COD") return "Thanh toán khi nhận hàng (COD)";
     if (id === "PayPal") return "PayPal System";
     if (id === "VNPay") return "VNPay Cổng Chính";
+    if (id === "DemiPay") return "Ví điện tử DemiPay";
     return id;
   };
 
@@ -953,6 +1015,21 @@ export default function Checkout() {
                   }
                 />
               )}
+              
+              {/* 🌟 Nút thanh toán DemiPay */}
+{selectedPayment === "DemiPay" && (
+  <DemiPayButton
+    amount={finalTotal}
+   onClick={handleDemiPayCheckout}
+    disabled={
+      isGlobalLoading ||
+      shippingInfo.loading ||
+      !address ||
+      checkoutCart.length === 0
+    }
+  />
+)}
+
             </div>
           </div>
         </div>
@@ -978,6 +1055,8 @@ export default function Checkout() {
         onClose={() => setIsPaymentModalOpen(false)}
         onSelect={(methodId) => setSelectedPayment(methodId)}
         selectedMethod={selectedPayment}
+        finalTotal={finalTotal} 
+        walletBalance={walletBalance}
       />
 
       {/* 🌟 MODAL CHỌN VOUCHER HIỂN THỊ KHI ĐƯỢC KÍCH HOẠT */}

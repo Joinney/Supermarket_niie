@@ -31,6 +31,27 @@ export default function Tabvidemipay({ profile }) {
     return d.toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(',', ' -');
   };
 
+  // 🌟 THÊM HÀM FORMAT TIỀN TỆ & MÀU SẮC
+  const formatTransaction = (amount, type) => {
+    const numAmount = Number(amount);
+    const absAmount = Math.abs(numAmount);
+    const formattedNumber = absAmount.toLocaleString('vi-VN') + 'đ';
+
+    // Nếu là thanh toán hoặc số tiền âm -> Màu đỏ và dấu trừ
+    if (type === 'payment' || numAmount < 0) {
+      return {
+        text: `-${formattedNumber}`,
+        textColor: 'text-red-600',
+      };
+    } 
+    
+    // Nếu là nạp/hoàn tiền -> Màu xanh và dấu cộng
+    return {
+      text: `+${formattedNumber}`,
+      textColor: 'text-[#006c49]', 
+    };
+  };
+
   return (
     <div className="w-full animate-fadeIn space-y-6">
       {/* LỊCH SỬ GIAO DỊCH */}
@@ -42,26 +63,32 @@ export default function Tabvidemipay({ profile }) {
         </div>
 
         <div className="space-y-3">
-          {transactions.map((txn) => (
-            <div key={txn.id} className="p-4 rounded-2xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/30 transition-all flex items-center justify-between gap-4 cursor-pointer">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-amber-100 text-amber-600">
-                  <RefreshCcw size={18} strokeWidth={2.5} />
+          {transactions.map((txn) => {
+            // 🌟 GỌI HÀM FORMAT CHO TỪNG GIAO DỊCH
+            const { text, textColor } = formatTransaction(txn.amount, txn.type);
+
+            return (
+              <div key={txn.id} className="p-4 rounded-2xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/30 transition-all flex items-center justify-between gap-4 cursor-pointer">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-amber-100 text-amber-600">
+                    <RefreshCcw size={18} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">{txn.title}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{txn.description}</p>
+                    <p className="text-[10px] font-semibold text-slate-400 mt-1">{formatTime(txn.created_at)}</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 text-sm">{txn.title}</h4>
-                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{txn.description}</p>
-                  <p className="text-[10px] font-semibold text-slate-400 mt-1">{formatTime(txn.created_at)}</p>
+                <div className="text-right shrink-0">
+                  {/* 🌟 HIỂN THỊ BIẾN TEXT VÀ MÀU SẮC ĐỘNG TẠI ĐÂY */}
+                  <p className={`font-black text-base ${textColor}`}>
+                    {text}
+                  </p>
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase mt-1">Thành công</p>
                 </div>
               </div>
-              <div className="text-right shrink-0">
-                <p className="font-black text-base text-[#006c49]">
-                  +{Number(txn.amount).toLocaleString("vi-VN")}đ
-                </p>
-                <p className="text-[10px] font-bold text-emerald-600 uppercase mt-1">Thành công</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           
           {transactions.length === 0 && (
             <div className="py-12 text-center text-slate-400 flex flex-col items-center">

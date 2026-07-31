@@ -15,7 +15,8 @@ import {
   getOrderTrackingLogs,
   createOrderTrackingLogNode, 
   calculateShipping,
-  getUserSpent
+  getUserSpent,
+  payOrderWithDemiPay
 } from '../controllers/orderController.js';
 
 // Đồng bộ import 2 hàm thống kê từ đúng tệp tin cấu hình statisticsController
@@ -64,7 +65,7 @@ router.get('/:id/check-review', (req, res) => {
 
 // 6. Tiếp nhận đồng bộ trạng thái thanh toán từ Payment-Service (Gọi nội bộ Docker)
 router.post('/internal/update-status', updateInternalOrderStatus);
-
+router.post('/internal-status', updateInternalOrderStatus);
 
 // ========================================================
 // 📊 ROUTE DÀNH CHO QUẢN TRỊ VIÊN (ADMIN ENDPOINTS)

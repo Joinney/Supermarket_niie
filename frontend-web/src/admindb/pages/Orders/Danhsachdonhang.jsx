@@ -120,10 +120,20 @@ export default function Danhsachdonhang() {
     return "bg-slate-100 text-slate-700 border border-slate-200";
   };
 
-  const getPaymentBadgeClass = (status) => {
-    const s = String(status || "").toLowerCase();
-    if (["completed", "da_thanh_toan", "success"].includes(s))
+  const getPaymentBadgeClass = (status, method) => {
+    const s = String(status || "").toLowerCase().trim();
+    const m = String(method || "").toLowerCase().trim();
+
+    // Bổ sung thêm "đã thanh toán" (có dấu)
+    const isCompleted = ["completed", "da_thanh_toan", "đã thanh toán", "success"].includes(s);
+
+    if (isCompleted) {
+      if (m === "demipay") {
+        return "bg-emerald-50 text-emerald-600 border border-emerald-200";
+      }
       return "bg-blue-50 text-blue-600 border border-blue-200";
+    }
+
     return "bg-slate-50 text-slate-600 border border-slate-200";
   };
 
@@ -483,11 +493,15 @@ export default function Danhsachdonhang() {
 
                       <td className="py-4 px-4 whitespace-nowrap text-center align-top pt-5">
                         <span
-                          className={`px-2.5 py-1 rounded-[6px] text-[9px] font-black uppercase tracking-wider ${getPaymentBadgeClass(order.trang_thai_thanh_toan)}`}
+                          className={`px-2.5 py-1 rounded-[6px] text-[9px] font-black uppercase tracking-wider ${getPaymentBadgeClass(order.trang_thai_thanh_toan, order.phuong_thuc_thanh_toan)}`}
                         >
-                          {order.trang_thai_thanh_toan || "PENDING"}
+                          {/* Kiểm tra thêm cả chữ có dấu "đã thanh toán" */}
+                          {["completed", "da_thanh_toan", "đã thanh toán", "success"].includes(String(order.trang_thai_thanh_toan || "").toLowerCase().trim())
+                            ? "COMPLETED"
+                            : order.trang_thai_thanh_toan || "PENDING"}
                         </span>
-                        <span className="block text-[9px] font-bold text-slate-400 mt-1 uppercase">
+                        
+                        <span className="block text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
                           {order.phuong_thuc_thanh_toan || "COD"}
                         </span>
                       </td>

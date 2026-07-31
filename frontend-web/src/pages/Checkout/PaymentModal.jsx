@@ -1,11 +1,13 @@
 import React from 'react';
-import { X, CreditCard } from 'lucide-react';
+import { X, CreditCard, Wallet } from 'lucide-react';
 
 export default function PaymentModal({ 
   isOpen, 
   onClose, 
   onSelect, 
-  selectedMethod 
+  selectedMethod,
+  finalTotal = 0,  
+  walletBalance = 0
 }) {
   if (!isOpen) return null;
 
@@ -90,6 +92,20 @@ export default function PaymentModal({
       textColor: 'text-blue-700'
     }
   ];
+
+  // 2. 🌟 TỰ ĐỘNG CHÈN VÍ VÀO ĐẦU DANH SÁCH NẾU SỐ DƯ ĐỦ
+  if (Number(walletBalance) >= Number(finalTotal) && Number(finalTotal) > 0) {
+    paymentMethods.unshift({
+      id: 'DemiPay',
+      name: 'Ví DemiPay',
+      description: `Thanh toán ngay bằng số dư ví. (Khả dụng: ${Number(walletBalance).toLocaleString('vi-VN')}đ)`,
+      icon: <Wallet className="w-7 h-7 text-[#006c49]" strokeWidth={2} />,
+      defaultBg: 'bg-[#e6f0ed]/60 hover:bg-[#e6f0ed]',
+      activeBorder: 'border-[#006c49]',
+      activeBg: 'bg-[#006c49]/15',
+      textColor: 'text-[#006c49]'
+    });
+  }
 
   return (
     // 🎯 ĐẨY XUỐNG THÊM: Tăng khoảng cách từ đỉnh lên pt-[175px] để popup né xa hẳn Header

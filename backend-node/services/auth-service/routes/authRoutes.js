@@ -3,7 +3,8 @@ import { signup, signin, logout, refreshToken, getAllInternalUsers,getAllBuyers,
 import upload from '../configs/cloudinary/cloudinary.js';
 import passport from '../configs/Auth/passport.js';
 import { generateTokens } from '../controllers/authController.js';
-import { getWalletTransactions, refundToWallet } from '../controllers/walletController.js';
+import { getWalletTransactions, refundToWallet, payWithWallet } from '../controllers/walletController.js';
+import verifyToken from '../middlewares/authMiddleware.js';
 const router = express.Router();
 
 /**
@@ -129,9 +130,12 @@ router.post('/admin/internal/users/:id/sync-tier', syncMembershipTier);
 router.get('/settings/vip', getVipSettings);
 router.put('/settings/vip', updateVipSettings);
 
-// Ví DemiPay
+// ==========================================
+// 🌟 VÍ DEMIPAY
+// ==========================================
 router.get('/wallet/transactions/:userId', getWalletTransactions);
 router.post('/internal/wallet/refund', refundToWallet);
+router.post('/wallet/pay', verifyToken, payWithWallet); // ĐÃ BỔ SUNG: Route trừ tiền khi thanh toán (Cần verifyToken)
 
 // ==========================================
 // 🌟 API ĐĂNG NHẬP GOOGLE OAUTH2

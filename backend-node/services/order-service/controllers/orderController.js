@@ -1149,6 +1149,75 @@ const getUserSpent = async (req, res) => {
   }
 };
 
+// ========================================================
+// 💳 API 15: THANH TOÁN ĐƠN HÀNG BẰNG VÍ DEMIPAY (XỬ LÝ TẬP TRUNG)
+// ========================================================
+const payOrderWithDemiPay = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { ma_don_hang, amount } = req.body;
+
+    if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
+    if (!ma_don_hang || !amount) return res.status(400).json({ success: false, message: "Thiếu thông tin mã đơn hàng hoặc số tiền!" });
+
+    // 1. Gọi nội bộ sang Auth Service để trừ tiền ví
+    // Lưu ý: Phải truyền tiếp token qua header để Auth Service nhận diện được user
+    const authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://demi_auth_service:5001';
+    
+    try {
+      const authRes = await axios.post(
+        `${authServiceUrl}/api/v1/auth/wallet/pay`, 
+        { amount: Number(amount), orderId: ma_don_hang },
+        { headers: { Authorization: req.headers.authorization } } 
+      );
+
+      // 2. Trừ tiền ví thành công -> Cập nhật trạng thái đơn hàng sang 'Đã thanh toán'
+      if (authRes.data.success) {
+        const updateQuery = `
+          UPDATE public.orders 
+          SET trang_thai_thanh_toan = 'Đã thanh toán',
+              phuong_thuc_thanh_toan = 'DemiPay'
+          WHERE ma_don_hang = $1 AND user_id = $2
+        `;
+        
+        if (db.query) {
+          await db.query(updateQuery, [ma_don_hang, userId]);
+        } else {
+          await db.execute(updateQuery, [ma_don_hang, userId]);
+        }
+
+        // (Tuỳ chọn) Bắn thông báo realtime cho user
+        try {
+          await axios.post('http://notification-service:8085/api/v1/notifications/send', {
+            userId: String(userId),
+            channel: "websocket",
+            title: "💳 Thanh toán thành công",
+            description: `Đơn hàng ${ma_don_hang} đã được thanh toán thành công qua ví DemiPay.`,
+            type: "order" 
+          });
+        } catch (notiError) {
+          console.warn("⚠️ Gửi thông báo thanh toán ví thất bại:", notiError.message);
+        }
+
+        return res.status(200).json({ 
+          success: true, 
+          message: "Thanh toán bằng ví DemiPay thành công và đã cập nhật đơn hàng!" 
+        });
+      }
+    } catch (authError) {
+      console.error("🔥 Lỗi Auth Service:", authError.response?.data || authError.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: authError.response?.data?.message || "Thanh toán thất bại, số dư không đủ hoặc lỗi kết nối ví." 
+      });
+    }
+
+  } catch (err) {
+    console.error("🔥 Lỗi hàm payOrderWithDemiPay:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi xử lý thanh toán ví." });
+  }
+};
+
 export { 
   getShippingFee, 
   placeOrder, 
@@ -1164,5 +1233,6 @@ export {
   calculateShipping,
   getOrderTrackingLogs,
   createOrderTrackingLogNode,
-  getUserSpent
+  getUserSpent,
+  payOrderWithDemiPay
 };
