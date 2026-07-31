@@ -129,16 +129,27 @@ export default function Header({ onOpenMenu }) {
     }
   };
 
-  const [showBanner, setShowBanner] = useState(true);
+  // -------------------------------------------------------------
+  // XỬ LÝ TẮT BANNER VĨNH VIỄN BẰNG LOCALSTORAGE
+  // -------------------------------------------------------------
+  const [showBanner, setShowBanner] = useState(() => {
+    return localStorage.getItem("demi_header_banner_dismissed") !== "true";
+  });
+
+  const handleCloseBanner = () => {
+    setShowBanner(false);
+    localStorage.setItem("demi_header_banner_dismissed", "true");
+  };
+
   const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
+    if (!showBanner || timeLeft <= 0) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => prev - 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, showBanner]);
 
   const formatTime = (totalSeconds) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -282,8 +293,9 @@ export default function Header({ onOpenMenu }) {
       {showBanner && (
         <div className="w-full bg-[#fea619] text-slate-900 h-10 md:h-11 flex items-center justify-between px-4 relative overflow-hidden text-xs md:text-sm font-bold tracking-wide shadow-sm">
           <button
-            onClick={() => setShowBanner(false)}
+            onClick={handleCloseBanner}
             className="text-slate-800 hover:text-black transition-colors p-1 z-10"
+            title="Tắt banner"
           >
             <X size={18} strokeWidth={2.5} />
           </button>

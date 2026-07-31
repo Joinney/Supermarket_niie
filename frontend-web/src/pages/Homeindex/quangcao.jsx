@@ -1,55 +1,120 @@
-import React from 'react';
-import { ArrowRight, Star } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { ArrowRight, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function QuangCao({ t }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Chỉ số slider
+  const [catSliderIndex, setCatSliderIndex] = useState(0);
+  const [ebtCurrentIndex, setEbtCurrentIndex] = useState(0);
+
+  // 1. TẢI CẤU HÌNH DỮ LIỆU QUẢNG CÁO TỪ PROMOTION SERVICE (API V1/HOMEPOSTERS)
+  useEffect(() => {
+    const fetchAds = async () => {
+      try {
+        const res = await axios.get('http://localhost:5007/api/v1/homeposters');
+        if (res.data?.success && res.data?.data) {
+          setData(res.data.data);
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải dữ liệu quảng cáo:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAds();
+  }, []);
+
+  // 2. TỰ ĐỘNG CHUYỂN SLIDE BANNER DANH MỤC (AUTOPLAY)
+  useEffect(() => {
+    if (!data || !data.catAutoPlay || (data.categoryBanners && data.categoryBanners.length <= 4)) return;
+    const timer = setInterval(() => {
+      setCatSliderIndex((prev) => (prev >= data.categoryBanners.length - 4 ? 0 : prev + 1));
+    }, (data.catInterval || 4) * 1000);
+    return () => clearInterval(timer);
+  }, [data]);
+
+  // 3. TỰ ĐỘNG CHUYỂN SLIDE SNAP EBT (AUTOPLAY)
+  useEffect(() => {
+    if (!data || !data.ebtAutoPlay || (data.ebtList && data.ebtList.length <= 1)) return;
+    const timer = setInterval(() => {
+      setEbtCurrentIndex((prev) => (prev + 1) % data.ebtList.length);
+    }, (data.ebtInterval || 5) * 1000);
+    return () => clearInterval(timer);
+  }, [data]);
+
+  // DỮ LIỆU BÌNH THƯỜNG / FALLBACK NẾU BAN ĐẦU CHƯA CÓ DATA HOẶC MỎI KẾT NỐI API
+  const heroBanner = data?.heroBanner || {
+    titleMain: 'Chợ Việt Nam & Châu Á',
+    titleHighlight: 'trực tuyến lớn nhất Mỹ',
+    offerBadge: '🚚 Giao hàng miễn phí cho 5 đơn đầu tiên',
+    offerSub: '*Giá trị tối thiểu $35, thay đổi theo từng khu vực',
+    giftBadgeValue: '$25',
+    giftBadgeText: 'Trị giá*',
+    truckImage: 'https://res.cloudinary.com/dm6fqzwhs/image/upload/v1781632779/Screenshot_2026-06-17_005741_zlraht.png',
+    qrText: 'Quét mã để tải app',
+    appReviewCount: 'Hơn 1 triệu lượt review'
+  };
+
+  const categoryBanners = data?.categoryBanners?.length > 0 ? data.categoryBanners : [
+    { id: 1, tag: 'Đặc sản', title: 'Xôi Chè\nViệt Nam', subtitle: 'Dẻo thơm hương nếp ngọt thanh vị chè!', image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=400&h=300&q=80', gradient: 'from-pink-950/95 via-pink-700/60 to-pink-600/20', btnColor: 'text-pink-600', imageOnly: false, showButton: true },
+    { id: 2, tag: 'Thực phẩm thiết yếu', title: 'Món chay\nViệt Nam', subtitle: 'Nguyên liệu thanh đạm, bữa ăn hài hòa', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&h=300&q=80', gradient: 'from-emerald-950/95 via-emerald-800/60 to-transparent', btnColor: 'text-emerald-800', imageOnly: false, showButton: true },
+    { id: 3, tag: 'Thực phẩm thiết yếu', title: 'Cà phê & Trà', subtitle: 'Cho mỗi ngày đều tràn năng lượng!', image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=400&h=300&q=80', gradient: 'from-teal-950/95 via-teal-600/50 to-transparent', btnColor: 'text-teal-600', imageOnly: false, showButton: true },
+    { id: 4, tag: 'Đặc sản', title: 'Bánh Mì', subtitle: 'Khám phá nguyên bản Bánh Mì Việt Nam', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&h=300&q=80', gradient: 'from-amber-950/95 via-amber-700/50 to-transparent', btnColor: 'text-amber-700', imageOnly: false, showButton: true }
+  ];
+
+  const ebtList = data?.ebtList?.length > 0 ? data.ebtList : [
+    { id: 1, useBannerImage: false, bannerImageUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=1200&h=120&q=80', title: 'Chúng tôi hiện chấp nhận thanh toán SNAP EBT', subtitle: 'Sắm thực phẩm Việt & được giao hàng miễn phí', note: '*Điều kiện EBT khác nhau theo từng tiểu bang.' }
+  ];
+
+  const currentEbt = ebtList[ebtCurrentIndex] || ebtList[0];
+
   return (
-    <div className="w-full space-y-6 text-left">
-     {/* 1. TOP HERO BANNER */}
+    <div className="w-full space-y-6 text-left selection:bg-emerald-100">
+      {/* 1. TOP HERO BANNER */}
       <div className="px-6 md:px-10 pt-4 flex flex-col lg:flex-row items-center justify-between gap-6 bg-gradient-to-r from-[#f4faf7] via-white to-orange-50/20 rounded-[40px] pb-6 border border-[#e6f0ed]">
-        {/* Bên trái: Tiêu đề và Ưu đãi theo thương hiệu Demi Mart */}
+        {/* Bên trái: Tiêu đề và Ưu đãi */}
         <div className="space-y-4 max-w-xl">
           <h1 className="text-4xl md:text-[46px] font-black text-[#161b22] tracking-tight leading-[1.1]">
-            Chợ Việt Nam & Châu Á<br />
-            <span className="text-[#006c49]">trực tuyến lớn nhất Mỹ</span>
+            {heroBanner.titleMain}<br />
+            <span className="text-[#006c49]">{heroBanner.titleHighlight}</span>
           </h1>
           
           <div className="inline-flex flex-col items-start gap-1">
             <div className="bg-[#fea619] text-[#684000] px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wide shadow-sm flex items-center gap-1.5">
-              🚚 Giao hàng miễn phí cho 5 đơn đầu tiên
+              {heroBanner.offerBadge}
             </div>
             <p className="text-[10px] text-slate-400 font-bold ml-3">
-              *Giá trị tối thiểu $35, thay đổi theo từng khu vực
+              {heroBanner.offerSub}
             </p>
           </div>
         </div>
 
-        {/* Giữa & Phải: Hình ảnh minh họa + QR Code tải app Demi Mart */}
+        {/* Giữa & Phải: Hình ảnh minh họa + QR Code tải app */}
         <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-12">
-          {/* Badge quà tặng răng cưa và các bóng sản phẩm trang trí chuẩn UI */}
           <div className="relative flex items-center gap-4 pl-4">
             
-            {/* 1. Badge $25 Trị giá* dáng răng cưa / hình sao lượn sóng */}
+            {/* Badge $25 Trị giá* */}
             <div className="relative w-20 h-20 flex items-center justify-center filter drop-shadow-md select-none rotate-[-5deg]">
-              {/* Tạo hình răng cưa lượn sóng bằng nhiều lớp hình vuông xoay góc */}
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-0 scale-105"></div>
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-12 scale-105"></div>
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-45 scale-105"></div>
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-75 scale-105"></div>
               
-              {/* Lớp nền hồng bên trong */}
               <div className="absolute inset-1 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl transform rotate-0"></div>
               <div className="absolute inset-1 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl transform rotate-12"></div>
               <div className="absolute inset-1 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl transform rotate-45"></div>
               <div className="absolute inset-1 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl transform rotate-75"></div>
               
-              {/* Nội dung chữ */}
               <div className="relative z-10 text-center text-white flex flex-col items-center justify-center -space-y-1">
-                <span className="text-xl font-black tracking-tight">$25</span>
-                <span className="text-[10px] font-bold tracking-tight">Trị giá*</span>
+                <span className="text-xl font-black tracking-tight">{heroBanner.giftBadgeValue}</span>
+                <span className="text-[10px] font-bold tracking-tight">{heroBanner.giftBadgeText}</span>
               </div>
             </div>
 
-            {/* 2. Bóng tròn sản phẩm 1: Quả bưởi (Nền xanh dương nhạt) */}
+            {/* Bóng tròn 1: Quả bưởi */}
             <div className="w-16 h-16 rounded-full bg-sky-200/70 border border-sky-100 flex items-center justify-center p-1 shadow-inner relative overflow-hidden transform translate-y-2">
               <img 
                 src="https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=80&h=80&q=80" 
@@ -58,7 +123,7 @@ export default function QuangCao({ t }) {
               />
             </div>
 
-            {/* 3. Bóng tròn sản phẩm 2: Chai nước/sữa (Nền hồng tím nhạt ở phía sau trên cao) */}
+            {/* Bóng tròn 2: Chai nước */}
             <div className="w-14 h-14 rounded-full bg-purple-100/80 border border-purple-50 flex items-center justify-center p-1 shadow-inner absolute -top-8 left-20 z-0">
               <img 
                 src="https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=80&h=80&q=80" 
@@ -67,10 +132,10 @@ export default function QuangCao({ t }) {
               />
             </div>
 
-          {/* 4. Hình ảnh xe giao hàng và túi hàng Demi Mart (Bản thu nhỏ Mini) */}
+            {/* Xe giao hàng */}
             <div className="relative z-10 ml-1 w-24 sm:w-28 md:w-32 lg:w-36 flex-shrink-0 flex flex-col items-center">
               <img 
-                src="https://res.cloudinary.com/dm6fqzwhs/image/upload/v1781632779/Screenshot_2026-06-17_005741_zlraht.png" 
+                src={heroBanner.truckImage} 
                 className="w-full h-auto object-contain"
                 alt="Delivery Truck"
               />
@@ -81,136 +146,142 @@ export default function QuangCao({ t }) {
 
           </div>
 
-          {/* Cụm QR Code tải App chuẩn theo màu #006c49 */}
+          {/* QR Code */}
           <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
             <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center p-1 border border-[#d6ede4]">
-              {/* Giả lập mã QR code sử dụng màu xanh lục #006c49 */}
               <div className="w-full h-full bg-[radial-gradient(#006c49_2px,transparent_2px)] [background-size:4px_4px]"></div>
             </div>
             <div className="space-y-0.5">
               <p className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                Quét mã để <br /> tải app <span className="text-[#006c49]">&rarr;</span>
+                {heroBanner.qrText} <span className="text-[#006c49]">&rarr;</span>
               </p>
               <div className="flex gap-0.5 text-[#fea619]">
                 {[...Array(5)].map((_, i) => <Star key={i} size={10} fill="currentColor" />)}
               </div>
-              <p className="text-[9px] text-[#006c49] font-black uppercase tracking-tight">Hơn 1 triệu lượt review</p>
+              <p className="text-[9px] text-[#006c49] font-black uppercase tracking-tight">{heroBanner.appReviewCount}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. BỐN BANNER DANH MỤC ĐẶC SẢN (GRID LAYOUT - FULL BACKGROUND IMAGES) */}
-      <div className="px-6 md:px-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Danh mục 1: Xôi Chè (Màu hồng sen) */}
-        <div className="h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group cursor-pointer shadow-sm hover:shadow-lg transition-all duration-300">
-          {/* Ảnh nền Full tràn viền */}
-          <img 
-            src="https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=400&h=300&q=80" 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            alt="Xôi Chè Việt Nam" 
-          />
-          {/* Lớp phủ màu hồng sen đặc trưng giúp text hiển thị rõ nét */}
-          <div className="absolute inset-0 bg-gradient-to-t from-pink-950/95 via-pink-700/60 to-pink-600/20 mix-blend-multiply"></div>
-          
-          <div className="space-y-1 relative z-10">
-            <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Đặc sản</span>
-            <h3 className="text-xl font-black tracking-tight drop-shadow-sm">Xôi Chè <br /> Việt Nam</h3>
-            <p className="text-[11px] text-pink-100 font-medium max-w-[160px] leading-tight drop-shadow-sm">Dẻo thơm hương nếp ngọt thanh vị chè!</p>
-          </div>
-          <button className="w-7 h-7 rounded-full bg-white text-pink-600 flex items-center justify-center shadow-md transition-transform group-hover:scale-110 relative z-10">
-            <ArrowRight size={14} strokeWidth={3} />
+      {/* 2. BANNER DANH MỤC */}
+      <div className="px-6 md:px-10 relative group">
+        {categoryBanners.length > 4 && (
+          <button
+            type="button"
+            onClick={() => setCatSliderIndex(Math.max(0, catSliderIndex - 1))}
+            disabled={catSliderIndex === 0}
+            className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#006c49] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 disabled:opacity-0 active:scale-95"
+            title="Xem banner trước"
+          >
+            <ChevronLeft size={26} strokeWidth={3} />
           </button>
-        </div>
+        )}
 
-        {/* Danh mục 2: Món chay (Màu xanh lá đậm) */}
-        <div className="h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group cursor-pointer shadow-sm hover:shadow-lg transition-all duration-300">
-          {/* Ảnh nền Full tràn viền */}
-          <img 
-            src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&h=300&q=80" 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            alt="Món chay Việt Nam" 
-          />
-          {/* Lớp phủ màu xanh lá đậm */}
-          <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/95 via-emerald-800/60 to-transparent"></div>
-          
-          <div className="space-y-1 relative z-10">
-            <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Thực phẩm thiết yếu</span>
-            <h3 className="text-xl font-black tracking-tight drop-shadow-sm">Món chay <br /> Việt Nam</h3>
-            <p className="text-[11px] text-green-100 font-medium max-w-[160px] leading-tight drop-shadow-sm">Nguyên liệu thanh đạm, bữa ăn hài hòa</p>
-          </div>
-          <button className="w-7 h-7 rounded-full bg-white text-emerald-800 flex items-center justify-center shadow-md transition-transform group-hover:scale-110 relative z-10">
-            <ArrowRight size={14} strokeWidth={3} />
+        {categoryBanners.length > 4 && (
+          <button
+            type="button"
+            onClick={() => setCatSliderIndex(Math.min(categoryBanners.length - 4, catSliderIndex + 1))}
+            disabled={catSliderIndex >= categoryBanners.length - 4}
+            className="absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#006c49] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 disabled:opacity-0 active:scale-95"
+            title="Xem banner tiếp theo"
+          >
+            <ChevronRight size={26} strokeWidth={3} />
           </button>
-        </div>
+        )}
 
-        {/* Danh mục 3: Cà phê & Trà (Màu xanh ngọc) */}
-        <div className="h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group cursor-pointer shadow-sm hover:shadow-lg transition-all duration-300">
-          {/* Ảnh nền Full tràn viền */}
-          <img 
-            src="https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=400&h=300&q=80" 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            alt="Cà phê & Trà" 
-          />
-          {/* Lớp phủ màu xanh Teal ngọc */}
-          <div className="absolute inset-0 bg-gradient-to-t from-teal-950/95 via-teal-600/50 to-transparent"></div>
-          
-          <div className="space-y-1 relative z-10">
-            <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Thực phẩm thiết yếu</span>
-            <h3 className="text-xl font-black tracking-tight drop-shadow-sm">Cà phê & Trà</h3>
-            <p className="text-[11px] text-teal-600 bg-white/95 px-2 py-0.5 rounded font-extrabold inline-block mt-1 shadow-sm">Cho mỗi ngày đều tràn năng lượng!</p>
-          </div>
-          <button className="w-7 h-7 rounded-full bg-white text-teal-600 flex items-center justify-center shadow-md transition-transform group-hover:scale-110 relative z-10">
-            <ArrowRight size={14} strokeWidth={3} />
-          </button>
-        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-500 ease-in-out">
+          {categoryBanners.slice(catSliderIndex, catSliderIndex + 4).map((item, idx) => (
+            <div
+              key={item.id || item._id || idx}
+              className="h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group/card cursor-pointer shadow-sm hover:shadow-lg transition-all duration-500"
+            >
+              <img 
+                src={item.image} 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-105" 
+                alt={item.title} 
+              />
+              
+              {!item.imageOnly && (
+                <>
+                  <div className={`absolute inset-0 bg-gradient-to-t ${item.gradient || 'from-pink-950/95 via-pink-700/60 to-pink-600/20'} transition-opacity duration-300`}></div>
+                  
+                  <div className="space-y-1 relative z-10">
+                    <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      {item.tag}
+                    </span>
+                    <h3 className="text-xl font-black tracking-tight drop-shadow-sm whitespace-pre-line leading-tight">
+                      {item.title}
+                    </h3>
+                    <p className="text-[11px] text-pink-100 font-medium max-w-[160px] leading-tight drop-shadow-sm opacity-90">
+                      {item.subtitle}
+                    </p>
+                  </div>
 
-        {/* Danh mục 4: Bánh mì (Màu vàng đất) */}
-        <div className="h-[220px] rounded-[28px] p-5 relative overflow-hidden text-white flex flex-col justify-between group cursor-pointer shadow-sm hover:shadow-lg transition-all duration-300">
-          {/* Ảnh nền Full tràn viền */}
-          <img 
-            src="https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&h=300&q=80" 
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            alt="Bánh Mì Việt Nam" 
-          />
-          {/* Lớp phủ màu nâu hổ phách / vàng đất */}
-          <div className="absolute inset-0 bg-gradient-to-t from-amber-950/95 via-amber-700/50 to-transparent"></div>
-          
-          <div className="space-y-1 relative z-10">
-            <span className="bg-white/20 backdrop-blur-md text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Đặc sản</span>
-            <h3 className="text-xl font-black tracking-tight drop-shadow-sm">Bánh Mì</h3>
-            <p className="text-[11px] text-amber-100 font-medium max-w-[160px] leading-tight drop-shadow-sm">Khám phá nguyên bản Bánh Mì Việt Nam</p>
-          </div>
-          <button className="w-7 h-7 rounded-full bg-white text-amber-700 flex items-center justify-center shadow-md transition-transform group-hover:scale-110 relative z-10">
-            <ArrowRight size={14} strokeWidth={3} />
-          </button>
-        </div>
-
-      </div>
-
-      {/* 3. THANH THÔNG BÁO CHẤP NHẬN THANH TOÁN SNAP EBT */}
-      <div className="mx-6 md:mx-10 bg-[#00875a] text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 border border-emerald-600 shadow-sm relative overflow-hidden group cursor-pointer">
-        <div className="flex items-center gap-4 relative z-10">
-          {/* Logo SNAP giả lập hình tròn nền trắng */}
-          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center flex-shrink-0 border border-emerald-100 shadow-inner">
-            <span className="text-[#00875a] font-black text-xs tracking-tight">SNAP</span>
-          </div>
-          <div>
-            <h4 className="text-base md:text-lg font-black tracking-tight flex items-center gap-2 flex-wrap">
-              Chúng tôi hiện chấp nhận thanh toán SNAP EBT
-            </h4>
-            <p className="text-[11px] text-emerald-100 font-medium">
-              Sắm thực phẩm Việt & được giao hàng miễn phí <span className="opacity-60 text-[9px] font-normal ml-1">*Điều kiện EBT khác nhau theo từng tiểu bang.</span>
-            </p>
-          </div>
-        </div>
-        
-        <div className="w-8 h-8 rounded-full bg-white text-[#00875a] flex items-center justify-center shadow-sm group-hover:translate-x-1 transition-transform flex-shrink-0">
-          <ArrowRight size={16} strokeWidth={3} />
+                  {item.showButton && (
+                    <button className={`w-7 h-7 rounded-full bg-white ${item.btnColor || 'text-pink-600'} flex items-center justify-center shadow-md transition-transform group-hover/card:scale-110 relative z-10`}>
+                      <ArrowRight size={14} strokeWidth={3} />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
+      {/* 3. THANH THÔNG BÁO SNAP EBT */}
+      <div className="mx-6 md:mx-10 relative group">
+        {ebtList.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setEbtCurrentIndex((prev) => (prev === 0 ? ebtList.length - 1 : prev - 1))}
+            className="absolute -left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#00875a] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-95"
+            title="Slide EBT trước"
+          >
+            <ChevronLeft size={26} strokeWidth={3} />
+          </button>
+        )}
+
+        {ebtList.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setEbtCurrentIndex((prev) => (prev === ebtList.length - 1 ? 0 : prev + 1))}
+            className="absolute -right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-white text-slate-900 border-2 border-slate-800 shadow-2xl flex items-center justify-center hover:bg-[#00875a] hover:text-white opacity-0 group-hover:opacity-100 transition-all duration-300 active:scale-95"
+            title="Slide EBT tiếp theo"
+          >
+            <ChevronRight size={26} strokeWidth={3} />
+          </button>
+        )}
+
+        <div className="transition-all duration-500 ease-in-out">
+          {currentEbt?.useBannerImage ? (
+            <div className="rounded-2xl overflow-hidden shadow-sm relative group cursor-pointer border border-slate-200">
+              <img src={currentEbt.bannerImageUrl} className="w-full h-auto object-cover transition-transform duration-500" alt="SNAP EBT Banner" />
+            </div>
+          ) : (
+            <div className="bg-[#00875a] text-white rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 border border-emerald-600 shadow-sm relative overflow-hidden group cursor-pointer">
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center flex-shrink-0 border border-emerald-100 shadow-inner">
+                  <span className="text-[#00875a] font-black text-xs tracking-tight">SNAP</span>
+                </div>
+                <div>
+                  <h4 className="text-base md:text-lg font-black tracking-tight flex items-center gap-2 flex-wrap">
+                    {currentEbt?.title}
+                  </h4>
+                  <p className="text-[11px] text-emerald-100 font-medium">
+                    {currentEbt?.subtitle} <span className="opacity-60 text-[9px] font-normal ml-1">{currentEbt?.note}</span>
+                  </p>
+                </div>
+              </div>
+              
+              <div className="w-8 h-8 rounded-full bg-white text-[#00875a] flex items-center justify-center shadow-sm group-hover:translate-x-1 transition-transform flex-shrink-0">
+                <ArrowRight size={16} strokeWidth={3} />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

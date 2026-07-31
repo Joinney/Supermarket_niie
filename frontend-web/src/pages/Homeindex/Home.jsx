@@ -19,8 +19,9 @@ import { useStore } from "../../context/StoreContext";
 import { productApi, promotionApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
 import QuangCao from "./quangcao";
+import ModalPoster from "./ModalPoster";
 
-// 🌟 IMPORT 5 COMPONENT TỪ THƯ MỤC KHÁM PHÁ BỘ SƯU TẬP
+// Import 5 component từ thư mục Khám phá bộ sưu tập
 import Goiychoban from "./khamphabosuutap/goiychoban";
 import Chungtoichon from "./khamphabosuutap/chungtoichon";
 import Hangmoive from "./khamphabosuutap/hangmoive";
@@ -30,24 +31,23 @@ import Moivetuannay from "./khamphabosuutap/moivetuannay";
 export default function Home() {
   const { t } = useLanguage();
   const { currentStore } = useStore();
-const { country_code, tabSlug } = useParams();
+  const { country_code, tabSlug } = useParams();
 
-  // State cho Sản phẩm thường (Bộ sưu tập)
+  // State sản phẩm thường (Bộ sưu tập)
   const [apiProducts, setApiProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productError, setProductError] = useState(null);
 
-  // State riêng cho Sản phẩm yêu thích (Top Favorites)
+  // State sản phẩm yêu thích (Top Favorites)
   const [topFavoriteProducts, setTopFavoriteProducts] = useState([]);
   const [loadingTopFavorites, setLoadingTopFavorites] = useState(true);
 
-  // State riêng cho Flash Sale
+  // State Flash Sale
   const [flashSaleData, setFlashSaleData] = useState([]);
   const [loadingFlashSale, setLoadingFlashSale] = useState(true);
 
   const favRef = useRef(null);
-
-const location = useLocation();
+  const location = useLocation();
 
   const TABS = [
     { id: "recommend", slug: "goi_y_cho_ban", label: "Gợi ý cho bạn" },
@@ -57,11 +57,11 @@ const location = useLocation();
     { id: "week_new", slug: "moi_ve_tuan_nay", label: "Mới về tuần này" },
   ];
 
-  const activeTabObj = TABS.find(t => t.slug === tabSlug) || TABS[0];
+  const activeTabObj = TABS.find((t) => t.slug === tabSlug) || TABS[0];
   const activeMainTab = activeTabObj.id;
   const [activeRankTab, setActiveRankTab] = useState("best");
 
-  // ĐỒNG HỒ "NHỊP TIM" CHUNG CHO TOÀN BỘ COMPONENT
+  // Đồng hồ thời gian thực
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -69,15 +69,15 @@ const location = useLocation();
     return () => clearInterval(timer);
   }, []);
 
-  // LỌC DỮ LIỆU DỰA TRÊN THỜI GIAN THỰC TẾ
+  // Lọc chương trình khuyến mãi đang chạy & sắp diễn ra
   const runningPromos = flashSaleData.filter(
     (item) =>
       new Date(item.chuong_trinh.thoi_gian_bat_dau) <= currentTime &&
-      new Date(item.chuong_trinh.thoi_gian_ket_thuc) >= currentTime,
+      new Date(item.chuong_trinh.thoi_gian_ket_thuc) >= currentTime
   );
 
   const upcomingPromos = flashSaleData.filter(
-    (item) => new Date(item.chuong_trinh.thoi_gian_bat_dau) > currentTime,
+    (item) => new Date(item.chuong_trinh.thoi_gian_bat_dau) > currentTime
   );
 
   const formatTimeLeft = (endTime) => {
@@ -108,14 +108,14 @@ const location = useLocation();
       try {
         setLoadingProducts(true);
         const response = await productApi.get(
-          `/products?role=client&limit=100&country=${targetCountry}`,
+          `/products?role=client&limit=100&country=${targetCountry}`
         );
         setApiProducts(response.data);
         setProductError(null);
       } catch (err) {
         console.error("Lỗi API Sản phẩm:", err);
         setProductError(
-          err.response?.data?.message || "Không thể đồng bộ dữ liệu trang chủ",
+          err.response?.data?.message || "Không thể đồng bộ dữ liệu trang chủ"
         );
       } finally {
         setLoadingProducts(false);
@@ -125,29 +125,24 @@ const location = useLocation();
     const fetchTopFavorites = async () => {
       try {
         setLoadingTopFavorites(true);
-        const res = await productApi.get('/products/top/favorites');
-        
-        // 1. Xử lý linh hoạt cấu trúc trả về của API (đề phòng API trả về mảng trực tiếp thay vì object)
-        const rawData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-        
-        // 2. Đồng bộ hóa các trường số lượng/tồn kho/đã bán để ProductCard có thể đọc được
-        const formattedData = rawData.map(item => ({
-            ...item,
-            // Nếu API yêu thích không trả về 'stock', ta có thể lấy từ 'so_luong_kho' hoặc gán mặc định để không bị hiện 0
-            stock: item.stock || item.so_luong_kho || 100, 
-            
-            // Nếu ProductCard dùng 'da_ban' nhưng API trả về 'luot_yeu_thich'
-            da_ban: item.da_ban || item.luot_yeu_thich || item.total_favorites || 0,
-            
-            // Bổ sung các cấu trúc lồng ghép nếu ProductCard của bạn yêu cầu (như ở phần Flash Sale)
-            thong_tin_sale: {
-                ...item.thong_tin_sale,
-                da_ban: item.da_ban || item.luot_yeu_thich || 0 
-            }
+        const res = await productApi.get("/products/top/favorites");
+
+        const rawData = Array.isArray(res.data)
+          ? res.data
+          : res.data?.data || [];
+
+        const formattedData = rawData.map((item) => ({
+          ...item,
+          stock: item.stock || item.so_luong_kho || 100,
+          da_ban:
+            item.da_ban || item.luot_yeu_thich || item.total_favorites || 0,
+          thong_tin_sale: {
+            ...item.thong_tin_sale,
+            da_ban: item.da_ban || item.luot_yeu_thich || 0,
+          },
         }));
 
         setTopFavoriteProducts(formattedData);
-        
       } catch (err) {
         console.error("Lỗi API Top Yêu Thích:", err);
       } finally {
@@ -177,7 +172,7 @@ const location = useLocation();
     fetchFlashSale();
   }, [country_code, currentStore?.code]);
 
-  // AUTO-SCROLL CAROUSEL
+  // Auto-scroll Carousel
   useEffect(() => {
     const container = favRef.current;
     if (!container) return;
@@ -217,10 +212,10 @@ const location = useLocation();
     };
   }, [flashSaleData]);
 
-const getCleanProductList = () => {
+  const getCleanProductList = () => {
     let rawList = [];
     if (!apiProducts) return [];
-    
+
     if (Array.isArray(apiProducts)) {
       rawList = apiProducts;
     } else if (apiProducts.data && Array.isArray(apiProducts.data)) {
@@ -229,17 +224,16 @@ const getCleanProductList = () => {
       rawList = apiProducts.products;
     }
 
-    // 🌟 LỌC TRÙNG LẶP: Dùng Set để chỉ giữ lại 1 đại diện duy nhất cho mỗi mã sản phẩm
     const uniqueProducts = [];
     const seenIds = new Set();
-    
+
     for (const item of rawList) {
       if (!seenIds.has(item.ma_san_pham)) {
         seenIds.add(item.ma_san_pham);
         uniqueProducts.push(item);
       }
     }
-    
+
     return uniqueProducts;
   };
 
@@ -250,12 +244,12 @@ const getCleanProductList = () => {
     : `/${currentStore?.code?.toLowerCase() || "vn"}`;
 
   return (
-    <div className="space-y-12 pb-20 bg-[#fafbfc] font-sans pt-[10px] selection:bg-[#006c49] selection:text-white">
+    <div className="space-y-12 pb-20 bg-[#fafbfc] font-sans pt-[10px] selection:bg-[#006c49] selection:text-white relative">
+      <ModalPoster country_code={country_code} currentStore={currentStore} />
+
       <QuangCao t={t} />
 
-      {/* ========================================================== */}
-      {/* 🌟 KHỐI 1: KHUYẾN MÃI NHANH (FLASH SALE) */}
-      {/* ========================================================== */}
+      {/* FLASH SALE */}
       <section className="mx-6 md:mx-10 space-y-6">
         {loadingFlashSale ? (
           <div className="h-40 bg-slate-100 rounded-[40px] animate-pulse"></div>
@@ -264,7 +258,7 @@ const getCleanProductList = () => {
             {runningPromos.length > 0 ? (
               runningPromos.map((promo, idx) => {
                 const timeLeft = formatTimeLeft(
-                  promo.chuong_trinh.thoi_gian_ket_thuc,
+                  promo.chuong_trinh.thoi_gian_ket_thuc
                 );
                 return (
                   <div
@@ -399,7 +393,7 @@ const getCleanProductList = () => {
                           Bắt đầu:{" "}
                           <span className="text-blue-600 bg-white px-2 py-0.5 rounded shadow-sm border border-blue-100">
                             {new Date(
-                              promo.chuong_trinh.thoi_gian_bat_dau,
+                              promo.chuong_trinh.thoi_gian_bat_dau
                             ).toLocaleString("vi-VN")}
                           </span>
                         </p>
@@ -416,9 +410,7 @@ const getCleanProductList = () => {
         )}
       </section>
 
-      {/* ========================================================== */}
-      {/* 🌟 KHỐI 2: SẢN PHẨM THỊNH HÀNH (TOP YÊU THÍCH CAO NHẤT) */}
-      {/* ========================================================== */}
+      {/* TOP YÊU THÍCH */}
       <section className="px-6 md:px-10">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -454,16 +446,13 @@ const getCleanProductList = () => {
                 className="w-full bg-white rounded-[28px] border border-slate-100/80 p-1 hover:shadow-xl hover:border-slate-200/50 transition-all duration-300 hover:-translate-y-1 relative"
               >
                 <ProductCard p={p} />
-                
               </div>
             ))
           )}
         </div>
       </section>
 
-      {/* ========================================================== */}
-      {/* 🌟 KHỐI 3: KHÁM PHÁ BỘ SƯU TẬP (ĐÃ TÁCH COMPONENT) */}
-      {/* ========================================================== */}
+      {/* KHÁM PHÁ BỘ SƯU TẬP */}
       <section className="px-6 md:px-10">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5 mb-6">
           <div className="flex items-center gap-2.5 text-left">
@@ -479,9 +468,9 @@ const getCleanProductList = () => {
             {TABS.map((tab) => (
               <Link
                 key={tab.id}
-                to={`${currentPrefix}/${tab.slug}`} 
+                to={`${currentPrefix}/${tab.slug}`}
                 preventScrollReset={true}
-                replace={true} // Bật replace để người dùng bấm nút "Back" trên trình duyệt không bị kẹt lùi lại từng tab một
+                replace={true}
                 className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all duration-300 whitespace-nowrap ${
                   activeMainTab === tab.id
                     ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/15"
@@ -494,17 +483,26 @@ const getCleanProductList = () => {
           </div>
         </div>
 
-        {/* 🌟 GỌI CÁC COMPONENT CON TƯƠNG ỨNG VỚI TAB ĐANG CHỌN */}
         <div className="mt-5">
-          {activeMainTab === "recommend" && <Goiychoban products={cleanProducts} loading={loadingProducts} />}
-          {activeMainTab === "chosen" && <Chungtoichon products={cleanProducts} loading={loadingProducts} />}
-          {activeMainTab === "new_release" && <Hangmoive products={cleanProducts} loading={loadingProducts} />}
-          {activeMainTab === "good_price" && <Giatotmoingay products={cleanProducts} loading={loadingProducts} />}
-          {activeMainTab === "week_new" && <Moivetuannay products={cleanProducts} loading={loadingProducts} />}
+          {activeMainTab === "recommend" && (
+            <Goiychoban products={cleanProducts} loading={loadingProducts} />
+          )}
+          {activeMainTab === "chosen" && (
+            <Chungtoichon products={cleanProducts} loading={loadingProducts} />
+          )}
+          {activeMainTab === "new_release" && (
+            <Hangmoive products={cleanProducts} loading={loadingProducts} />
+          )}
+          {activeMainTab === "good_price" && (
+            <Giatotmoingay products={cleanProducts} loading={loadingProducts} />
+          )}
+          {activeMainTab === "week_new" && (
+            <Moivetuannay products={cleanProducts} loading={loadingProducts} />
+          )}
         </div>
       </section>
 
-      {/* 4. BANNER NGANG */}
+      {/* BANNER NGANG */}
       <div className="mx-6 md:mx-10 h-32 bg-[#006c49] rounded-[36px] flex items-center justify-between px-6 md:px-16 border border-[#006c49] group cursor-pointer shadow-xl shadow-[#006c49]/15 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-12 relative z-10 text-left">
@@ -523,9 +521,7 @@ const getCleanProductList = () => {
         </button>
       </div>
 
-      {/* ========================================================== */}
-      {/* KHỐI 3: GLOBAL+ BẢNG XẾP HẠNG */}
-      {/* ========================================================== */}
+      {/* BẢNG XẾP HẠNG */}
       <section className="px-6 md:px-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <div className="lg:col-span-4 bg-white border border-slate-100 rounded-[36px] p-6 text-left shadow-[0_12px_40px_rgba(0,0,0,0.015)] space-y-4 lg:sticky lg:top-4">
           <div className="flex items-center gap-3">
@@ -589,8 +585,8 @@ const getCleanProductList = () => {
                   index === 0
                     ? "from-yellow-50/60 to-amber-100/30 border-yellow-200/70 shadow-yellow-100/40 shadow-xl"
                     : index === 1
-                      ? "from-slate-50 to-slate-200/30 border-slate-200/70"
-                      : "from-amber-50 to-amber-200/20 border-amber-200/50";
+                    ? "from-slate-50 to-slate-200/30 border-slate-200/70"
+                    : "from-amber-50 to-amber-200/20 border-amber-200/50";
 
                 return (
                   <div
@@ -602,8 +598,8 @@ const getCleanProductList = () => {
                         index === 0
                           ? "bg-gradient-to-r from-yellow-500 to-amber-500"
                           : index === 1
-                            ? "bg-slate-400"
-                            : "bg-amber-700"
+                          ? "bg-slate-400"
+                          : "bg-amber-700"
                       }`}
                     >
                       #{index + 1}

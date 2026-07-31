@@ -111,6 +111,7 @@ export default function Sidebar() {
     dashboard: location.pathname.includes("/admin/dashboard"),
     sanPham: location.pathname.includes("/admin/products"),
     khuyenMai: location.pathname.includes("/admin/promotions"),
+    posterNotification: location.pathname.includes("/admin/posters-notifications"), // 🌟 THÊM STATE CHO DROP-DOWN MOI
     donHang: location.pathname.includes("/admin/Donhang"),
     khoHang: location.pathname.includes("/admin/inventory"),
     khachHang: location.pathname.includes("/admin/customers"),
@@ -132,6 +133,9 @@ export default function Sidebar() {
       khuyenMai: currentPath.includes("/admin/promotions")
         ? true
         : prev.khuyenMai,
+      posterNotification: currentPath.includes("/admin/posters-notifications")
+        ? true
+        : prev.posterNotification,
       donHang: currentPath.includes("/admin/Donhang") ? true : prev.donHang,
       khoHang: currentPath.includes("/admin/inventory") ? true : prev.khoHang,
       khachHang: currentPath.includes("/admin/customers")
@@ -159,6 +163,8 @@ export default function Sidebar() {
       navigate("/admin/dashboard/tongquan");
     } else if (menuKey === "khuyenMai" && hasAccess("promotions")) {
       navigate("/admin/promotions/danh-sach");
+    } else if (menuKey === "posterNotification" && (hasAccess("posters") || hasAccess("notifications") || userRole === "ADMIN")) {
+      navigate("/admin/posters-notifications/poster");
     } else if (menuKey === "donHang" && hasAccess("orders")) {
       navigate("/admin/Donhang/DanhsachTrackingorder");
     } else if (menuKey === "khoHang" && hasAccess("inventory")) {
@@ -192,16 +198,13 @@ export default function Sidebar() {
   const getMainMenuStyle = (path) => {
     if (
       activeItem === path ||
-      (path === "/admin/dashboard" &&
-        activeItem.includes("/admin/dashboard")) ||
+      (path === "/admin/dashboard" && activeItem.includes("/admin/dashboard")) ||
       (path === "/admin/products" && activeItem.includes("/admin/products")) ||
-      (path === "/admin/promotions" &&
-        activeItem.includes("/admin/promotions")) ||
+      (path === "/admin/promotions" && activeItem.includes("/admin/promotions")) ||
+      (path === "/admin/posters-notifications" && activeItem.includes("/admin/posters-notifications")) ||
       (path === "/admin/Donhang" && activeItem.includes("/admin/Donhang")) ||
-      (path === "/admin/inventory" &&
-        activeItem.includes("/admin/inventory")) ||
-      (path === "/admin/customers" &&
-        activeItem.includes("/admin/customers")) ||
+      (path === "/admin/inventory" && activeItem.includes("/admin/inventory")) ||
+      (path === "/admin/customers" && activeItem.includes("/admin/customers")) ||
       (path === "/admin/settings-auth" &&
         (activeItem.includes("/admin/settings/quanlynoibo") ||
           activeItem.includes("/admin/settings/quanlyvaitro") ||
@@ -336,23 +339,22 @@ export default function Sidebar() {
                 </button>
 
                 {openDropdowns.dashboard && !isCollapsed && (
-  <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-    {/* 🌟 NÚT MỚI THÊM VÀO ĐẦU DROPDOWN ĐỂ ĐIỀU HƯỚNG SANG TRANG CÓ BIỂU ĐỒ BAR/LINE */}
-    <button
-      onClick={() => handleSubMenuClick("/admin/dashboard/tongquan")}
-      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/tongquan")}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/tongquan") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
-      <span>Tổng quan kinh doanh</span>
-    </button>
+                  <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+                    <button
+                      onClick={() => handleSubMenuClick("/admin/dashboard/tongquan")}
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/tongquan")}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/tongquan") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                      <span>Tổng quan kinh doanh</span>
+                    </button>
 
-    <button
-      onClick={() => handleSubMenuClick("/admin/dashboard/thongkesanpham")}
-      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
-      <span>Thống kê sản phẩm</span>
-    </button>
+                    <button
+                      onClick={() => handleSubMenuClick("/admin/dashboard/thongkesanpham")}
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                      <span>Thống kê sản phẩm</span>
+                    </button>
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/dashboard/thongkedonhang")
@@ -532,7 +534,6 @@ export default function Sidebar() {
                       <span>Danh sách Khuyến mãi</span>
                     </button>
 
-                    {/* Nút 1: Tạo Flash Sale */}
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/promotions/tao-moi")
@@ -545,7 +546,6 @@ export default function Sidebar() {
                       <span>Tạo Flash Sale</span>
                     </button>
 
-                    {/* 🌟 Nút 2: Phát hành Mã Coupon */}
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/promotions/tao-coupon")
@@ -556,6 +556,84 @@ export default function Sidebar() {
                         className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/promotions/tao-coupon") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Phát hành Mã Coupon</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 🌟 MODULE MỚI: POSTER VÀ THÔNG BÁO */}
+            {(hasAccess("posters") || hasAccess("notifications") || userRole === "ADMIN") && (
+              <div>
+                <button
+                  onClick={() =>
+                    handleMainMenuClick(
+                      "posterNotification",
+                      "/admin/posters-notifications/poster",
+                    )
+                  }
+                  className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm transition group ${getMainMenuStyle("/admin/posters-notifications")}`}
+                  title={isCollapsed ? "Poster và Thông báo" : ""}
+                >
+                  <div className="flex items-center gap-3">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.8}
+                      stroke="currentColor"
+                      className="w-5 h-5 transition-colors"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10.34 15.84c-.012-.15-.018-.304-.018-.46 0-4.97 3.058-9.065 7.23-9.065.986 0 1.93.228 2.788.647M6.88 12.83C4.103 14.28 2.25 17.062 2.25 20.25h19.5c0-1.74-.555-3.35-1.5-4.667M15.75 7.5a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+                      />
+                    </svg>
+                    {!isCollapsed && (
+                      <span className="animate-fadeIn">Poster và thông báo</span>
+                    )}
+                  </div>
+                  {!isCollapsed && (
+                    <span
+                      className={`text-[10px] transition-transform duration-200 ${openDropdowns.posterNotification ? "rotate-90" : ""}`}
+                    >
+                      ❯
+                    </span>
+                  )}
+                </button>
+
+                {openDropdowns.posterNotification && !isCollapsed && (
+                  <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+                    {/* Tab con 1: Poster */}
+                    <button
+                      onClick={() =>
+                        handleSubMenuClick("/admin/posters-notifications/poster")
+                      }
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/posters-notifications/poster")}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/posters-notifications/poster") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
+                      <span>Poster</span>
+                    </button>
+
+                    {/* Tab con 2: Thông báo */}
+                    <button
+                      onClick={() =>
+                        handleSubMenuClick("/admin/posters-notifications/thong-bao")
+                      }
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/posters-notifications/thong-bao")}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/posters-notifications/thong-bao") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
+                      <span>Thông báo</span>
                     </button>
                   </div>
                 )}
@@ -602,7 +680,6 @@ export default function Sidebar() {
 
                 {openDropdowns.donHang && !isCollapsed && (
                   <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
-                    {/* 🌟 NÚT TRACKING ĐƠN HÀNG MỚI */}
                     <button
                       onClick={() =>
                         handleSubMenuClick(
@@ -617,7 +694,6 @@ export default function Sidebar() {
                       <span>Danh sách tracking đơn hàng</span>
                     </button>
 
-                    {/* DANH SÁCH ĐƠN HÀNG CŨ CỦA BẠN (GIỮ NGUYÊN VẸN) */}
                     <button
                       onClick={() =>
                         handleSubMenuClick("/admin/Donhang/Danhsachdonhang")
@@ -873,7 +949,6 @@ export default function Sidebar() {
                           <span>Danh sách vai trò</span>
                         </button>
 
-                        {/* 🌟 NÚT MỚI: CẤU HÌNH HẠNG VIP */}
                         <button
                           onClick={() =>
                             handleSubMenuClick("/admin/settings/vip-tiers")

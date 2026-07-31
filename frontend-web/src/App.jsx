@@ -20,7 +20,7 @@ import HeaderKhachHang from "./components/Header";
 import SidebarKhachHang from "./components/Sidebar";
 import Footer from "./components/Footer";
 import Home from "./pages/Homeindex/Home";
-import Global from "./pages/Homeindex/global/global.jsx"; // 🌟 Bổ sung Import trang Global
+import Global from "./pages/Homeindex/global/global.jsx";
 import Login from "./pages/Auth/Login";
 import Signup from "./pages/Auth/Signup";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
@@ -39,7 +39,7 @@ import AdminProfile from "./admindb/pages/profile/AdminProfile.jsx";
 import AdminLogin from "./admindb/pages/auth/AdminLogin.jsx";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin from "./admindb/components/Header";
-// Thêm dòng này ngay dưới import HeaderAdmin từ "./admindb/components/Header";
+
 import AdminDashboardPage from "./admindb/pages/dashboard/AdminDashboardPage.jsx";
 import Dashboard from "./admindb/pages/dashboard/ThongKeSanPham.jsx";
 import ThongKeDonHang from "./admindb/pages/dashboard/ThongKeDonHang.jsx";
@@ -85,13 +85,16 @@ import Chitietnoibo from "./admindb/pages/settings/Quanlynoibo/Chitietnoibo.jsx"
 import Danhsachvaitro from "./admindb/pages/settings/Quanlyvaitro/Danhsachvaitro.jsx";
 import VipSettings from "./admindb/pages/Settings/VipSettings";
 
-// --- 🌟 IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI TIẾNG VIỆT CHUẨN CẤU TRÚC 🌟 ---
+// --- IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI ---
 import DanhSachGiamGia from "./admindb/pages/Promotions/DanhSachGiamGia.jsx";
 import TaoGiamGia from "./admindb/pages/Promotions/TaoGiamGia.jsx";
 import CreateCoupon from "./admindb/pages/Promotions/CreateCoupon.jsx";
 
+// 🌟🌟🌟 IMPORT TRANG POSTER BUILDER THEO ĐÚNG CẤU TRÚC THƯ MỤC CỦA BẠN 🌟🌟🌟
+import PosterBuilder from "./admindb/pages/quanlyposterthongbao/PosterBuilder.jsx";
+
 /**
- * 🎯 ĐÃ THAY THẾ: Component Giao Diện Cấu hình chung (General Settings) thực tế theo hình mẫu
+ * Component Giao Diện Cấu hình chung (General Settings)
  */
 const SettingsGeneral = () => {
   const [isTaxIncluded, setIsTaxIncluded] = useState(true);
@@ -330,54 +333,8 @@ const SettingsGeneral = () => {
               </div>
             </div>
           </div>
-
-          {/* SECTION 4: Tích hợp & API */}
-          <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-center gap-2">
-              <div className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600">
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-sm font-bold text-gray-900">
-                Tích hợp & API
-              </h2>
-            </div>
-            <div>
-              {/* Webhook URL (Đồng bộ kho hàng) */}
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                Webhook URL (Đồng bộ kho hàng)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  defaultValue="https://api.demimart.vn/v1/webhooks/inventory-sync"
-                  className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none text-gray-600"
-                />
-                <button
-                  type="button"
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition"
-                >
-                  Kiểm tra kết nối
-                </button>
-              </div>
-              <p className="mt-2 text-[11px] text-gray-400">
-                Dùng để đồng bộ tồn kho thời gian thực với các hệ thống bên
-                ngoài.
-              </p>
-            </div>
-          </div>
         </div>
+
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
           {/* SECTION 5: Cài đặt Vùng & Ngôn ngữ */}
@@ -405,7 +362,6 @@ const SettingsGeneral = () => {
 
             <div className="space-y-4">
               <div>
-                {/* Tiền tệ mặc định */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Tiền tệ mặc định
                 </label>
@@ -414,7 +370,6 @@ const SettingsGeneral = () => {
                 </select>
               </div>
               <div>
-                {/* Múi giờ */}
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                   Múi giờ
                 </label>
@@ -422,231 +377,8 @@ const SettingsGeneral = () => {
                   <option>(GMT+07:00) Bangkok, Hà Nội, Jakarta</option>
                 </select>
               </div>
-              <div>
-                {/* Ngôn ngữ hệ thống */}
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  Ngôn ngữ hệ thống
-                </label>
-                <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none bg-white">
-                  <option>Tiếng Việt</option>
-                </select>
-              </div>
-              <div>
-                {/* Định dạng ngày tháng */}
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                  Định dạng ngày tháng
-                </label>
-                <select className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none bg-white">
-                  <option>DD/MM/YYYY (31/12/2023)</option>
-                </select>
-              </div>
             </div>
           </div>
-
-          {/* SECTION 6: Giờ hoạt động */}
-          <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-center gap-2">
-              <div className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600">
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-sm font-bold text-gray-900">Giờ hoạt động</h2>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-gray-600">T2 - T6</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    defaultValue="08:00"
-                    className="w-14 rounded-lg border border-gray-200 px-2 py-1 text-center text-xs focus:outline-none focus:border-emerald-500"
-                  />
-                  <span>-</span>
-                  <input
-                    type="text"
-                    defaultValue="22:00"
-                    className="w-14 rounded-lg border border-gray-200 px-2 py-1 text-center text-xs focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-gray-600">Thứ Bảy</span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    defaultValue="09:00"
-                    className="w-14 rounded-lg border border-gray-200 px-2 py-1 text-center text-xs focus:outline-none focus:border-emerald-500"
-                  />
-                  <span>-</span>
-                  <input
-                    type="text"
-                    defaultValue="23:00"
-                    className="w-14 rounded-lg border border-gray-200 px-2 py-1 text-center text-xs focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-gray-600">Chủ Nhật</span>
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-500 uppercase tracking-wide">
-                    Đóng cửa
-                  </span>
-                  <button
-                    type="button"
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <svg
-                      className="h-3.5 w-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="mt-4 w-full rounded-xl border border-dashed border-emerald-500 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50/40 transition"
-              >
-                + Thêm ngày nghỉ Lễ
-              </button>
-            </div>
-          </div>
-
-          {/* SECTION 7: Tài sản thương hiệu */}
-          <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-center gap-2">
-              <div className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600">
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-sm font-bold text-gray-900">
-                Tài sản thương hiệu
-              </h2>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                {/* Logo cửa hàng */}
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Logo cửa hàng
-                </label>
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-5 text-center cursor-pointer hover:bg-gray-50 transition">
-                  <div className="rounded-full bg-emerald-50 p-2 text-emerald-600 mb-2">
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-xs font-bold text-gray-700">
-                    Tải lên Logo mới
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    SVG, PNG, WEBP, JPG (Tối đa 800x800px)
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                {/* Màu sắc thương hiệu */}
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Màu sắc thương hiệu
-                </label>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-7 w-7 rounded-lg bg-[#007A5A] shadow-inner cursor-pointer border border-black/5"
-                    title="#007A5A"
-                  />
-                  <div
-                    className="h-7 w-7 rounded-lg bg-white shadow-inner cursor-pointer border border-gray-200"
-                    title="#FFFFFF"
-                  />
-                  <button
-                    type="button"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* BOTTOM ACTION BAR */}
-      <div className="mt-6 flex items-center justify-between rounded-xl bg-white p-4 border border-gray-100 shadow-sm">
-        <div className="flex items-center gap-2 text-[11px] text-emerald-600 font-semibold">
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-            />
-          </svg>
-          <span>
-            Đã bật đồng bộ hóa tự động cho tất cả các thiết bị đầu cuối.
-          </span>
-        </div>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            className="rounded-lg px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 transition"
-          >
-            Hủy bỏ
-          </button>
-          <button
-            type="button"
-            className="rounded-lg bg-[#007A5A] px-4 py-2 text-xs font-bold text-white hover:bg-[#006349] transition shadow-sm"
-          >
-            Cập nhật cài đặt
-          </button>
         </div>
       </div>
     </div>
@@ -654,13 +386,13 @@ const SettingsGeneral = () => {
 };
 
 /**
- * 💡 ĐOẠN NÀY ĐỂ ĐỌC QUYỀN VÀ KHÓA CHẶT ROUTE GỐC
+ * Component Guard bảo vệ Module Admin
  */
 const AdminModuleGuard = ({ moduleName, children }) => {
   const userRole = localStorage.getItem("adminRole") || "";
   const adminInfo = JSON.parse(localStorage.getItem("adminInfo") || "{}");
 
-  if (userRole === "Admin") return children;
+  if (userRole === "ADMIN" || userRole === "Admin") return children;
 
   let permissions = [];
   try {
@@ -673,7 +405,7 @@ const AdminModuleGuard = ({ moduleName, children }) => {
 
   const hasAccess = permissions.some(
     (p) =>
-      (p.module === moduleName || p.name === moduleName) &&
+      (p.module === moduleName || p.name === moduleName || p.id === moduleName) &&
       (p.view === true || p.view === "true"),
   );
 
@@ -685,7 +417,7 @@ const AdminModuleGuard = ({ moduleName, children }) => {
 };
 
 /**
- * 1. LAYOUTS (KHÁCH HÀNG & ADMIN)
+ * LAYOUTS
  */
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -733,14 +465,14 @@ const AdminDashboardLayout = () => {
 };
 
 /**
- * 2. CẤU HÌNH ROUTES
+ * CẤU HÌNH ROUTES
  */
 const AppRoutes = () => (
   <Routes>
     {/* ================= ROUTES CHO KHÁCH HÀNG ================= */}
     <Route element={<MainLayout />}>
       <Route path="/" element={<Home />} />
-      <Route path="/global" element={<Global />} /> {/* 🌟 Bổ sung Route trang Global khớp cấu hình */}
+      <Route path="/global" element={<Global />} />
       <Route path="/:country_code/:tabSlug?" element={<Home />} />
       <Route
         path="/:country_code/category/khuyen-mai"
@@ -793,7 +525,7 @@ const AppRoutes = () => (
         element={<Navigate to="dashboard/thongkesanpham" replace />}
       />
 
-      {/* 🏠 Bọc Bảng điều khiển */}
+      {/* 🏠 Bảng điều khiển */}
       <Route
         path="dashboard"
         element={
@@ -802,20 +534,14 @@ const AppRoutes = () => (
           </AdminModuleGuard>
         }
       >
-        {/* ❌ DÒNG CŨ: <Route index element={<Navigate to="thongkesanpham" replace />} /> */}
-  {/*  SỬA THÀNH: */}
-  <Route index element={<Navigate to="tongquan" replace />} />
-  
-  {/* 🌟 BỔ SUNG ROUTE CON CHO TRANG TỔNG QUAN KINH DOANH MỚI: */}
-  <Route path="tongquan" element={<AdminDashboardPage />} />
-  
-  <Route path="thongkesanpham" element={<Dashboard />} />
-  <Route path="thongkedonhang" element={<ThongKeDonHang />} />
-  <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
-</Route>
+        <Route index element={<Navigate to="tongquan" replace />} />
+        <Route path="tongquan" element={<AdminDashboardPage />} />
+        <Route path="thongkesanpham" element={<Dashboard />} />
+        <Route path="thongkedonhang" element={<ThongKeDonHang />} />
+        <Route path="thongkekhachhang" element={<ThongKeKhachHang />} />
+      </Route>
 
-
-      {/* 🛒 Bọc Danh sách sản phẩm */}
+      {/* 🛒 Danh sách sản phẩm */}
       <Route
         path="products"
         element={
@@ -860,7 +586,7 @@ const AppRoutes = () => (
         <Route path="/admin/products/units/edit/:id" element={<UnitForm />} />
       </Route>
 
-      {/* Quản Lý Khuyến Mãi (Promotion & Flash Sale & Coupon) */}
+      {/* 🎁 Quản Lý Khuyến Mãi */}
       <Route
         path="promotions"
         element={
@@ -870,22 +596,40 @@ const AppRoutes = () => (
         }
       >
         <Route index element={<Navigate to="danh-sach" replace />} />
-
-        {/* Trang danh sách tổng hợp */}
         <Route path="danh-sach" element={<DanhSachGiamGia />} />
-
-        {/* 1. flash sale */}
         <Route path="tao-moi" element={<TaoGiamGia />} />
-        {/* Edit Flash Sale */}
         <Route path="sua-flashsale/:id" element={<TaoGiamGia />} />
-
-        {/* Mã Coupon/Voucher */}
         <Route path="tao-coupon" element={<CreateCoupon />} />
-        {/* Edit Coupon */}
         <Route path="sua-coupon/:id" element={<CreateCoupon />} />
       </Route>
 
-      {/* 🌍 Bọc Quản Lý Cửa Hàng / Quốc Gia */}
+      {/* 🌟🌟🌟 ROUTE QUẢN LÝ POSTER VÀ THÔNG BÁO MỚI THÊM 🌟🌟🌟 */}
+      <Route
+        path="posters-notifications"
+        element={
+          <AdminModuleGuard moduleName="posters">
+            <Outlet />
+          </AdminModuleGuard>
+        }
+      >
+        <Route index element={<Navigate to="poster" replace />} />
+        {/* Tab 1: Poster Builder */}
+        <Route path="poster" element={<PosterBuilder />} />
+        {/* Tab 2: Thông báo */}
+        <Route
+          path="thong-bao"
+          element={
+            <div className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm">
+              <h2 className="text-xl font-bold text-slate-800">Quản Lý Thông Báo Hệ Thống</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Gửi thông báo đẩy (Push Notifications) và tin nhắn khuyến mãi tới khách hàng.
+              </p>
+            </div>
+          }
+        />
+      </Route>
+
+      {/* 🌍 Quốc Gia */}
       <Route
         path="nations"
         element={
@@ -900,12 +644,12 @@ const AppRoutes = () => (
         <Route path="edit/:id" element={<NationalForm />} />
       </Route>
 
-      {/* 🌟 ĐƯA RA NGOÀI GUARD: Trang chi tiết tracking mock tĩnh nằm độc lập ở đây để không bị đá ra login */}
       <Route
         path="Donhang/Chitiettracking/:id"
         element={<Chitiettrackingorder />}
       />
-      {/* 📄 Bọc Đơn Hàng */}
+
+      {/* 📄 Đơn Hàng */}
       <Route
         path="Donhang"
         element={
@@ -926,7 +670,7 @@ const AppRoutes = () => (
         <Route path="Chitietdonhang/:id" element={<Chitietdonhang />} />
       </Route>
 
-      {/* 📦 Bọc Kho Hàng */}
+      {/* 📦 Kho Hàng */}
       <Route
         path="inventory"
         element={
@@ -935,23 +679,19 @@ const AppRoutes = () => (
           </AdminModuleGuard>
         }
       >
-        {/* Chuyển hướng mặc định */}
         <Route index element={<Navigate to="warehouse-list" replace />} />
-        {/* ---- Nhóm 1: Quản lý Kho Vật Lý ---- */}
         <Route path="warehouse-list" element={<DanhSachKho />} />
         <Route path="create-warehouse" element={<TaoKhoForm />} />
-        <Route path="edit-warehouse/:id" element={<TaoKhoForm />} />{" "}
-        {/* ---- Nhóm 2: Quản lý Chứng từ (Phiếu Nhập) ---- */}
+        <Route path="edit-warehouse/:id" element={<TaoKhoForm />} />
         <Route path="import-list" element={<DanhSachPhieuNhap />} />
         <Route path="import-detail/:id" element={<ChiTietPhieuNhap />} />
         <Route path="create-import-ticket" element={<TaoPhieuNhapForm />} />
-        {/* ---- Nhóm 3: Quản lý Hàng Hóa bên trong ---- */}
         <Route path="batches" element={<LoHang />} />
         <Route path="stock" element={<TonKho />} />
         <Route path="transfer" element={<ChuyenKho />} />
       </Route>
 
-      {/* 👥 Bọc Khách Hàng */}
+      {/* 👥 Khách Hàng */}
       <Route
         path="customers"
         element={
@@ -965,10 +705,10 @@ const AppRoutes = () => (
         <Route
           path="list/Chitietkhachhang/:id"
           element={<Chitietkhachhang />}
-        />{" "}
+        />
       </Route>
 
-      {/* 🛡️ Bọc Tài khoản & Phân quyền */}
+      {/* 🛡️ Cài đặt & Phân quyền */}
       <Route
         path="settings"
         element={
@@ -978,9 +718,7 @@ const AppRoutes = () => (
         }
       >
         <Route index element={<Navigate to="generalsettings" replace />} />
-
         <Route path="generalsettings" element={<SettingsGeneral />} />
-
         <Route path="vip-tiers" element={<VipSettings />} />
 
         <Route path="quanlynoibo">
@@ -1007,9 +745,8 @@ const AppRoutes = () => (
   </Routes>
 );
 
-
 /**
- * 3. COMPONENT ĐIỀU PHỐI
+ * COMPONENT ĐIỀU PHỐI
  */
 const AppContent = () => {
   const { loading } = useContext(AuthContext);
@@ -1024,22 +761,21 @@ const AppContent = () => {
 
   return (
     <>
-      {/* 🔔 BỔ SUNG CONTAINER TOASTER ĐỂ HIỂN THỊ THÔNG BÁO POPUP TOÀN MÀN HÌNH */}
-      <Toaster 
-          position="top-right" 
-          reverseOrder={false}
-          containerStyle={{
-            top: 20,
-            zIndex: 999999, // Nổi lên trên toàn bộ Header
-          }}
-        />
+      <Toaster
+        position="top-right"
+        reverseOrder={false}
+        containerStyle={{
+          top: 20,
+          zIndex: 999999,
+        }}
+      />
       <AppRoutes />
     </>
   );
 };
 
 /**
- * 4. FINAL APP
+ * FINAL APP
  */
 function App({ initialLanguage }) {
   return (
