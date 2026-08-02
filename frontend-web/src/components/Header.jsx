@@ -1,751 +1,324 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
-import { useNavigate, Link, useLocation, useParams } from "react-router-dom";
-import { useCart } from "../context/CartContext";
-import { AuthContext } from "../context/AuthContext";
-import Logo from "../assets/Demi Mart.png";
-import { productApi } from "../api/axios";
-import { useLanguage } from "../context/LanguageContext";
-import { useStore } from "../context/StoreContext";
-import NotificationDropdown from "./thongbao/NotificationDropdown";
-import {
-  Globe,
-  ChevronDown,
-  Check,
-  Search,
-  LogOut,
-  MapPin,
-  ShoppingCart,
-  Calendar,
-  User,
-  Gift,
-  Menu,
-  X,
-} from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+import { Bell, Package, Tag, Info, CheckCheck, BellOff, X } from "lucide-react";
+import SockJS from "sockjs-client";
+import { Client } from "@stomp/stompjs";
+import axios from "axios";
+import toast from "react-hot-toast";
 
+// --- XỬ LÝ LẤY URL ĐỘNG TỪ BIẾN MÔI TRƯỜNG AN TOÀN CHO RENDER (HTTPS) ---
 const isLocalhost =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1";
-const AUTH_BASE_URL = isLocalhost
-  ? "http://localhost:5001"
-  : "https://authservice-sz4p.onrender.com";
 
-const BANNER_DISMISS_KEY = "demi_header_banner_dismissed_time";
-const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 phút = 300,000 milliseconds
+const BASE_BACKEND_URL = isLocalhost
+  ? "http://localhost:8085"
+  : (import.meta.env.VITE_NOTIFICATION_API_URL || import.meta.env.VITE_AUTH_API_URL || "https://authservice-sz4p.onrender.com");
 
-export default function Header({ onOpenMenu }) {
-  const { user: authUser, logout, getMembershipTier } = useContext(AuthContext);
-  const { cart } = useCart();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { country_code } = useParams();
+const NOTIFICATION_API_BASE = `${BASE_BACKEND_URL}/api/v1/notifications`;
+const WEBSOCKET_URL = import.meta.env.VITE_WS_URL || `${BASE_BACKEND_URL}/ws-notification`;
 
-  // State cho Tìm kiếm
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
-  const [categorySuggestions, setCategorySuggestions] = useState([]);
-  const [isSuggestOpen, setIsSuggestOpen] = useState(false);
-  const suggestRef = useRef(null);
-  const suggestTimer = useRef(null);
-
-  // Dữ liệu Tìm kiếm phổ biến
-  const popularSearches = [
-    { text: "nước mắm", hot: true },
-    { text: "rau", hot: true },
-    { text: "bánh tráng", hot: true },
-    { text: "cá", hot: false },
-    { text: "danh sách mua sắm", hot: false },
-    { text: "bún", hot: false },
-    { text: "tôm", hot: false },
-    { text: "gà", hot: false },
-    { text: "giá", hot: false },
-    { text: "gạo", hot: false },
-  ];
-
-  const { currentLanguage, changeLanguage, t } = useLanguage();
-  const { currentStore, setCurrencyStore, stores, formatPrice } = useStore();
-  const [isLangOpen, setIsLangOpen] = useState(false);
-  const langRef = useRef(null);
-  const [currentDate, setCurrentDate] = useState("Đang tải...");
-
-  const formatCurrency = (amountVND) => {
-    return formatPrice
-      ? formatPrice(amountVND)
-      : `${amountVND.toLocaleString()}đ`;
-  };
-
-  const sortedStores =
-    stores && stores.length > 0
-      ? [...stores].sort((a, b) =>
-          a.code?.toUpperCase() === "VN"
-            ? -1
-            : b.code?.toUpperCase() === "VN"
-              ? 1
-              : 0,
-        )
-      : [];
-
-  const handleLanguageChange = (langCode, countryCode) => {
-    changeLanguage(langCode);
-
-    if (langCode === "vi") {
-      setCurrencyStore({
-        code: "VN",
-        currency: "VND",
-        symbol: "₫",
-        locale: "vi-VN",
-        rate: 1,
-      });
-    } else if (langCode === "en") {
-      setCurrencyStore({
-        code: "US",
-        currency: "USD",
-        symbol: "$",
-        locale: "en-US",
-        rate: 0.00004,
-      });
-    } else if (langCode === "zh") {
-      setCurrencyStore({
-        code: "CN",
-        currency: "CNY",
-        symbol: "¥",
-        locale: "zh-CN",
-        rate: 0.00029,
-      });
-    }
-
-    const targetCode = (countryCode || "vn").toLowerCase();
-    window.location.href = `/${targetCode}`;
-    setIsLangOpen(false);
-  };
-
-  const handlePopularSearchClick = (keyword) => {
-    setSearchKeyword(keyword);
-    setIsSuggestOpen(false);
-    navigate(`/search?keyword=${encodeURIComponent(keyword)}`);
-  };
-
-  const handleSearch = () => {
-    if (searchKeyword.trim()) {
-      navigate(`/search?keyword=${encodeURIComponent(searchKeyword.trim())}`);
-      setSearchKeyword("");
-      setIsSuggestOpen(false);
-    }
-  };
-
-  // -------------------------------------------------------------
-  // XỬ LÝ TẮT BANNER TRONG 5 PHÚT & LOAD TRANG CÓ LẠI BÌNH THƯỜNG
-  // -------------------------------------------------------------
-  const [showBanner, setShowBanner] = useState(() => {
-    const dismissedTime = localStorage.getItem(BANNER_DISMISS_KEY);
-    if (!dismissedTime) return true; // Chưa từng tắt -> Hiện banner
-
-    const timePassed = Date.now() - parseInt(dismissedTime, 10);
-    if (timePassed > FIVE_MINUTES_MS) {
-      // Đã quá 5 phút -> Cho hiện lại
-      localStorage.removeItem(BANNER_DISMISS_KEY);
-      return true;
-    }
-    // Chưa đủ 5 phút -> Ẩn banner
-    return false;
-  });
-
-  const handleCloseBanner = () => {
-    setShowBanner(false);
-    // Lưu thời điểm tắt vào localStorage
-    localStorage.setItem(BANNER_DISMISS_KEY, Date.now().toString());
-  };
-
-  // Tự động kiểm tra để hiện lại banner sau 5 phút nếu người dùng vẫn đang ở trên trang
-  useEffect(() => {
-    if (showBanner) return;
-
-    const interval = setInterval(() => {
-      const dismissedTime = localStorage.getItem(BANNER_DISMISS_KEY);
-      if (!dismissedTime) {
-        setShowBanner(true);
-        return;
-      }
-
-      const timePassed = Date.now() - parseInt(dismissedTime, 10);
-      if (timePassed >= FIVE_MINUTES_MS) {
-        setShowBanner(true);
-        localStorage.removeItem(BANNER_DISMISS_KEY);
-      }
-    }, 10000); // Kiểm tra mỗi 10 giây
-
-    return () => clearInterval(interval);
-  }, [showBanner]);
-
-  const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
+export default function NotificationDropdown() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [userId, setUserId] = useState("");
+  const notiRef = useRef(null);
 
   useEffect(() => {
-    if (!showBanner || timeLeft <= 0) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [timeLeft, showBanner]);
+    const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    const currentUserId = savedUser.id || savedUser._id || "1";
+    setUserId(currentUserId);
+  }, []);
 
-  const formatTime = (totalSeconds) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const pad = (num) => String(num).padStart(2, "0");
-    return {
-      h: pad(hours).split(""),
-      m: pad(minutes).split(""),
-      s: pad(seconds).split(""),
-    };
-  };
-
-  const timeChunks = formatTime(timeLeft);
-  const headerRef = useRef(null);
-
+  // 1. Tải danh sách thông báo từ API (Có bọc try-catch chống crash)
   useEffect(() => {
-    const updateHeaderHeight = () => {
-      if (headerRef.current) {
-        const height = headerRef.current.offsetHeight;
-        document.documentElement.style.setProperty(
-          "--header-height",
-          `${height}px`,
-        );
+    if (!userId) return;
+
+    const fetchNotificationHistory = async () => {
+      try {
+        const response = await axios.get(`${NOTIFICATION_API_BASE}/user/${userId}`);
+        setNotifications(response.data || []);
+      } catch (error) {
+        console.warn("Lỗi hoặc chưa kết nối được Notification Service:", error);
       }
     };
-    updateHeaderHeight();
-    window.addEventListener("resize", updateHeaderHeight);
-    return () => window.removeEventListener("resize", updateHeaderHeight);
-  }, [showBanner]);
 
-  const [displayUser, setDisplayUser] = useState(() => {
-    const saved = localStorage.getItem("user");
+    fetchNotificationHistory();
+  }, [userId]);
+
+  // 🔔 Hàm hiển thị Toast nổi trên màn hình
+  const showToastNotification = (noti) => {
+    toast.custom(
+      (t) => (
+        <div
+          className={`${
+            t.visible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 -translate-y-4 scale-95"
+          } transition-all duration-300 max-w-sm w-full bg-white shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black/5 p-4 border-l-4 border-l-[#006c49] z-[999999]`}
+        >
+          <div className="flex-1 w-0">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 text-[#006c49] flex items-center justify-center font-bold">
+                  <Bell size={20} />
+                </div>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-black text-slate-900 leading-tight">
+                  {noti.title || "Thông báo mới"}
+                </p>
+                <p className="mt-1 text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                  {noti.description || noti.message || ""}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex border-l border-slate-100 ml-3 pl-2">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="w-full border border-transparent rounded-none p-1 flex items-center justify-center text-slate-400 hover:text-slate-600 focus:outline-none"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: 4000, position: "top-right" }
+    );
+  };
+
+  // 2. Kết nối WebSocket & Bật Popup Toast (Bọc try-catch chống SecurityError)
+  useEffect(() => {
+    if (!userId) return;
+
+    let stompClient = null;
+
     try {
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
+      const socket = new SockJS(WEBSOCKET_URL);
+      stompClient = new Client({
+        webSocketFactory: () => socket,
+        reconnectDelay: 10000, // Tăng delay reconnect lên 10s
+        debug: (str) => {
+          // Bỏ comment nếu muốn debug websocket: console.log(str);
+        },
+      });
+
+      stompClient.onConnect = () => {
+        console.log("WebSocket connected thành công!");
+        stompClient.subscribe(`/topic/user/${userId}`, (message) => {
+          if (message.body) {
+            try {
+              const newNoti = JSON.parse(message.body);
+              setNotifications((prev) => [newNoti, ...prev]);
+              showToastNotification(newNoti);
+            } catch (e) {
+              console.error("Lỗi parse dữ liệu WebSocket:", e);
+            }
+          }
+        });
+      };
+
+      stompClient.onStompError = (frame) => {
+        console.warn("Lỗi STOMP WebSocket:", frame.headers["message"]);
+      };
+
+      stompClient.activate();
+    } catch (err) {
+      console.warn("Không thể khởi tạo SockJS trên môi trường HTTPS hiện tại:", err);
     }
-  });
 
+    return () => {
+      if (stompClient && stompClient.active) {
+        stompClient.deactivate();
+      }
+    };
+  }, [userId]);
+
+  // Đóng dropdown khi click bên ngoài
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setDisplayUser(null);
-      return;
-    }
-    if (authUser) setDisplayUser(authUser);
-    else setDisplayUser(null);
-  }, [authUser]);
-
-  useEffect(() => {
-    const options = { weekday: "long", day: "numeric", month: "numeric" };
-    const dateStr = new Date().toLocaleDateString("vi-VN", options);
-    setCurrentDate(dateStr);
-
     function handleClickOutside(event) {
-      if (langRef.current && !langRef.current.contains(event.target))
-        setIsLangOpen(false);
+      if (notiRef.current && !notiRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    function onDocClick(e) {
-      if (suggestRef.current && !suggestRef.current.contains(e.target)) {
-        const input = document.getElementById("demi-search-bar");
-        if (input && input.contains(e.target)) return;
-        setIsSuggestOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
+  const checkIfRead = (noti) => noti.isRead === true || noti.read === true;
+  const getNotificationId = (noti) => noti.id || noti._id;
+  const unreadCount = notifications.filter((n) => !checkIfRead(n)).length;
 
-  const getAvatarSrc = (userObj) => {
-    if (!userObj)
-      return `https://ui-avatars.com/api/?name=User&background=006c49&color=fff`;
+  const markAsRead = async (noti) => {
+    const notiId = getNotificationId(noti);
+    if (!notiId || checkIfRead(noti)) return;
 
-    const url = userObj.avatar_url || userObj.avatar;
-    const name = userObj.full_name || "User";
-
-    if (!url || url === "" || url.includes("unsplash.com")) {
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=006c49&color=fff`;
-    }
-
-    const cleanUrl = url.split("?")[0];
-    if (cleanUrl.startsWith("http")) return cleanUrl;
-
-    const cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
-    return `${AUTH_BASE_URL}${cleanPath}`;
-  };
-
-  const handleLogout = async () => {
     try {
-      await logout();
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      navigate("/");
+      await axios.put(`${NOTIFICATION_API_BASE}/${notiId}/read`);
+      setNotifications((prev) =>
+        prev.map((n) =>
+          getNotificationId(n) === notiId
+            ? { ...n, isRead: true, read: true }
+            : n
+        )
+      );
     } catch (error) {
-      navigate("/");
+      console.error("Lỗi khi cập nhật trạng thái đã đọc:", error);
     }
   };
 
-  const isAuthPage = ["/login", "/signup", "/forgot-password"].includes(
-    location.pathname,
-  );
+  const markAllAsRead = async () => {
+    if (notifications.length === 0 || unreadCount === 0) return;
 
-  const renderHeaderTierBadge = () => {
-    const tier = getMembershipTier();
-    if (!tier) return null;
+    try {
+      await axios.put(`${NOTIFICATION_API_BASE}/user/${userId}/read-all`);
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, isRead: true, read: true }))
+      );
+    } catch (error) {
+      console.error("Lỗi khi đánh dấu tất cả đã đọc:", error);
+    }
+  };
 
-    const name = String(tier).toUpperCase();
-    if (name === "KIM CƯƠNG") {
-      return (
-        <span className="bg-indigo-50 text-indigo-600 border border-indigo-200 text-[8px] font-black px-1.5 py-[1px] rounded-full uppercase tracking-wider shadow-sm flex items-center gap-0.5 mt-0.5 w-max leading-none">
-          💎 {name}
-        </span>
-      );
+  const formatTime = (createdAt) => {
+    if (!createdAt) return "Vừa xong";
+    try {
+      return new Date(createdAt)
+        .toLocaleDateString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+        .replace(",", " -");
+    } catch (e) {
+      return "Vừa xong";
     }
-    if (name === "VÀNG") {
-      return (
-        <span className="bg-amber-50 text-amber-600 border border-amber-200 text-[8px] font-black px-1.5 py-[1px] rounded-full uppercase tracking-wider shadow-sm flex items-center gap-0.5 mt-0.5 w-max leading-none">
-          👑 {name}
-        </span>
-      );
-    }
-    return (
-      <span className="bg-slate-50 text-slate-500 border border-slate-200 text-[8px] font-black px-1.5 py-[1px] rounded-full uppercase tracking-wider shadow-sm flex items-center gap-0.5 mt-0.5 w-max leading-none">
-        🥈 BẠC
-      </span>
-    );
   };
 
   return (
-    <header
-      ref={headerRef}
-      className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
-    >
-      {/* Banner Khuyến Mãi */}
-      {showBanner && (
-        <div className="w-full bg-[#fea619] text-slate-900 h-10 md:h-11 flex items-center justify-between px-4 relative overflow-hidden text-xs md:text-sm font-bold tracking-wide shadow-sm">
-          <button
-            onClick={handleCloseBanner}
-            className="text-slate-800 hover:text-black transition-colors p-1 z-10"
-            title="Tắt banner"
-          >
-            <X size={18} strokeWidth={2.5} />
-          </button>
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 whitespace-nowrap">
-            <span>Giao hàng miễn phí cho 5 đơn hàng đầu tiên của bạn</span>
-            <div className="flex items-center gap-1 font-black text-white text-[11px] md:text-xs">
-              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">
-                {timeChunks.h[0]}
-              </span>
-              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">
-                {timeChunks.h[1]}
-              </span>
-              <span className="text-slate-900 font-black -mt-0.5 mx-0.5">
-                :
-              </span>
-              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">
-                {timeChunks.m[0]}
-              </span>
-              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">
-                {timeChunks.m[1]}
-              </span>
-              <span className="text-slate-900 font-black -mt-0.5 mx-0.5">
-                :
-              </span>
-              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">
-                {timeChunks.s[0]}
-              </span>
-              <span className="w-5 h-5 bg-slate-900 rounded flex items-center justify-center shadow-sm tabular-nums">
-                {timeChunks.s[1]}
-              </span>
-            </div>
-          </div>
-          <div className="w-5 opacity-0 pointer-events-none"></div>
-        </div>
-      )}
-
-      {/* Thanh Header Chính */}
-      <div className="h-[60px] md:h-[72px] px-3 md:px-10 flex items-center justify-between gap-2 border-b border-slate-50">
-        <div className="flex items-center gap-1 md:gap-4 flex-shrink-0 min-w-[130px] md:min-w-[170px]">
-          <button
-            onClick={onOpenMenu}
-            className="lg:hidden p-1.5 text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-          >
-            <Menu size={22} />
-          </button>
-          <Link
-            to={country_code ? `/${country_code.toLowerCase()}` : "/vn"}
-            className="transition-transform active:scale-95 flex-shrink-0 block"
-            onClick={() => window.scrollTo(0, 0)}
-          >
-            <img
-              src={Logo}
-              alt="Demi Mart"
-              width="130"
-              className="h-6 md:h-8 w-auto object-contain drop-shadow-sm"
-            />
-          </Link>
-        </div>
-
-        {/* Ô Tìm Kiếm - Trung Tâm */}
-        {!isAuthPage && (
-          <div className="flex-1 max-w-xl relative group hidden sm:block min-h-[45px]">
-            <input
-              id="demi-search-bar"
-              type="text"
-              placeholder={t("search_placeholder")}
-              value={searchKeyword}
-              onFocus={() => setIsSuggestOpen(true)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSearchKeyword(v);
-                setIsSuggestOpen(true);
-
-                if (suggestTimer.current) clearTimeout(suggestTimer.current);
-
-                if (v.trim().length === 0) {
-                  setSuggestions([]);
-                  setCategorySuggestions([]);
-                  return;
-                }
-
-                suggestTimer.current = setTimeout(async () => {
-                  const currentCountryCode = currentStore?.code || "vn";
-                  try {
-                    if (v.trim().length > 0 && v.trim().length < 3) {
-                      const res = await productApi.get(
-                        `/products/categories/search?keyword=${encodeURIComponent(v)}&country=${currentCountryCode}`,
-                      );
-                      setCategorySuggestions(res.data || []);
-                      setSuggestions([]);
-                    } else if (v.trim().length >= 3) {
-                      const res = await productApi.get(
-                        `/products/search?keyword=${encodeURIComponent(v)}&limit=10&country=${currentCountryCode}`,
-                      );
-                      setSuggestions(res.data || []);
-                      setCategorySuggestions([]);
-                    }
-                  } catch (err) {
-                    setSuggestions([]);
-                    setCategorySuggestions([]);
-                  }
-                }, 250);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSearch();
-              }}
-              className="w-full bg-[#f3f6f9] border-2 border-transparent py-2 md:py-2.5 pl-5 pr-12 rounded-full outline-none focus:bg-white focus:border-[#006c49] transition-all text-xs md:text-sm font-bold text-slate-700 shadow-inner"
-            />
-            <button
-              onClick={handleSearch}
-              className="absolute right-1 top-1 bottom-1 w-10 md:w-12 flex items-center justify-center bg-[#006c49] text-white rounded-full transition-transform active:scale-90 z-10"
-            >
-              <Search size={16} strokeWidth={3} />
-            </button>
-
-            {/* Bảng Gợi Ý Tìm Kiếm */}
-            {isSuggestOpen && (
-              <div
-                ref={suggestRef}
-                className="absolute left-0 right-0 mt-3 bg-white border border-slate-100 rounded-3xl shadow-xl z-50 p-4 max-h-[450px] overflow-y-auto overscroll-contain scrollbar-hide"
-              >
-                {searchKeyword.trim().length === 0 && (
-                  <div className="animate-fadeIn">
-                    <h4 className="text-[13px] font-bold text-slate-800 mb-3 ml-1">
-                      Những tìm kiếm phổ biến
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {popularSearches.map((item, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handlePopularSearchClick(item.text)}
-                          className="px-3.5 py-1.5 border border-slate-200 rounded-full text-xs font-semibold text-slate-600 hover:border-[#006c49] hover:text-[#006c49] transition-all flex items-center gap-1 active:scale-95 bg-white hover:bg-[#f3f6f9]"
-                        >
-                          {item.hot && (
-                            <span className="text-red-500 text-sm leading-none">
-                              🔥
-                            </span>
-                          )}
-                          {item.text}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {searchKeyword.trim().length > 0 &&
-                  searchKeyword.trim().length < 3 && (
-                    <div className="animate-fadeIn">
-                      {categorySuggestions.length > 0 ? (
-                        <div className="grid grid-cols-4 md:grid-cols-5 gap-y-4 gap-x-2">
-                          {categorySuggestions.map((cat) => (
-                            <button
-                              key={`${cat.loai_danh_muc}-${cat.ma_danh_muc}`}
-                              onClick={() => {
-                                const currentCountryCode = String(
-                                  currentStore?.code || "vn",
-                                ).toLowerCase();
-                                navigate(
-                                  `/${currentCountryCode}/category/${cat.slug}`,
-                                );
-                                setIsSuggestOpen(false);
-                                setSearchKeyword("");
-                              }}
-                              className="flex flex-col items-center gap-2 hover:opacity-80 transition-opacity group"
-                            >
-                              <div className="w-16 h-16 bg-[#f8fafc] rounded-2xl flex items-center justify-center p-2 group-hover:shadow-md transition-shadow border border-slate-50">
-                                <img
-                                  src={
-                                    cat.hinh_anh || "https://placehold.co/60x60"
-                                  }
-                                  alt={cat.ten_danh_muc}
-                                  className="w-full h-full object-contain mix-blend-multiply"
-                                />
-                              </div>
-                              <span className="text-[11px] font-bold text-slate-700 text-center line-clamp-2 px-1 leading-tight group-hover:text-[#006c49]">
-                                {cat.ten_danh_muc}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center text-sm font-semibold text-slate-400 py-6">
-                          Không tìm thấy danh mục liên quan.
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                {searchKeyword.trim().length >= 3 && (
-                  <div className="animate-fadeIn">
-                    {suggestions.length > 0 ? (
-                      <div className="flex flex-col gap-1">
-                        {suggestions.map((s) => (
-                          <button
-                            key={s.ma_san_pham}
-                            onClick={() => {
-                              const country = String(
-                                s.country_code || currentStore?.code || "vn",
-                              ).toLowerCase();
-                              const category = s.slug_danh_muc || "san-pham";
-                              navigate(
-                                `/${country}/product/${category}/${s.ma_san_pham}`,
-                              );
-                              setIsSuggestOpen(false);
-                              setSearchKeyword("");
-                            }}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-[#f8fafc] transition-colors text-left border border-transparent hover:border-slate-100"
-                          >
-                            <img
-                              src={
-                                s.hinh_anh_chinh || "https://placehold.co/60x60"
-                              }
-                              className="w-14 h-14 object-contain rounded-xl border border-slate-100 bg-white p-1"
-                              alt={s.ten_san_pham}
-                            />
-                            <div className="flex-1 overflow-hidden">
-                              <div className="font-bold text-sm text-[#006c49] truncate mb-0.5">
-                                {s.ten_san_pham}
-                              </div>
-                              <div className="text-xs font-black text-[#006c49] bg-[#e6f0ed] inline-block px-2 py-0.5 rounded-md">
-                                {formatCurrency(s.gia_ban_thap_nhat || 0)}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center text-sm font-semibold text-slate-400 py-6">
-                        Không tìm thấy sản phẩm nào.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+    <div className="relative" ref={notiRef}>
+      {/* Nút quả chuông */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          showToastNotification({
+            title: "Thông báo thử nghiệm",
+            description: "Toast nổi hoạt động bình thường và sẽ tự ẩn sau 4 giây!",
+          });
+        }}
+        className="p-2 md:p-2.5 rounded-full text-slate-700 hover:bg-slate-100 transition-all relative active:scale-95 flex items-center justify-center"
+        title="Thông báo (Nhấn chuột phải để test thử Toast)"
+      >
+        <Bell size={20} strokeWidth={2.2} />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-white animate-pulse">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
         )}
+      </button>
 
-        {/* Khối Giao diện Phải (Ngôn ngữ, User, Thông báo, Giỏ hàng) */}
-        <div className="flex items-center gap-2 md:gap-4 flex-shrink-0 justify-end">
-          {/* Chọn Ngôn ngữ */}
-          <div className="relative" ref={langRef}>
-            <button
-              onClick={() => setIsLangOpen(!isLangOpen)}
-              className="flex items-center gap-1 text-slate-600 hover:text-[#006c49] transition-colors p-1.5 rounded-lg hover:bg-slate-50"
-            >
-              <Globe size={18} />
-              <span className="text-[11px] font-black uppercase hidden md:block">
-                {currentLanguage.code}
-              </span>
-              <ChevronDown
-                size={12}
-                className={`transition-transform duration-300 ${isLangOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {isLangOpen && (
-              <div className="absolute right-0 mt-4 w-48 bg-white border border-slate-100 rounded-xl shadow-2xl p-1 animate-fadeIn border-t-4 border-t-[#006c49] z-50">
-                {sortedStores.map((store) => {
-                  let langCode = store.code.toLowerCase();
-                  if (langCode === "vn") langCode = "vi";
-                  if (langCode === "us") langCode = "en";
-                  if (langCode === "cn") langCode = "zh";
-
-                  return (
-                    <button
-                      key={store.code}
-                      type="button"
-                      onClick={() => handleLanguageChange(langCode, store.code)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                        currentLanguage.code === langCode
-                          ? "bg-[#e6f0ed] text-[#006c49]"
-                          : "text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>{store.flag}</span>
-                        {store.name}
-                      </div>
-                      {currentLanguage.code === langCode && (
-                        <Check size={14} strokeWidth={3} />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* User Info / Đăng nhập */}
-          <div className="flex items-center">
-            {displayUser ? (
-              <div className="flex items-center gap-2 md:gap-3 bg-[#f8fafc] p-1 md:p-1.5 rounded-full border border-slate-100 md:pr-3 group transition-all">
-                <Link to="/profile" className="flex-shrink-0">
-                  <img
-                    src={getAvatarSrc(displayUser)}
-                    className="w-8 h-8 rounded-full object-cover border-2 border-white shadow-sm"
-                    alt="AVT"
-                    onError={(e) => {
-                      const fallbackName = displayUser?.full_name || "User";
-                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=006c49&color=fff`;
-                    }}
-                  />
-                </Link>
-                <div className="hidden lg:flex flex-col justify-center text-left overflow-hidden min-w-[70px]">
-                  <p className="text-[11px] font-black text-slate-900 leading-tight truncate max-w-[90px]">
-                    {displayUser.full_name}
-                  </p>
-                  {renderHeaderTierBadge()}
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="text-slate-300 hover:text-red-500 transition-all ml-1 active:scale-90"
-                  title="Đăng xuất"
-                >
-                  <LogOut size={16} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-slate-700 font-bold text-[12px] md:text-[14px] whitespace-nowrap">
-                <User size={18} className="text-slate-800" />
-                <div className="flex items-center">
-                  <Link
-                    to="/login"
-                    className="hover:text-[#006c49] transition-colors"
-                  >
-                    {t("login")}
-                  </Link>
-                  <span className="mx-1 text-slate-300 font-light hidden md:inline">
-                    /
-                  </span>
-                  <Link
-                    to="/signup"
-                    className="hover:text-[#006c49] transition-colors hidden md:inline"
-                  >
-                    {t("signup")}
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 🔔 COMPONENT THÔNG BÁO TÁCH RIÊNG - Chỉ hiển thị khi ĐÃ ĐĂNG NHẬP */}
-          {displayUser && <NotificationDropdown />}
-
-          {/* Cart Icon */}
-          <Link
-            id="cart-icon"
-            to="/cart"
-            className="bg-[#006c49] text-white p-2 md:px-5 md:py-2.5 rounded-full md:rounded-2xl flex items-center gap-2 shadow-lg shadow-[#006c49]/20 active:scale-95 transition-all flex-shrink-0 min-w-[44px] md:min-w-[120px] justify-center group"
-          >
-            <div className="relative">
-              <ShoppingCart
-                size={18}
-                strokeWidth={2.5}
-                className="group-hover:rotate-12 transition-transform"
-              />
-              {cart && cart.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-[#fea619] text-[#161b22] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#006c49] animate-bounce">
-                  {cart.length}
+      {/* Menu Dropdown Thông báo */}
+      {isOpen && (
+        <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fadeIn border-t-4 border-t-[#006c49]">
+          <div className="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-slate-800">Thông báo</h3>
+              {unreadCount > 0 && (
+                <span className="bg-[#e6f0ed] text-[#006c49] text-[10px] font-black px-2 py-0.5 rounded-full">
+                  {unreadCount} mới
                 </span>
               )}
             </div>
-            <span className="text-[11px] font-black uppercase hidden lg:block tracking-widest">
-              {t("cart")}
-            </span>
-          </Link>
-        </div>
-      </div>
-
-      {/* Thanh Menu Phụ */}
-      <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto scrollbar-hide">
-        <nav className="flex items-center gap-5 md:gap-8 whitespace-nowrap min-w-max">
-          {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => {
-            const targetPath =
-              item === "Toàn cầu+"
-                ? "/global"
-                : country_code
-                  ? `/${country_code.toLowerCase()}`
-                  : "/vn";
-
-            return (
-              <Link
-                key={item}
-                to={targetPath}
-                className="text-[10px] md:text-[11px] font-black text-slate-500 hover:text-[#006c49] uppercase tracking-widest transition-colors"
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-[11px] font-semibold text-[#006c49] hover:underline flex items-center gap-1"
               >
-                {item}
-              </Link>
-            );
-          })}
-          <Link
-            to="/"
-            className="text-[10px] md:text-[11px] font-black text-[#a855f7] flex items-center gap-2"
-          >
-            <Gift size={14} /> Giới thiệu nhận ngay $20!
-          </Link>
-        </nav>
-
-        <div className="hidden md:flex items-center flex-shrink-0 ml-4">
-          <div className="flex items-center gap-2 min-w-[140px] justify-end pr-4">
-            <MapPin size={16} className="text-[#fea619] flex-shrink-0" />
-            <span className="text-[10px] md:text-[11px] font-black text-slate-700 uppercase whitespace-nowrap">
-              TP. Hồ Chí Minh
-            </span>
+                <CheckCheck size={14} /> Đọc tất cả
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 border-l border-slate-100 pl-5 uppercase min-w-[165px] justify-start">
-            <Calendar size={15} className="text-slate-400 flex-shrink-0" />
-            <span className="text-[10px] md:text-[11px] font-black text-slate-600 whitespace-nowrap tabular-nums">
-              {currentDate}
-            </span>
+          <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-50 scrollbar-hide">
+            {notifications.length > 0 ? (
+              notifications.map((item) => {
+                const isRead = checkIfRead(item);
+                const notiId = getNotificationId(item);
+
+                return (
+                  <div
+                    key={notiId || Math.random().toString()}
+                    onClick={() => markAsRead(item)}
+                    className={`p-3.5 flex gap-3 transition-colors cursor-pointer hover:bg-slate-50 ${
+                      !isRead ? "bg-emerald-50/40" : ""
+                    }`}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      {item.type === "promo" ? (
+                        <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+                          <Tag size={16} />
+                        </div>
+                      ) : item.type === "system" ? (
+                        <div className="w-8 h-8 rounded-full bg-emerald-50 text-[#006c49] flex items-center justify-center">
+                          <Info size={16} />
+                        </div>
+                      ) : (
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            isRead
+                              ? "bg-slate-100 text-slate-400"
+                              : "bg-blue-50 text-blue-600"
+                          }`}
+                        >
+                          <Package size={16} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p
+                          className={`text-xs truncate ${
+                            !isRead
+                              ? "font-black text-slate-900"
+                              : "font-semibold text-slate-600"
+                          }`}
+                        >
+                          {item.title}
+                        </p>
+                        {!isRead && (
+                          <span className="w-2 h-2 rounded-full bg-[#006c49] flex-shrink-0"></span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                        {item.description}
+                      </p>
+                      <span className="text-[10px] text-slate-400 font-medium mt-1 block">
+                        {formatTime(item.createdAt || item.time)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-8 text-center text-slate-400">
+                <BellOff size={32} className="mx-auto mb-2 opacity-30" />
+                <p className="text-xs font-semibold">Chưa có thông báo nào mới</p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-2.5 text-center bg-slate-50 border-t border-slate-100">
+            <Link
+              to="/profile/notifications"
+              onClick={() => setIsOpen(false)}
+              className="text-xs font-bold text-[#006c49] hover:underline block"
+            >
+              Xem tất cả thông báo
+            </Link>
           </div>
         </div>
-      </div>
-    </header>
+      )}
+    </div>
   );
 }
