@@ -5,6 +5,18 @@ import { setupProxy } from '../middlewares/proxy.middleware.js';
 const router = express.Router();
 
 // ==========================================
+// API TRẢ VỀ DỮ LIỆU CẤU HÌNH CONFIG (JSON)
+// ==========================================
+router.get('/services-dashboard', (req, res) => {
+    res.json({
+        success: true,
+        gatewayPort: process.env.PORT || 5000,
+        frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+        services: services
+    });
+});
+
+// ==========================================
 // ĐỊNH TUYẾN TRỰC TIẾP (Khớp 100% với Frontend)
 // ==========================================
 router.use('/api/v1/auth', setupProxy(services.auth));
@@ -19,7 +31,7 @@ router.use('/api/v1/coupons', setupProxy(services.promotion)); // Coupons chung 
 router.use('/api/v1/ai', setupProxy(services.ai));
 router.use('/api/v1/notifications', setupProxy(services.notification));
 
-// Đón lõng những Route ngoại lệ xuất hiện trong log của bạn
+// Đón lõng những Route ngoại lệ xuất hiện trong log
 router.use('/api/v1/nations', setupProxy(services.product));
 
 // Xử lý luồng Socket.IO cho ứng dụng (Trỏ về Order Service)
@@ -55,7 +67,6 @@ router.use('/api/v1/paypal-capture', setupProxy(services.payment));
 router.use('/api/v1/vnpay-return', setupProxy(services.payment));
 
 // 7. Nhóm Vận chuyển & Tracking (Trỏ về Order Service)
-// (Vì trong file orderRoutes.js bạn đã code sẵn các route bắt đầu bằng /shipping/)
 router.use('/api/v1/shipping', setupProxy(services.order));
 
 // 8. Bổ sung API Quy đổi đơn vị tính (Trỏ về Product Service)
@@ -64,9 +75,14 @@ router.use('/api/v1/unit-conversions', setupProxy(services.product));
 // 9. Nhóm Đánh giá sản phẩm (Trỏ về Product Service)
 router.use('/api/v1/reviews', setupProxy(services.product));
 
-// Health Check
+// Health Check cho đường dẫn /health
 router.get('/health', (req, res) => {
     res.json({ success: true, message: "API Gateway của Demi Mart đang hoạt động mượt mà 🚀" });
+});
+
+// Root Route - Tự động mở ngay giao diện Dashboard khi truy cập localhost:5000
+router.get('/', (req, res) => {
+    res.redirect('/dashboard');
 });
 
 export default router;
