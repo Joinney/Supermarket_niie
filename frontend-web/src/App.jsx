@@ -33,35 +33,35 @@ import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
 import ChatbotAI from "./components/layout/ChatbotAI";
 
-// --- IMPORTS GIAO DIỆN ADMIN ---
+// --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHÍNH XÁC CHỮ HOA/THƯỜNG THEO GIT INDEX) ---
 import AdminProtect from "./admindb/components/AdminProtect";
-import AdminProfile from "./admindb/pages/profile/AdminProfile.jsx";
-import AdminLogin from "./admindb/pages/auth/AdminLogin.jsx";
+import AdminProfile from "./admindb/pages/Profile/AdminProfile.jsx";
+import AdminLogin from "./admindb/pages/Auth/AdminLogin.jsx";
 import SidebarAdmin from "./admindb/components/Sidebar";
 import HeaderAdmin from "./admindb/components/Header";
 
-import AdminDashboardPage from "./admindb/pages/dashboard/AdminDashboardPage.jsx";
-import Dashboard from "./admindb/pages/dashboard/ThongKeSanPham.jsx";
-import ThongKeDonHang from "./admindb/pages/dashboard/ThongKeDonHang.jsx";
-import ThongKeKhachHang from "./admindb/pages/dashboard/ThongKeKhachHang.jsx";
-import Danhsachsanpham from "./admindb/pages/products/tatcasanpham/Danhsachsanpham.jsx";
-import Danhsachdonhang from "./admindb/pages/orders/Danhsachdonhang.jsx";
-import Chitietdonhang from "./admindb/pages/orders/OrderDetail.jsx";
-import DanhsachTrackingorder from "./admindb/pages/orders/DanhsachTrackingorder.jsx";
-import Chitiettrackingorder from "./admindb/pages/orders/chitiettrackingorder.jsx";
-import AdminProductDetail from "./admindb/pages/products/tatcasanpham/ProductDetail.jsx";
-import AdminVariantDetail from "./admindb/pages/products/tatcasanpham/bienthesanpham/VariantDetail.jsx";
-import AdminCreateVariant from "./admindb/pages/products/tatcasanpham/bienthesanpham/CreateVariant.jsx";
-import ProductCreate from "./admindb/pages/products/tatcasanpham/ProductCreate.jsx";
-import ProductEdit from "./admindb/pages/products/tatcasanpham/ProductEdit.jsx";
-import ParentCategories from "./admindb/pages/products/danhmuccha/ParentCategories.jsx";
-import ParentCategoryForm from "./admindb/pages/products/danhmuccha/ParentCategoryForm.jsx";
-import ChildCategories from "./admindb/pages/products/danhmuccon/ChildCategories.jsx";
-import ChildCategoryForm from "./admindb/pages/products/danhmuccon/ChildCategoryForm.jsx";
-import Units from "./admindb/pages/products/quychuandonggoi/Units.jsx";
-import UnitForm from "./admindb/pages/products/quychuandonggoi/UnitsForm.jsx";
-import Nation from "./admindb/pages/products/thitruongquocgia/National.jsx";
-import NationalForm from "./admindb/pages/products/thitruongquocgia/NationalForm.jsx";
+import AdminDashboardPage from "./admindb/pages/Dashboard/AdminDashboardPage.jsx";
+import Dashboard from "./admindb/pages/Dashboard/ThongKeSanPham.jsx";
+import ThongKeDonHang from "./admindb/pages/Dashboard/ThongKeDonHang.jsx";
+import ThongKeKhachHang from "./admindb/pages/Dashboard/ThongKeKhachHang.jsx";
+import Danhsachsanpham from "./admindb/pages/Products/tatcasanpham/Danhsachsanpham.jsx";
+import Danhsachdonhang from "./admindb/pages/Orders/Danhsachdonhang.jsx";
+import Chitietdonhang from "./admindb/pages/Orders/OrderDetail.jsx";
+import DanhsachTrackingorder from "./admindb/pages/Orders/DanhsachTrackingorder.jsx";
+import Chitiettrackingorder from "./admindb/pages/Orders/chitiettrackingorder.jsx";
+import AdminProductDetail from "./admindb/pages/Products/tatcasanpham/ProductDetail.jsx";
+import AdminVariantDetail from "./admindb/pages/Products/tatcasanpham/bienthesanpham/VariantDetail.jsx";
+import AdminCreateVariant from "./admindb/pages/Products/tatcasanpham/bienthesanpham/CreateVariant.jsx";
+import ProductCreate from "./admindb/pages/Products/tatcasanpham/ProductCreate.jsx";
+import ProductEdit from "./admindb/pages/Products/tatcasanpham/ProductEdit.jsx";
+import ParentCategories from "./admindb/pages/Products/danhmuccha/ParentCategories.jsx";
+import ParentCategoryForm from "./admindb/pages/Products/danhmuccha/ParentCategoryForm.jsx";
+import ChildCategories from "./admindb/pages/Products/danhmuccon/ChildCategories.jsx";
+import ChildCategoryForm from "./admindb/pages/Products/danhmuccon/ChildCategoryForm.jsx";
+import Units from "./admindb/pages/Products/quychuandonggoi/Units.jsx";
+import UnitForm from "./admindb/pages/Products/quychuandonggoi/UnitsForm.jsx";
+import Nation from "./admindb/pages/Products/thitruongquocgia/National.jsx";
+import NationalForm from "./admindb/pages/Products/thitruongquocgia/NationalForm.jsx";
 
 // Import các Form/Page từ Warehouse
 import DanhSachPhieuNhap from "./admindb/pages/Warehouse/dansachphieunhap/DanhSachPhieuNhap.jsx";
@@ -76,13 +76,13 @@ import TonKho from "./admindb/pages/Warehouse/Tonkho.jsx";
 import ChuyenKho from "./admindb/pages/Warehouse/dieuchuyenkho/Chuyenkho.jsx";
 
 // --- IMPORTS KHÁCH HÀNG (ADMIN CONTROL) ---
-import Danhsachkhachhang from "./admindb/pages/customers/Danhsachkhachhang.jsx";
-import Chitietkhachhang from "./admindb/pages/customers/Chitietkhachhang.jsx";
+import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang.jsx";
+import Chitietkhachhang from "./admindb/pages/Customers/Chitietkhachhang.jsx";
 
 // Nhóm quản lý nội bộ
-import Danhsachnoibo from "./admindb/pages/settings/Quanlynoibo/Danhsachnoibo.jsx";
-import Chitietnoibo from "./admindb/pages/settings/Quanlynoibo/Chitietnoibo.jsx";
-import Danhsachvaitro from "./admindb/pages/settings/Quanlyvaitro/Danhsachvaitro.jsx";
+import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo.jsx";
+import Chitietnoibo from "./admindb/pages/Settings/Quanlynoibo/Chitietnoibo.jsx";
+import Danhsachvaitro from "./admindb/pages/Settings/Quanlyvaitro/Danhsachvaitro.jsx";
 import VipSettings from "./admindb/pages/Settings/VipSettings";
 
 // --- IMPORTS MODULE QUẢN LÝ KHUYẾN MÃI ---
@@ -90,7 +90,7 @@ import DanhSachGiamGia from "./admindb/pages/Promotions/DanhSachGiamGia.jsx";
 import TaoGiamGia from "./admindb/pages/Promotions/TaoGiamGia.jsx";
 import CreateCoupon from "./admindb/pages/Promotions/CreateCoupon.jsx";
 
-// 🌟🌟🌟 IMPORT TRANG POSTER BUILDER THEO ĐÚNG CẤU TRÚC THƯ MỤC CỦA BẠN 🌟🌟🌟
+// --- IMPORT TRANG POSTER BUILDER ---
 import PosterBuilder from "./admindb/pages/quanlyposterthongbao/PosterBuilder.jsx";
 
 /**
@@ -603,7 +603,7 @@ const AppRoutes = () => (
         <Route path="sua-coupon/:id" element={<CreateCoupon />} />
       </Route>
 
-      {/* 🌟🌟🌟 ROUTE QUẢN LÝ POSTER VÀ THÔNG BÁO MỚI THÊM 🌟🌟🌟 */}
+      {/* 🌟 QUẢN LÝ POSTER VÀ THÔNG BÁO 🌟 */}
       <Route
         path="posters-notifications"
         element={
@@ -613,16 +613,17 @@ const AppRoutes = () => (
         }
       >
         <Route index element={<Navigate to="poster" replace />} />
-        {/* Tab 1: Poster Builder */}
         <Route path="poster" element={<PosterBuilder />} />
-        {/* Tab 2: Thông báo */}
         <Route
           path="thong-bao"
           element={
             <div className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm">
-              <h2 className="text-xl font-bold text-slate-800">Quản Lý Thông Báo Hệ Thống</h2>
+              <h2 className="text-xl font-bold text-slate-800">
+                Quản Lý Thông Báo Hệ Thống
+              </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Gửi thông báo đẩy (Push Notifications) và tin nhắn khuyến mãi tới khách hàng.
+                Gửi thông báo đẩy (Push Notifications) và tin nhắn khuyến mãi
+                tới khách hàng.
               </p>
             </div>
           }
