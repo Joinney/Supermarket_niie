@@ -23,11 +23,19 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+        <!-- Spring Security: Cần thiết cho SecurityConfig.java -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
         <!-- Thư viện hỗ trợ WebSockets cho Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
+
         <!-- Thư viện gửi Mail chứa JavaMailSender -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -59,7 +67,7 @@
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
         </dependency>
 
-        <!-- Swagger UI for Spring Boot 3 (Đã chuyển vào trong block dependencies và sửa artifactId) -->
+        <!-- Swagger UI for Spring Boot 3 -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
