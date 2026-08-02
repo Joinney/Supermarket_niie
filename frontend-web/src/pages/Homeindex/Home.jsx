@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Flame,
   Timer,
+  Clock,
   Trophy,
   Sparkles,
   TrendingUp,
@@ -19,7 +20,7 @@ import { useStore } from "../../context/StoreContext";
 import { productApi, promotionApi } from "../../api/axios";
 import ProductCard from "../../components/Product/ProductCard";
 import QuangCao from "./quangcao";
-import ModalPoster from "./ModalPoster";
+import ModalPoster from "./modalquangcao/ModalPoster";
 
 // Import 5 component từ thư mục Khám phá bộ sưu tập
 import Goiychoban from "./khamphabosuutap/goiychoban";
@@ -42,9 +43,10 @@ export default function Home() {
   const [topFavoriteProducts, setTopFavoriteProducts] = useState([]);
   const [loadingTopFavorites, setLoadingTopFavorites] = useState(true);
 
-  // State Flash Sale
+  // State Flash Sale & Slot lựa chọn
   const [flashSaleData, setFlashSaleData] = useState([]);
   const [loadingFlashSale, setLoadingFlashSale] = useState(true);
+  const [selectedSlot, setSelectedSlot] = useState("running");
 
   const favRef = useRef(null);
   const location = useLocation();
@@ -243,170 +245,206 @@ export default function Home() {
     ? `/${country_code.toLowerCase()}`
     : `/${currentStore?.code?.toLowerCase() || "vn"}`;
 
+  const activePromo = runningPromos?.[0] || null;
+  const activeTimeLeft = activePromo
+    ? formatTimeLeft(activePromo.chuong_trinh.thoi_gian_ket_thuc)
+    : { dd: "00", hh: "00", mm: "00", ss: "00" };
+
   return (
     <div className="space-y-12 pb-20 bg-[#fafbfc] font-sans pt-[10px] selection:bg-[#006c49] selection:text-white relative">
       <ModalPoster country_code={country_code} currentStore={currentStore} />
 
       <QuangCao t={t} />
 
-      {/* FLASH SALE */}
-      <section className="mx-6 md:mx-10 space-y-6">
+      {/* ========================================================= */}
+      {/* FLASH SALE - NỀN TRẮNG, VIỀN ĐỎ CAM GRADIENT NỔI BẬT */}
+      {/* ========================================================= */}
+      <section className="mx-4 sm:mx-6 md:mx-10 my-8">
         {loadingFlashSale ? (
-          <div className="h-40 bg-slate-100 rounded-[40px] animate-pulse"></div>
+          <div className="h-64 bg-slate-100 rounded-[36px] animate-pulse"></div>
         ) : (
-          <>
-            {runningPromos.length > 0 ? (
-              runningPromos.map((promo, idx) => {
-                const timeLeft = formatTimeLeft(
-                  promo.chuong_trinh.thoi_gian_ket_thuc
-                );
-                return (
-                  <div
-                    key={idx}
-                    className="bg-white rounded-[32px] p-6 md:p-8 shadow-sm border border-slate-100 relative overflow-hidden"
-                  >
-                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#f05a28] to-[#ff7e5f]"></div>
-
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-[#f05a28] to-[#ea580c] rounded-2xl flex items-center justify-center shadow-md">
-                          <Flame
-                            size={24}
-                            className="text-white fill-white/20"
-                          />
-                        </div>
-                        <div>
-                          <h2 className="text-xl md:text-2xl font-black text-[#161b22] uppercase tracking-tight">
-                            {promo.chuong_trinh.ten_chuong_trinh ||
-                              "Khuyến mãi nhanh"}
-                          </h2>
-                          <p className="text-xs text-slate-500 font-medium mt-0.5">
-                            Săn deal chớp nhoáng - Số lượng có hạn
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-3 bg-[#fff1f0] px-5 py-2.5 rounded-2xl border border-orange-100">
-                          <span className="text-xs font-bold text-[#f05a28] uppercase tracking-widest hidden sm:block">
-                            Kết thúc sau
-                          </span>
-                          <div className="flex gap-1.5 text-[#f05a28] font-black text-lg items-center">
-                            {timeLeft.dd !== "00" && (
-                              <>
-                                <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm text-center">
-                                  {timeLeft.dd}n
-                                </span>
-                                <span className="text-[#f05a28] font-black">
-                                  :
-                                </span>
-                              </>
-                            )}
-                            <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm min-w-[36px] text-center">
-                              {timeLeft.hh}
-                            </span>
-                            :
-                            <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm min-w-[36px] text-center">
-                              {timeLeft.mm}
-                            </span>
-                            :
-                            <span className="bg-white px-2 py-0.5 rounded-lg shadow-sm min-w-[36px] text-center">
-                              {timeLeft.ss}
-                            </span>
-                          </div>
-                        </div>
-
-                        <Link
-                          to={`${currentPrefix}/category/khuyen-mai`}
-                          className="text-xs font-black text-[#f05a28] bg-orange-50 hover:bg-[#f05a28] hover:text-white px-5 py-3 rounded-2xl transition-all shadow-sm active:scale-95 whitespace-nowrap hidden lg:flex items-center gap-2 border border-orange-100"
-                        >
-                          Săn ngay <ArrowRight size={16} />
-                        </Link>
-                      </div>
-                    </div>
-
-                    <div
-                      ref={favRef}
-                      className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 pt-2"
-                    >
-                      {promo.products?.map((p, pIdx) => (
-                        <div
-                          key={`flash-${promo.chuong_trinh.ma_khuyen_mai}-${p.ma_san_pham}-${pIdx}`}
-                          className="w-[180px] md:w-[200px] shrink-0 bg-white border border-slate-100/80 rounded-[28px] p-2 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative group flex flex-col justify-between"
-                        >
-                          <ProductCard
-                            p={p}
-                            categoryName="Siêu Sale"
-                            categorySlug="khuyen-mai"
-                          />
-                          <div className="mt-3 px-2 pb-2 w-full">
-                            <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 mb-1.5">
-                              <span>
-                                Đã bán {p.thong_tin_sale?.da_ban || 0}
-                              </span>
-                              <span className="text-[#f05a28]">
-                                CÒN{" "}
-                                {(p.thong_tin_sale?.so_luong_gioi_han || 0) -
-                                  (p.thong_tin_sale?.da_ban || 0)}
-                              </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-orange-400 to-[#f05a28] rounded-full"
-                                style={{
-                                  width: `${p.thong_tin_sale?.phan_tram_da_ban || 0}%`,
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+          /* Khung ngoài làm dải viền gradient đỏ-cam (padding 3px) */
+          <div className="p-[3px] bg-gradient-to-r from-[#ff3b30] via-[#ff6b00] to-[#ff3b30] rounded-[28px] md:rounded-[36px] shadow-xl shadow-red-500/10">
+            {/* Khung ruột bên trong màu TRẮNG */}
+            <div className="bg-white rounded-[25px] md:rounded-[33px] p-4 sm:p-6 md:p-8">
+              {/* HEADER KHU VỰC SALE */}
+              <div className="flex flex-col lg:flex-row items-center justify-between gap-5 mb-6 border-b border-slate-100 pb-6">
+                {/* Tiêu đề & Countdown */}
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 md:gap-4 text-slate-900 w-full lg:w-auto">
+                  <div className="w-12 h-12 bg-gradient-to-tr from-[#ff3b30] to-[#ff6b00] text-white rounded-2xl flex items-center justify-center shadow-md shadow-red-500/20 shrink-0">
+                    <Zap size={28} className="fill-current animate-bounce" />
                   </div>
-                );
-              })
-            ) : (
-              <div className="w-full bg-white border border-slate-100 rounded-3xl py-12 flex flex-col items-center justify-center text-slate-400 shadow-sm">
-                <Zap size={32} className="text-slate-200 mb-3" />
-                <p className="font-bold text-[15px]">
-                  Hiện không có chương trình sale nào đang diễn ra.
-                </p>
-              </div>
-            )}
 
-            {upcomingPromos.length > 0 && (
-              <div className="bg-white border border-blue-100 rounded-[30px] p-6 shadow-sm">
-                <h3 className="font-black text-blue-900 mb-5 uppercase text-sm tracking-widest flex items-center gap-2">
-                  <Timer size={18} className="text-blue-500" /> Sắp diễn ra
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {upcomingPromos.map((promo, idx) => (
+                  <div className="text-center sm:text-left">
+                    <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight italic text-transparent bg-clip-text bg-gradient-to-r from-[#ff3b30] to-[#ff6b00]">
+                      GIỜ VÀNG DEAL SỐC
+                    </h2>
+
+                    {selectedSlot === "running" && activePromo && (
+                      <div className="flex items-center gap-2 mt-1 justify-center sm:justify-start">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-red-500">
+                          Kết thúc trong
+                        </span>
+                        <div className="flex items-center gap-1 font-black text-sm text-white">
+                          {activeTimeLeft.dd !== "00" && (
+                            <>
+                              <span className="bg-slate-900 px-2 py-0.5 rounded-lg min-w-[28px] text-center">
+                                {activeTimeLeft.dd}d
+                              </span>
+                              <span className="text-red-500 font-bold">:</span>
+                            </>
+                          )}
+                          <span className="bg-slate-900 px-2 py-0.5 rounded-lg min-w-[28px] text-center shadow-inner">
+                            {activeTimeLeft.hh}
+                          </span>
+                          <span className="text-red-500 font-bold">:</span>
+                          <span className="bg-slate-900 px-2 py-0.5 rounded-lg min-w-[28px] text-center shadow-inner">
+                            {activeTimeLeft.mm}
+                          </span>
+                          <span className="text-red-500 font-bold">:</span>
+                          <span className="bg-gradient-to-r from-[#ff3b30] to-[#ff6b00] text-white px-2 py-0.5 rounded-lg min-w-[28px] text-center shadow-inner animate-pulse">
+                            {activeTimeLeft.ss}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Thanh chọn khung giờ (Slots) */}
+                <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 w-full sm:w-auto overflow-x-auto scrollbar-hide justify-between">
+                  <button
+                    onClick={() => setSelectedSlot("running")}
+                    className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 rounded-xl text-center transition-all duration-300 whitespace-nowrap ${
+                      selectedSlot === "running"
+                        ? "bg-gradient-to-r from-[#ff3b30] to-[#ff6b00] text-white shadow-md font-black"
+                        : "text-slate-600 hover:text-slate-900 font-bold"
+                    }`}
+                  >
+                    <div className="text-xs uppercase tracking-wider opacity-90">
+                      Đang diễn ra
+                    </div>
+                    <div className="text-sm font-extrabold flex items-center justify-center gap-1">
+                      <Clock size={12} /> Live
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedSlot("upcoming")}
+                    className={`flex-1 sm:flex-initial px-4 sm:px-6 py-2 rounded-xl text-center transition-all duration-300 whitespace-nowrap ${
+                      selectedSlot === "upcoming"
+                        ? "bg-gradient-to-r from-[#ff3b30] to-[#ff6b00] text-white shadow-md font-black"
+                        : "text-slate-600 hover:text-slate-900 font-bold"
+                    }`}
+                  >
+                    <div className="text-xs uppercase tracking-wider opacity-90">
+                      Sắp diễn ra
+                    </div>
+                    <div className="text-sm font-extrabold flex items-center justify-center gap-1">
+                      <Clock size={12} /> {upcomingPromos.length} ca
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* DANH SÁCH SẢN PHẨM GRID 6 CỘT */}
+              {selectedSlot === "running" ? (
+                runningPromos.length > 0 ? (
+                  runningPromos.map((promo, idx) => (
                     <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 bg-blue-50/50 hover:bg-blue-50 transition-colors rounded-2xl border border-blue-100"
+                      key={`running-promo-${idx}`}
+                      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4"
                     >
-                      <div>
-                        <p className="font-bold text-blue-900 text-sm">
-                          {promo.chuong_trinh.ten_chuong_trinh}
-                        </p>
-                        <p className="text-[11px] font-medium text-slate-500 mt-1 flex items-center gap-1.5">
-                          Bắt đầu:{" "}
-                          <span className="text-blue-600 bg-white px-2 py-0.5 rounded shadow-sm border border-blue-100">
+                      {promo.products?.map((p, pIdx) => {
+                        const limit = p.thong_tin_sale?.so_luong_gioi_han || 30;
+                        const sold = p.thong_tin_sale?.da_ban || 0;
+                        const remaining = Math.max(0, limit - sold);
+                        const percent = Math.min(
+                          100,
+                          Math.round((sold / limit) * 100)
+                        );
+
+                        return (
+                          <div
+                            key={`flash-${promo.chuong_trinh.ma_khuyen_mai}-${p.ma_san_pham}-${pIdx}`}
+                            className="bg-white rounded-2xl p-2.5 sm:p-3 shadow-xs border border-slate-100 hover:shadow-xl hover:border-red-200 hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between group relative"
+                          >
+                            <ProductCard
+                              p={p}
+                              categoryName="Siêu Sale"
+                              categorySlug="khuyen-mai"
+                            />
+
+                            {/* Thanh Tiến Trình "Còn x/y suất" */}
+                            <div className="mt-3 w-full">
+                              <div className="relative h-6 bg-orange-100/80 rounded-full overflow-hidden flex items-center justify-center border border-orange-200/60 shadow-inner">
+                                <div
+                                  className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-yellow-400 to-[#ff6b00] transition-all duration-500 rounded-full"
+                                  style={{ width: `${percent}%` }}
+                                ></div>
+                                <div className="relative z-10 flex items-center justify-center gap-1 text-[11px] font-black uppercase text-slate-800 drop-shadow-xs">
+                                  <Flame
+                                    size={13}
+                                    className="text-red-600 fill-red-600 animate-bounce"
+                                  />
+                                  <span>
+                                    {remaining === 0
+                                      ? "HẾT HÀNG"
+                                      : `Còn ${remaining}/${limit} suất`}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-12 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
+                    <Zap size={36} className="mx-auto text-amber-500 mb-2" />
+                    <p className="font-extrabold text-base text-slate-700">
+                      Hiện chưa có chương trình Flash Sale nào đang mở bán.
+                    </p>
+                  </div>
+                )
+              ) : (
+                /* Khung hiển thị các chương trình sắp diễn ra */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {upcomingPromos.length > 0 ? (
+                    upcomingPromos.map((promo, idx) => (
+                      <div
+                        key={`upcoming-${idx}`}
+                        className="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 text-slate-800 flex items-center justify-between"
+                      >
+                        <div>
+                          <p className="font-black text-base text-[#ff3b30]">
+                            {promo.chuong_trinh.ten_chuong_trinh}
+                          </p>
+                          <p className="text-xs font-semibold mt-1 text-slate-500">
+                            Bắt đầu:{" "}
                             {new Date(
                               promo.chuong_trinh.thoi_gian_bat_dau
                             ).toLocaleString("vi-VN")}
-                          </span>
-                        </p>
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-black bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 rounded-xl uppercase tracking-wider shadow-xs">
+                          Sắp mở
+                        </span>
                       </div>
-                      <span className="text-[9px] font-black bg-blue-500 text-white px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm">
-                        Sắp tới
-                      </span>
+                    ))
+                  ) : (
+                    <div className="col-span-full py-12 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100">
+                      <Clock size={36} className="mx-auto text-slate-400 mb-2" />
+                      <p className="font-extrabold text-base text-slate-700">
+                        Chưa có lịch Flash Sale sắp tới. Hãy quay lại sau nhé!
+                      </p>
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            )}
-          </>
+              )}
+            </div>
+          </div>
         )}
       </section>
 

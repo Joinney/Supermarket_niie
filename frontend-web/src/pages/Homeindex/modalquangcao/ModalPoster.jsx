@@ -2,9 +2,13 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import { Link } from "react-router-dom";
 import { X, Sparkles, ArrowUpRight } from "lucide-react";
+import ChromaKeyVideo from "./ChromaKeyVideo";
 
 export default function ModalPoster({ country_code, currentStore }) {
   const [showPoster, setShowPoster] = useState(true);
+
+  // Đường dẫn video trong thư mục public/
+  const videoSrc = "/tomlizard.mp4";
 
   const handleClosePoster = () => {
     setShowPoster(false);
@@ -57,7 +61,7 @@ export default function ModalPoster({ country_code, currentStore }) {
         {/* Nút đóng X nằm bên ngoài góc trên bên phải */}
         <button
           onClick={handleClosePoster}
-          className="absolute -top-12 right-0 z-40 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/90 hover:bg-[#006c49] text-white backdrop-blur-md flex items-center justify-center shadow-2xl transition-all duration-300 hover:rotate-90 active:scale-95 border-2 border-white"
+          className="absolute -top-12 right-0 z-50 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900/90 hover:bg-[#006c49] text-white backdrop-blur-md flex items-center justify-center shadow-2xl transition-all duration-300 hover:rotate-90 active:scale-95 border-2 border-white"
           aria-label="Đóng"
         >
           <X size={22} strokeWidth={2.5} />
@@ -66,42 +70,50 @@ export default function ModalPoster({ country_code, currentStore }) {
         {/* Khung Bento Grid Modal chính */}
         <div className="bg-transparent rounded-[32px] overflow-visible transition-all">
           
-          {/* Bố cục Bento Grid tràn viền */}
+          {/* Bố cục Bento Grid */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 sm:gap-4 w-full md:h-[420px]">
             
             {/* Cột trái: 2 ảnh nhỏ */}
             <div className="col-span-12 md:col-span-5 flex flex-col gap-3.5 sm:gap-4 h-[260px] md:h-full">
               
-              {/* Ảnh nhỏ góc trên trái */}
-              <Link
-                to={posterItems.leftTop.link}
-                onClick={handleClosePoster}
-                className="relative flex-1 rounded-2xl overflow-hidden group bg-white shadow-2xl border-2 border-white/90 hover:border-[#006c49] transition-all duration-300 block"
-              >
-                <img
-                  src={posterItems.leftTop.image}
-                  alt={posterItems.leftTop.title}
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                />
-                
-                <span className="absolute top-2.5 left-2.5 z-10 bg-black/60 backdrop-blur-md text-amber-300 text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-white/20 shadow-md">
-                  {posterItems.leftTop.tag}
-                </span>
-
-                <div className="absolute inset-0 p-3 sm:p-3.5 flex flex-col justify-end text-white z-10">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="font-black text-xs sm:text-sm leading-tight line-clamp-1 group-hover:text-emerald-300 transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-                      {posterItems.leftTop.title}
-                    </span>
-                    <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-300 flex-shrink-0 drop-shadow" />
-                  </div>
-                  <span className="text-[10px] sm:text-xs text-slate-100 mt-0.5 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-                    {posterItems.leftTop.subtitle}
+              {/* === POSTER 1: HOT SALE (Góc trên trái) === */}
+              <div className="relative flex-1 overflow-visible z-20">
+                <Link
+                  to={posterItems.leftTop.link}
+                  onClick={handleClosePoster}
+                  className="relative block h-full w-full rounded-2xl overflow-hidden group bg-white shadow-2xl border-2 border-white/90 hover:border-[#006c49] transition-all duration-300"
+                >
+                  <img
+                    src={posterItems.leftTop.image}
+                    alt={posterItems.leftTop.title}
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                  />
+                  
+                  <span className="absolute top-2.5 left-2.5 z-10 bg-black/60 backdrop-blur-md text-amber-300 text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border border-white/20 shadow-md">
+                    {posterItems.leftTop.tag}
                   </span>
-                </div>
-              </Link>
 
-              {/* Ảnh nhỏ góc dưới trái */}
+                  <div className="absolute inset-0 p-3 sm:p-3.5 flex flex-col justify-end text-white z-10 pr-24">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-black text-xs sm:text-sm leading-tight line-clamp-1 group-hover:text-emerald-300 transition-colors drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                        {posterItems.leftTop.title}
+                      </span>
+                      <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-300 flex-shrink-0 drop-shadow" />
+                    </div>
+                    <span className="text-[10px] sm:text-xs text-slate-100 mt-0.5 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                      {posterItems.leftTop.subtitle}
+                    </span>
+                  </div>
+                </Link>
+
+                {/* TẮC KÈ ĐẶT CHUẨN TRÊN POSTER HOT SALE */}
+                <ChromaKeyVideo
+                  src={videoSrc}
+                  className="absolute -bottom-1 right-0 w-32 h-40 sm:w-36 sm:h-44 z-30 pointer-events-none drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]"
+                />
+              </div>
+
+              {/* === POSTER 2: NEW ARRIVAL (Góc dưới trái) === */}
               <Link
                 to={posterItems.leftBottom.link}
                 onClick={handleClosePoster}
@@ -131,8 +143,8 @@ export default function ModalPoster({ country_code, currentStore }) {
               </Link>
             </div>
 
-            {/* Cột phải: 1 ảnh lớn chiếm trọn chiều cao */}
-            <div className="col-span-12 md:col-span-7 h-[280px] md:h-full">
+            {/* Cột phải: 1 ảnh lớn */}
+            <div className="col-span-12 md:col-span-7 h-[280px] md:h-full relative">
               <Link
                 to={posterItems.rightMain.link}
                 onClick={handleClosePoster}

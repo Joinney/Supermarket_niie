@@ -29,6 +29,9 @@ const AUTH_BASE_URL = isLocalhost
   ? "http://localhost:5001"
   : "https://authservice-sz4p.onrender.com";
 
+const BANNER_DISMISS_KEY = "demi_header_banner_dismissed_time";
+const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 phút = 300,000 milliseconds
+
 export default function Header({ onOpenMenu }) {
   const { user: authUser, logout, getMembershipTier } = useContext(AuthContext);
   const { cart } = useCart();
@@ -130,16 +133,48 @@ export default function Header({ onOpenMenu }) {
   };
 
   // -------------------------------------------------------------
-  // XỬ LÝ TẮT BANNER VĨNH VIỄN BẰNG LOCALSTORAGE
+  // XỬ LÝ TẮT BANNER TRONG 5 PHÚT & LOAD TRANG CÓ LẠI BÌNH THƯỜNG
   // -------------------------------------------------------------
   const [showBanner, setShowBanner] = useState(() => {
-    return localStorage.getItem("demi_header_banner_dismissed") !== "true";
+    const dismissedTime = localStorage.getItem(BANNER_DISMISS_KEY);
+    if (!dismissedTime) return true; // Chưa từng tắt -> Hiện banner
+
+    const timePassed = Date.now() - parseInt(dismissedTime, 10);
+    if (timePassed > FIVE_MINUTES_MS) {
+      // Đã quá 5 phút -> Cho hiện lại
+      localStorage.removeItem(BANNER_DISMISS_KEY);
+      return true;
+    }
+    // Chưa đủ 5 phút -> Ẩn banner
+    return false;
   });
 
   const handleCloseBanner = () => {
     setShowBanner(false);
-    localStorage.setItem("demi_header_banner_dismissed", "true");
+    // Lưu thời điểm tắt vào localStorage
+    localStorage.setItem(BANNER_DISMISS_KEY, Date.now().toString());
   };
+
+  // Tự động kiểm tra để hiện lại banner sau 5 phút nếu người dùng vẫn đang ở trên trang
+  useEffect(() => {
+    if (showBanner) return;
+
+    const interval = setInterval(() => {
+      const dismissedTime = localStorage.getItem(BANNER_DISMISS_KEY);
+      if (!dismissedTime) {
+        setShowBanner(true);
+        return;
+      }
+
+      const timePassed = Date.now() - parseInt(dismissedTime, 10);
+      if (timePassed >= FIVE_MINUTES_MS) {
+        setShowBanner(true);
+        localStorage.removeItem(BANNER_DISMISS_KEY);
+      }
+    }, 10000); // Kiểm tra mỗi 10 giây
+
+    return () => clearInterval(interval);
+  }, [showBanner]);
 
   const [timeLeft, setTimeLeft] = useState(11 * 3600 + 59 * 60 + 23);
 

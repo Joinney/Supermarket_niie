@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import { io } from 'socket.io-client';
 import { ArrowRight, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { promotionApi } from '../../api/axios'; 
 
 export default function QuangCao({ t }) {
   const [data, setData] = useState(null);
@@ -18,45 +18,66 @@ export default function QuangCao({ t }) {
 
   // 1. TẢI CẤU HÌNH BAN ĐẦU & KẾT NỐI REALTIME SOCKET.IO
   useEffect(() => {
-    // Fetch dữ liệu khởi tạo từ Backend API
+    let isMounted = true;
+
+    // Fetch dữ liệu khởi tạo qua promotionApi
     const fetchAds = async () => {
       try {
-        const res = await axios.get('http://localhost:5007/api/v1/homeposters');
-        if (res.data?.success && res.data?.data) {
+        const res = await promotionApi.get('/homeposters');
+        if (isMounted && res.data?.success && res.data?.data) {
           setData(res.data.data);
         }
       } catch (err) {
-        console.error('Lỗi khi tải dữ liệu quảng cáo:', err);
+        // Giữ UI mặc định mượt mà khi backend không có data
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
+
     fetchAds();
 
-    // Kết nối Socket.IO Realtime tới Promotion Service (Port 5007)
-    const socket = io('http://localhost:5007', {
-      transports: ['websocket'],
-      withCredentials: true
+    // Trích xuất tự động Origin Domain từ promotionApi (Gateway 5000 / Production)
+    const apiBaseUrl = promotionApi.defaults.baseURL || "";
+    let socketUrl = "http://localhost:5000";
+
+    try {
+      if (apiBaseUrl) {
+        socketUrl = new URL(apiBaseUrl).origin;
+      }
+    } catch (e) {
+      socketUrl = window.location.origin;
+    }
+
+    // Khởi tạo Socket.IO kết nối linh hoạt
+    const socket = io(socketUrl, {
+      reconnectionAttempts: 5,
+      timeout: 10000,
+      transports: ['websocket', 'polling']
     });
 
     socket.on('homeposter_updated', (updatedData) => {
-      console.log('⚡ Realtime Update Received:', updatedData);
-      setData(updatedData);
+      if (isMounted) setData(updatedData);
     });
 
     return () => {
-      socket.disconnect();
+      isMounted = false;
+      socket.off('homeposter_updated');
+      setTimeout(() => {
+        if (socket.connected) {
+          socket.disconnect();
+        }
+      }, 100);
     };
   }, []);
 
-  // 2. TỰ ĐỘNG CHUYỂN SLIDE BANNER DANH MỤC (AUTOPLAY TỪNG BANNER)
+  // 2. AUTOPLAY SLIDE BANNER DANH MỤC
   useEffect(() => {
     if (!data || !data.catAutoPlay || !data.categoryBanners || data.categoryBanners.length <= 4) return;
     const timer = setInterval(() => {
       if (catScrollRef.current) {
         const container = catScrollRef.current;
         const cardWidth = container.firstElementChild?.offsetWidth || 260;
-        const gap = 16; // tương ứng gap-4
+        const gap = 16;
         const maxScrollLeft = container.scrollWidth - container.clientWidth;
 
         if (container.scrollLeft >= maxScrollLeft - 5) {
@@ -70,7 +91,7 @@ export default function QuangCao({ t }) {
     return () => clearInterval(timer);
   }, [data]);
 
-  // 3. TỰ ĐỘNG CHUYỂN SLIDE SNAP EBT (AUTOPLAY)
+  // 3. AUTOPLAY SLIDE SNAP EBT
   useEffect(() => {
     if (!data || !data.ebtAutoPlay || (data.ebtList && data.ebtList.length <= 1)) return;
     const timer = setInterval(() => {
@@ -109,11 +130,11 @@ export default function QuangCao({ t }) {
     if (!isMouseDown || !catScrollRef.current) return;
     e.preventDefault();
     const x = e.pageX - catScrollRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5; // Hệ số tốc độ cuộn
+    const walk = (x - startX) * 1.5;
     catScrollRef.current.scrollLeft = scrollLeft - walk;
   };
 
-  // DỮ LIỆU DỰ PHÒNG (FALLBACK NẾU CHƯA CÓ DATA HOẶC MẤT KẾT NỐI API)
+  // Dữ liệu giao diện mặc định (Fallback UI)
   const heroBanner = data?.heroBanner || {
     titleMain: 'Chợ Việt Nam & Châu Á',
     titleHighlight: 'trực tuyến lớn nhất Mỹ',
@@ -121,7 +142,7 @@ export default function QuangCao({ t }) {
     offerSub: '*Giá trị tối thiểu $35, thay đổi theo từng khu vực',
     giftBadgeValue: '$25',
     giftBadgeText: 'Trị giá*',
-    truckImage: 'https://res.cloudinary.com/dm6fqzwhs/image/upload/v1781632779/Screenshot_2026-06-17_005741_zlraht.png',
+    truckImage: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80',
     qrImage: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://demimart.com/app',
     qrText: 'Quét mã để tải app',
     appReviewCount: 'Hơn 1 triệu lượt review'
@@ -144,7 +165,6 @@ export default function QuangCao({ t }) {
     <div className="w-full space-y-6 text-left selection:bg-emerald-100">
       {/* 1. TOP HERO BANNER */}
       <div className="px-6 md:px-10 pt-4 flex flex-col lg:flex-row items-center justify-between gap-6 bg-gradient-to-r from-[#f4faf7] via-white to-orange-50/20 rounded-[40px] pb-6 border border-[#e6f0ed]">
-        {/* Bên trái: Tiêu đề và Ưu đãi */}
         <div className="space-y-4 max-w-xl">
           <h1 className="text-4xl md:text-[46px] font-black text-[#161b22] tracking-tight leading-[1.1]">
             {heroBanner.titleMain}<br />
@@ -161,11 +181,8 @@ export default function QuangCao({ t }) {
           </div>
         </div>
 
-        {/* Giữa & Phải: Hình ảnh minh họa + Khối QR Code To Rõ */}
         <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-10">
           <div className="relative flex items-center gap-4 pl-4">
-            
-            {/* Badge quà tặng $25 */}
             <div className="relative w-20 h-20 flex items-center justify-center filter drop-shadow-md select-none rotate-[-5deg]">
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-0 scale-105"></div>
               <div className="absolute inset-0 bg-white rounded-xl transform rotate-12 scale-105"></div>
@@ -183,7 +200,6 @@ export default function QuangCao({ t }) {
               </div>
             </div>
 
-            {/* Bóng quả bưởi */}
             <div className="w-16 h-16 rounded-full bg-sky-200/70 border border-sky-100 flex items-center justify-center p-1 shadow-inner relative overflow-hidden transform translate-y-2">
               <img 
                 src="https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?auto=format&fit=crop&w=80&h=80&q=80" 
@@ -192,7 +208,6 @@ export default function QuangCao({ t }) {
               />
             </div>
 
-            {/* Bóng chai nước */}
             <div className="w-14 h-14 rounded-full bg-purple-100/80 border border-purple-50 flex items-center justify-center p-1 shadow-inner absolute -top-8 left-20 z-0">
               <img 
                 src="https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=80&h=80&q=80" 
@@ -201,21 +216,21 @@ export default function QuangCao({ t }) {
               />
             </div>
 
-            {/* Xe giao hàng */}
             <div className="relative z-10 ml-1 w-24 sm:w-28 md:w-32 lg:w-36 flex-shrink-0 flex flex-col items-center">
               <img 
                 src={heroBanner.truckImage} 
-                className="w-full h-auto object-contain"
+                className="w-full h-auto object-contain rounded-lg"
                 alt="Delivery Truck"
+                onError={(e) => {
+                  e.target.src = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80";
+                }}
               />
               <span className="absolute -bottom-1 bg-[#006c49] text-white font-black text-[8px] px-2 py-0.5 rounded shadow uppercase tracking-wider scale-90 whitespace-nowrap">
                 Demi Mart
               </span>
             </div>
-
           </div>
 
-          {/* KHỐI QR CODE CÓ HÌNH ẢNH (KÍCH THƯỚC TO RÕ w-28 h-28 DỄ QUÉT) */}
           <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-slate-100 shadow-md">
             <div className="w-28 h-28 bg-white rounded-xl flex items-center justify-center p-1.5 border border-[#d6ede4] shadow-inner overflow-hidden flex-shrink-0">
               {heroBanner.qrImage ? (
@@ -237,7 +252,7 @@ export default function QuangCao({ t }) {
         </div>
       </div>
 
-      {/* 2. BANNER DANH MỤC TRƯỢT TỪNG BANNER & KÉO CHUỘT LƯỚT MƯỢT MÀ */}
+      {/* 2. BANNER DANH MỤC TRƯỢT TỪNG BANNER */}
       <div className="px-6 md:px-10 relative group select-none">
         <button
           type="button"
@@ -257,7 +272,6 @@ export default function QuangCao({ t }) {
           <ChevronRight size={26} strokeWidth={3} />
         </button>
 
-        {/* KHUNG TRƯỢT NHẤN GIỮ KÉO CHUỘT (DRAG TO SCROLL) */}
         <div
           ref={catScrollRef}
           onMouseDown={handleMouseDown}

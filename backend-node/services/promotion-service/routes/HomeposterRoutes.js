@@ -5,7 +5,7 @@ const router = express.Router();
 
 /**
  * @swagger
- * /api/v1/advertisements:
+ * /api/v1/promotions/homeposters:
  *   get:
  *     summary: Lấy cấu hình banner quảng cáo trang chủ
  *     tags: [Advertisements]
@@ -13,7 +13,8 @@ const router = express.Router();
  *       200:
  *         description: Thành công
  */
-router.get('/', async (req, res) => {
+// 🟢 Sửa route '/' thành ['/', '/homeposters'] để hỗ trợ cả 2 đường dẫn
+router.get(['/', '/homeposters'], async (req, res) => {
   try {
     let config = await HomeAdvertisement.findOne();
     if (!config) {
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
- * /api/v1/advertisements:
+ * /api/v1/promotions/homeposters:
  *   put:
  *     summary: Cập nhật cấu hình banner quảng cáo từ Admin (PosterBuilder)
  *     tags: [Advertisements]
@@ -35,13 +36,21 @@ router.get('/', async (req, res) => {
  *       200:
  *         description: Lưu thành công
  */
-router.put('/', async (req, res) => {
+// 🟢 Sửa route '/' thành ['/', '/homeposters'] cho phương thức PUT
+router.put(['/', '/homeposters'], async (req, res) => {
   try {
     const updated = await HomeAdvertisement.findOneAndUpdate(
       {},
       req.body,
       { new: true, upsert: true, runValidators: true }
     );
+
+    // ⚡ Phát tín hiệu Socket.io tới Frontend nếu bạn dùng Realtime
+    const io = req.app.get('socketio');
+    if (io) {
+      io.emit('homeposter_updated', updated);
+    }
+
     res.status(200).json({ success: true, message: 'Lưu cấu hình quảng cáo thành công!', data: updated });
   } catch (err) {
     res.status(400).json({ success: false, message: 'Lỗi khi lưu quảng cáo', error: err.message });

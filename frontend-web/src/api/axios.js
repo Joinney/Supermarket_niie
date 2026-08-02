@@ -4,12 +4,20 @@ import axios from 'axios';
 let isRefreshing = false;
 let refreshSubscribers = [];
 
+// Đăng ký các request bị 401 chờ Token mới
 const subscribeTokenRefresh = (cb) => {
     refreshSubscribers.push(cb);
 };
 
+// Khi có Token mới: Thực thi lại toàn bộ request trong hàng đợi
 const onRefreshed = (token) => {
-    refreshSubscribers.map((cb) => cb(token));
+    refreshSubscribers.forEach((cb) => cb(null, token));
+    refreshSubscribers = [];
+};
+
+// Khi Refresh Token thất bại: Giải phóng hàng đợi và báo lỗi
+const onRefreshFailed = (error) => {
+    refreshSubscribers.forEach((cb) => cb(error, null));
     refreshSubscribers = [];
 };
 
@@ -44,11 +52,14 @@ const createInstance = (baseURL) => {
             const originalRequest = error.config;
             const currentPath = window.location.pathname;
 
+            // 1. Nếu đang ở các trang Login -> Không kích hoạt Refresh Token
             if (currentPath.includes('/login') || currentPath.includes('/signin')) {
                 return Promise.reject(error);
             }
 
-            if (error.response?.status === 401) {
+            // 2. Xử lý lỗi 401 (Unauthorized)
+            if (error.response?.status === 401 && !originalRequest._retry) {
+                originalRequest._retry = true; // Đánh dấu tránh lặp vô tận
                 const localRefreshToken = localStorage.getItem("refreshToken");
                 
                 if (localRefreshToken) {
@@ -57,8 +68,6 @@ const createInstance = (baseURL) => {
                         console.warn(`⚠️ Đang tiến hành gia hạn mã truy cập ngầm cho mạng lưới dịch vụ...`);
 
                         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                        
-                        // 🌟 ĐÃ SỬA LẠI: Trỏ thẳng về Gateway 5000 giống hệt cấu hình bên dưới
                         const authUrl = isLocalHost ? 'http://localhost:5000/api/v1' : 'https://authservice-sz4p.onrender.com/api/v1';
 
                         axios.post(`${authUrl}/auth/refresh-token`, { refreshToken: localRefreshToken })
@@ -75,26 +84,36 @@ const createInstance = (baseURL) => {
                             })
                             .catch(refreshError => {
                                 isRefreshing = false;
-                                console.error("❌ Phiên đăng nhập Admin đã hết hạn hoàn toàn trên hệ thống!");
+                                console.error("❌ Phiên đăng nhập đã hết hạn hoàn toàn trên hệ thống!");
+                                onRefreshFailed(refreshError);
+                                
+                                // Xóa sạch thông tin phiên cũ
                                 localStorage.removeItem("adminToken");
                                 localStorage.removeItem("token");
                                 localStorage.removeItem("refreshToken");
                                 localStorage.removeItem("user");
-                                window.location.href = "/admin/login";
+
+                                // Redirect thông minh theo Role
+                                if (currentPath.startsWith('/admin')) {
+                                    window.location.href = "/admin/login";
+                                } else {
+                                    window.location.href = "/login";
+                                }
                             });
                     }
 
-                    const retryOriginalRequest = new Promise((resolve) => {
-                        subscribeTokenRefresh((token) => {
+                    // Đưa request bị lỗi vào hàng đợi chờ Token mới
+                    return new Promise((resolve, reject) => {
+                        subscribeTokenRefresh((err, token) => {
+                            if (err) {
+                                return reject(err);
+                            }
                             originalRequest.headers.Authorization = `Bearer ${token}`;
                             resolve(instance(originalRequest));
                         });
                     });
-                    return retryOriginalRequest;
                 } else {
-                    localStorage.removeItem("adminToken");
-                    localStorage.removeItem("token");
-                    localStorage.removeItem("user");
+                    localStorage.clear();
                 }
             }
 

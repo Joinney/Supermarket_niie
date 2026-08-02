@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { useLanguage } from "./LanguageContext";
-// 🌟 ĐỒNG BỘ: Sử dụng productApi từ file cấu hình interceptor tập trung
 import { productApi } from "../api/axios"; 
 
 const StoreContext = createContext();
@@ -11,11 +10,16 @@ export const StoreProvider = ({ children }) => {
   const [stores, setStores] = useState([]);
   const [currentStore, setCurrentStore] = useState(null);
 
+  // Dùng Ref để lấy giá trị mới nhất của currentStore trong Socket mà không gây Re-connect
+  const currentStoreRef = useRef(currentStore);
+  useEffect(() => {
+    currentStoreRef.current = currentStore;
+  }, [currentStore]);
+
   // 1. Fetch danh sách quốc gia
   useEffect(() => {
     const fetchNations = async () => {
       try {
-        // 🚀 TỐI ƯU: Sử dụng route tương đối sạch sẽ thông qua productApi
         const res = await productApi.get("/nations");
         const data = res.data.data || [];
         const formattedStores = data.map((item) => ({
@@ -38,7 +42,6 @@ export const StoreProvider = ({ children }) => {
       const urlCountry = pathSegments[1]?.toUpperCase();
       const matchedStore = stores.find((store) => store.code === urlCountry);
 
-      // Nếu truy cập vào một cửa hàng đã bị khóa -> Âm thầm văng về trang chủ
       if (matchedStore && matchedStore.trang_thai === false) {
         window.location.href = "/";
         return;
@@ -55,13 +58,12 @@ export const StoreProvider = ({ children }) => {
     }
   }, [stores, window.location.pathname]);
 
-  // 3. Socket Real-time tự động nhận diện 100% (Đã tối ưu dọn dẹp kết nối lỗi)
+  // 3. Socket Real-time (Đã tối ưu dependency [])
   useEffect(() => {
     const apiBaseUrl = productApi.defaults.baseURL || "";
     let socketUrl = "";
 
     try {
-      // Trích xuất chính xác Domain + Port (ví dụ: http://localhost:5002) bỏ qua phần path phía sau
       socketUrl = new URL(apiBaseUrl).origin;
     } catch (e) {
       socketUrl = window.location.origin;
@@ -69,9 +71,8 @@ export const StoreProvider = ({ children }) => {
     
     if (!socketUrl) return;
 
-    // Khởi tạo kết nối với cấu hình tự động thử lại có giới hạn
     const socket = io(socketUrl, {
-      reconnectionAttempts: 5, // Thử tối đa 5 lần để tránh spam log khi server bảo trì
+      reconnectionAttempts: 5,
       timeout: 10000,
     });
 
@@ -81,24 +82,23 @@ export const StoreProvider = ({ children }) => {
       );
     });
 
-    socket.on("connect_error", (error) => {
-      console.warn(`⚠️ StoreContext: Không thể kết nối tới Socket server tại ${socketUrl}. Hãy kiểm tra xem product-service đã bật chưa!`);
+    socket.on("connect_error", () => {
+      console.warn(`⚠️ StoreContext: Không thể kết nối tới Socket server tại ${socketUrl}.`);
     });
 
     socket.on("store_status_changed", (data) => {
       console.log("📩 StoreContext nhận tín hiệu thay đổi thị trường:", data);
 
-      // Nếu siêu thị đang xem bị admin khóa -> Âm thầm văng về trang chủ
+      const activeStore = currentStoreRef.current;
       if (
-        currentStore &&
-        String(currentStore.code).toUpperCase() ===
+        activeStore &&
+        String(activeStore.code).toUpperCase() ===
           String(data.ma_quoc_gia).toUpperCase() &&
         data.trang_thai === false
       ) {
         window.location.href = "/";
       }
 
-      // Cập nhật lại danh sách trên thanh menu
       setStores((prev) =>
         prev.map((s) =>
           String(s.code).toUpperCase() ===
@@ -110,12 +110,9 @@ export const StoreProvider = ({ children }) => {
     });
 
     return () => {
-      socket.off("connect");
-      socket.off("connect_error");
-      socket.off("store_status_changed");
       socket.disconnect();
     };
-  }, [currentStore]);
+  }, []); // ✅ Để mảng rỗng để Socket chỉ khởi tạo 1 lần duy nhất
 
   // --- HÀM FORMAT TIỀN TỆ ---
   const currencyMap = {
