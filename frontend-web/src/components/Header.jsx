@@ -25,9 +25,10 @@ import {
 const isLocalhost =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1";
+
 const AUTH_BASE_URL = isLocalhost
   ? "http://localhost:5001"
-  : "https://authservice-sz4p.onrender.com";
+  : (import.meta.env.VITE_AUTH_API_URL || "https://authservice-sz4p.onrender.com");
 
 const BANNER_DISMISS_KEY = "demi_header_banner_dismissed_time";
 const FIVE_MINUTES_MS = 5 * 60 * 1000; // 5 phút = 300,000 milliseconds
@@ -137,25 +138,21 @@ export default function Header({ onOpenMenu }) {
   // -------------------------------------------------------------
   const [showBanner, setShowBanner] = useState(() => {
     const dismissedTime = localStorage.getItem(BANNER_DISMISS_KEY);
-    if (!dismissedTime) return true; // Chưa từng tắt -> Hiện banner
+    if (!dismissedTime) return true;
 
     const timePassed = Date.now() - parseInt(dismissedTime, 10);
     if (timePassed > FIVE_MINUTES_MS) {
-      // Đã quá 5 phút -> Cho hiện lại
       localStorage.removeItem(BANNER_DISMISS_KEY);
       return true;
     }
-    // Chưa đủ 5 phút -> Ẩn banner
     return false;
   });
 
   const handleCloseBanner = () => {
     setShowBanner(false);
-    // Lưu thời điểm tắt vào localStorage
     localStorage.setItem(BANNER_DISMISS_KEY, Date.now().toString());
   };
 
-  // Tự động kiểm tra để hiện lại banner sau 5 phút nếu người dùng vẫn đang ở trên trang
   useEffect(() => {
     if (showBanner) return;
 
@@ -171,7 +168,7 @@ export default function Header({ onOpenMenu }) {
         setShowBanner(true);
         localStorage.removeItem(BANNER_DISMISS_KEY);
       }
-    }, 10000); // Kiểm tra mỗi 10 giây
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [showBanner]);
@@ -201,19 +198,25 @@ export default function Header({ onOpenMenu }) {
   const timeChunks = formatTime(timeLeft);
   const headerRef = useRef(null);
 
+  // --- CẬP NHẬT CHIỀU CAO HEADER AN TOÀN CHỐNG MẤT HEADER ---
   useEffect(() => {
     const updateHeaderHeight = () => {
       if (headerRef.current) {
-        const height = headerRef.current.offsetHeight;
+        const height = headerRef.current.offsetHeight || 112;
         document.documentElement.style.setProperty(
           "--header-height",
-          `${height}px`,
+          `${height}px`
         );
       }
     };
-    updateHeaderHeight();
+
+    const timer = setTimeout(updateHeaderHeight, 50);
+
     window.addEventListener("resize", updateHeaderHeight);
-    return () => window.removeEventListener("resize", updateHeaderHeight);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", updateHeaderHeight);
+    };
   }, [showBanner]);
 
   const [displayUser, setDisplayUser] = useState(() => {
@@ -322,7 +325,7 @@ export default function Header({ onOpenMenu }) {
   return (
     <header
       ref={headerRef}
-      className="fixed top-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
+      className="fixed top-0 left-0 right-0 w-full z-[10000] font-sans shadow-sm bg-white/95 backdrop-blur-md transition-all duration-300"
     >
       {/* Banner Khuyến Mãi */}
       {showBanner && (
