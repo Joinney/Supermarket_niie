@@ -65,10 +65,13 @@ const createInstance = (baseURL) => {
                 if (localRefreshToken) {
                     if (!isRefreshing) {
                         isRefreshing = true;
-                        console.warn(`⚠️ Đang tiến hành gia hạn mã truy cập ngầm cho mạng lưới dịch vụ...`);
+                        console.warn(`⚠️ Đang tiến hành gia hạn mã truy cập ngầm qua Gateway...`);
 
                         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                        const authUrl = isLocalHost ? 'http://localhost:5000/api/v1' : 'https://authservice-sz4p.onrender.com/api/v1';
+                        // Đã cập nhật authUrl theo Gateway chính thức trên Render
+                        const authUrl = isLocalHost 
+                            ? 'http://localhost:5000/api/v1' 
+                            : 'https://api-gateway-vuyo.onrender.com/api/v1';
 
                         axios.post(`${authUrl}/auth/refresh-token`, { refreshToken: localRefreshToken })
                             .then(refreshResponse => {
@@ -124,19 +127,21 @@ const createInstance = (baseURL) => {
 };
 
 // =========================================================================
-// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY (5000)
+// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY (LOCAL: 5000 | RENDER: api-gateway-vuyo)
 // =========================================================================
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const gateway = 'http://localhost:5000/api/v1';
+const gateway = isLocal 
+    ? 'http://localhost:5000/api/v1' 
+    : 'https://api-gateway-vuyo.onrender.com/api/v1';
 
-export const authApi = createInstance(isLocal ? gateway : 'https://authservice-sz4p.onrender.com/api/v1');
-export const productApi = createInstance(isLocal ? gateway : 'https://productservice-n87v.onrender.com/api/v1');
-export const cartApi = createInstance(isLocal ? gateway : 'https://cartservice-i6s1.onrender.com/api/v1');
-export const orderApi = createInstance(isLocal ? gateway : 'https://orderservice-n0z1.onrender.com/api/v1');
-export const paymentApi = createInstance(isLocal ? gateway : 'https://payment-service-opea.onrender.com/api/v1');
-export const warehouseApi = createInstance(isLocal ? gateway : 'https://inventory-service-mjzr.onrender.com/api/v1');
+export const authApi = createInstance(gateway);
+export const productApi = createInstance(gateway);
+export const cartApi = createInstance(gateway);
+export const orderApi = createInstance(gateway);
+export const paymentApi = createInstance(gateway);
+export const warehouseApi = createInstance(gateway);
 
-export const promotionApi = createInstance(isLocal ? `${gateway}/promotions` : 'https://promotion-service-r5zx.onrender.com/api/v1/promotions');
-export const couponApi = createInstance(isLocal ? `${gateway}/coupons` : 'https://promotion-service-r5zx.onrender.com/api/v1/coupons');
- 
+export const promotionApi = createInstance(`${gateway}/promotions`);
+export const couponApi = createInstance(`${gateway}/coupons`);
+
 export default authApi;
