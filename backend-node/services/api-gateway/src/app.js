@@ -6,10 +6,34 @@ import { services } from './config/services.config.js';
 
 const app = express();
 
-// Cấu hình CORS cho phép Frontend gọi vào Gateway
+// --- 1. DYNAMIC CORS CONFIGURATION ---
+// Danh sách các origins được phép gọi vào Gateway
+const allowedOrigins = [
+    'https://demimart-fe.onrender.com',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    process.env.FRONTEND_URL
+].filter(Boolean); // Lọc bỏ giá trị undefined
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+        // Cho phép các request không có origin (như Postman, Mobile app, Server-to-Server)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(o => origin.startsWith(o))) {
+            return callback(null, true);
+        } else {
+            // Cho phép tạm thời mọi origin từ render.com để tránh bị block khi đổi subdomain
+            if (origin.endsWith('.onrender.com')) {
+                return callback(null, true);
+            }
+            return callback(new Error(`CORS policy: Origin ${origin} not allowed`));
+        }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Ghi log request để dễ debug
@@ -17,7 +41,7 @@ app.use(morgan('dev'));
 
 // Giao diện Dashboard hiển thị toàn bộ Microservices & Frontend (Tông màu chủ đạo #006c49)
 app.get('/dashboard', (req, res) => {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://demimart-fe.onrender.com';
     const totalServices = Object.keys(services).length;
 
     // Hàng hiển thị cổng Frontend
@@ -146,7 +170,7 @@ app.get('/dashboard', (req, res) => {
             }
 
             .metric-card .title { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
-            .metric-card .value { font-size: 1.5rem; color: var(--primary); font-weight: 700; margin-top: 0.25rem; }
+            .metric-card .value { font-size: 1.2rem; color: var(--primary); font-weight: 700; margin-top: 0.25rem; word-break: break-all; }
 
             .table-wrapper {
                 border: 1px solid var(--border-color);
@@ -233,7 +257,7 @@ app.get('/dashboard', (req, res) => {
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="title">Cổng Frontend</div>
-                    <div class="value">:5173</div>
+                    <div class="value">${frontendUrl}</div>
                 </div>
                 <div class="metric-card">
                     <div class="title">Tổng Microservices</div>

@@ -127,21 +127,23 @@ const createInstance = (baseURL) => {
 };
 
 // =========================================================================
-// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY (LOCAL: 5000 | RENDER: api-gateway-vuyo)
+// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY
 // =========================================================================
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+// Chỉ để baseURL là domain Gateway (hoặc kèm /api/v1 tùy theo route gateway của bạn)
 const gateway = isLocal 
-    ? 'http://localhost:5000/api/v1' 
-    : 'https://api-gateway-vuyo.onrender.com/api/v1';
+    ? 'http://localhost:5000' 
+    : 'https://api-gateway-vuyo.onrender.com';
 
-export const authApi = createInstance(gateway);
-export const productApi = createInstance(gateway);
-export const cartApi = createInstance(gateway);
-export const orderApi = createInstance(gateway);
-export const paymentApi = createInstance(gateway);
-export const warehouseApi = createInstance(gateway);
+export const authApi = createInstance(`${gateway}/api/v1`);
+export const productApi = createInstance(`${gateway}/api/v1`);
+export const cartApi = createInstance(`${gateway}/api/v1`);
+export const orderApi = createInstance(`${gateway}/api/v1`);
+export const paymentApi = createInstance(`${gateway}/api/v1`);
+export const warehouseApi = createInstance(`${gateway}/api/v1`);
 
-export const promotionApi = createInstance(`${gateway}/promotions`);
-export const couponApi = createInstance(`${gateway}/coupons`);
+export const promotionApi = createInstance(`${gateway}/api/v1/promotions`);
+export const couponApi = createInstance(`${gateway}/api/v1/coupons`);
 
 export default authApi;
