@@ -20,10 +20,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     }
 
     @Override
-    public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Định nghĩa Endpoint kết nối WebSocket, cho phép React kết nối qua SockJS
-        registry.addEndpoint("/ws-notification")
-                .setAllowedOriginPatterns("*") // Cho phép Front-end ở port khác (ví dụ: 3000, 5173) truy cập
-                .withSockJS();
-    }
+public void registerStompEndpoints(StompEndpointRegistry registry) {
+    registry.addEndpoint("/ws-notification")
+            .setAllowedOriginPatterns("*") // Cho phép tất cả Origin
+            .withSockJS();
+}
 }

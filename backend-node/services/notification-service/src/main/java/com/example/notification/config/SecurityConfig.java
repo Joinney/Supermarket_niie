@@ -2,6 +2,7 @@ package com.example.notification.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -22,9 +23,12 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                // Cho phép công khai endpoint WebSocket & API Notifications
-                .requestMatchers("/ws-notification/**", "/api/v1/notifications/**", "/actuator/**").permitAll()
-                .anyRequest().permitAll() // Hoặc .authenticated() nếu bạn có kiểm tra JWT Token riêng
+                // Mở toàn bộ request OPTIONS (Preflight check)
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Mở công khai endpoint WebSocket SockJS
+                .requestMatchers("/ws-notification/**", "/ws-notification/info/**").permitAll()
+                .requestMatchers("/api/v1/notifications/**").permitAll()
+                .anyRequest().permitAll()
             );
 
         return http.build();
@@ -33,7 +37,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Cho phép tất cả Domain (Bao gồm demimart-fe.onrender.com)
+        // Cấu hình linh hoạt Origin cho Render và Local
         configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
