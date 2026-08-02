@@ -3,20 +3,22 @@ import { Link } from "react-router-dom";
 import { Bell, Package, Tag, Info, CheckCheck, BellOff, X } from "lucide-react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
-import axios from "axios";
 import toast from "react-hot-toast";
 
-// --- XỬ LÝ LẤY URL ĐỘNG TỪ BIẾN MÔI TRƯỜNG AN TOÀN CHO RENDER (HTTPS) ---
-const isLocalhost =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1";
+// Import notificationApi đã được cấu hình tự động nhận diện Gateway & Refresh Token
+import { notificationApi } from "../../api/axios";
 
-const BASE_BACKEND_URL = isLocalhost
-  ? "http://localhost:8085"
-  : (import.meta.env.VITE_NOTIFICATION_API_URL || import.meta.env.VITE_AUTH_API_URL || "https://authservice-sz4p.onrender.com");
-
-const NOTIFICATION_API_BASE = `${BASE_BACKEND_URL}/api/v1/notifications`;
-const WEBSOCKET_URL = import.meta.env.VITE_WS_URL || `${BASE_BACKEND_URL}/ws-notification`;
+// Hàm tự động xác định WebSocket URL dựa trên domain hiện tại của trình duyệt
+const getWebSocketUrl = () => {
+  const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  
+  if (isLocal) {
+    return "http://localhost:8085/ws-notification";
+  }
+  
+  // Trên Render Cloud: Kết nối trực tiếp qua HTTPS của Notification Service
+  return "https://notification-service-sz4p.onrender.com/ws-notification";
+};
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,13 +32,13 @@ export default function NotificationDropdown() {
     setUserId(currentUserId);
   }, []);
 
-  // 1. Tải danh sách thông báo từ API (Có bọc try-catch chống crash)
+  // 1. Tải danh sách thông báo từ API Gateway (Sử dụng notificationApi từ axios.js)
   useEffect(() => {
     if (!userId) return;
 
     const fetchNotificationHistory = async () => {
       try {
-        const response = await axios.get(`${NOTIFICATION_API_BASE}/user/${userId}`);
+        const response = await notificationApi.get(`/notifications/user/${userId}`);
         setNotifications(response.data || []);
       } catch (error) {
         console.warn("Lỗi hoặc chưa kết nối được Notification Service:", error);
@@ -86,19 +88,18 @@ export default function NotificationDropdown() {
     );
   };
 
-  // 2. Kết nối WebSocket & Bật Popup Toast (Bọc try-catch chống SecurityError)
+  // 2. Kết nối WebSocket & Bật Popup Toast
   useEffect(() => {
     if (!userId) return;
 
     let stompClient = null;
 
     try {
-      const socket = new SockJS(WEBSOCKET_URL);
       stompClient = new Client({
-        webSocketFactory: () => socket,
-        reconnectDelay: 10000, // Tăng delay reconnect lên 10s
+        webSocketFactory: () => new SockJS(getWebSocketUrl()),
+        reconnectDelay: 10000,
         debug: (str) => {
-          // Bỏ comment nếu muốn debug websocket: console.log(str);
+          if (window.location.hostname === "localhost") console.log(str);
         },
       });
 
@@ -123,7 +124,7 @@ export default function NotificationDropdown() {
 
       stompClient.activate();
     } catch (err) {
-      console.warn("Không thể khởi tạo SockJS trên môi trường HTTPS hiện tại:", err);
+      console.warn("Không thể khởi tạo SockJS trên môi trường hiện tại:", err);
     }
 
     return () => {
@@ -148,12 +149,13 @@ export default function NotificationDropdown() {
   const getNotificationId = (noti) => noti.id || noti._id;
   const unreadCount = notifications.filter((n) => !checkIfRead(n)).length;
 
+  // Đánh dấu 1 thông báo là đã đọc
   const markAsRead = async (noti) => {
     const notiId = getNotificationId(noti);
     if (!notiId || checkIfRead(noti)) return;
 
     try {
-      await axios.put(`${NOTIFICATION_API_BASE}/${notiId}/read`);
+      await notificationApi.put(`/notifications/${notiId}/read`);
       setNotifications((prev) =>
         prev.map((n) =>
           getNotificationId(n) === notiId
@@ -166,11 +168,12 @@ export default function NotificationDropdown() {
     }
   };
 
+  // Đánh dấu tất cả thông báo là đã đọc
   const markAllAsRead = async () => {
     if (notifications.length === 0 || unreadCount === 0) return;
 
     try {
-      await axios.put(`${NOTIFICATION_API_BASE}/user/${userId}/read-all`);
+      await notificationApi.put(`/notifications/user/${userId}/read-all`);
       setNotifications((prev) =>
         prev.map((n) => ({ ...n, isRead: true, read: true }))
       );

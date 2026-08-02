@@ -68,7 +68,7 @@ const createInstance = (baseURL) => {
                         console.warn(`⚠️ Đang tiến hành gia hạn mã truy cập ngầm qua Gateway...`);
 
                         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                        // Đã cập nhật authUrl theo Gateway chính thức trên Render
+                        // Đã cập nhật authUrl theo Gateway chính thức
                         const authUrl = isLocalHost 
                             ? 'http://localhost:5000/api/v1' 
                             : 'https://api-gateway-vuyo.onrender.com/api/v1';
@@ -127,11 +127,10 @@ const createInstance = (baseURL) => {
 };
 
 // =========================================================================
-// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY
+// QUY TỤ TOÀN BỘ REQUEST VỀ CỔNG GATEWAY (TỰ ĐỘNG NHẬN DIỆN MÔI TRƯỜNG)
 // =========================================================================
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// Chỉ để baseURL là domain Gateway (hoặc kèm /api/v1 tùy theo route gateway của bạn)
 const gateway = isLocal 
     ? 'http://localhost:5000' 
     : 'https://api-gateway-vuyo.onrender.com';
@@ -145,5 +144,8 @@ export const warehouseApi = createInstance(`${gateway}/api/v1`);
 
 export const promotionApi = createInstance(`${gateway}/api/v1/promotions`);
 export const couponApi = createInstance(`${gateway}/api/v1/coupons`);
+
+// 🔔 BỔ SUNG: Khai báo notificationApi trỏ về Gateway
+export const notificationApi = createInstance(`${gateway}/api/v1`);
 
 export default authApi;

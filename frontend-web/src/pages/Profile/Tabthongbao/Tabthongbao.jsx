@@ -2,30 +2,41 @@ import React, { useEffect, useState } from "react";
 import { Package, BellOff, CheckCheck } from "lucide-react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
-import axios from "axios";
 
-// ĐỊNH NGHĨA PORT CỦA NOTIFICATION SERVICE
-const NOTIFICATION_API_BASE = "http://localhost:8085/api/v1/notifications";
-const WEBSOCKET_URL = "http://localhost:8085/ws-notification";
+// Import notificationApi đã được cấu hình tự động nhận diện Gateway & Refresh Token
+import { notificationApi } from "../../../api/axios";
+
+// Hàm tự động xác định WebSocket URL dựa trên domain hiện tại của trình duyệt
+const getWebSocketUrl = () => {
+  const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  
+  if (isLocal) {
+    return "http://localhost:8085/ws-notification";
+  }
+  
+  // Trên Render Cloud: Kết nối trực tiếp qua HTTPS của Notification Service
+  return "https://notification-service-sz4p.onrender.com/ws-notification";
+};
 
 const Tabthongbao = () => {
   const [notifications, setNotifications] = useState([]);
   const [userId, setUserId] = useState("");
 
-  // Lấy userId hiện tại từ LocalStorage / AuthContext
+  // Lấy userId hiện tại từ LocalStorage
   useEffect(() => {
     const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    const currentUserId = savedUser.id || savedUser._id || "1"; // Ưu tiên test user "1" như log socket hiển thị
+    const currentUserId = savedUser.id || savedUser._id || "1";
     setUserId(currentUserId);
   }, []);
 
-  // 1. Tải danh sách thông báo cũ từ MongoDB khi Component khởi động
+  // 1. Tải danh sách thông báo qua API Gateway (Sử dụng notificationApi từ axios.js)
   useEffect(() => {
     if (!userId) return;
 
     const fetchNotificationHistory = async () => {
       try {
-        const response = await axios.get(`${NOTIFICATION_API_BASE}/user/${userId}`);
+        // Tự động gọi: /api/v1/notifications/user/{userId} qua Gateway
+        const response = await notificationApi.get(`/notifications/user/${userId}`);
         setNotifications(response.data || []);
       } catch (error) {
         console.error("Lỗi khi tải lịch sử thông báo:", error);
@@ -39,28 +50,29 @@ const Tabthongbao = () => {
   useEffect(() => {
     if (!userId) return;
 
-    const socket = new SockJS(WEBSOCKET_URL);
     const stompClient = new Client({
-      webSocketFactory: () => socket,
+      webSocketFactory: () => new SockJS(getWebSocketUrl()),
       reconnectDelay: 5000,
-      debug: (str) => console.log(str),
+      debug: (str) => {
+        if (window.location.hostname === "localhost") console.log(str);
+      },
     });
 
-    stompClient.onConnect = (frame) => {
-      console.log("Websocket connected!");
-      
+    stompClient.onConnect = () => {
+      console.log("🚀 WebSocket Notification connected!");
+
       stompClient.subscribe(`/topic/user/${userId}`, (message) => {
         if (message.body) {
           const newNoti = JSON.parse(message.body);
-          console.log("Nhận được thông báo mới:", newNoti);
-          
+          console.log("🔔 Nhận được thông báo mới:", newNoti);
+
           setNotifications((prev) => [newNoti, ...prev]);
         }
       });
     };
 
     stompClient.onStompError = (frame) => {
-      console.error("Lỗi kết nối STOMP:", frame.headers["message"]);
+      console.error("🔥 Lỗi kết nối STOMP:", frame.headers["message"]);
     };
 
     stompClient.activate();
@@ -72,28 +84,28 @@ const Tabthongbao = () => {
     };
   }, [userId]);
 
-  // Kiểm tra xem phần tử thông báo đã đọc hay chưa (Xử lý tương thích cả read và isRead)
+  // Kiểm tra xem thông báo đã đọc hay chưa
   const checkIfRead = (noti) => {
     return noti.isRead === true || noti.read === true;
   };
 
-  // Lấy ID chính xác từ DB trả về (Hỗ trợ cả id và _id của MongoDB)
+  // Lấy ID chính xác từ DB
   const getNotificationId = (noti) => {
     return noti.id || noti._id;
   };
 
-  // 3. Đánh dấu một thông báo là đã đọc
+  // 3. Đánh dấu một thông báo là đã đọc (Sử dụng notificationApi)
   const handleMarkAsRead = async (noti) => {
     const notiId = getNotificationId(noti);
     if (!notiId) return;
 
     try {
-      await axios.put(`${NOTIFICATION_API_BASE}/${notiId}/read`);
+      await notificationApi.put(`/notifications/${notiId}/read`);
       setNotifications((prev) =>
         prev.map((n) => {
           const currentId = getNotificationId(n);
           if (currentId === notiId) {
-            return { ...n, isRead: true, read: true }; // Gán cả 2 trường để an toàn
+            return { ...n, isRead: true, read: true };
           }
           return n;
         })
@@ -103,11 +115,11 @@ const Tabthongbao = () => {
     }
   };
 
-  // 4. Đánh dấu tất cả là đã đọc
+  // 4. Đánh dấu tất cả là đã đọc (Sử dụng notificationApi)
   const handleMarkAllAsRead = async () => {
     if (notifications.length === 0) return;
     try {
-      await axios.put(`${NOTIFICATION_API_BASE}/user/${userId}/read-all`);
+      await notificationApi.put(`/notifications/user/${userId}/read-all`);
       setNotifications((prev) =>
         prev.map((n) => ({ ...n, isRead: true, read: true }))
       );
@@ -116,7 +128,6 @@ const Tabthongbao = () => {
     }
   };
 
-  // Xác định xem có thông báo nào chưa đọc hay không
   const hasUnread = notifications.some((n) => !checkIfRead(n));
 
   return (
