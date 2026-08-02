@@ -4,6 +4,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import passport from 'passport';
+import cookieParser from 'cookie-parser'; // 👈 1. Thêm cookie-parser
 import { fileURLToPath } from 'url';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
@@ -27,7 +28,8 @@ import addressRoutes from './routes/addressRoutes.js';
 import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
 
 // Initialize app and port
-const PORT = process.env.PORT_AUTH || 5001; 
+const PORT = process.env.PORT_AUTH || process.env.PORT || 5001; 
+const BASE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
 
 // 2. Cấu hình CORS
 const allowedOrigins = [
@@ -37,7 +39,8 @@ const allowedOrigins = [
     'http://localhost:5174', 
     'http://127.0.0.1:5174',
     'http://localhost:3000',
-    'https://demimart-fe.onrender.com'
+    'https://demimart-fe.onrender.com',
+    'https://authservice-sz4p.onrender.com'
 ].filter(Boolean);
 
 app.use(cors({ 
@@ -58,6 +61,7 @@ app.options('*', cors());
 // 3. Bảo mật & Xử lý dữ liệu
 app.use(express.json({ limit: '5mb' })); 
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser()); // 👈 2. Kích hoạt middleware đọc cookie
 app.use(passport.initialize());
 
 // Cho phép Frontend truy cập ảnh trong thư mục uploads
@@ -74,8 +78,16 @@ const swaggerOptions = {
         },
         servers: [
             { 
+                url: BASE_URL, 
+                description: 'Server hiện tại (Render / Local)' 
+            },
+            { 
+                url: 'https://authservice-sz4p.onrender.com', 
+                description: 'Production Server (Render)' 
+            },
+            { 
                 url: `http://localhost:${PORT}`, 
-                description: 'Development Server (Docker)' 
+                description: 'Development Server (Local)' 
             }
         ],
         components: {
@@ -163,8 +175,8 @@ io.on('connection', (socket) => {
 
 const server = httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`\n=========================================`);
-    console.log(`✅ Auth & Realtime Service Live: http://localhost:${PORT}`);
-    console.log(`📝 Swagger Docs:  http://localhost:${PORT}/api-docs`);
+    console.log(`✅ Auth & Realtime Service Live: ${BASE_URL}`);
+    console.log(`📝 Swagger Docs: ${BASE_URL}/api-docs`);
     console.log(`=========================================\n`);
 });
 
