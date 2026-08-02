@@ -6,8 +6,17 @@ import { Client } from "@stomp/stompjs";
 import axios from "axios";
 import toast from "react-hot-toast";
 
-const NOTIFICATION_API_BASE = "http://localhost:8085/api/v1/notifications";
-const WEBSOCKET_URL = "http://localhost:8085/ws-notification";
+// --- XỬ LÝ LẤY URL ĐỘNG TỪ BIẾN MÔI TRƯỜNG AN TOÀN CHO RENDER (HTTPS) ---
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
+const BASE_BACKEND_URL = isLocalhost
+  ? "http://localhost:8085"
+  : (import.meta.env.VITE_NOTIFICATION_API_URL || import.meta.env.VITE_AUTH_API_URL || "https://authservice-sz4p.onrender.com");
+
+const NOTIFICATION_API_BASE = `${BASE_BACKEND_URL}/api/v1/notifications`;
+const WEBSOCKET_URL = import.meta.env.VITE_WS_URL || `${BASE_BACKEND_URL}/ws-notification`;
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,7 +30,7 @@ export default function NotificationDropdown() {
     setUserId(currentUserId);
   }, []);
 
-  // 1. Tải danh sách thông báo từ API
+  // 1. Tải danh sách thông báo từ API (Có bọc try-catch chống crash)
   useEffect(() => {
     if (!userId) return;
 
@@ -30,7 +39,7 @@ export default function NotificationDropdown() {
         const response = await axios.get(`${NOTIFICATION_API_BASE}/user/${userId}`);
         setNotifications(response.data || []);
       } catch (error) {
-        console.error("Lỗi khi tải lịch sử thông báo:", error);
+        console.warn("Lỗi hoặc chưa kết nối được Notification Service:", error);
       }
     };
 
@@ -77,33 +86,48 @@ export default function NotificationDropdown() {
     );
   };
 
-  // 2. Kết nối WebSocket & Bật Popup Toast khi nhận tin mới
+  // 2. Kết nối WebSocket & Bật Popup Toast (Bọc try-catch chống SecurityError)
   useEffect(() => {
     if (!userId) return;
 
-    const socket = new SockJS(WEBSOCKET_URL);
-    const stompClient = new Client({
-      webSocketFactory: () => socket,
-      reconnectDelay: 5000,
-    });
+    let stompClient = null;
 
-    stompClient.onConnect = () => {
-      console.log("WebSocket connected thành công!");
-      stompClient.subscribe(`/topic/user/${userId}`, (message) => {
-        if (message.body) {
-          const newNoti = JSON.parse(message.body);
-          console.log("Nhận thông báo mới từ WebSocket:", newNoti);
-          
-          setNotifications((prev) => [newNoti, ...prev]);
-          showToastNotification(newNoti);
-        }
+    try {
+      const socket = new SockJS(WEBSOCKET_URL);
+      stompClient = new Client({
+        webSocketFactory: () => socket,
+        reconnectDelay: 10000, // Tăng delay reconnect lên 10s
+        debug: (str) => {
+          // Bỏ comment nếu muốn debug websocket: console.log(str);
+        },
       });
-    };
 
-    stompClient.activate();
+      stompClient.onConnect = () => {
+        console.log("WebSocket connected thành công!");
+        stompClient.subscribe(`/topic/user/${userId}`, (message) => {
+          if (message.body) {
+            try {
+              const newNoti = JSON.parse(message.body);
+              setNotifications((prev) => [newNoti, ...prev]);
+              showToastNotification(newNoti);
+            } catch (e) {
+              console.error("Lỗi parse dữ liệu WebSocket:", e);
+            }
+          }
+        });
+      };
+
+      stompClient.onStompError = (frame) => {
+        console.warn("Lỗi STOMP WebSocket:", frame.headers["message"]);
+      };
+
+      stompClient.activate();
+    } catch (err) {
+      console.warn("Không thể khởi tạo SockJS trên môi trường HTTPS hiện tại:", err);
+    }
 
     return () => {
-      if (stompClient.active) {
+      if (stompClient && stompClient.active) {
         stompClient.deactivate();
       }
     };
@@ -285,7 +309,6 @@ export default function NotificationDropdown() {
           </div>
 
           <div className="p-2.5 text-center bg-slate-50 border-t border-slate-100">
-            {/* 🌟 ĐÃ CẬP NHẬT ROUTE SANG /profile/notifications */}
             <Link
               to="/profile/notifications"
               onClick={() => setIsOpen(false)}
