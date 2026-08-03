@@ -9,6 +9,9 @@ export const StoreProvider = ({ children }) => {
   const { currentLanguage } = useLanguage();
   const [stores, setStores] = useState([]);
   const [currentStore, setCurrentStore] = useState(null);
+  
+  // 🌟 THÊM STATE ĐỂ LƯU SOCKET VÀ TRUYỀN XUỐNG CÁC COMPONENT CON (NHƯ PRODUCT DETAIL)
+  const [productSocket, setProductSocket] = useState(null);
 
   // Dùng Ref để lấy giá trị mới nhất của currentStore trong Socket mà không gây Re-connect
   const currentStoreRef = useRef(currentStore);
@@ -58,32 +61,32 @@ export const StoreProvider = ({ children }) => {
     }
   }, [stores, window.location.pathname]);
 
-  // 3. Socket Real-time (Đã tối ưu dependency [])
+// 3. Socket Real-time (Đã tối ưu)
   useEffect(() => {
-    const apiBaseUrl = productApi.defaults.baseURL || "";
-    let socketUrl = "";
-
-    try {
-      socketUrl = new URL(apiBaseUrl).origin;
-    } catch (e) {
-      socketUrl = window.location.origin;
-    }
+    // 🌟 SỬA TẠI ĐÂY: Trỏ thẳng về cổng 5001 (Realtime Service) thay vì cổng 5000
+    const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // Tự động nhận diện môi trường Dev (Local) hoặc Prod (Render)
+    const socketUrl = isLocalHost 
+      ? 'http://localhost:5001' 
+      : 'https://authservice-sz4p.onrender.com'; // Thay bằng link Render của Auth Service nếu cần
     
     if (!socketUrl) return;
 
     const socket = io(socketUrl, {
+      transports: ["polling", "websocket"], 
       reconnectionAttempts: 5,
       timeout: 10000,
     });
 
+    setProductSocket(socket);
+
     socket.on("connect", () => {
-      console.log(
-        `✅ StoreContext: Đã kết nối Socket tới Product Server thực tế tại: ${socketUrl}`,
-      );
+      console.log(`✅ StoreContext: Đã kết nối Socket tới Server tại: ${socketUrl}`);
     });
 
-    socket.on("connect_error", () => {
-      console.warn(`⚠️ StoreContext: Không thể kết nối tới Socket server tại ${socketUrl}.`);
+    socket.on("connect_error", (err) => {
+      console.warn(`⚠️ StoreContext: Lỗi kết nối Socket:`, err.message);
     });
 
     socket.on("store_status_changed", (data) => {
@@ -110,9 +113,13 @@ export const StoreProvider = ({ children }) => {
     });
 
     return () => {
-      socket.disconnect();
+      if (socket.connected) {
+        socket.disconnect();
+      } else {
+        socket.once("connect", () => socket.disconnect());
+      }
     };
-  }, []); // ✅ Để mảng rỗng để Socket chỉ khởi tạo 1 lần duy nhất
+  }, []);
 
   // --- HÀM FORMAT TIỀN TỆ ---
   const currencyMap = {
@@ -150,7 +157,8 @@ export const StoreProvider = ({ children }) => {
         stores,
         formatPrice,
         currentCurrency,
-      }}
+        productSocket, // 🌟 EXPORT biến này ra ngoài
+      }} 
     >
       {children}
     </StoreContext.Provider>

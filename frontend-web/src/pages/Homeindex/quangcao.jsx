@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 import { ArrowRight, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { promotionApi } from '../../api/axios'; 
 
 export default function QuangCao({ t }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // 🌟 LẤY SOCKET DÙNG CHUNG TỪ HỆ THỐNG
+  const socket = useSocket();
 
   // Ref và State phục vụ trượt từng banner + Nhấn giữ kéo chuột
   const catScrollRef = useRef(null);
@@ -36,39 +39,22 @@ export default function QuangCao({ t }) {
 
     fetchAds();
 
-    // Trích xuất tự động Origin Domain từ promotionApi (Gateway 5000 / Production)
-    const apiBaseUrl = promotionApi.defaults.baseURL || "";
-    let socketUrl = "http://localhost:5000";
-
-    try {
-      if (apiBaseUrl) {
-        socketUrl = new URL(apiBaseUrl).origin;
-      }
-    } catch (e) {
-      socketUrl = window.location.origin;
+    // 🌟 CHỈ CẦN LẮNG NGHE SỰ KIỆN TỪ SOCKET CÓ SẴN
+    if (socket) {
+      socket.on('homeposter_updated', (updatedData) => {
+        if (isMounted) setData(updatedData);
+      });
     }
 
-    // Khởi tạo Socket.IO kết nối linh hoạt
-    const socket = io(socketUrl, {
-      reconnectionAttempts: 5,
-      timeout: 10000,
-      transports: ['websocket', 'polling']
-    });
-
-    socket.on('homeposter_updated', (updatedData) => {
-      if (isMounted) setData(updatedData);
-    });
-
+    // Dọn dẹp listener khi component bị hủy (Không disconnect toàn bộ mạng nữa)
     return () => {
       isMounted = false;
-      socket.off('homeposter_updated');
-      setTimeout(() => {
-        if (socket.connected) {
-          socket.disconnect();
-        }
-      }, 100);
+      if (socket) {
+        socket.off('homeposter_updated');
+      }
     };
-  }, []);
+  }, [socket]); // 🌟 Cập nhật lại mảng phụ thuộc (dependency)
+
 
   // 2. AUTOPLAY SLIDE BANNER DANH MỤC
   useEffect(() => {

@@ -170,8 +170,24 @@ const io = new Server(httpServer, {
 global._io = io;
 
 io.on('connection', (socket) => {
-    socket.on('join_user_room', (userId) => {
+    // 🌟 1. Lấy userId từ URL Query mà Frontend vừa gửi lên
+    const userId = socket.handshake.query.userId;
+
+    if (userId) {
+        // 🌟 2. Tự động gom user này vào một cái "phòng riêng" mang tên họ
         socket.join(`user_room_${userId}`);
+        console.log(`🟢 [Socket] Khách hàng ID: ${userId} vừa kết nối (Socket ID: ${socket.id})`);
+    }
+
+    // (Giữ lại cái này phòng hờ Frontend muốn join thủ công)
+    socket.on('join_user_room', (id) => {
+        socket.join(`user_room_${id}`);
+    });
+
+    socket.on('disconnect', () => {
+        if (userId) {
+            console.log(`🔌 [Socket] Khách hàng ID: ${userId} đã ngắt kết nối.`);
+        }
     });
 });
 

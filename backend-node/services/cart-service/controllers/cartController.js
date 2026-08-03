@@ -15,8 +15,6 @@ export const getCart = async (req, res) => {
     const detailedItemsPromises = cart.items.map(async (item) => {
       const itemObj = item.toObject();
       
-      // ❌ ĐÃ XÓA ĐOẠN IF SHORT-CIRCUIT GÂY LỖI DỮ LIỆU CŨ ❌
-
       try {
         const response = await axios.get(`http://localhost:5002/api/v1/products/variants/${item.variantId}`);
         
@@ -26,9 +24,12 @@ export const getCart = async (req, res) => {
           return {
             ...itemObj,
             productId: vData.ma_san_pham || itemObj.productId || "",
-            // 🌟 LUÔN ƯU TIÊN LẤY SKU VÀ GIÁ MỚI NHẤT TỪ KHO ĐỂ KHÔNG BỊ ORDER SERVICE TỪ CHỐI
             sku: vData.sku || itemObj.sku || item.variantId, 
             price: Number(vData.gia_ban_le) || itemObj.price || 0, 
+            
+            // 🌟 ĐÃ BỔ SUNG STOCK: Luôn ưu tiên lấy tồn kho thực tế nóng hổi từ Product Service
+            stock: Number(vData.so_luong_ton ?? itemObj.stock ?? 9999),
+
             variantName: vData.ten_bien_the || itemObj.variantName || "",
             image: vData.hinh_anh_url || vData.duong_dan_url || itemObj.image || "",
             thuoc_tinh_hop_nhat: vData.thuoc_tinh_hop_nhat?.length > 0 ? vData.thuoc_tinh_hop_nhat : (itemObj.thuoc_tinh_hop_nhat || []),
@@ -61,7 +62,7 @@ export const getCart = async (req, res) => {
 export const addToCart = async (req, res) => {
   const { 
     variantId, 
-    sku, // 🌟 ĐÃ BỔ SUNG: Nhận mã SKU từ Frontend
+    sku, 
     name, 
     variantName, 
     price, 
@@ -71,7 +72,8 @@ export const addToCart = async (req, res) => {
     countryCode, 
     categorySlug,
     ten_don_vi,          
-    thuoc_tinh_hop_nhat  
+    thuoc_tinh_hop_nhat,
+    stock // 🌟 ĐÃ BỔ SUNG STOCK: Hứng dữ liệu tồn kho từ Frontend gửi lên
   } = req.body;
 
   try {
@@ -81,17 +83,18 @@ export const addToCart = async (req, res) => {
     const idx = cart.items.findIndex(i => i.variantId === variantId);
     if (idx > -1) {
       cart.items[idx].quantity += Number(quantity);
-      // 🌟 ĐÃ BỔ SUNG: Cập nhật lại các trường dữ liệu quan trọng
       if (sku) cart.items[idx].sku = sku; 
       if (price) cart.items[idx].price = price;
       if (image) cart.items[idx].image = image;
       if (variantName) cart.items[idx].variantName = variantName;
       if (ten_don_vi) cart.items[idx].ten_don_vi = ten_don_vi;
       if (thuoc_tinh_hop_nhat) cart.items[idx].thuoc_tinh_hop_nhat = thuoc_tinh_hop_nhat;
+      // 🌟 ĐÃ BỔ SUNG STOCK: Cập nhật lại tồn kho nếu đã có trong giỏ
+      if (stock !== undefined) cart.items[idx].stock = stock;
     } else {
       cart.items.push({ 
         variantId, 
-        sku: sku || '', // 🌟 ĐÃ BỔ SUNG: Lưu SKU vào mảng
+        sku: sku || '', 
         name, 
         variantName: variantName || '', 
         price, 
@@ -101,7 +104,8 @@ export const addToCart = async (req, res) => {
         countryCode, 
         categorySlug,
         ten_don_vi: ten_don_vi || 'Gói',               
-        thuoc_tinh_hop_nhat: thuoc_tinh_hop_nhat || [] 
+        thuoc_tinh_hop_nhat: thuoc_tinh_hop_nhat || [],
+        stock: stock || 9999 // 🌟 ĐÃ BỔ SUNG STOCK: Lưu tồn kho lúc thêm mới
       });
     }
     
@@ -125,14 +129,16 @@ export const mergeCart = async (req, res) => {
       const existing = cart.items.find(i => i.variantId === newItem.variantId);
       if (existing) {
         existing.quantity = Number(existing.quantity) + Number(newItem.quantity);
-        if (newItem.sku) existing.sku = newItem.sku; // 🌟 ĐÃ BỔ SUNG
+        if (newItem.sku) existing.sku = newItem.sku; 
         if (newItem.variantName) existing.variantName = newItem.variantName;
         if (newItem.ten_don_vi) existing.ten_don_vi = newItem.ten_don_vi;
         if (newItem.thuoc_tinh_hop_nhat) existing.thuoc_tinh_hop_nhat = newItem.thuoc_tinh_hop_nhat;
+        // 🌟 ĐÃ BỔ SUNG STOCK
+        if (newItem.stock !== undefined) existing.stock = newItem.stock;
       } else {
         cart.items.push({
           variantId: newItem.variantId,
-          sku: newItem.sku || '', // 🌟 ĐÃ BỔ SUNG
+          sku: newItem.sku || '', 
           productId: newItem.productId || '',
           name: newItem.name,
           variantName: newItem.variantName || '', 
@@ -142,7 +148,8 @@ export const mergeCart = async (req, res) => {
           categorySlug: newItem.categorySlug || 'san-pham',
           countryCode: newItem.countryCode || 'vn',
           ten_don_vi: newItem.ten_don_vi || 'Gói',                
-          thuoc_tinh_hop_nhat: newItem.thuoc_tinh_hop_nhat || []  
+          thuoc_tinh_hop_nhat: newItem.thuoc_tinh_hop_nhat || [],
+          stock: newItem.stock || 9999 // 🌟 ĐÃ BỔ SUNG STOCK
         });
       }
     });
@@ -247,8 +254,6 @@ export const getCartByUserId = async (req, res) => {
     const detailedItemsPromises = cart.items.map(async (item) => {
       const itemObj = item.toObject();
       
-      // ❌ ĐÃ XÓA ĐOẠN IF SHORT-CIRCUIT GÂY LỖI DỮ LIỆU CŨ ❌
-
       try {
         const response = await axios.get(`http://localhost:5002/api/v1/products/variants/${item.variantId}`);
         if (response.data) {
@@ -258,6 +263,10 @@ export const getCartByUserId = async (req, res) => {
             productId: vData.ma_san_pham || itemObj.productId || "",
             sku: vData.sku || itemObj.sku || item.variantId,
             price: Number(vData.gia_ban_le) || itemObj.price || 0, 
+
+            // 🌟 ĐÃ BỔ SUNG STOCK:
+            stock: Number(vData.so_luong_ton ?? itemObj.stock ?? 9999),
+
             variantName: vData.ten_bien_the || itemObj.variantName || "",
             image: vData.hinh_anh_url || vData.duong_dan_url || itemObj.image || "",
             thuoc_tinh_hop_nhat: vData.thuoc_tinh_hop_nhat?.length > 0 ? vData.thuoc_tinh_hop_nhat : (itemObj.thuoc_tinh_hop_nhat || []),

@@ -49,7 +49,6 @@ export default function Cart() {
     return Object.values(groups);
   }, [cart]);
 
-  // 🚀 CẢI TIẾN 1: TỰ ĐỘNG BUNG SỔ TẤT CẢ SẢN PHẨM CÓ NHIỀU BIẾN THỂ NGAY KHI CÓ DỮ LIỆU
   useEffect(() => {
     if (groupedCart.length > 0 && expandedProducts.length === 0) {
       const multiVariantIds = groupedCart
@@ -83,7 +82,6 @@ export default function Cart() {
     );
   };
 
-  // 🚀 CẢI TIẾN 2: LOGIC CHECKBOX CHO HÀNG TỔNG GOM BIẾN THỂ
   const toggleSelectGroup = (subVariants) => {
     const subVariantIds = subVariants.map((v) => v.variantId);
     const isAllGroupSelected = subVariantIds.every((id) =>
@@ -91,12 +89,10 @@ export default function Cart() {
     );
 
     if (isAllGroupSelected) {
-      // Nếu đã chọn hết thì bỏ chọn cả nhóm con
       setSelectedItems((prev) =>
         prev.filter((id) => !subVariantIds.includes(id)),
       );
     } else {
-      // Nếu chưa chọn hết thì nạp thêm những phân loại con còn thiếu vào state chọn
       setSelectedItems((prev) => [...new Set([...prev, ...subVariantIds])]);
     }
   };
@@ -109,8 +105,30 @@ export default function Cart() {
     );
   };
 
+  const getMaxStock = (item) => {
+    const stockVal = item.stock 
+      ?? item.so_luong_ton 
+      ?? item.so_luong_thuc_te
+      ?? item?.variant?.so_luong_ton 
+      ?? item?.bien_the?.so_luong_ton 
+      ?? item?.product?.so_luong_ton;
+    return stockVal !== undefined && stockVal !== null ? Number(stockVal) : 9999;
+  };
+
   const handleUpdateQuantity = (item, type) => {
-    if (type === "minus" && (item.quantity || 1) <= 1) return;
+    // IN RA CONSOLE ĐỂ XEM BACKEND TRẢ VỀ CÁI GÌ
+    console.log("🔍 KIỂM TRA ITEM TRONG GIỎ HÀNG:", item); 
+
+    const currentQty = Number(item.quantity) || 1;
+    const maxStock = getMaxStock(item);
+
+    if (type === "minus" && currentQty <= 1) return;
+    
+    if (type === "plus" && currentQty >= maxStock) {
+      alert(`Rất tiếc! Phân loại này chỉ còn ${maxStock} sản phẩm trong kho.`);
+      return;
+    }
+
     addToCart({ ...item, quantity: type === "plus" ? 1 : -1 });
   };
 
@@ -230,6 +248,8 @@ export default function Cart() {
                     singleItem.variantId,
                   );
                   const productDetailUrl = `/${country.toLowerCase()}/product/${category}/${group.productId}/${singleItem.variantId}`;
+                  
+                  const maxStock = getMaxStock(singleItem);
 
                   return (
                     <div
@@ -311,11 +331,13 @@ export default function Cart() {
                             <span className="w-8 text-center font-black text-slate-800 text-xs">
                               {singleItem.quantity || 1}
                             </span>
+                            
                             <button
                               onClick={() =>
                                 handleUpdateQuantity(singleItem, "plus")
                               }
-                              className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-all"
+                              disabled={(singleItem.quantity || 1) >= maxStock}
+                              className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               <Plus size={10} strokeWidth={3} />
                             </button>
@@ -337,7 +359,6 @@ export default function Cart() {
                 const isExpanded = expandedProducts.includes(group.productId);
                 const mainProductUrl = `/${country.toLowerCase()}/product/${category}/${group.productId}`;
 
-                // Kiểm tra xem tất cả phân loại con trong nhóm đã được tick chọn chưa
                 const isAllGroupSelected = group.subVariants
                   .map((v) => v.variantId)
                   .every((id) => selectedItems.includes(id));
@@ -347,10 +368,8 @@ export default function Cart() {
                     key={group.productId}
                     className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 border-slate-100 ${isExpanded ? "ring-1 ring-slate-200 shadow-md" : ""}`}
                   >
-                    {/* HÀNG TỔNG (SẢN PHẨM CHA) */}
                     <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 via-slate-50/30 to-white justify-between">
                       <div className="flex items-center gap-4 flex-1 min-w-0">
-                        {/* 🚀 ĐÃ BỔ SUNG: Checkbox chọn nhanh cho hàng tổng sản phẩm gom */}
                         <input
                           type="checkbox"
                           checked={isAllGroupSelected}
@@ -403,14 +422,13 @@ export default function Cart() {
                       </button>
                     </div>
 
-                    {/* HIỂN THỊ CÁC BIẾN THỂ CON BÊN TRONG KHI BUNG RA */}
                     {isExpanded && (
                       <div className="divide-y divide-slate-100 bg-white border-t border-slate-50/50">
                         {group.subVariants.map((subItem) => {
                           const isSubSelected = selectedItems.includes(
                             subItem.variantId,
                           );
-                          const subProductDetailUrl = `/${country.toLowerCase()}/product/${category}/${group.productId}/${subItem.variantId}`;
+                          const subMaxStock = getMaxStock(subItem); // 🌟 Tương tự lấy giới hạn kho
 
                           return (
                             <div
@@ -478,11 +496,13 @@ export default function Cart() {
                                     <span className="w-8 text-center font-black text-slate-800 text-xs">
                                       {subItem.quantity || 1}
                                     </span>
+                                    
                                     <button
                                       onClick={() =>
                                         handleUpdateQuantity(subItem, "plus")
                                       }
-                                      className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-all"
+                                      disabled={(subItem.quantity || 1) >= subMaxStock}
+                                      className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                     >
                                       <Plus size={10} strokeWidth={3} />
                                     </button>
@@ -509,7 +529,6 @@ export default function Cart() {
             </div>
           </div>
 
-          {/* CỘT PHẢI: TÓM TẮT HÓA ĐƠN */}
           <div className="lg:col-span-4 lg:sticky lg:top-24">
             <div className="bg-white border border-slate-100 rounded-2xl p-6 lg:p-8 shadow-2xl shadow-slate-200/60 space-y-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-emerald-500/10 to-transparent rounded-bl-full pointer-events-none"></div>

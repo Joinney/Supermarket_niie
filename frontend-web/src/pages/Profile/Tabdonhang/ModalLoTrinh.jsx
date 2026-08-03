@@ -11,6 +11,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  LocateFixed, // 🌟 Import thêm icon định vị xe
 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -122,42 +123,32 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     };
   };
 
-  // 📐 KIỂM TRA BƯU CỤC CÓ NẰM TRÊN TUYẾN ĐƯỜNG KHÔNG
-  const isOfficeStrictlyOnRoute = (
-    officeLat,
-    officeLng,
-    polylineCoords,
-    maxDistanceKm = 5.5,
-  ) => {
-    const maxDistanceDegSq = (maxDistanceKm * 0.009) ** 2;
+ // 🎯 HÀM BẤM NÚT ZOOM ĐẾN VỊ TRÍ XE ĐANG CHẠY (MƯỢT MÀ BẰNG flyTo)
+  const handleFocusOnVehicle = () => {
+    if (!leafletMapInstance.current) return;
 
-    for (let i = 0; i < polylineCoords.length - 1; i++) {
-      const p1 = polylineCoords[i];
-      const p2 = polylineCoords[i + 1];
+    let targetLat, targetLng;
 
-      const minLat = Math.min(p1[0], p2[0]) - 0.05;
-      const maxLat = Math.max(p1[0], p2[0]) + 0.05;
-      const minLng = Math.min(p1[1], p2[1]) - 0.05;
-      const maxLng = Math.max(p1[1], p2[1]) + 0.05;
-
-      if (
-        officeLat >= minLat &&
-        officeLat <= maxLat &&
-        officeLng >= minLng &&
-        officeLng <= maxLng
-      ) {
-        const snap = getClosestPointOnSegment(
-          p1[0],
-          p1[1],
-          p2[0],
-          p2[1],
-          officeLat,
-          officeLng,
-        );
-        if (snap.distSq <= maxDistanceDegSq) return true;
+    if (liveVehicleMarkerRef.current) {
+      const currentLatLng = liveVehicleMarkerRef.current.getLatLng();
+      targetLat = currentLatLng.lat;
+      targetLng = currentLatLng.lng;
+    } else if (staticRouteCoords.length > 0) {
+      const currentPt = staticRouteCoords[Math.min(currentCoordIndex, staticRouteCoords.length - 1)];
+      if (currentPt) {
+        targetLat = currentPt[0];
+        targetLng = currentPt[1];
       }
     }
-    return false;
+
+    if (targetLat && targetLng) {
+      // 🚀 Dùng flyTo để tạo hiệu ứng bay lướt ống kính siêu mượt
+      leafletMapInstance.current.flyTo([targetLat, targetLng], 16, {
+        animate: true,
+        duration: 2.5, // Thời gian lướt (2.5 giây)
+        easeLinearity: 0.5, // Độ cong và mượt khi chuyển hướng
+      });
+    }
   };
 
   // 📐 KHẮC PHỤC LỖI KHUNG HÌNH MAP: Cập nhật lại size thực tế của Leaflet khi ẩn/hiện Sidebar
@@ -214,7 +205,7 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
     return L.divIcon({
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 150px; position: relative;">
-          <div style="background: ${statusText.includes('đến') || statusText.includes('bưu cục') || statusText.includes('Xác nhận') ? '#b91c1c' : '#006c49'}; color: white; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap; margin-bottom: 4px; border: 1px solid #cbd5e1; text-align: center;">
+          <div style="background: #006c49; color: white; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap; margin-bottom: 4px; border: 1px solid #cbd5e1; text-align: center;">
             ${statusText}
           </div>
           <div style="width: ${widthPx}px; height: ${heightPx}px; display: flex; align-items: center; justify-content: center;">
@@ -421,7 +412,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
         let lastMileName = "Bưu cục phát chặng cuối DemiMart Express";
         let totalHubs = 0;
 
-        // --- ĐỒNG BỘ HOÀN TOÀN: LỌC SẠCH TRẠM TRÙNG GIỐNG CHITIETTRACKINGORDER ---
         let uniqueStations = [];
         if (hasDirectLog) {
           uniqueStations = sortedLogs;
@@ -450,7 +440,6 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
           L.marker([storeLat, storeLng], { icon: createStationCleanIcon(SHOP_ICON_URL, 36) }).on("click", () => { if (isMounted) setSelectedStation(directLog); }).addTo(routingLayer.current);
           firstMileName = "Kho hàng trung tâm"; lastMileName = "Giao hàng trực tiếp siêu tốc";
         } else {
-          // Duyệt và thêm waypoint từ mảng uniqueStations đã được lọc sạch
           uniqueStations.forEach((log) => {
             const lat = parseFloat(log.station_lat); const lng = parseFloat(log.station_lng);
             if (!lat || !lng) return;
@@ -523,14 +512,13 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
           leafletMapInstance.current.fitBounds(routingLayer.current.getBounds(), { padding: [50, 50] });
 
-          // 🌟 KHÓA CỨNG LÒ XO NỘI SUY: Chỉ bám đuổi tịnh tiến mượt mà khi targetCoordIndexRef thay đổi từ dữ liệu thực tế của Socket
+          // 🌟 KHÓA CỨNG LÒ XO NỘI SUY: Tịnh tiến đuổi theo xe
           userSimulationIntervalRef.current = setInterval(() => {
             setCurrentCoordIndex((prevIndex) => {
               const targetIdx = targetCoordIndexRef.current;
               if (prevIndex < targetIdx) {
                 const distanceLeft = targetIdx - prevIndex;
 
-                // Đồng bộ nhảy cóc nếu lệch chặng quá xa do F5
                 if (distanceLeft > 40) {
                   const currentPt = coordinates[targetIdx];
                   if (liveVehicleMarkerRef.current && currentPt) {
@@ -578,14 +566,13 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
 
             let statusText = "Đang di chuyển";
             if (isFullyDelivered) statusText = "🎉 Đã giao xong";
-            else if (isArrived) statusText = "⚠️ Đã đến bưu cục";
+            else if (isArrived) statusText = "Đã đến bưu cục";
             else if (!isTruck) statusText = "Shipper đang giao hỏa tốc";
 
             if (liveVehicleMarkerRef.current) {
               liveVehicleMarkerRef.current.setIcon(createUserLiveVehicleIcon(isTruck, statusText, 64, 64));
             }
 
-            // 🎯 GÁN ĐÍCH MỤC TIÊU MỚI: Kích hoạt lò xo tịnh tiến chạy đuổi theo Admin
             targetCoordIndexRef.current = bestMatchIndex;
 
             if (isArrived || isFullyDelivered) {
@@ -791,6 +778,17 @@ export default function ModalLoTrinh({ isOpen, onClose, order }) {
                 </span>
               </div>
             )}
+
+            {/* 🌟 NÚT ĐỊNH VỊ XE CHẠY Ở GÓC PHẢI TRÊN CỦA KHUNG BẢN ĐỒ */}
+            <button
+              onClick={handleFocusOnVehicle}
+              title="Định vị vị trí xe đang vận chuyển"
+              className="absolute top-4 right-4 z-[1001] bg-white hover:bg-emerald-50 text-[#006c49] p-3 rounded-2xl shadow-xl border border-slate-200/80 flex items-center gap-2 font-black text-xs transition-all active:scale-95 group cursor-pointer"
+            >
+              <LocateFixed size={18} className="animate-spin-slow group-hover:scale-110 transition-transform" />
+              <span className="hidden sm:inline">Theo dõi xe</span>
+            </button>
+
             <div ref={mapRef} style={{ height: "100%", width: "100%" }} className="z-0 outline-none" />
           </div>
 

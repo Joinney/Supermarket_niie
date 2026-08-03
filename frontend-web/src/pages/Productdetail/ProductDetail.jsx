@@ -10,7 +10,7 @@ import {
   CreditCard,
   Heart,
 } from "lucide-react";
-import { io } from "socket.io-client";
+
 import { useLanguage } from "../../context/LanguageContext";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
@@ -36,7 +36,7 @@ export default function ProductDetail() {
   const location = useLocation();
   const { addToCart } = useCart();
 
-  const { currentStore, formatPrice } = useStore();
+  const { currentStore, formatPrice, productSocket } = useStore();
   const { t } = useLanguage();
 
   const [product, setProduct] = useState(null);
@@ -74,14 +74,21 @@ export default function ProductDetail() {
   }, []);
 
   useEffect(() => {
-    const apiBaseUrl = productApi.defaults.baseURL || "";
-    const socketUrl = apiBaseUrl.replace(/\/api$/, "");
-    const socket = io(socketUrl);
+    if (!productSocket) return;
+
+    // Lắng nghe các sự kiện cập nhật biến thể/giá/tồn kho (nếu có)
+    const handleProductUpdate = (data) => {
+      console.log("📩 [ProductDetail] Nhận tín hiệu cập nhật sản phẩm:", data);
+      // Bạn có thể xử lý cập nhật state sản phẩm tại đây khi cần
+    };
+
+    productSocket.on("product_update", handleProductUpdate);
 
     return () => {
-      socket.disconnect();
+      // 🌟 Chỉ gỡ sự kiện của component này, TUYỆT ĐỐI không gọi socket.disconnect()
+      productSocket.off("product_update", handleProductUpdate);
     };
-  }, []);
+  }, [productSocket]);
 
   useEffect(() => {
     if (!id || id === "undefined") {

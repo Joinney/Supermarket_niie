@@ -30,14 +30,16 @@ export const CartProvider = ({ children }) => {
             id: resolvedProductId, 
 
             variantId: item.variantId || item.variant_id || item.ma_bien_the,
-            
-            // 🌟 ĐÃ BỔ SUNG CHỐT CHẶN CUỐI CÙNG: Không cho phép rớt SKU nữa!
             sku: item.sku || item.ma_sku || item.variantId || item.variant_id || "", 
 
             name: item.name || item.ten_san_pham || "Sản phẩm",
             variantName: item.variantName || item.ten_bien_the || "",
             price: Number(item.price || item.gia_ban_le || item.gia_khuyen_mai || 0),
             quantity: Number(item.quantity || 1),
+            
+            // 🌟 ĐÂY RỒI: Chốt chặn bắt lại thông tin tồn kho để không bị rơi mất nữa!
+            stock: Number(item.stock ?? item.so_luong_ton ?? item.so_luong_thuc_te ?? 9999),
+
             image: item.image || item.duong_dan_url || item.hinh_anh_url || "",
             categorySlug: item.categorySlug || item.slug_danh_muc || "san-pham",
             countryCode: item.countryCode || item.country_code || "vn",
