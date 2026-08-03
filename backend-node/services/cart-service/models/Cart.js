@@ -8,13 +8,17 @@ const cartSchema = new mongoose.Schema({
   },
   items: [{
     variantId: { type: String, required: true },
-    sku: { type: String, default: '' }, // 🌟 ĐÃ BỔ SUNG: Chốt chặn quan trọng để MongoDB chịu lưu SKU
+    sku: { type: String, default: '' }, 
     productId: { type: String, default: '' }, 
     name: { type: String, required: true },
     variantName: { type: String, default: '' }, 
     image: { type: String, default: '' },
     price: { type: Number, required: true, default: 0 },
     quantity: { type: Number, required: true, default: 1 },
+    
+    // 🌟 ĐÃ BỔ SUNG: Khai báo trường stock để MongoDB chịu lưu lại tồn kho!
+    stock: { type: Number, default: 9999 },
+
     categorySlug: { type: String, default: 'san-pham' },
     countryCode: { type: String, default: 'vn' },
 
