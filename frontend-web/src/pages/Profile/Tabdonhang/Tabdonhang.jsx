@@ -10,6 +10,8 @@ import {
   Bike,
   Home,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
 import ModalChiTietDonHang from "./ModalChiTietDonHang";
@@ -56,6 +58,10 @@ export default function Tabdonhang({
   const [reviewModalData, setReviewModalData] = useState(null);
   const [reviewedOrderIds, setReviewedOrderIds] = useState([]);
   
+  // 🌟 STATE PHÂN TRANG
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5); // Mặc định 5 đơn / trang
+
   const globalSocket = useSocket();
   const socketRef = useRef(null);
   const realtimeUpdatedOrdersRef = useRef({});
@@ -78,6 +84,11 @@ export default function Tabdonhang({
       })
     );
   }, [initialOrders]);
+
+  // Reset về trang 1 khi người dùng đổi tab trạng thái đơn
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [currentTabLabel]);
 
   // KẾT NỐI SOCKET REALTIME VẬN ĐƠN
   useEffect(() => {
@@ -218,6 +229,21 @@ export default function Tabdonhang({
     );
   });
 
+  // 🌟 LOGIC PHÂN TRANG DÀNH CHO BẢNG ĐƠN HÀNG
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
+  const indexOfLastOrder = currentPage * itemsPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - itemsPerPage;
+  const currentOrdersOnPage = filteredOrders.slice(
+    indexOfFirstOrder,
+    indexOfLastOrder
+  );
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
   // Nếu trong Tab đó không có đơn hàng nào
   if (filteredOrders.length === 0) {
     return (
@@ -231,7 +257,7 @@ export default function Tabdonhang({
   }
 
   return (
-    <div className="space-y-4 text-left max-w-4xl mx-auto">
+    <div className="space-y-4 text-left max-w-4xl mx-auto font-sans">
       <h2 className="text-lg font-black text-slate-900 border-b border-slate-50 pb-3 flex justify-between items-center">
         <span>Lịch sử giao dịch vận đơn</span>
         <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg font-bold">
@@ -240,7 +266,7 @@ export default function Tabdonhang({
       </h2>
 
       <div className="space-y-3.5">
-        {filteredOrders.map((order) => {
+        {currentOrdersOnPage.map((order) => {
           const items =
             order.danh_sach_san_pham || order.items || order.products || [];
 
@@ -583,6 +609,55 @@ export default function Tabdonhang({
           );
         })}
       </div>
+
+      {/* 🌟 THANH ĐIỀU KHIỂN PHÂN TRANG (PAGINATION CONTROL) */}
+      {filteredOrders.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-bold text-slate-500">
+          {/* Tùy chọn số lượng đơn/trang */}
+          <div className="flex items-center gap-2">
+            <span>Hiển thị:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1); // Reset về trang 1
+              }}
+              className="bg-slate-50 border border-slate-200 text-slate-700 font-black rounded-xl px-2.5 py-1 outline-none focus:border-[#006c49] cursor-pointer"
+            >
+              <option value={5}>5 đơn / trang</option>
+              <option value={10}>10 đơn / trang</option>
+              <option value={20}>20 đơn / trang</option>
+            </select>
+          </div>
+
+          {/* Nút chuyển trang */}
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400">
+              Trang <b className="text-slate-800 font-black">{currentPage}</b> / {totalPages}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+                className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Trang trước"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => handlePageChange(currentPage + 1)}
+                className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Trang sau"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ModalLoTrinh
         isOpen={!!selectedOrderForMap}
