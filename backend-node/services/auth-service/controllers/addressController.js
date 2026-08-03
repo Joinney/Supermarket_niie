@@ -2,21 +2,54 @@ import pool from '../configs/database.js';
 import axios from 'axios';
 
 /**
- * 1. LẤY DANH SÁCH ĐỊA CHỈ
+ * 1. LẤY DANH SÁCH ĐỊA CHỈ CỦA USER ĐANG ĐĂNG NHẬP (USER VIEW)
  */
 export const getAddresses = async (req, res) => {
     try {
         const userId = req.user.id;
         const query = `
             SELECT * FROM user_addresses 
-            WHERE user_id = $1 
+            WHERE user_id::text = $1::text 
             ORDER BY is_default DESC, created_at DESC
         `;
-        const result = await pool.query(query, [userId]);
+        const result = await pool.query(query, [String(userId)]);
         return res.status(200).json({ success: true, data: result.rows });
     } catch (error) {
         console.error("Lỗi getAddresses:", error.message);
         return res.status(500).json({ success: false, error: "Không thể lấy danh sách địa chỉ" });
+    }
+};
+
+/**
+ * 🌟 1B. BỔ SUNG: LẤY DANH SÁCH ĐỊA CHỈ THEO USER ID (DÀNH CHO ADMIN VIEW)
+ */
+export const getAddressesByUserId = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId || userId === "undefined") {
+            return res.status(200).json({ success: true, addresses: [], data: [] });
+        }
+
+        const query = `
+            SELECT * FROM user_addresses 
+            WHERE user_id::text = $1::text 
+            ORDER BY is_default DESC, created_at DESC
+        `;
+        const result = await pool.query(query, [String(userId)]);
+
+        // Trả về cả 2 field "addresses" và "data" để tương thích mọi dạng xử lý ở Frontend
+        return res.status(200).json({ 
+            success: true, 
+            addresses: result.rows,
+            data: result.rows 
+        });
+    } catch (error) {
+        console.error("Lỗi getAddressesByUserId:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: "Lỗi hệ thống khi Admin lấy danh sách địa chỉ của người dùng" 
+        });
     }
 };
 
@@ -30,15 +63,14 @@ export const addAddress = async (req, res) => {
             receiver_name, receiver_phone, province_name, province_id, ProvinceID,
             district_name, district_id, DistrictID, ward_name, ward_id, ward_code, WardCode,
             detail_address, is_default, address_type,
-            latitude, longitude // 👈 Bổ sung nhận tọa độ từ Body
+            latitude, longitude
         } = req.body;
 
         const isDefaultBool = is_default === 1 || is_default === true;
         if (isDefaultBool) {
-            await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
+            await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1::text', [String(userId)]);
         }
 
-        // Cập nhật câu lệnh INSERT thêm 2 cột latitude và longitude
         const query = `
             INSERT INTO user_addresses (
                 user_id, receiver_name, receiver_phone, province_name, province_id, 
@@ -56,8 +88,8 @@ export const addAddress = async (req, res) => {
             userId, receiver_name, receiver_phone, province_name, Number(finalProvinceId),    
             district_name, Number(finalDistrictId), ward_name, String(finalWardCode), 
             detail_address, isDefaultBool, address_type || 'home',
-            latitude ? parseFloat(latitude) : null,   // 👈 Ép kiểu số thực an toàn
-            longitude ? parseFloat(longitude) : null // 👈 Ép kiểu số thực an toàn
+            latitude ? parseFloat(latitude) : null,
+            longitude ? parseFloat(longitude) : null
         ];
 
         const result = await pool.query(query, values);
@@ -80,13 +112,13 @@ export const updateAddress = async (req, res) => {
             receiver_name, receiver_phone, province_name, province_id, ProvinceID,
             district_name, district_id, DistrictID, ward_name, ward_id, ward_code, WardCode, 
             detail_address, is_default, address_type,
-            latitude, longitude // 👈 ĐÃ SỬA: Bổ sung lấy tọa độ từ req.body
+            latitude, longitude
         } = req.body;
 
         const isDefaultBool = is_default === 1 || is_default === true;
 
         if (isDefaultBool) {
-            await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id = $1', [userId]);
+            await pool.query('UPDATE user_addresses SET is_default = false WHERE user_id::text = $1::text', [String(userId)]);
         }
 
         const query = `
@@ -95,10 +127,9 @@ export const updateAddress = async (req, res) => {
                 district_name = $5, district_id = $6, ward_name = $7, ward_code = $8, 
                 detail_address = $9, is_default = $10, 
                 address_type = $11, latitude = $12, longitude = $13
-            WHERE address_id = $14 AND user_id = $15 RETURNING *
+            WHERE address_id = $14 AND user_id::text = $15::text RETURNING *
         `;
 
-        // 🛡️ Định nghĩa đầy đủ các biến để tránh dính ReferenceError
         const finalProvinceId = province_id || ProvinceID || 1;
         const finalDistrictId = district_id || DistrictID || 1;
         const finalWardCode = ward_code || ward_id || WardCode || '1';
@@ -107,9 +138,9 @@ export const updateAddress = async (req, res) => {
             receiver_name, receiver_phone, province_name, Number(finalProvinceId), 
             district_name, Number(finalDistrictId), ward_name, String(finalWardCode), 
             detail_address, isDefaultBool, address_type || 'home', 
-            latitude ? parseFloat(latitude) : null,   // 👈 ĐÃ SỬA: Ép kiểu an toàn giống hàm Thêm
-            longitude ? parseFloat(longitude) : null, // 👈 ĐÃ SỬA: Ép kiểu an toàn giống hàm Thêm
-            addressId, userId     
+            latitude ? parseFloat(latitude) : null,
+            longitude ? parseFloat(longitude) : null,
+            addressId, String(userId)     
         ];
 
         const result = await pool.query(query, values);
@@ -129,7 +160,10 @@ export const deleteAddress = async (req, res) => {
     try {
         const addressId = req.params.id || req.params.address_id;
         const userId = req.user.id;
-        const result = await pool.query('DELETE FROM user_addresses WHERE address_id = $1 AND user_id = $2 RETURNING *', [addressId, userId]);
+        const result = await pool.query(
+            'DELETE FROM user_addresses WHERE address_id = $1 AND user_id::text = $2::text RETURNING *', 
+            [addressId, String(userId)]
+        );
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: "Xóa thất bại" });
         return res.status(200).json({ success: true, message: "Đã xóa địa chỉ khỏi hệ thống!" });
     } catch (error) {
@@ -138,13 +172,11 @@ export const deleteAddress = async (req, res) => {
 };
 
 // ========================================================
-// 🛡️ TRUNG TÂM API PROXY ĐỊA CHÍNH - FIX TRIỆT ĐỂ LỖI 500 & CHUYỂN VÙNG THỰC TẾ
+// 🛡️ TRUNG TÂM API PROXY ĐỊA CHÍNH - GHN PRODUCTION
 // ========================================================
 
 const getGhnConfig = () => {
     const rawToken = process.env.GHN_TOKEN || '200ce97d-5b84-11f1-9370-d6d3721dfdc0';
-    
-    // 🎯 ĐỒNG BỘ MÔI TRƯỜNG THỰC TẾ: Ép sử dụng URL Production chính thức của GHN phù hợp với token thật của bạn
     let baseUrl = 'https://online-gateway.ghn.vn/shiip/public-api/master-data';
     
     return {
@@ -159,8 +191,6 @@ const getGhnConfig = () => {
 export const getProvincesProxy = async (req, res) => {
     try {
         const config = getGhnConfig();
-        console.log(`📡 [DEBUG PROXY] Đang gửi request tới GHN Production: ${config.baseUrl}/province`);
-
         const response = await axios.get(`${config.baseUrl}/province`, {
             headers: { 
                 'Token': config.token,
@@ -169,7 +199,7 @@ export const getProvincesProxy = async (req, res) => {
         });
         return res.status(200).json({ success: true, data: response.data.data });
     } catch (error) {
-        console.error("🔥 [BUG LOG] Lỗi sập hàm getProvincesProxy:", error.response?.data || error.message);
+        console.error("🔥 Lỗi sập hàm getProvincesProxy:", error.response?.data || error.message);
         return res.status(500).json({ 
             success: false, 
             error: "Lỗi kết nối từ Backend Demi Mart đến máy chủ GHN",
@@ -193,7 +223,7 @@ export const getDistrictsProxy = async (req, res) => {
         );
         return res.status(200).json({ success: true, data: response.data.data });
     } catch (error) {
-        console.error("🔥 [BUG LOG] Lỗi sập hàm getDistrictsProxy:", error.response?.data || error.message);
+        console.error("🔥 Lỗi sập hàm getDistrictsProxy:", error.response?.data || error.message);
         return res.status(500).json({ success: false, error: "Lỗi hệ thống khi bốc danh mục Quận/Huyện" });
     }
 };
@@ -213,7 +243,7 @@ export const getWardsProxy = async (req, res) => {
         );
         return res.status(200).json({ success: true, data: response.data.data });
     } catch (error) {
-        console.error("🔥 [BUG LOG] Lỗi sập hàm getWardsProxy:", error.response?.data || error.message);
+        console.error("🔥 Lỗi sập hàm getWardsProxy:", error.response?.data || error.message);
         return res.status(500).json({ success: false, error: "Lỗi hệ thống khi bốc danh mục Phường/Xã" });
     }
 };

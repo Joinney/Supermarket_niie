@@ -32,7 +32,7 @@ const createInstance = (baseURL) => {
         let token = localStorage.getItem("adminToken") || localStorage.getItem("token");
     
         if (token) {
-            token = token.replace(/^"|"$/g, ''); 
+            token = String(token).replace(/^"|"$/g, '').trim(); 
             config.headers.Authorization = `Bearer ${token}`;
         }
 
@@ -68,7 +68,6 @@ const createInstance = (baseURL) => {
                         console.warn(`⚠️ Đang tiến hành gia hạn mã truy cập ngầm qua Gateway...`);
 
                         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                        // Đã cập nhật authUrl theo Gateway chính thức
                         const authUrl = isLocalHost 
                             ? 'http://localhost:5000/api/v1' 
                             : 'https://api-gateway-vuyo.onrender.com/api/v1';
@@ -76,7 +75,7 @@ const createInstance = (baseURL) => {
                         axios.post(`${authUrl}/auth/refresh-token`, { refreshToken: localRefreshToken })
                             .then(refreshResponse => {
                                 isRefreshing = false;
-                                const newToken = refreshResponse.data.token;
+                                const newToken = refreshResponse.data.token || refreshResponse.data.accessToken;
                                 
                                 if (localStorage.getItem("adminToken")) {
                                     localStorage.setItem("adminToken", newToken);
@@ -142,10 +141,13 @@ export const orderApi = createInstance(`${gateway}/api/v1`);
 export const paymentApi = createInstance(`${gateway}/api/v1`);
 export const warehouseApi = createInstance(`${gateway}/api/v1`);
 
+// 📍 BỔ SUNG TRỌNG TÂM: Instance API Quản lý Sổ Địa Chỉ & GHN Proxy Locations
+export const addressApi = createInstance(`${gateway}/api/v1`);
+
 export const promotionApi = createInstance(`${gateway}/api/v1/promotions`);
 export const couponApi = createInstance(`${gateway}/api/v1/coupons`);
 
-// 🔔 BỔ SUNG: Khai báo notificationApi trỏ về Gateway
+// 🔔 BỔ SUNG: Instance API Thông báo hệ thống
 export const notificationApi = createInstance(`${gateway}/api/v1`);
 
 export default authApi;

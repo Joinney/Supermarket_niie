@@ -1,158 +1,87 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
-import { authApi, cartApi, orderApi } from "../../../api/axios";
+import { useParams, useNavigate } from "react-router-dom";
+import { authApi, cartApi, orderApi, addressApi } from "../../../api/axios";
 
 const Chitietkhachhang = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
   const userId = id;
 
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // State quản lý địa chỉ đang được chọn để hiển thị trên bản đồ (Mặc định chọn item đầu tiên)
+  // State quản lý địa chỉ đang được chọn để hiển thị trên Bản đồ Google Maps
   const [selectedAddress, setSelectedAddress] = useState(null);
 
-  // States quản lý Modal xem lịch sử giao dịch
+  // States quản lý Modal & Tìm kiếm / Bộ lọc đơn hàng
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-
-  // States phục vụ Tìm kiếm & Bộ lọc trong các Modal
   const [orderSearch, setOrderSearch] = useState("");
   const [orderFilterStatus, setOrderFilterStatus] = useState("ALL");
-  const [paymentSearch, setPaymentSearch] = useState("");
-  const [paymentFilterStatus, setPaymentFilterStatus] = useState("ALL");
 
-  useEffect(() => {
-    const fetchCustomerDetailAndCart = async () => {
-      // Nếu không có ID thì không cần load gì cả, hiển thị màn hình trống/lỗi
-      if (!userId || userId === "undefined") {
-        setLoading(false);
-        setCustomer(null);
-        return;
+  // 🌟 HÀM CHUẨN HÓA DỮ LIỆU SỔ ĐỊA CHỈ (Đảm bảo tương thích mọi kiểu Key từ Database)
+  const formatAddresses = (rawList, userData) => {
+    if (!Array.isArray(rawList) || rawList.length === 0) return [];
+
+    return rawList.map((addr, idx) => {
+      if (typeof addr === "string") {
+        return {
+          name: userData?.full_name || `Địa chỉ ${idx + 1}`,
+          phone: userData?.phone_number || "",
+          detail: addr,
+          tag: idx === 0 ? "Mặc định" : "",
+        };
       }
 
-      setLoading(true);
-      try {
-        const userRequest = authApi.get(`/auth/internal/users/${userId}`);
-        const cartRequest = cartApi
-          .get(`/cart/internal/${userId}`)
-          .catch(() => ({ data: { items: [] } }));
+      const name =
+        addr.receiver_name ||
+        addr.name ||
+        addr.ho_ten ||
+        userData?.full_name ||
+        "Khách hàng";
 
-        const [userResponse, cartResponse] = await Promise.all([
-          userRequest,
-          cartRequest,
-        ]);
+      const phone =
+        addr.receiver_phone ||
+        addr.phone ||
+        addr.so_dien_thoai ||
+        userData?.phone_number ||
+        "";
 
-        if (userResponse.data) {
-          const userData = userResponse.data;
-          const cartItems = cartResponse.data?.items || [];
+      // Tự động ghép nối địa chỉ chi tiết từ các trường nhỏ nếu không có chuỗi đầy đủ
+      const detail =
+        addr.detail_address ||
+        addr.detail ||
+        addr.dia_chi_chi_tiet ||
+        [
+          addr.detail_address,
+          addr.ward_name || addr.phuong_xa,
+          addr.district_name || addr.quan_huyen,
+          addr.province_name || addr.tinh_thanh,
+        ]
+          .filter(Boolean)
+          .join(", ") ||
+        "Chưa có địa chỉ chi tiết";
 
-          // Thử gọi Order Service lấy các đơn hàng thực tế của user (Admin view)
-          let ordersForUser = [];
-          try {
-            const adminToken = localStorage.getItem("adminToken")
-              ? String(localStorage.getItem("adminToken"))
-                  .replace(/^"|"$/g, "")
-                  .trim()
-              : "";
-            const orderRes = await orderApi.get(
-              `/admin/user-orders/${userId}`,
-              {
-                headers: {
-                  Authorization: adminToken ? `Bearer ${adminToken}` : "",
-                },
-              },
-            );
-            if (orderRes.data?.success) {
-              ordersForUser = orderRes.data.orders || [];
-            }
-          } catch (orderErr) {
-            console.warn(
-              "Không lấy được danh sách đơn hàng của khách (Order Service):",
-              orderErr?.message || orderErr,
-            );
-            ordersForUser = userData.orders || [];
-          }
+      const tag =
+        addr.is_default || addr.mac_dinh || idx === 0 ? "Mặc định" : "";
 
-          // Chuyển đổi dữ liệu đơn hàng về dạng hiển thị và tính tổng chi tiêu
-          const formattedOrders = (ordersForUser || []).map((o) => {
-            const ma = o.ma_don_hang || (o.id ? String(o.id) : "");
-            const date = o.ngay_tao
-              ? new Date(o.ngay_tao).toLocaleString("vi-VN", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                })
-              : o.date || "";
-            const status =
-              o.trang_thai_don_hang ||
-              o.trang_thai_thanh_toan ||
-              (o.status ? String(o.status) : "PENDING");
-            const amountNum =
-              Number(o.tong_thanh_toan || o.tong_thanh_toan || o.total || 0) ||
-              0;
-            const amountStr = amountNum
-              ? amountNum.toLocaleString("vi-VN") + "đ"
-              : o.amount || "0 đ";
-            return {
-              id: ma,
-              rawId: o.id,
-              date,
-              status,
-              amount: amountStr,
-              amountNumber: amountNum,
-              items: o.danh_sach_san_pham || o.items || [],
-            };
-          });
+      return { name, phone, detail, tag };
+    });
+  };
 
-          const totalSpendingNum = formattedOrders.reduce(
-            (s, it) => s + (Number(it.amountNumber) || 0),
-            0,
-          );
-
-          // Gộp dữ liệu từ API thật
-          setCustomer({
-            ...userData,
-            cart: cartItems,
-            total_orders: formattedOrders.length
-              ? `${formattedOrders.length} đơn`
-              : "0 đơn",
-            total_spending: totalSpendingNum
-              ? `${totalSpendingNum.toLocaleString("vi-VN")} đ`
-              : "0 đ",
-            addresses: userData.addresses || [],
-            orders: formattedOrders,
-            payments: userData.payments || [],
-          });
-        } else {
-          setCustomer(null);
-        }
-      } catch (err) {
-        console.error("❌ Lỗi nạp dữ liệu thật:", err);
-        setCustomer(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCustomerDetailAndCart();
-  }, [userId]);
-
+  // Hàm load dữ liệu Mẫu / Fallback khi không kết nối được API
   const loadFallbackData = () => {
     const fallback = {
-      user_id: "demo_id",
+      user_id: userId || "demo_id",
       full_name: "Nguyễn Văn A",
       code: "#CUS-7829",
       phone_number: "+84 901 234 567",
       email: "nguyenvana.agri@gmail.com",
-      birthday: "January 15, 1992",
+      birthday: "15/01/1992",
       status: "active",
       membership_tier: "KIM CƯƠNG",
       total_orders: "12 đơn",
-      total_spending: "15.8M VND",
-      note: "Khách hàng thân thiết từ năm 2020. Ưa thích các sản phẩm phân hữu cơ vi sinh. Thường xuyên đặt hàng vào cuối tháng. Cần tư vấn thêm về hệ thống tưới tự động cho farm mới tại Ba Vì.",
+      total_spending: "15.800.000 đ",
+      note: "Khách hàng thân thiết. Ưa thích các sản phẩm nội thất gỗ sồi.",
       addresses: [
         {
           name: "Đạt Vũ",
@@ -169,24 +98,17 @@ const Chitietkhachhang = () => {
       orders: [
         {
           id: "#ORD-5521",
-          date: "28/03/24",
+          date: "28/03/2024",
           status: "COMPLETED",
-          amount: "2,450,000 VND",
+          amount: "2.450.000 đ",
+          amountNumber: 2450000,
         },
         {
           id: "#ORD-5498",
-          date: "24/03/24",
+          date: "24/03/2024",
           status: "PROCESSING",
-          amount: "1,120,000 VND",
-        },
-      ],
-      payments: [
-        {
-          id: "TX-5521",
-          date: "28/03/24",
-          method: "Thẻ ATM",
-          status: "THÀNH CÔNG",
-          amount: "2,450,000 VND",
+          amount: "1.120.000 đ",
+          amountNumber: 1120000,
         },
       ],
       cart: [
@@ -205,6 +127,7 @@ const Chitietkhachhang = () => {
         },
       ],
     };
+
     setCustomer(fallback);
     if (fallback.addresses && fallback.addresses.length > 0) {
       setSelectedAddress(fallback.addresses[0]);
@@ -213,12 +136,138 @@ const Chitietkhachhang = () => {
   };
 
   useEffect(() => {
-    if (!userId && loading) {
-      loadFallbackData();
-    }
+    const fetchCustomerDetailAndCart = async () => {
+      if (!userId || userId === "undefined") {
+        loadFallbackData();
+        return;
+      }
+
+      setLoading(true);
+      try {
+        // 1. Gọi Auth Service
+        const userRequest = authApi.get(`/auth/internal/users/${userId}`);
+
+        // 2. Gọi Cart Service
+        const cartRequest = cartApi
+          .get(`/cart/internal/${userId}`)
+          .catch(() => ({ data: { items: [] } }));
+
+        // 3. Gọi Address Service (Sử dụng route Internal vừa bổ sung)
+        const addressRequest = addressApi
+          ? addressApi.get(`/addresses/internal/${userId}`).catch(() => null)
+          : Promise.resolve(null);
+
+        const [userResponse, cartResponse, addressResponse] = await Promise.all([
+          userRequest,
+          cartRequest,
+          addressRequest,
+        ]);
+
+        if (userResponse?.data) {
+          const userData = userResponse.data;
+          
+          // Trích xuất danh sách sản phẩm giỏ hàng
+          const cartItems = cartResponse.data?.items || cartResponse.data || [];
+
+          // Trích xuất danh sách địa chỉ từ Address Service hoặc Auth Fallback
+          const rawAddresses =
+            addressResponse?.data?.addresses ||
+            addressResponse?.data?.data ||
+            addressResponse?.data ||
+            userData.addresses ||
+            userData.dia_chi ||
+            [];
+
+          const formattedAddresses = formatAddresses(rawAddresses, userData);
+
+          // Trích xuất danh sách đơn hàng
+          let ordersForUser = [];
+          try {
+            const adminToken = localStorage.getItem("adminToken")
+              ? String(localStorage.getItem("adminToken"))
+                  .replace(/^"|"$/g, "")
+                  .trim()
+              : "";
+            const orderRes = await orderApi.get(
+              `/admin/user-orders/${userId}`,
+              {
+                headers: {
+                  Authorization: adminToken ? `Bearer ${adminToken}` : "",
+                },
+              }
+            );
+            if (orderRes.data?.success) {
+              ordersForUser = orderRes.data.orders || [];
+            }
+          } catch (orderErr) {
+            console.warn("⚠️ Lỗi truy vấn Order Service:", orderErr);
+            ordersForUser = userData.orders || [];
+          }
+
+          // Chuẩn hóa danh sách đơn hàng
+          const formattedOrders = (ordersForUser || []).map((o) => {
+            const ma = o.ma_don_hang || (o.id ? String(o.id) : "");
+            const date = o.ngay_tao
+              ? new Date(o.ngay_tao).toLocaleString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })
+              : o.date || "";
+            const status =
+              o.trang_thai_don_hang ||
+              o.trang_thai_thanh_toan ||
+              (o.status ? String(o.status) : "PENDING");
+            const amountNum = Number(o.tong_thanh_toan || o.total || 0) || 0;
+            const amountStr = amountNum
+              ? amountNum.toLocaleString("vi-VN") + " đ"
+              : o.amount || "0 đ";
+            return {
+              id: ma,
+              rawId: o.id,
+              date,
+              status,
+              amount: amountStr,
+              amountNumber: amountNum,
+              items: o.danh_sach_san_pham || o.items || [],
+            };
+          });
+
+          const totalSpendingNum = formattedOrders.reduce(
+            (s, it) => s + (Number(it.amountNumber) || 0),
+            0
+          );
+
+          setCustomer({
+            ...userData,
+            cart: Array.isArray(cartItems) ? cartItems : [],
+            total_orders: formattedOrders.length
+              ? `${formattedOrders.length} đơn`
+              : "0 đơn",
+            total_spending: totalSpendingNum
+              ? `${totalSpendingNum.toLocaleString("vi-VN")} đ`
+              : "0 đ",
+            addresses: formattedAddresses,
+            orders: formattedOrders,
+          });
+
+          if (formattedAddresses.length > 0) {
+            setSelectedAddress(formattedAddresses[0]);
+          }
+        } else {
+          loadFallbackData();
+        }
+      } catch (err) {
+        console.error("❌ Lỗi gọi API thật, chuyển sang dữ liệu mẫu:", err);
+        loadFallbackData();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomerDetailAndCart();
   }, [userId]);
 
-  // 🌟 HÀM TIỆN ÍCH QUYẾT ĐỊNH MÀU SẮC HUY HIỆU VIP LẤP LÁNH
   const getTierBadgeStyle = (tier) => {
     const name = String(tier || "BẠC").toUpperCase();
     if (name === "KIM CƯƠNG") {
@@ -248,6 +297,7 @@ const Chitietkhachhang = () => {
         Đang nạp chi tiết khách hàng...
       </div>
     );
+
   if (!customer)
     return (
       <div className="p-8 text-center text-gray-400">
@@ -256,37 +306,25 @@ const Chitietkhachhang = () => {
     );
 
   const defaultOrders = customer.orders?.slice(0, 3) || [];
-  const defaultPayments = customer.payments?.slice(0, 3) || [];
 
   const totalCartValue =
     customer.cart?.reduce((sum, item) => {
-      const numPrice = parseInt(String(item.price).replace(/[^0-9]/g, "")) || 0;
+      const numPrice =
+        parseInt(String(item.price).replace(/[^0-9]/g, "")) || 0;
       return sum + numPrice * (item.quantity || 1);
     }, 0) || 0;
 
   const filteredModalOrders = (customer.orders || []).filter((order) => {
-    const idStr = String(order.id || order.ma_don_hang || "").toLowerCase();
-    const matchesSearch = idStr.includes(
-      String(orderSearch || "").toLowerCase(),
-    );
+    const idStr = String(order.id || "").toLowerCase();
+    const matchesSearch = idStr.includes(String(orderSearch || "").toLowerCase());
     const matchesFilter =
       orderFilterStatus === "ALL" || order.status === orderFilterStatus;
     return matchesSearch && matchesFilter;
   });
 
-  const filteredModalPayments = (customer.payments || []).filter((pay) => {
-    const payIdStr = String(pay.id || "").toLowerCase();
-    const matchesSearch = payIdStr.includes(
-      String(paymentSearch || "").toLowerCase(),
-    );
-    const matchesFilter =
-      paymentFilterStatus === "ALL" || pay.status === paymentFilterStatus;
-    return matchesSearch && matchesFilter;
-  });
-
   return (
     <div className="w-full min-h-screen bg-[#fafafa] font-sans text-slate-800 antialiased p-6 text-left relative pb-12">
-      {/* Tiêu đề & Nút back */}
+      {/* Header & Button Back */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -304,11 +342,11 @@ const Chitietkhachhang = () => {
         </button>
       </div>
 
-      {/* Grid Bento Box Hệ Thống */}
+      {/* Grid Bento Box */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* KHỐI TRÁI + KHỐI GIỮA */}
+        {/* CỘT TRÁI (2/3 Screen) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Avatar Profile */}
+          {/* Profile Card */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-xl bg-emerald-50 text-emerald-700 font-black text-xl border flex items-center justify-center overflow-hidden shrink-0">
@@ -327,23 +365,21 @@ const Chitietkhachhang = () => {
                   <h2 className="text-lg font-bold text-slate-900">
                     {customer.full_name}
                   </h2>
-
-                  {/* 🌟 THÊM: HUY HIỆU HẠNG VIP VÀ TRẠNG THÁI ACTIVE */}
                   {getTierBadgeStyle(customer.membership_tier)}
                   <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                     Active
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-1.5 font-mono">
-                  MÃ KHÁCH HÀNG: {customer.code}
+                  MÃ KHÁCH HÀNG: {customer.code || customer.user_id}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Widgets Thống kê Tài chính */}
+          {/* Widgets Thống kê */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center hover:shadow-md transition">
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center">
               <div>
                 <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider">
                   Tổng số đơn hàng
@@ -356,7 +392,7 @@ const Chitietkhachhang = () => {
                 🛍️
               </span>
             </div>
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center hover:shadow-md transition">
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex justify-between items-center">
               <div>
                 <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider">
                   Tổng chi tiêu
@@ -371,7 +407,7 @@ const Chitietkhachhang = () => {
             </div>
           </div>
 
-          {/* Form Chi Tiết Thông Tin Cá Nhân */}
+          {/* Thông Tin Cá Nhân */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2 mb-5">
               <span>👤</span> Thông tin cá nhân
@@ -412,96 +448,86 @@ const Chitietkhachhang = () => {
             </div>
           </div>
 
-          {/* Khối Ghi Chú */}
+          {/* Ghi Chú Hệ Thống */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2 mb-3">
               <span>📄</span> Ghi chú hệ thống
             </h3>
             <div className="p-4 bg-emerald-50/30 border border-emerald-100/50 rounded-xl text-xs font-medium text-emerald-800 leading-relaxed italic">
-              "{customer.note}"
+              "{customer.note || "Không có ghi chú"}"
             </div>
           </div>
         </div>
 
-        {/* KHỐI BÊN PHẢI */}
+        {/* CỘT PHẢI (1/3 Screen) */}
         <div className="space-y-6">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-4">
-              Phân loại tài khoản
-            </h3>
-            <div className="flex justify-between items-center text-xs font-bold">
-              <span className="text-gray-400">Trạng thái hệ thống</span>
-              <span className="text-emerald-600 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>{" "}
-                Hoạt động
-              </span>
-            </div>
-          </div>
-
-          {/* Danh Sách Địa Chỉ Giao Nhận */}
+          {/* Sổ Địa Chỉ */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2 select-none">
-              <span>📍</span> Sổ địa chỉ khách hàng{" "}
-              <span className="text-[10px] font-normal normal-case text-gray-400">
-                (Nhấn để xem Map)
-              </span>
+            <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
+              <span>📍</span> Sổ địa chỉ khách hàng
             </h3>
-            <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
-              {customer.addresses?.map((addr, idx) => {
-                const isSelected = selectedAddress?.detail === addr.detail;
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => setSelectedAddress(addr)}
-                    className={`p-3 border rounded-xl relative text-xs cursor-pointer transition-all duration-200 ${
-                      isSelected
-                        ? "bg-emerald-50/40 border-emerald-500 shadow-sm ring-1 ring-emerald-500/30"
-                        : "bg-[#fafafa] border-gray-100 hover:bg-slate-50 hover:border-gray-200"
-                    }`}
-                  >
-                    <div className="flex justify-between items-center font-bold text-slate-800">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={
-                            isSelected ? "text-emerald-700 font-bold" : ""
-                          }
-                        >
-                          {addr.name}
-                        </span>
-                        <span className="text-gray-400 font-mono font-normal">
+            <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+              {customer.addresses?.length > 0 ? (
+                customer.addresses.map((addr, idx) => {
+                  const isSelected = selectedAddress?.detail === addr.detail;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedAddress(addr)}
+                      className={`p-3 border rounded-xl cursor-pointer transition-all ${
+                        isSelected
+                          ? "bg-emerald-50/40 border-emerald-500 shadow-sm ring-1 ring-emerald-500/30"
+                          : "bg-[#fafafa] border-gray-100 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center font-bold text-xs text-slate-800">
+                        <div className="flex items-center gap-1.5">
+                          <span>{addr.name}</span>
+                          {addr.tag && (
+                            <span className="bg-emerald-100 text-emerald-700 text-[9px] px-1.5 py-0.2 rounded font-semibold">
+                              {addr.tag}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-gray-400 font-mono">
                           {addr.phone}
                         </span>
                       </div>
+                      <p className="text-gray-500 mt-1 text-xs leading-relaxed">
+                        {addr.detail}
+                      </p>
                     </div>
-                    <p className="text-gray-500 mt-2 font-medium leading-relaxed">
-                      {addr.detail}
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <p className="text-xs text-gray-400 italic py-2">
+                  Chưa có địa chỉ nào
+                </p>
+              )}
             </div>
 
-            {/* LIVE GOOGLE MAPS DETECT */}
-            {selectedAddress && (
-              <div className="pt-2 border-t border-gray-50 space-y-2 animate-fadeIn">
-                <div className="w-full h-36 rounded-xl border border-gray-200 overflow-hidden relative shadow-inner bg-[#f2efe9]">
+            {/* Google Map Viewer */}
+            {selectedAddress?.detail && (
+              <div className="pt-2 border-t border-gray-50">
+                <div className="w-full h-36 rounded-xl border border-gray-200 overflow-hidden relative bg-[#f2efe9]">
                   <iframe
-                    title="Google Maps Admin Viewer"
+                    title="Google Maps Viewer"
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}
                     loading="lazy"
-                    allowFullScreen
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(selectedAddress.detail)}&t=&z=16&ie=UTF8&iwloc=&output=embed`}
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                      selectedAddress.detail
+                    )}&t=&z=16&ie=UTF8&iwloc=&output=embed`}
                   ></iframe>
                 </div>
               </div>
             )}
           </div>
 
-          {/* GIỎ HÀNG THẬT LẤY TỪ HÀM GETCARTBYUSERID VIA CARTAPI */}
+          {/* Giỏ Hàng Hiện Tại */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-            <div className="flex justify-between items-center select-none">
+            <div className="flex justify-between items-center">
               <h3 className="text-xs font-black text-[#006c49] uppercase tracking-wider flex items-center gap-2">
                 <span>🛒</span> Giỏ hàng hiện tại
               </h3>
@@ -512,77 +538,81 @@ const Chitietkhachhang = () => {
 
             <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
               {customer.cart && customer.cart.length > 0 ? (
-                customer.cart.map((item, idx) => (
-                  <div
-                    key={item.variantId || idx}
-                    className="p-3 bg-[#fafafa] border border-slate-100 rounded-xl text-xs space-y-2 flex flex-col hover:bg-slate-50 transition"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 bg-white border border-slate-200/60 rounded-lg overflow-hidden p-1 shadow-sm shrink-0 flex items-center justify-center">
-                        {item.image && item.image.startsWith("http") ? (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <span className="text-lg">{item.image || "📦"}</span>
-                        )}
-                      </div>
+                customer.cart.map((item, idx) => {
+                  const productName =
+                    item.name || item.variantName || "Sản phẩm không tên";
+                  const itemPrice =
+                    parseInt(
+                      String(item.price || 0).replace(/[^0-9]/g, "")
+                    ) || 0;
 
-                      <div className="min-w-0 flex-1 text-left">
-                        <p
-                          className="font-bold text-slate-800 text-xs tracking-tight line-clamp-2 uppercase italic"
-                          title={item.name}
-                        >
-                          {item.name}
-                        </p>
-                        <p className="text-[10px] font-bold text-emerald-700 mt-1">
-                          {parseInt(
-                            String(item.price).replace(/[^0-9]/g, "") || "0",
-                          ).toLocaleString()}
-                          đ ×{" "}
-                          <span className="text-slate-900 font-black">
-                            {item.quantity || 1}
-                          </span>
-                          <span className="text-gray-400 font-medium ml-1">
-                            ({item.ten_don_vi || "Cái"})
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {item.thuoc_tinh_hop_nhat &&
-                      item.thuoc_tinh_hop_nhat.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-2 border-t border-slate-200/50">
-                          {item.thuoc_tinh_hop_nhat.map((attr, aIdx) => (
-                            <span
-                              key={aIdx}
-                              className="text-[9px] font-bold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-xs"
-                            >
-                              {attr.ten_thuoc_tinh}:{" "}
-                              <b className="text-[#006c49] font-black">
-                                {attr.gia_tri}
-                              </b>
-                            </span>
-                          ))}
+                  return (
+                    <div
+                      key={item.variantId || idx}
+                      className="p-3 bg-[#fafafa] border border-slate-100 rounded-xl text-xs space-y-2 flex flex-col hover:bg-slate-50 transition"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 bg-white border border-slate-200 rounded-lg overflow-hidden p-1 shrink-0 flex items-center justify-center">
+                          {item.image && item.image.startsWith("http") ? (
+                            <img
+                              src={item.image}
+                              alt={productName}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-lg">📦</span>
+                          )}
                         </div>
-                      )}
-                  </div>
-                ))
+
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-800 text-xs line-clamp-2">
+                            {productName}
+                          </p>
+                          <p className="text-[10px] font-bold text-emerald-700 mt-1">
+                            {itemPrice.toLocaleString()}đ ×{" "}
+                            <span className="text-slate-900 font-black">
+                              {item.quantity || 1}
+                            </span>{" "}
+                            <span className="text-gray-400 font-medium">
+                              ({item.ten_don_vi || "Cái"})
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Hiển thị danh sách Thuộc tính EAV của biến thể */}
+                      {item.thuoc_tinh_hop_nhat &&
+                        item.thuoc_tinh_hop_nhat.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-2 border-t border-slate-200/50">
+                            {item.thuoc_tinh_hop_nhat.map((attr, aIdx) => (
+                              <span
+                                key={aIdx}
+                                className="text-[9px] font-bold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded"
+                              >
+                                {attr.ten_thuoc_tinh}:{" "}
+                                <b className="text-[#006c49]">
+                                  {attr.gia_tri}
+                                </b>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  );
+                })
               ) : (
-                <div className="text-center py-6 text-gray-400 italic text-xs font-medium">
+                <div className="text-center py-6 text-gray-400 italic text-xs">
                   Giỏ hàng hiện tại trống
                 </div>
               )}
             </div>
 
-            {customer.cart && customer.cart.length > 0 && (
+            {customer.cart?.length > 0 && (
               <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-xs font-bold">
                 <span className="text-gray-400 uppercase italic">
                   Tổng tạm tính:
                 </span>
-                <span className="text-[#006c49] text-base font-black tracking-tight">
+                <span className="text-[#006c49] text-base font-black">
                   {totalCartValue.toLocaleString()}đ
                 </span>
               </div>
@@ -591,17 +621,16 @@ const Chitietkhachhang = () => {
         </div>
       </div>
 
-      {/* ================= SECTION BẢNG THỐNG KÊ LỊCH SỬ GIAO DỊCH CHÍNH ================= */}
-      <div className="mt-6 space-y-6">
-        {/* Bảng Đơn Hàng */}
+      {/* Lịch Sử Đơn Hàng (Bảng Tóm Tắt Mới Nhất) */}
+      <div className="mt-6">
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-5 flex justify-between items-center border-b border-gray-50 select-none">
+          <div className="p-5 flex justify-between items-center border-b border-gray-50">
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
               <span>🛍️</span> Lịch sử đơn hàng (Mới nhất)
             </h3>
             <button
               onClick={() => setIsOrderModalOpen(true)}
-              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
+              className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
             >
               Xem tất cả ({customer.orders?.length || 0}) ↗
             </button>
@@ -609,7 +638,7 @@ const Chitietkhachhang = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50/70 text-gray-400 font-bold uppercase border-b border-gray-100 select-none">
+                <tr className="bg-slate-50/70 text-gray-400 font-bold uppercase border-b border-gray-100">
                   <th className="py-3.5 px-6">Mã đơn</th>
                   <th className="py-3.5 px-6">Ngày đặt</th>
                   <th className="py-3.5 px-6">Trạng thái</th>
@@ -619,10 +648,7 @@ const Chitietkhachhang = () => {
               <tbody className="divide-y divide-gray-50 font-bold text-slate-600">
                 {defaultOrders.length > 0 ? (
                   defaultOrders.map((order, i) => (
-                    <tr
-                      key={i}
-                      className="hover:bg-slate-50/40 transition-colors"
-                    >
+                    <tr key={i} className="hover:bg-slate-50/40">
                       <td className="py-3.5 px-6 text-slate-900 font-mono">
                         {order.id}
                       </td>
@@ -631,7 +657,7 @@ const Chitietkhachhang = () => {
                       </td>
                       <td className="py-3.5 px-6">
                         <span
-                          className={`px-2 py-0.5 rounded font-black text-[10px] uppercase tracking-wider ${
+                          className={`px-2 py-0.5 rounded font-black text-[10px] uppercase ${
                             order.status === "COMPLETED"
                               ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
                               : "bg-amber-50 text-amber-600 border border-amber-100"
@@ -649,7 +675,7 @@ const Chitietkhachhang = () => {
                   <tr>
                     <td
                       colSpan="4"
-                      className="py-6 text-center text-gray-400 italic font-medium"
+                      className="py-6 text-center text-gray-400 italic"
                     >
                       Chưa có lịch sử đơn hàng
                     </td>
@@ -660,6 +686,95 @@ const Chitietkhachhang = () => {
           </div>
         </div>
       </div>
+
+      {/* MODAL XEM TOÀN BỘ LỊCH SỬ ĐƠN HÀNG */}
+      {isOrderModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-3 border-b">
+              <h2 className="text-base font-bold text-slate-900">
+                Lịch sử tất cả đơn hàng ({customer.orders?.length || 0})
+              </h2>
+              <button
+                onClick={() => setIsOrderModalOpen(false)}
+                className="text-gray-400 hover:text-slate-800 text-lg font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="Tìm mã đơn hàng..."
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                className="flex-1 px-3 py-2 border rounded-xl text-xs focus:outline-emerald-500"
+              />
+              <select
+                value={orderFilterStatus}
+                onChange={(e) => setOrderFilterStatus(e.target.value)}
+                className="px-3 py-2 border rounded-xl text-xs focus:outline-emerald-500"
+              >
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="PROCESSING">PROCESSING</option>
+                <option value="PENDING">PENDING</option>
+              </select>
+            </div>
+
+            <div className="overflow-y-auto flex-1 custom-scrollbar">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-gray-400 font-bold uppercase border-b">
+                    <th className="py-3 px-4">Mã đơn</th>
+                    <th className="py-3 px-4">Ngày đặt</th>
+                    <th className="py-3 px-4">Trạng thái</th>
+                    <th className="py-3 px-4">Tổng tiền</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y font-medium text-slate-700">
+                  {filteredModalOrders.length > 0 ? (
+                    filteredModalOrders.map((ord, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {ord.id}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-gray-500">
+                          {ord.date}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded font-black text-[10px] uppercase ${
+                              ord.status === "COMPLETED"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-amber-50 text-amber-600"
+                            }`}
+                          >
+                            {ord.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-emerald-700">
+                          {ord.amount}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        className="py-6 text-center text-gray-400 italic"
+                      >
+                        Không tìm thấy đơn hàng phù hợp
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -206,7 +206,6 @@ const Danhsachkhachhang = () => {
               placeholder="Tìm kiếm khách hàng..."
               className="w-full pl-4 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none transition-all font-medium placeholder-gray-400 text-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20"
             />
-            {/* 🔄 Thay thế icon kính lúp emoji 🔍 */}
             <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -258,7 +257,6 @@ const Danhsachkhachhang = () => {
                 <th className="py-4 px-6 text-center">Số điện thoại</th>
                 <th className="py-4 px-6 text-center">Giới tính</th>
                 <th className="py-4 px-6 text-center">Hạng VIP</th>
-                {/* 🌟 THÊM CỘT NÀY */}
                 <th className="py-4 px-6 text-center">Lần cuối truy cập</th>
                 <th className="py-4 px-6 text-center">Thao tác</th>
               </tr>
@@ -266,7 +264,6 @@ const Danhsachkhachhang = () => {
             <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
               {loading && (
                 <tr>
-                  {/* 🌟 CẬP NHẬT colSpan thành 8 */}
                   <td
                     colSpan="8"
                     className="py-8 text-center text-[#006c49] font-bold animate-pulse"
@@ -369,7 +366,6 @@ const Danhsachkhachhang = () => {
                       )}
                     </td>
 
-                    {/* 🌟 CỘT MỚI: HIỂN THỊ HẠNG THÀNH VIÊN */}
                     <td className="py-4 px-6 text-center">
                       <span
                         className={`px-2.5 py-0.5 rounded text-[10px] font-black inline-block border uppercase tracking-wide shadow-sm ${getTierBadgeStyle(row.membership_tier)}`}
@@ -384,12 +380,31 @@ const Danhsachkhachhang = () => {
 
                     <td className="py-4 px-6 text-center">
                       <div className="flex items-center justify-center gap-3">
+                        {/* 👁️ Nút Xem Chi Tiết được thay bằng SVG Icon Con Mắt */}
                         <button
                           onClick={() => handleViewDetail(row.user_id)}
-                          className="text-slate-400 hover:text-emerald-600 transition p-1.5 hover:bg-slate-50 rounded-lg"
+                          className="text-slate-300 hover:text-emerald-600 transition p-1.5 hover:bg-slate-50 rounded-lg"
                           title="Xem chi tiết khách hàng"
                         >
-                          👁️
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.2}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                            />
+                          </svg>
                         </button>
 
                         <button
@@ -495,7 +510,6 @@ const Danhsachkhachhang = () => {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-md w-full p-6 animate-scaleUp text-left">
             <div className="flex justify-between items-center pb-3 border-b border-gray-100 mb-4">
-              {/* 🔄 Thay thế icon bút viết emoji 📝 */}
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-1.5">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -513,7 +527,6 @@ const Danhsachkhachhang = () => {
                 </svg>
                 Cập nhật thông tin khách hàng
               </h3>
-              {/* 🔄 Thay thế icon nút hủy đóng emoji ✕ */}
               <button
                 onClick={() => setEditingUser(null)}
                 className="text-gray-400 hover:text-gray-600 flex items-center justify-center"
@@ -630,7 +643,6 @@ const Danhsachkhachhang = () => {
       {deletingUserId && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-sm w-full p-6 animate-scaleUp text-center">
-            {/* 🔄 Thay thế icon cảnh báo tam giác emoji ⚠️ */}
             <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
               <svg
                 xmlns="http://www.w3.org/2000/svg"

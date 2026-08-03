@@ -240,55 +240,78 @@ export const uploadPaymentProof = async (req, res) => {
 };
 
 // =========================================================================
-// 7. LẤY GIỎ HÀNG THEO USER ID (DANH CHO TRANG QUẢN TRỊ ADMIN VIEW)
+// 7. LẤY GIỎ HÀNG THEO USER ID (DÀNH CHO TRANG QUẢN TRỊ ADMIN VIEW) - FIXED
 // =========================================================================
 export const getCartByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
-    const cart = await Cart.findOne({ userId: userId });
-    
+
+    if (!userId || userId === "undefined") {
+      return res.status(200).json({ userId: null, items: [] });
+    }
+
+    // 🌟 FIX LỖI 1: Tìm kiếm theo cả String lẫn ObjectId
+    const cart = await Cart.findOne({
+      $or: [
+        { userId: userId },
+        { userId: String(userId) }
+      ]
+    });
+
     if (!cart || !cart.items || cart.items.length === 0) {
       return res.status(200).json({ userId: userId, items: [] });
     }
 
     const detailedItemsPromises = cart.items.map(async (item) => {
       const itemObj = item.toObject();
-      
+
       try {
-        const response = await axios.get(`http://localhost:5002/api/v1/products/variants/${item.variantId}`);
+        // 🌟 FIX LỖI 2: Thêm timeout 2 giây để tránh treo request nếu Product Service ngắt
+        const response = await axios.get(
+          `http://localhost:5002/api/v1/products/variants/${item.variantId}`,
+          { timeout: 2000 }
+        );
+
         if (response.data) {
           const vData = response.data;
           return {
             ...itemObj,
+            // Đảm bảo các trường tiêu chuẩn luôn có giá trị để Frontend hiển thị được
+            name: itemObj.name || vData.ten_bien_the || vData.ten_san_pham || "Sản phẩm chưa đặt tên",
             productId: vData.ma_san_pham || itemObj.productId || "",
             sku: vData.sku || itemObj.sku || item.variantId,
-            price: Number(vData.gia_ban_le) || itemObj.price || 0, 
-
-            // 🌟 ĐÃ BỔ SUNG STOCK:
+            price: Number(vData.gia_ban_le) || itemObj.price || 0,
             stock: Number(vData.so_luong_ton ?? itemObj.stock ?? 9999),
-
             variantName: vData.ten_bien_the || itemObj.variantName || "",
             image: vData.hinh_anh_url || vData.duong_dan_url || itemObj.image || "",
             thuoc_tinh_hop_nhat: vData.thuoc_tinh_hop_nhat?.length > 0 ? vData.thuoc_tinh_hop_nhat : (itemObj.thuoc_tinh_hop_nhat || []),
-            ten_don_vi: vData.ten_don_vi || itemObj.ten_don_vi || "Gói"
+            ten_don_vi: vData.ten_don_vi || itemObj.ten_don_vi || "Cái"
           };
         }
       } catch (apiError) {
-        console.warn(`⚠️ [Admin View - Connection Refused] Mã biến thể: ${item.variantId}`);
+        console.warn(`⚠️ [Admin View - Product Service Error/Timeout] VariantId: ${item.variantId}`);
       }
-      
-      return { ...itemObj, thuoc_tinh_hop_nhat: itemObj.thuoc_tinh_hop_nhat || [], ten_don_vi: itemObj.ten_don_vi || "Gói" };
+
+      // Đảm bảo fallback data nguyên vẹn từ Mongo nếu không gọi được Product Service
+      return {
+        ...itemObj,
+        name: itemObj.name || itemObj.variantName || "Sản phẩm",
+        price: Number(itemObj.price) || 0,
+        image: itemObj.image || "",
+        thuoc_tinh_hop_nhat: itemObj.thuoc_tinh_hop_nhat || [],
+        ten_don_vi: itemObj.ten_don_vi || "Cái"
+      };
     });
 
     const finalItems = await Promise.all(detailedItemsPromises);
 
-    res.status(200).json({
+    return res.status(200).json({
       userId: cart.userId,
       items: finalItems
     });
 
   } catch (error) {
     console.error("🔥 Lỗi tại getCartByUserId Backend:", error.message);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message, items: [] });
   }
 };
