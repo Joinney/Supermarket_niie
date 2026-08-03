@@ -1,30 +1,31 @@
 // File: backend/services/order-service/routes/orderRoutes.js
 import express from 'express';
 import { 
-  getShippingFee, 
-  placeOrder, 
-  updateInternalOrderStatus, 
-  getOrderStatistics, 
-  getAllOrdersAdmin, 
-  getMyOrders, 
-  getOrderDetailAdmin, 
-  cancelOrder,
-  getOrdersByUserAdmin,
-  getPostOffices,
-  testReadKml,
-  getOrderTrackingLogs,
-  createOrderTrackingLogNode, 
-  calculateShipping,
-  getUserSpent,
-  payOrderWithDemiPay,
-  confirmReceiveOrder 
+    getShippingFee, 
+    placeOrder, 
+    updateInternalOrderStatus, 
+    getOrderStatistics, 
+    getAllOrdersAdmin, 
+    getMyOrders, 
+    getOrderDetailAdmin, 
+    cancelOrder,
+    getOrdersByUserAdmin,
+    getPostOffices,
+    testReadKml,
+    getOrderTrackingLogs,
+    createOrderTrackingLogNode, 
+    calculateShipping,
+    getUserSpent,
+    payOrderWithDemiPay,
+    confirmReceiveOrder,        
+    updateOrderStatusAdmin       
 } from '../controllers/orderController.js';
 
-// Đồng bộ import 2 hàm thống kê từ đúng tệp tin cấu hình statisticsController
+// Đồng bộ import các hàm thống kê từ đúng tệp tin cấu hình statisticsController
 import { 
-  getMonthlyRevenue, 
-  getOrderOverviewStats,
-  getTopProducts
+    getMonthlyRevenue, 
+    getOrderOverviewStats,
+    getTopProducts
 } from '../controllers/statisticsController.js';
 
 // Chỉ sử dụng middleware 'protect' đã được định nghĩa chắc chắn để chống lỗi requireAdmin undefined
@@ -60,7 +61,7 @@ router.get('/:id/check-review', (req, res) => {
 });
 
 // 5.3 Khách hàng xác nhận đã nhận hàng (Tự động chuyển trạng thái Đã giao & Cộng XU hoàn tiền)
-router.put('/orders/:ma_don_hang/confirm-receive', protect, confirmReceiveOrder); // 👈 ĐÃ BỔ SUNG ROUTE NÀY
+router.put('/orders/:ma_don_hang/confirm-receive', protect, confirmReceiveOrder);
 
 // ========================================================
 // 🔒 ROUTE ĐỒNG BỘ NỘI BỘ (INTERNAL SERVICE ENDPOINTS)
@@ -83,32 +84,35 @@ router.get('/admin/all-orders', protect, getAllOrdersAdmin);
 // 9. Lấy chi tiết 1 đơn hàng kèm danh sách sản phẩm và thông tin khách hàng (Auth-Service)
 router.get('/admin/orders/:id', protect, getOrderDetailAdmin); 
 
-// 10. Admin can thiệp hủy đơn hàng đang chờ xử lý và kích hoạt hoàn kho sản phẩm
+// 🌟 10. Admin cập nhật trạng thái đơn hàng nhanh (Xác nhận, chuyển trạng thái giao hàng)
+router.put('/admin/orders/:ma_don_hang/status', protect, updateOrderStatusAdmin);
+router.patch('/admin/orders/:ma_don_hang/status', protect, updateOrderStatusAdmin);
+
+// 11. Admin can thiệp hủy đơn hàng đang chờ xử lý và kích hoạt hoàn kho sản phẩm
 router.put('/admin/orders/:ma_don_hang/cancel', protect, cancelOrder); 
 
-// 9.1 Lấy danh sách đơn hàng theo user id (Admin) - để trang quản trị xem lịch sử đơn của 1 khách
+// 12. Lấy danh sách đơn hàng theo user id (Admin) - để trang quản trị xem lịch sử đơn của 1 khách
 router.get('/admin/user-orders/:userId', protect, getOrdersByUserAdmin);
 
 // Các endpoint cung cấp chuỗi thời gian cho đồ thị và số liệu widgets tầng 1
 router.get('/admin/monthly-revenue', protect, getMonthlyRevenue);
 router.get('/admin/overview', protect, getOrderOverviewStats);
-
 router.get('/admin/top-products', protect, getTopProducts);
 
 // ========================================================
 // 🏁 ROUTE ĐỊNH TUYẾN LOGISTICS VÀ KIỂM THỬ (LOGISTICS ENDPOINTS)
 // ========================================================
 
-// 11. TRUY VẤN LOGISTICS: Kết xuất mảng lộ trình bưu cục chặng giữa và chặng phát cuối từ DB lên bản đồ
+// 13. TRUY VẤN LOGISTICS: Kết xuất mảng lộ trình bưu cục chặng giữa và chặng phát cuối từ DB lên bản đồ
 router.get('/shipping/logs/:orderId', getOrderTrackingLogs);
 
-// 12. GHI LOG LOGISTICS REALTIME: Tiếp nhận lệnh nhảy trạm từ Admin để lưu lịch sử quét trạm vào PostgreSQL
+// 14. GHI LOG LOGISTICS REALTIME: Tiếp nhận lệnh nhảy trạm từ Admin để lưu lịch sử quét trạm vào PostgreSQL
 router.post('/shipping/tracking-logs/create-node', createOrderTrackingLogNode);
 
-// 13. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
+// 15. Endpoint test Postman đọc dữ liệu KML gốc toàn quốc
 router.post('/test-kml', testReadKml);
 
-// 14. TÍNH TỔNG TIỀN CHI TIÊU CỦA KHÁCH HÀNG
+// 16. TÍNH TỔNG TIỀN CHI TIÊU CỦA KHÁCH HÀNG
 router.get('/internal/user-spent/:userId', getUserSpent);
 
 export default router;
