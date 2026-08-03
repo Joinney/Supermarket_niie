@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import ModalLoTrinh from "./ModalLoTrinh";
-import ModalChiTietDonHang from "./ModalChiTietDonHang"; // 🌟 Import component Modal vừa tách
+import ModalChiTietDonHang from "./ModalChiTietDonHang";
 import ReviewModal from "../../../components/Reviews/ReviewModal";
 import { productApi } from "../../../api/axios";
 import io from "socket.io-client";
@@ -35,24 +35,25 @@ const ORDER_STEPS = [
 ];
 
 export default function Tabdonhang({
-  orders: initialOrders, 
+  orders: initialOrders,
   currentTabLabel,
   onCancelOrder,
   onReviewOrder,
   onViewDetails,
   onReorder,
-  onRefreshData, 
+  onRefreshData,
 }) {
   const [orders, setOrders] = useState(initialOrders);
   const [selectedOrderForMap, setSelectedOrderForMap] = useState(null);
-  const [selectedOrderDetail, setSelectedOrderDetail] = useState(null); // Quản lý hiển thị chi tiết đơn hàng
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState(null);
   const [expandedOrders, setExpandedOrders] = useState({});
   const [reviewModalData, setReviewModalData] = useState(null);
   const [reviewedOrderIds, setReviewedOrderIds] = useState([]);
-  
+
   const socketRef = useRef(null);
   const realtimeUpdatedOrdersRef = useRef({});
 
+  // Cập nhật state đơn hàng khi props initialOrders thay đổi
   useEffect(() => {
     if (!initialOrders) return;
     setOrders(() => {
@@ -69,21 +70,28 @@ export default function Tabdonhang({
     });
   }, [initialOrders]);
 
+  // 🌟 KẾT NỐI SOCKET REALTIME VẬN ĐƠN (Đã xử lý triệt để lỗi WebSocket closed)
   useEffect(() => {
-    socketRef.current = io("http://localhost:5005", {
+    const socket = io("http://localhost:5005", {
       transports: ["websocket"],
+      reconnectionAttempts: 5,
+    });
+    socketRef.current = socket;
+
+    // Chờ kết nối thành công mới Join Room để tránh rớt packet
+    socket.on("connect", () => {
+      if (initialOrders && initialOrders.length > 0) {
+        initialOrders.forEach((order) => {
+          const roomId = String(order.ma_don_hang || "").trim();
+          if (roomId) {
+            socket.emit("join_order_room", roomId);
+          }
+        });
+      }
     });
 
-    if (initialOrders && initialOrders.length > 0) {
-      initialOrders.forEach((order) => {
-        const roomId = String(order.ma_don_hang || "").trim();
-        if (roomId) {
-          socketRef.current.emit("join_order_room", roomId);
-        }
-      });
-    }
-
-    socketRef.current.on("send_truck_location", (data) => {
+    // Lắng nghe cập nhật vị trí xe / trạng thái đơn hàng
+    socket.on("send_truck_location", (data) => {
       if (!data) return;
       const { ma_don_hang, isFullyDelivered, isArrived, currentStationIndex } = data;
 
@@ -93,14 +101,16 @@ export default function Tabdonhang({
       } else if (currentStationIndex === 0 && !isArrived) {
         newStatus = "Lấy hàng";
       } else if (currentStationIndex === -1) {
-        newStatus = "Xác nhận"; 
+        newStatus = "Xác nhận";
       }
 
       const cleanMaDonHang = String(ma_don_hang).trim();
 
       setOrders((prevOrders) => {
-        const targetOrder = prevOrders.find(o => String(o.ma_don_hang).trim() === cleanMaDonHang);
-        
+        const targetOrder = prevOrders.find(
+          (o) => String(o.ma_don_hang).trim() === cleanMaDonHang
+        );
+
         if (targetOrder && targetOrder.trang_thai_don_hang !== newStatus) {
           realtimeUpdatedOrdersRef.current[cleanMaDonHang] = newStatus;
 
@@ -120,12 +130,17 @@ export default function Tabdonhang({
     });
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      // 🌟 MẸO AN TOÀN TRÁNH CẢNH BÁO STRICT MODE CONSOLE:
+      // Chỉ ngắt ngay nếu đã kết nối xong, nếu đang bắt tay (connecting) thì đợi xong rồi ngắt
+      if (socket.connected) {
+        socket.disconnect();
+      } else {
+        socket.once("connect", () => socket.disconnect());
       }
     };
   }, [initialOrders, onRefreshData]);
 
+  // Kiểm tra trạng thái đánh giá sản phẩm
   useEffect(() => {
     const checkReviewStatuses = async () => {
       if (!orders || orders.length === 0) return;
@@ -140,7 +155,7 @@ export default function Tabdonhang({
         if (!reviewedOrderIds.includes(orderIdStr)) {
           try {
             const res = await productApi.get(
-              `/orders/${orderIdStr}/check-review`,
+              `/orders/${orderIdStr}/check-review`
             );
             if (res.data.success && res.data.hasReviewed) {
               setReviewedOrderIds((prev) => {
@@ -151,7 +166,7 @@ export default function Tabdonhang({
           } catch (error) {
             console.warn(
               "Không check được trạng thái đánh giá cho đơn",
-              orderIdStr,
+              orderIdStr
             );
           }
         }
@@ -179,7 +194,7 @@ export default function Tabdonhang({
   }
 
   const activeStepConfig = ORDER_STEPS.find(
-    (step) => step.label === currentTabLabel,
+    (step) => step.label === currentTabLabel
   );
 
   const filteredOrders = orders.filter((order) => {
@@ -188,7 +203,7 @@ export default function Tabdonhang({
       .trim()
       .toLowerCase();
     return activeStepConfig.matchStatuses.some(
-      (status) => status.toLowerCase() === normalizedStatus,
+      (status) => status.toLowerCase() === normalizedStatus
     );
   });
 
@@ -257,11 +272,11 @@ export default function Tabdonhang({
             normalizedStatus === "xác nhận" || normalizedStatus === "confirmed";
 
           const currentStepIndex = ORDER_STEPS.filter(
-            (s) => s.label !== "Đã hủy",
+            (s) => s.label !== "Đã hủy"
           ).findIndex((step) =>
             step.matchStatuses.some(
-              (status) => status.toLowerCase() === normalizedStatus,
-            ),
+              (status) => status.toLowerCase() === normalizedStatus
+            )
           );
 
           if (!firstGroup) return null;
@@ -284,7 +299,7 @@ export default function Tabdonhang({
                   <span className="text-[10px] text-slate-400 font-bold">
                     Đặt lúc:{" "}
                     {new Date(
-                      order.ngay_tao || order.created_at || Date.now(),
+                      order.ngay_tao || order.created_at || Date.now()
                     ).toLocaleDateString("vi-VN")}
                   </span>
                 </div>
@@ -347,7 +362,7 @@ export default function Tabdonhang({
                   </span>
                   <span className="text-sm font-black text-[#006c49]">
                     {(Number(order.tong_thanh_toan) || 0).toLocaleString(
-                      "vi-VN",
+                      "vi-VN"
                     )}{" "}
                     đ
                   </span>
@@ -456,7 +471,7 @@ export default function Tabdonhang({
                           )}
                         </React.Fragment>
                       );
-                    },
+                    }
                   )}
                 </div>
               )}
@@ -499,7 +514,6 @@ export default function Tabdonhang({
 
                   {normalizedStatus === "đã giao" && (
                     <div className="flex items-center gap-1.5">
-                      {/* BẤM NÚT SẼ MỞ MODAL CHI TIẾT */}
                       <button
                         onClick={() => {
                           setSelectedOrderDetail(order);
@@ -564,7 +578,7 @@ export default function Tabdonhang({
         onClose={() => setSelectedOrderForMap(null)}
       />
 
-      {/* MODAL CHI TIẾT ĐƠN HÀNG (Sử dụng component tách riêng) */}
+      {/* MODAL CHI TIẾT ĐƠN HÀNG */}
       <ModalChiTietDonHang
         isOpen={!!selectedOrderDetail}
         order={selectedOrderDetail}

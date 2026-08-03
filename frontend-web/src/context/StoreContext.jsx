@@ -9,6 +9,9 @@ export const StoreProvider = ({ children }) => {
   const { currentLanguage } = useLanguage();
   const [stores, setStores] = useState([]);
   const [currentStore, setCurrentStore] = useState(null);
+  
+  // 🌟 THÊM STATE ĐỂ LƯU SOCKET VÀ TRUYỀN XUỐNG CÁC COMPONENT CON (NHƯ PRODUCT DETAIL)
+  const [productSocket, setProductSocket] = useState(null);
 
   // Dùng Ref để lấy giá trị mới nhất của currentStore trong Socket mà không gây Re-connect
   const currentStoreRef = useRef(currentStore);
@@ -58,7 +61,7 @@ export const StoreProvider = ({ children }) => {
     }
   }, [stores, window.location.pathname]);
 
-  // 3. Socket Real-time (Đã tối ưu dependency [])
+  // 3. Socket Real-time (Đã tối ưu)
   useEffect(() => {
     const apiBaseUrl = productApi.defaults.baseURL || "";
     let socketUrl = "";
@@ -71,19 +74,21 @@ export const StoreProvider = ({ children }) => {
     
     if (!socketUrl) return;
 
+    // 🌟 FIX LỖI 400 BAD REQUEST: Thêm transports: ["websocket"]
     const socket = io(socketUrl, {
+      transports: ["websocket"],
       reconnectionAttempts: 5,
       timeout: 10000,
     });
 
+    setProductSocket(socket); // Lưu lại socket để tái sử dụng toàn app
+
     socket.on("connect", () => {
-      console.log(
-        `✅ StoreContext: Đã kết nối Socket tới Product Server thực tế tại: ${socketUrl}`,
-      );
+      console.log(`✅ StoreContext: Đã kết nối Socket tới Product Server tại: ${socketUrl}`);
     });
 
-    socket.on("connect_error", () => {
-      console.warn(`⚠️ StoreContext: Không thể kết nối tới Socket server tại ${socketUrl}.`);
+    socket.on("connect_error", (err) => {
+      console.warn(`⚠️ StoreContext: Lỗi kết nối Socket Product:`, err.message);
     });
 
     socket.on("store_status_changed", (data) => {
@@ -110,9 +115,15 @@ export const StoreProvider = ({ children }) => {
     });
 
     return () => {
-      socket.disconnect();
+      // 🌟 MẸO CHỐNG CẢNH BÁO STRICT MODE:
+      // Chỉ ngắt khi đã kết nối xong, nếu đang kết nối dở thì đợi kết nối rồi mới disconnect
+      if (socket.connected) {
+        socket.disconnect();
+      } else {
+        socket.once("connect", () => socket.disconnect());
+      }
     };
-  }, []); // ✅ Để mảng rỗng để Socket chỉ khởi tạo 1 lần duy nhất
+  }, []);
 
   // --- HÀM FORMAT TIỀN TỆ ---
   const currencyMap = {
@@ -150,7 +161,8 @@ export const StoreProvider = ({ children }) => {
         stores,
         formatPrice,
         currentCurrency,
-      }}
+        productSocket, // 🌟 EXPORT biến này ra ngoài
+      }} 
     >
       {children}
     </StoreContext.Provider>

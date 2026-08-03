@@ -12,6 +12,7 @@ import { CartProvider } from "./context/CartContext";
 import { OrderProvider } from "./context/OrderContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ProtectedRoute } from "./components/Auth/ProtectedRoute";
+import { SocketProvider } from "./context/SocketContext";
 
 // --- IMPORTS GIAO DIỆN KHÁCH HÀNG ---
 import Checkout from "./pages/Checkout/Checkout";
@@ -750,7 +751,7 @@ const AppRoutes = () => (
  * COMPONENT ĐIỀU PHỐI
  */
 const AppContent = () => {
-  const { loading } = useContext(AuthContext);
+  const { loading, user, profile } = useContext(AuthContext);
 
   if (loading) {
     return (
@@ -760,8 +761,10 @@ const AppContent = () => {
     );
   }
 
+  const currentUser = profile || user;
+  
   return (
-    <>
+    <SocketProvider profile={currentUser}>
       <Toaster
         position="top-right"
         reverseOrder={false}
@@ -771,7 +774,7 @@ const AppContent = () => {
         }}
       />
       <AppRoutes />
-    </>
+    </SocketProvider>
   );
 };
 
