@@ -899,7 +899,7 @@ const testReadKml = async (req, res) => {
   }
 };
 
-// 11. Tính toán địa lý và chi phí
+// 11. Tính toán địa lý và chi phí (ĐÃ HOÀN CHỈNH BẬC THANG & MỨC TRẦN)
 const calculateShipping = async (req, res) => {
   try {
     const { userLat, userLng } = req.body;
@@ -907,12 +907,56 @@ const calculateShipping = async (req, res) => {
 
     const storeLat = 10.792622;
     const storeLng = 106.680172;
+    
+    // Khoảng cách theo đường chim bay (KM)
     const distanceKm = calcHaversine(parseFloat(userLat), parseFloat(userLng), storeLat, storeLng);
-    const estimatedMinutes = Math.round((distanceKm / 30) * 60) + 15;
-    const shippingFee = distanceKm <= 2 ? 0 : Math.round((distanceKm - 2) * 5000);
+    
+    let shippingFee = 0;
+    let estimatedMinutes = 0;
+
+    // 🚚 TRƯỜNG HỢP 1: NỘI TỈNH / CỰ LY GẦN (Dưới 32km - Giao siêu tốc)
+    if (distanceKm <= 32) {
+      // Tốc độ di chuyển nội thành ước tính 30km/h
+      estimatedMinutes = Math.round((distanceKm / 30) * 60) + 15; 
+      
+      if (distanceKm <= 2) {
+        shippingFee = 0; // Giữ nguyên luật cũ: Dưới 2km freeship
+      } else {
+        // Trên 2km: Tính 5.000đ cho mỗi KM tiếp theo
+        shippingFee = Math.round((distanceKm - 2) * 5000); 
+      }
+    } 
+    // 🚛 TRƯỜNG HỢP 2: NGOẠI TỈNH / CỰ LY XA (Gửi đơn vị vận chuyển)
+    else {
+      // Thời gian giao hàng: Cộng thêm 2 ngày (2880 phút) + thời gian di chuyển
+      estimatedMinutes = Math.round(2880 + (distanceKm / 500) * 1440); 
+      
+      // Phí cơ bản 35k, cứ mỗi 50km tiếp theo thì cộng nhẹ thêm 5k
+      const baseFee = 35000;
+      const extraDistanceFee = Math.floor((distanceKm - 32) / 50) * 5000;
+      shippingFee = baseFee + extraDistanceFee;
+      
+      // 🌟 RÀNG BUỘC QUAN TRỌNG: MỨC TRẦN GIÁ SHIP (MAX CAP)
+      // Dù xa đến mấy (Hà Nội, Lào Cai...) thì tiền ship cũng tối đa 80.000đ
+      const MAX_SHIPPING_FEE = 80000; 
+      if (shippingFee > MAX_SHIPPING_FEE) {
+        shippingFee = MAX_SHIPPING_FEE;
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      data: { nearestStore: { id: "DEMIMART_HQ_01", name: "Trụ sở chính Express", lat: storeLat, lng: storeLng }, distanceKm: Number(distanceKm.toFixed(1)), estimatedMinutes, shippingFee }
+      data: { 
+        nearestStore: { 
+          id: "DEMIMART_HQ_01", 
+          name: "Trụ sở chính Express", 
+          lat: storeLat, 
+          lng: storeLng 
+        }, 
+        distanceKm: Number(distanceKm.toFixed(1)), 
+        estimatedMinutes, 
+        shippingFee 
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
