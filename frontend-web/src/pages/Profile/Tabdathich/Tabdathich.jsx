@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, HeartOff, ExternalLink, ShoppingBag } from "lucide-react";
+import { Package, HeartOff, ExternalLink, ShoppingBag, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { productApi } from "../../../api/axios"; 
 import { useStore } from "../../../context/StoreContext";
@@ -7,6 +7,10 @@ import { useStore } from "../../../context/StoreContext";
 export default function Tabdathich() {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 🌟 STATE QUẢN LÝ PHÂN TRANG
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(6); // Mặc định 6 sản phẩm/trang
   
   const { currentStore, formatPrice } = useStore();
   const country = String(currentStore?.code || "vn").toLowerCase();
@@ -17,10 +21,10 @@ export default function Tabdathich() {
 
   const fetchFavorites = async () => {
     try {
-      // Gọi lên API mới vừa viết ở Backend
+      // Gọi lên API lấy danh sách yêu thích
       const res = await productApi.get('/products/favorites/me'); 
       if (res.data?.success) {
-        setFavorites(res.data.data);
+        setFavorites(res.data.data || []);
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách yêu thích:", error);
@@ -31,12 +35,19 @@ export default function Tabdathich() {
 
   // Nút bỏ yêu thích
   const handleUnlike = async (ma_san_pham) => {
-    // 1. Optimistic Update (Xoá ngay khỏi màn hình để UI phản hồi siêu nhanh)
+    // 1. Optimistic Update (Xoá ngay khỏi màn hình)
     const previousFavorites = [...favorites];
-    setFavorites(favorites.filter(item => item.ma_san_pham !== ma_san_pham));
+    const updatedFavorites = favorites.filter(item => item.ma_san_pham !== ma_san_pham);
+    setFavorites(updatedFavorites);
+
+    // Tự động lùi về 1 trang nếu xóa sản phẩm cuối cùng của trang hiện tại
+    const newTotalPages = Math.ceil(updatedFavorites.length / itemsPerPage) || 1;
+    if (currentPage > newTotalPages) {
+      setCurrentPage(newTotalPages);
+    }
 
     try {
-      // 2. Gửi request huỷ thích xuống backend (Tái sử dụng API Toggle bạn đã làm)
+      // 2. Gửi request huỷ thích xuống backend
       const res = await productApi.post(`/products/${ma_san_pham}/likes`, { trang_thai: false });
       if (!res.data?.success) {
         setFavorites(previousFavorites); // Hoàn tác nếu API lỗi
@@ -44,6 +55,18 @@ export default function Tabdathich() {
     } catch (error) {
       console.error("Lỗi khi bỏ thích:", error);
       setFavorites(previousFavorites); 
+    }
+  };
+
+  // 🌟 LOGIC CẮT MẢNG DỮ LIỆU ĐỂ HỂN THỊ THEO TRANG
+  const totalPages = Math.ceil(favorites.length / itemsPerPage) || 1;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentFavoritesOnPage = favorites.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
     }
   };
 
@@ -86,8 +109,9 @@ export default function Tabdathich() {
         </span>
       </div>
       
+      {/* Danh sách sản phẩm cắt theo trang */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-        {favorites.map((item) => (
+        {currentFavoritesOnPage.map((item) => (
           <div 
             key={item.ma_san_pham} 
             className="bg-white border border-slate-100 rounded-[20px] p-3 flex gap-4 hover:shadow-xl hover:border-slate-200 transition-all group"
@@ -125,7 +149,7 @@ export default function Tabdathich() {
 
                 <button 
                   onClick={() => handleUnlike(item.ma_san_pham)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-90"
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-90 cursor-pointer"
                   title="Xoá khỏi danh sách"
                 >
                   <HeartOff size={14} strokeWidth={2.5} />
@@ -135,6 +159,55 @@ export default function Tabdathich() {
           </div>
         ))}
       </div>
+
+      {/* 🌟 THANH BẢNG ĐIỀU KHIỂN PHÂN TRANG (PAGINATION CONTROL) */}
+      {favorites.length > 0 && (
+        <div className="mt-8 pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-bold text-slate-500">
+          {/* Tùy chọn số lượng mục/trang */}
+          <div className="flex items-center gap-2">
+            <span>Hiển thị:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1); // Reset về trang 1
+              }}
+              className="bg-slate-50 border border-slate-200 text-slate-700 font-black rounded-xl px-2.5 py-1 outline-none focus:border-[#006c49] cursor-pointer"
+            >
+              <option value={6}>6 mục / trang</option>
+              <option value={12}>12 mục / trang</option>
+              <option value={24}>24 mục / trang</option>
+            </select>
+          </div>
+
+          {/* Nút chuyển trang */}
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400">
+              Trang <b className="text-slate-800 font-black">{currentPage}</b> / {totalPages}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+                className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Trang trước"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => handlePageChange(currentPage + 1)}
+                className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                title="Trang sau"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

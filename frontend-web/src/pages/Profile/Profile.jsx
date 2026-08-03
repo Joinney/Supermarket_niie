@@ -49,7 +49,7 @@ import Tabvoucher from "./Tabvoucher/Tabvoucher";
 import Tabdathich from "./Tabdathich/Tabdathich";
 import Tabvidemipay from "./Tabvidemipay/Tabvidemipay";
 
-// 🌟 IMPORT MODAL ĐIỂM DANH (Dựa theo đường dẫn trong ảnh của bạn)
+// 🌟 IMPORT MODAL ĐIỂM DANH
 import CheckInModal from "../../admindb/components/CheckInModal";
 
 // Fix lỗi icon mặc định Leaflet
@@ -122,6 +122,33 @@ export default function ProfilePage() {
 
   // 🌟 STATE QUẢN LÝ BẬT/TẮT MODAL ĐIỂM DANH
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+
+  // 🌟 STATE VÀ REF XỬ LÝ DỪNG CỐ ĐỊNH SIDEBAR KHI CHẠM FOOTER (Code của đồng đội)
+  const [isAtFooter, setIsAtFooter] = useState(false);
+  const sidebarContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const footerElement = document.querySelector("footer");
+      if (!footerElement || !sidebarContainerRef.current) return;
+
+      const footerRect = footerElement.getBoundingClientRect();
+      const sidebarHeight = sidebarContainerRef.current.offsetHeight || 520;
+      const targetTop = 185; // Khoảng cách cố định đỉnh màn hình
+
+      // Kiểm tra xem mép trên của Footer đã dâng lên đụng đáy Sidebar chưa
+      if (footerRect.top <= targetTop + sidebarHeight + 20) {
+        setIsAtFooter(true);
+      } else {
+        setIsAtFooter(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll(); // Kiểm tra ngay lần đầu mount
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const API_BASE_URL = authApi.defaults.baseURL
     ? authApi.defaults.baseURL.replace(/\/api$/, "")
@@ -1092,69 +1119,83 @@ export default function ProfilePage() {
       )}
 
       <div className="max-w-[1600px] mx-auto px-0 md:px-6 lg:px-10">
-        <div className="flex flex-col md:flex-row gap-6 pt-0 md:pt-6 items-start">
-          {/* DESKTOP SIDEBAR MENU */}
-          <aside className="hidden md:block w-64 lg:w-72 shrink-0 space-y-4 sticky top-6">
-            <div className="bg-white rounded-[32px] p-5 shadow-sm border border-slate-100 flex items-center gap-4 h-[90px]">
-              <div className="relative shrink-0">
-                <img
-                  src={getAvatarSrc(profile.avatar_url)}
-                  className="w-14 h-14 rounded-2xl object-cover border-4 border-[#f0f9f6]"
-                  alt="Avatar"
-                />
-                <div className="absolute -top-1 -right-1 bg-amber-400 text-white p-1 rounded-lg border-2 border-white shadow-sm">
-                  <Award size={10} fill="currentColor" />
+        <div className="flex flex-col md:flex-row gap-6 pt-0 md:pt-6 relative items-start">
+          {/* 🌟 DESKTOP SIDEBAR MENU - TỰ ĐỘNG CHUYỂN DẠNG KHI CHẠM CHÂN TRANG FOOTER */}
+          <div className="hidden md:block w-64 lg:w-72 shrink-0">
+            <aside
+              ref={sidebarContainerRef}
+              className={`${
+                isAtFooter ? "absolute bottom-0 top-auto" : "fixed top-[185px]"
+              } w-64 lg:w-72 space-y-4 z-20 transition-all duration-150`}
+            >
+              {/* Box 1: Khối Avatar & Tên */}
+              <div className="bg-white rounded-[32px] p-5 shadow-sm border border-slate-100 flex items-center gap-4 h-[90px]">
+                <div className="relative shrink-0">
+                  <img
+                    src={getAvatarSrc(profile.avatar_url)}
+                    className="w-14 h-14 rounded-2xl object-cover border-4 border-[#f0f9f6]"
+                    alt="Avatar"
+                  />
+                  <div className="absolute -top-1 -right-1 bg-amber-400 text-white p-1 rounded-lg border-2 border-white shadow-sm">
+                    <Award size={10} fill="currentColor" />
+                  </div>
+                </div>
+                <div className="overflow-hidden text-left">
+                  <h4 className="font-black text-slate-900 truncate tracking-tight text-sm">
+                    {profile.full_name}
+                  </h4>
+                  {renderTierBadge(
+                    profile.membership_tier,
+                    "text-[9px] mt-1",
+                    10,
+                  )}
                 </div>
               </div>
-              <div className="overflow-hidden text-left">
-                <h4 className="font-black text-slate-900 truncate tracking-tight text-sm">
-                  {profile.full_name}
-                </h4>
-                {renderTierBadge(
-                  profile.membership_tier,
-                  "text-[9px] mt-1",
-                  10,
-                )}
-              </div>
-            </div>
 
-            <div className="bg-white rounded-[32px] p-2 shadow-sm border border-slate-100 space-y-4">
-              {menuGroups.map((group, idx) => (
-                <div key={idx} className="space-y-0.5">
-                  <p className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
-                    {group.title}
-                  </p>
-                  {group.items.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        navigate(
-                          item.path ? `/profile/${item.path}` : "/profile",
-                        );
-                      }}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${activeTab === item.id || (item.id === "orders" && activeTab === "orders") ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20" : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"}`}
-                    >
-                      <span
-                        className={
+              {/* Box 2: Menu điều hướng các Tab */}
+              <div className="bg-white rounded-[32px] p-2 shadow-sm border border-slate-100 space-y-4">
+                {menuGroups.map((group, idx) => (
+                  <div key={idx} className="space-y-0.5">
+                    <p className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
+                      {group.title}
+                    </p>
+                    {group.items.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          navigate(
+                            item.path ? `/profile/${item.path}` : "/profile",
+                          );
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
                           activeTab === item.id ||
                           (item.id === "orders" && activeTab === "orders")
-                            ? "text-white"
-                            : "text-slate-300"
-                        }
+                            ? "bg-[#006c49] text-white shadow-lg shadow-[#006c49]/20"
+                            : "text-slate-500 hover:bg-slate-50 hover:text-[#006c49]"
+                        }`}
                       >
-                        {item.icon}
-                      </span>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </aside>
+                        <span
+                          className={
+                            activeTab === item.id ||
+                            (item.id === "orders" && activeTab === "orders")
+                              ? "text-white"
+                              : "text-slate-300"
+                          }
+                        >
+                          {item.icon}
+                        </span>
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
 
-          {/* MAIN CONTAINER CONTENT */}
-          <div className="flex-1 w-full space-y-4">
+          {/* MAIN CONTAINER CONTENT - BÊN PHẢI NẰM RIÊNG KÉO LÊN XUỐNG DỄ DÀNG */}
+          <div className="flex-1 w-full space-y-4 min-w-0">
             {/* WIDGETS WALLET SECTION */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:gap-4">
               <div className="md:col-span-2 bg-[#006c49] rounded-none md:rounded-[28px] p-5 text-white relative overflow-hidden shadow-lg h-[110px] md:h-[100px]">
@@ -1390,7 +1431,7 @@ export default function ProfilePage() {
         dangerouslySetInnerHTML={{
           __html: `
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; font-weight: bold; transform: translateY(0); } }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
         .animate-toastIn { animation: toastIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
