@@ -1,3 +1,5 @@
+// File: backend/services/order-service/controllers/orderController.js
+
 import * as Order from '../models/orderModel.js';
 import axios from 'axios';
 import db from '../configs/database.js';
@@ -318,21 +320,18 @@ const placeOrder = async (req, res) => {
         }
 
         if (rawPostOffices.length > 0) {
-          // 1. Tìm bưu cục First Mile (Gần Kho nhất)
           const optimalFirstMileOffice = rawPostOffices.reduce((prev, curr) => {
             const prevDist = calcHaversine(storeLat, storeLng, prev.location.lat, prev.location.lng);
             const currDist = calcHaversine(storeLat, storeLng, curr.location.lat, curr.location.lng);
             return currDist < prevDist ? curr : prev;
           }, rawPostOffices[0]);
 
-          // 2. Tìm bưu cục Last Mile (Gần Khách Hàng nhất)
           const optimalLastMileOffice = rawPostOffices.reduce((prev, curr) => {
             const prevDist = calcHaversine(rgbLatNum, rgbLngNum, prev.location.lat, prev.location.lng);
             const currDist = calcHaversine(rgbLatNum, rgbLngNum, curr.location.lat, curr.location.lng);
             return currDist < prevDist ? curr : prev;
           }, rawPostOffices[0]);
 
-          // Lấy danh sách điểm Waypoint chạy qua OSRM
           let waypoints = [`${storeLng},${storeLat}`];
           if (optimalFirstMileOffice) waypoints.push(`${optimalFirstMileOffice.location.lng},${optimalFirstMileOffice.location.lat}`);
 
@@ -356,7 +355,6 @@ const placeOrder = async (req, res) => {
           const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints.join(';')}?overview=full&geometries=geojson`;
           const routeRes = await axios.get(osrmUrl);
           
-          // A. Bưu cục Chặng Đầu (First Mile)
           stationsToSave.push({
             station_id: String(optimalFirstMileOffice.id),
             station_name: String(optimalFirstMileOffice.name),
@@ -371,30 +369,26 @@ const placeOrder = async (req, res) => {
             trang_thai_hien_thi: 'Đã tiếp nhận hàng tại bưu cục điều phối chặng đầu'
           });
 
-          // B. Tìm 2 Bưu Cục Trung Chuyển Trên Đường Đi OSRM (Mid-Mile Hubs)
           if (routeRes.data?.code === "Ok" && routeRes.data.routes[0]?.geometry?.coordinates) {
             const coordinates = routeRes.data.routes[0].geometry.coordinates;
-            const idx1 = Math.floor(coordinates.length * 0.33); // Tọa độ mốc 1/3 đường
-            const idx2 = Math.floor(coordinates.length * 0.66); // Tọa độ mốc 2/3 đường
+            const idx1 = Math.floor(coordinates.length * 0.33);
+            const idx2 = Math.floor(coordinates.length * 0.66);
 
             const coordMid1 = coordinates[idx1];
             const coordMid2 = coordinates[idx2];
 
-            // Tìm Bưu cục KML thực tế gần tọa độ mốc 1/3 nhất
             const midStation1 = rawPostOffices.reduce((prev, curr) => {
               const prevDist = calcHaversine(coordMid1[1], coordMid1[0], prev.location.lat, prev.location.lng);
               const currDist = calcHaversine(coordMid1[1], coordMid1[0], curr.location.lat, curr.location.lng);
               return currDist < prevDist ? curr : prev;
             }, rawPostOffices[0]);
 
-            // Tìm Bưu cục KML thực tế gần tọa độ mốc 2/3 nhất
             const midStation2 = rawPostOffices.reduce((prev, curr) => {
               const prevDist = calcHaversine(coordMid2[1], coordMid2[0], prev.location.lat, prev.location.lng);
               const currDist = calcHaversine(coordMid2[1], coordMid2[0], curr.location.lat, curr.location.lng);
               return currDist < prevDist ? curr : prev;
             }, rawPostOffices[0]);
 
-            // Đẩy Trạm Trung Chuyển 1 vào danh sách (nếu không trùng với First/Last)
             if (midStation1.id !== optimalFirstMileOffice.id && midStation1.id !== optimalLastMileOffice.id) {
               stationsToSave.push({
                 station_id: String(midStation1.id),
@@ -411,7 +405,6 @@ const placeOrder = async (req, res) => {
               });
             }
 
-            // Đẩy Trạm Trung Chuyển 2 vào danh sách (nếu không trùng)
             if (midStation2.id !== optimalFirstMileOffice.id && midStation2.id !== optimalLastMileOffice.id && midStation2.id !== midStation1.id) {
               stationsToSave.push({
                 station_id: String(midStation2.id),
@@ -429,7 +422,6 @@ const placeOrder = async (req, res) => {
             }
           }
 
-          // C. Bưu cục Chặng Cuối (Last Mile)
           if (optimalLastMileOffice.id !== optimalFirstMileOffice.id) {
             stationsToSave.push({
               station_id: String(optimalLastMileOffice.id),
@@ -501,7 +493,7 @@ const placeOrder = async (req, res) => {
     }
 
     // =========================================================================
-    // 🌟 BẮN THÔNG BÁO ĐẶT HÀNG THÀNH CÔNG (KHÔNG ẢNH HƯỞNG LUỒNG LOGISTICS)
+    // 🌟 BẮN THÔNG BÁO ĐẶT HÀNG THÀNH CÔNG
     // =========================================================================
     try {
       await axios.post('http://notification-service:8085/api/v1/notifications/send', {
@@ -514,7 +506,6 @@ const placeOrder = async (req, res) => {
     } catch (notiError) {
       console.warn("⚠️ Gửi thông báo thất bại:", notiError.message);
     }
-    // =========================================================================
 
     return res.status(201).json({ 
       success: true, 
@@ -723,7 +714,9 @@ const getOrderDetailAdmin = async (req, res) => {
       try {
         const authResponse = await axios.get(`http://demi_auth_service:5001/api/v1/auth/internal/users/${order.user_id}`);
         if (authResponse.data) order.user_info = authResponse.data; 
-      } catch (authErr) { console.warn("Lỗi fetch user info"); }
+      } catch (authErr) {
+        console.warn("Lỗi fetch user info");
+      }
     }
 
     try {
@@ -751,7 +744,6 @@ const cancelOrder = async (req, res) => {
   try {
     const { ma_don_hang } = req.params;
 
-    // 🌟 ĐÃ SỬA: Thêm user_id vào câu lệnh SELECT
     const checkOrderQuery = `SELECT id, user_id, ma_don_hang, trang_thai_don_hang, tong_thanh_toan, phuong_thuc_thanh_toan, trang_thai_thanh_toan FROM public.orders WHERE ma_don_hang = $1`;
     const checkOrderRes = db.query ? await db.query(checkOrderQuery, [ma_don_hang]) : await db.execute(checkOrderQuery, [ma_don_hang]);
     const orderInfo = checkOrderRes.rows ? checkOrderRes.rows[0] : checkOrderRes[0];
@@ -797,9 +789,7 @@ const cancelOrder = async (req, res) => {
       await db.execute(updateQuery, [ma_don_hang]);
     }
 
-    // =========================================================================
-    // 💰 HOÀN TIỀN VÀO VÍ DEMIPAY (NẾU ĐÃ THANH TOÁN VNPAY/PAYPAL)
-    // =========================================================================
+    // Hoàn tiền vào ví DemiPay nếu đã thanh toán trước
     try {
       const paymentStatus = String(orderInfo.trang_thai_thanh_toan).trim().toLowerCase();
       const paymentMethod = String(orderInfo.phuong_thuc_thanh_toan).trim().toUpperCase();
@@ -808,7 +798,6 @@ const cancelOrder = async (req, res) => {
       const isPrepaid = ['VNPAY', 'PAYPAL'].includes(paymentMethod);
 
       if (isPaid && isPrepaid && orderInfo.user_id) {
-        // Gọi API nội bộ sang Auth Service để cộng tiền
         await axios.post('http://auth-service:5001/api/v1/auth/internal/wallet/refund', {
           userId: orderInfo.user_id,
           amount: Number(orderInfo.tong_thanh_toan),
@@ -820,11 +809,8 @@ const cancelOrder = async (req, res) => {
     } catch (refundErr) {
       console.warn("⚠️ Hoàn tiền ví thất bại:", refundErr.message);
     }
-    // =========================================================================
     
-    // =========================================================================
-    // 🌟 BẮN THÔNG BÁO HỦY ĐƠN HÀNG
-    // =========================================================================
+    // Bắn thông báo hủy đơn
     try {
       if (orderInfo.user_id) {
         await axios.post('http://notification-service:8085/api/v1/notifications/send', {
@@ -838,7 +824,6 @@ const cancelOrder = async (req, res) => {
     } catch (notiError) {
       console.warn("⚠️ Gửi thông báo hủy thất bại:", notiError.message);
     }
-    // =========================================================================
 
     return res.status(200).json({ 
       success: true, 
@@ -910,7 +895,7 @@ const calculateShipping = async (req, res) => {
   try {
     const { userLat, userLng } = req.body;
     if (!userLat || !userLng) return res.status(400).json({ success: false, message: "Địa chỉ này chưa có tọa độ bản đồ!" });
- 
+
     const storeLat = 10.792622;
     const storeLng = 106.680172;
     const distanceKm = calcHaversine(parseFloat(userLat), parseFloat(userLng), storeLat, storeLng);
@@ -925,9 +910,7 @@ const calculateShipping = async (req, res) => {
   }
 };
 
-// ========================================================
-// 📊 API 12: TRUY VẤN LỘ TRÌNH BƯU CỤC TỪ CƠ SỞ DỮ LIỆU CHO BẢN ĐỒ
-// ========================================================
+// 12. Truy vấn lộ trình bưu cục
 const getOrderTrackingLogs = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -992,9 +975,7 @@ const getOrderTrackingLogs = async (req, res) => {
   }
 };
 
-// ========================================================
-// 🌟 API 13: GHI LOG LOGISTICS REALTIME TỪ CÁC NODE ADMIN DI CHUYỂN
-// ========================================================
+// 13. Ghi log logistics realtime
 const createOrderTrackingLogNode = async (req, res) => {
   try {
     const {
@@ -1013,9 +994,6 @@ const createOrderTrackingLogNode = async (req, res) => {
       trang_thai_hien_thi
     } = req.body;
 
-    // =========================================================================
-    // 🛡️ BƯỚC 1: KHIÊN CHỐNG SPAM (CHẶN GHI TRÙNG TRẠNG THÁI)
-    // =========================================================================
     const checkDuplicateQuery = `
       SELECT id FROM public.order_tracking_logs 
       WHERE order_id = $1 AND trang_thai_hien_thi = $2 
@@ -1031,13 +1009,11 @@ const createOrderTrackingLogNode = async (req, res) => {
     const isDuplicate = checkRes.rows ? checkRes.rows.length > 0 : checkRes.length > 0;
     
     if (isDuplicate) {
-      console.log(`⚠️ Bỏ qua spam: Đơn ${ma_don_hang} đã có trạng thái "${trang_thai_hien_thi}"`);
       return res.status(200).json({ 
         success: true, 
         message: "Trạng thái này đã được cập nhật trước đó, bỏ qua ghi trùng." 
       });
     }
-    // =========================================================================
 
     const insertLogQuery = `
       INSERT INTO public.order_tracking_logs (
@@ -1072,9 +1048,6 @@ const createOrderTrackingLogNode = async (req, res) => {
       result = await db.execute(insertLogQuery, queryParams);
     }
 
-    // =========================================================================
-    // 🌟 TRUY VẤN CHỦ NHÂN ĐƠN HÀNG VÀ BẮN THÔNG BÁO CẬP NHẬT TRẠM
-    // =========================================================================
     try {
       const getUserQuery = `SELECT user_id FROM public.orders WHERE id = $1`;
       const userRes = db.query ? await db.query(getUserQuery, [Number(order_id)]) : await db.execute(getUserQuery, [Number(order_id)]);
@@ -1092,7 +1065,6 @@ const createOrderTrackingLogNode = async (req, res) => {
     } catch (notiError) {
       console.warn("⚠️ Gửi thông báo nhảy trạm thất bại:", notiError.message);
     }
-    // =========================================================================
 
     return res.status(201).json({
       success: true,
@@ -1109,9 +1081,7 @@ const createOrderTrackingLogNode = async (req, res) => {
   }
 };
 
-// ========================================================
-// 💰 API 14: TÍNH TỔNG TIỀN CHI TIÊU CỦA KHÁCH HÀNG (VIP)
-// ========================================================
+// 14. Tính tổng tiền chi tiêu
 const getUserSpent = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1149,9 +1119,7 @@ const getUserSpent = async (req, res) => {
   }
 };
 
-// ========================================================
-// 💳 API 15: THANH TOÁN ĐƠN HÀNG BẰNG VÍ DEMIPAY (XỬ LÝ TẬP TRUNG)
-// ========================================================
+// 15. Thanh toán bằng ví DemiPay
 const payOrderWithDemiPay = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -1160,8 +1128,6 @@ const payOrderWithDemiPay = async (req, res) => {
     if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
     if (!ma_don_hang || !amount) return res.status(400).json({ success: false, message: "Thiếu thông tin mã đơn hàng hoặc số tiền!" });
 
-    // 1. Gọi nội bộ sang Auth Service để trừ tiền ví
-    // Lưu ý: Phải truyền tiếp token qua header để Auth Service nhận diện được user
     const authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://demi_auth_service:5001';
     
     try {
@@ -1171,7 +1137,6 @@ const payOrderWithDemiPay = async (req, res) => {
         { headers: { Authorization: req.headers.authorization } } 
       );
 
-      // 2. Trừ tiền ví thành công -> Cập nhật trạng thái đơn hàng sang 'Đã thanh toán'
       if (authRes.data.success) {
         const updateQuery = `
           UPDATE public.orders 
@@ -1186,7 +1151,6 @@ const payOrderWithDemiPay = async (req, res) => {
           await db.execute(updateQuery, [ma_don_hang, userId]);
         }
 
-        // (Tuỳ chọn) Bắn thông báo realtime cho user
         try {
           await axios.post('http://notification-service:8085/api/v1/notifications/send', {
             userId: String(userId),
@@ -1218,6 +1182,57 @@ const payOrderWithDemiPay = async (req, res) => {
   }
 };
 
+// 16. Admin Cập nhật trạng thái đơn hàng (ĐỒNG BỘ DÙNG ĐÚNG DB POOL/CLIENT)
+const updateOrderStatusAdmin = async (req, res) => {
+  try {
+    const ma_don_hang = req.params.ma_don_hang || req.params.id;
+    const { trang_thai_don_hang, status } = req.body;
+
+    const newStatus = trang_thai_don_hang || status;
+
+    if (!newStatus) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Vui lòng cung cấp trạng thái đơn hàng mới!' 
+      });
+    }
+
+    const updateQuery = `
+      UPDATE public.orders 
+      SET trang_thai_don_hang = $1
+      WHERE ma_don_hang = $2 OR id::text = $2
+      RETURNING *;
+    `;
+
+    const result = db.query ? await db.query(updateQuery, [newStatus, ma_don_hang]) : await db.execute(updateQuery, [newStatus, ma_don_hang]);
+    const updatedRows = result.rows ? result.rows : result[0];
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Không tìm thấy đơn hàng #${ma_don_hang} để cập nhật!`
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Đã cập nhật trạng thái đơn hàng #${ma_don_hang} thành: ${newStatus}`,
+      data: updatedRows[0]
+    });
+
+  } catch (error) {
+    console.error('🔥 Lỗi chi tiết updateOrderStatusAdmin:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi máy chủ khi cập nhật trạng thái đơn hàng!',
+      error: error.message 
+    });
+  }
+};
+
+// ========================================================
+// 📦 EXPORT DUY NHẤT TẠI CỤM CUỐI FILE
+// ========================================================
 export { 
   getShippingFee, 
   placeOrder, 
@@ -1234,5 +1249,6 @@ export {
   getOrderTrackingLogs,
   createOrderTrackingLogNode,
   getUserSpent,
-  payOrderWithDemiPay
+  payOrderWithDemiPay,
+  updateOrderStatusAdmin
 };
