@@ -11,6 +11,11 @@ import {
   FileText,
   CheckCircle2,
   Circle,
+  Truck,
+  ChevronDown,
+  Check,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 
 const OrderDetail = () => {
@@ -18,69 +23,191 @@ const OrderDetail = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const orderId = location.state?.orderId;
-
   const [orderData, setOrderData] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // State hiển thị tên địa chính dịch từ GHN hoặc Nominatim
+  const [resolvedAddress, setResolvedAddress] = useState("Đang tra cứu địa chỉ...");
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+
+  // State cho dropdown thay đổi trạng thái nhanh
+  const [isStatusMenuOpen, setIsStatusMenuId] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const fetchOrderDetail = async () => {
+    if (!maDonHang) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const adminToken = localStorage.getItem("adminToken");
+      const response = await orderApi.get(`/admin/orders/${maDonHang}`, {
+        headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
+      });
+
+      if (response.data && response.data.success) {
+        const order = response.data.data;
+        setOrderData(order);
+        setProducts(order.danh_sach_san_pham || order.items || []);
+      } else {
+        setErrorMsg("Không thể tải thông tin đơn hàng từ hệ thống.");
+      }
+    } catch (err) {
+      console.error("Lỗi khi kết nối API:", err);
+      if (err.response?.status === 401) {
+        setErrorMsg(
+          "Phiên làm việc hết hạn hoặc bạn không có quyền xem chi tiết hóa đơn (401 Unauthorized)."
+        );
+      } else {
+        setErrorMsg("Lỗi kết nối đến dịch vụ đơn hàng.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchOrderDetail = async () => {
-      if (!maDonHang) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const adminToken = localStorage.getItem("adminToken");
-        //  Đoạn code mới đã bổ sung đúng cấu trúc Admin Route của Back-end
-        //  Đường dẫn mới giúp Axios nối chuỗi chính xác thành: /api/orders/admin/orders/...
-        const response = await orderApi.get(`/admin/orders/${maDonHang}`, {
-          headers: { Authorization: adminToken ? `Bearer ${adminToken}` : "" },
-        });
-
-        if (response.data && response.data.success) {
-          const order = response.data.data;
-          setOrderData(order);
-          setProducts(order.danh_sach_san_pham || []);
-        } else {
-          setErrorMsg("Không thể tải thông tin đơn hàng từ hệ thống.");
-        }
-      } catch (err) {
-        console.error("Lỗi khi kết nối API:", err);
-        if (err.response?.status === 401) {
-          setErrorMsg(
-            "Phiên làm việc hết hạn hoặc bạn không có quyền xem chi tiết hóa đơn (401 Unauthorized).",
-          );
-        } else {
-          setErrorMsg("Lỗi kết nối đến dịch vụ đơn hàng.");
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchOrderDetail();
   }, [maDonHang]);
 
-  // 🌟 THUẬT TOÁN GOM NHÓM SẢN PHẨM CHUẨN MICROSERVICES
+  // 🌟 THUẬT TOÁN ĐỌC ĐỊA CHỈ THÔNG MINH (KẾT HỢP GPS & MÃ ĐỊA CHÍNH GHN)
+  useEffect(() => {
+    if (!orderData) return;
+
+    // 1. Nếu có sẵn chuỗi địa chỉ văn bản từ Backend thì ưu tiên dùng ngay
+    let shippingInfo = orderData.thong_tin_giao_hang || {};
+    if (typeof shippingInfo === "string") {
+      try { shippingInfo = JSON.parse(shippingInfo); } catch (e) { shippingInfo = {}; }
+    }
+
+    const staticAddress =
+      shippingInfo.dia_chi_day_du ||
+      shippingInfo.full_address ||
+      shippingInfo.address ||
+      orderData.dia_chi_day_du ||
+      orderData.full_address ||
+      orderData.address ||
+      orderData.user_info?.address;
+
+    if (staticAddress && String(staticAddress).trim() !== "" && staticAddress !== "null") {
+      setResolvedAddress(staticAddress);
+      return;
+    }
+
+    // 2. Nếu có tọa độ to_lat & to_lng -> Dùng Nominatim Reverse Geocoding lấy địa chỉ tiếng Việt cực nhanh
+    const lat = orderData.to_lat || orderData.latitude;
+    const lng = orderData.to_lng || orderData.longitude;
+
+    setIsResolvingAddress(true);
+
+    if (lat && lng) {
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.display_name) {
+            setResolvedAddress(data.display_name);
+          } else {
+            resolveByGhnCodes();
+          }
+        })
+        .catch(() => {
+          resolveByGhnCodes();
+        })
+        .finally(() => {
+          setIsResolvingAddress(false);
+        });
+    } else {
+      resolveByGhnCodes();
+    }
+
+    // 3. Hàm dự phòng dịch từ to_district_id & to_ward_code nếu không có GPS
+    async function resolveByGhnCodes() {
+      const districtId = orderData.to_district_id;
+      const wardCode = String(orderData.to_ward_code || "").trim();
+
+      if (!districtId) {
+        setResolvedAddress("Chưa cập nhật địa chỉ giao hàng");
+        setIsResolvingAddress(false);
+        return;
+      }
+
+      try {
+        let districtName = "";
+        let provinceName = "";
+        let wardName = "";
+
+        // Gọi lấy danh sách Tỉnh
+        const provincesRes = await orderApi.get("/addresses/provinces").catch(() => null);
+        const provinces = provincesRes?.data?.data || provincesRes?.data || [];
+
+        for (const prov of provinces) {
+          const distRes = await orderApi.get(`/addresses/districts?province_id=${prov.ProvinceID}`).catch(() => null);
+          const districts = distRes?.data?.data || distRes?.data || [];
+          const matchedDist = districts.find((d) => Number(d.DistrictID) === Number(districtId));
+
+          if (matchedDist) {
+            districtName = matchedDist.DistrictName;
+            provinceName = prov.ProvinceName;
+
+            const wardRes = await orderApi.get(`/addresses/wards?district_id=${districtId}`).catch(() => null);
+            const wards = wardRes?.data?.data || wardRes?.data || [];
+            const matchedWard = wards.find((w) => String(w.WardCode).trim() === wardCode);
+            if (matchedWard) wardName = matchedWard.WardName;
+            break;
+          }
+        }
+
+        const fullStr = [wardName, districtName, provinceName].filter(Boolean).join(", ");
+        setResolvedAddress(fullStr || `Mã Quận: ${districtId} • Mã Xã: ${wardCode}`);
+      } catch (err) {
+        setResolvedAddress(`Mã Quận: ${districtId} • Mã Xã: ${wardCode}`);
+      } finally {
+        setIsResolvingAddress(false);
+      }
+    }
+  }, [orderData]);
+
+  const handleUpdateStatus = async (newStatus) => {
+    if (!orderData) return;
+    const targetMaDonHang = orderData.ma_don_hang || orderData.id;
+    setIsUpdatingStatus(true);
+    setIsStatusMenuId(false);
+
+    try {
+      if (newStatus === "cancelled" || newStatus === "da_huy" || newStatus === "Đã hủy") {
+        await orderApi.put(`/admin/orders/${targetMaDonHang}/cancel`);
+      } else {
+        await orderApi.put(`/admin/orders/${targetMaDonHang}/status`, {
+          trang_thai_don_hang: newStatus,
+          status: newStatus,
+        });
+      }
+      await fetchOrderDetail();
+    } catch (err) {
+      console.error("Lỗi cập nhật trạng thái:", err.response || err);
+      const msg = err.response?.data?.message || err.response?.data?.error || "Cập nhật trạng thái thất bại!";
+      alert(`⚠️ Lỗi: ${msg}`);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const groupedProducts = useMemo(() => {
     const groups = {};
     products.forEach((prod) => {
-      // Dùng ma_san_pham làm key gốc, nếu không có thì lấy tên sản phẩm
-      const key =
-        prod.ma_san_pham || prod.product_name || prod.ten_san_pham || "unknown";
+      const key = prod.ma_san_pham || prod.product_name || prod.ten_san_pham || "unknown";
 
       if (!groups[key]) {
         groups[key] = {
           ma_san_pham: prod.ma_san_pham || "",
-          product_name:
-            prod.product_name || prod.ten_san_pham || "Sản phẩm Demi",
+          product_name: prod.product_name || prod.ten_san_pham || "Sản phẩm Demi",
           image_url:
             prod.image_url ||
             prod.image ||
             "https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=100",
-          items: [], // Mảng chứa các biến thể (variants) của sản phẩm này
+          items: [],
         };
       }
 
@@ -117,6 +244,26 @@ const OrderDetail = () => {
       .replace(",", " AT");
   };
 
+  const getDeliveryBadgeClass = (status) => {
+    const s = String(status || "").toLowerCase().trim();
+    if (["xác nhận", "xac_nhan", "da_xac_nhan", "đã xác nhận", "processing", "shipped", "delivered", "da_giao", "đã giao", "đang giao"].includes(s))
+      return "bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-bold";
+    if (["pending", "dang_xu_ly", "cho_xu_ly", "chờ xử lý", "cho_xac_nhan", "chờ xác nhận"].includes(s))
+      return "bg-amber-50 text-amber-700 border border-amber-200/60 font-bold";
+    if (["cancelled", "da_huy", "đã hủy"].includes(s))
+      return "bg-rose-50 text-rose-700 border border-rose-200/60 font-bold";
+    return "bg-slate-50 text-slate-700 border border-slate-200/60 font-bold";
+  };
+
+  const renderDeliveryBadgeText = (status) => {
+    const s = String(status || "").toLowerCase().trim();
+    if (["xác nhận", "xac_nhan", "da_xac_nhan", "đã xác nhận"].includes(s)) return "XÁC NHẬN";
+    if (["shipped", "đang giao", "dang_giao"].includes(s)) return "ĐANG GIAO";
+    if (["delivered", "da_giao", "đã giao"].includes(s)) return "ĐÃ GIAO HÀNG";
+    if (["cancelled", "da_huy", "đã hủy"].includes(s)) return "ĐÃ HỦY";
+    return String(status || "CHỜ XỬ LÝ").toUpperCase();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center font-sans">
@@ -149,31 +296,38 @@ const OrderDetail = () => {
   }
 
   const customerName = orderData.user_info?.full_name || "Khách mua hàng";
-  const customerPhone =
-    orderData.user_info?.phone_number || "Chưa cập nhật SĐT";
+  const customerPhone = orderData.user_info?.phone_number || "Chưa cập nhật SĐT";
   const customerEmail = orderData.user_info?.email || "Chưa cập nhật Email";
-  const customerAddress = orderData.address || "Nhận tại siêu thị Demi Mart";
   const customerAvatar =
     orderData.user_info?.avatar_url ||
     "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=100&auto=format&fit=crop";
-  const paymentMethod =
-    orderData.phuong_thuc_thanh_toan || "Thanh toán khi nhận hàng (COD)";
+
+  const paymentMethod = orderData.phuong_thuc_thanh_toan || "Thanh toán khi nhận hàng (COD)";
 
   const rawPaymentStatus = orderData.trang_thai_thanh_toan
     ? String(orderData.trang_thai_thanh_toan).toUpperCase()
     : "PENDING";
+
   const isPaid =
     rawPaymentStatus === "COMPLETED" ||
     rawPaymentStatus === "DA_THANH_TOAN" ||
     rawPaymentStatus === "SUCCESS";
 
-  const rawDeliveryStatus = orderData.trang_thai_don_hang
-    ? String(orderData.trang_thai_don_hang).toLowerCase()
-    : "pending";
+  const currentDeliveryStatusStr = String(orderData.trang_thai_don_hang || orderData.status || "").toLowerCase().trim();
+
+  const isPendingStatus = [
+    "pending",
+    "dang_xu_ly",
+    "cho_xu_ly",
+    "cho_xac_nhan",
+    "chờ xử lý",
+    "chờ xác nhận",
+  ].includes(currentDeliveryStatusStr);
+
   const isDelivered =
-    rawDeliveryStatus === "delivered" ||
-    rawDeliveryStatus === "da_giao" ||
-    rawDeliveryStatus === "đã giao";
+    currentDeliveryStatusStr === "delivered" ||
+    currentDeliveryStatusStr === "da_giao" ||
+    currentDeliveryStatusStr === "đã giao";
 
   const timelineSteps = [
     {
@@ -203,25 +357,90 @@ const OrderDetail = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 font-sans text-gray-800 text-left">
-      {/* Header */}
-      <div className="max-w-6xl mx-auto mb-6 flex justify-between items-center">
+      {/* HEADER ĐỐI XỨNG */}
+      <div className="max-w-6xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
         <div>
-          <div className="text-xs text-gray-400 mb-1 font-bold uppercase tracking-wider">
+          <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">
             Dashboard ❯ Đơn hàng ❯{" "}
             <span className="text-emerald-700">Chi tiết đơn hàng</span>
           </div>
-          <div className="flex items-center gap-3 mt-2">
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               Chi tiết đơn hàng
             </h1>
-            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-1 rounded font-black font-mono shadow-sm">
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-1 rounded-lg font-black font-mono shadow-xs">
               Mã: {orderData.ma_don_hang || `DH-${orderData.id}`}
             </span>
           </div>
         </div>
+
+        {/* Cụm Giữa: Trạng thái Vận chuyển & Thanh toán */}
+        <div className="flex flex-wrap items-center gap-3 bg-slate-50 p-2 px-4 rounded-2xl border border-slate-100 shadow-xs">
+          <div className="flex items-center gap-2">
+            <Truck size={16} className="text-slate-400" />
+            {isPendingStatus ? (
+              <div className="relative inline-block text-left">
+                <button
+                  disabled={isUpdatingStatus}
+                  onClick={() => setIsStatusMenuId(!isStatusMenuOpen)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 shadow-xs hover:bg-amber-100 transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {isUpdatingStatus ? (
+                    <span className="flex items-center gap-1 text-amber-600">
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                      Đang lưu...
+                    </span>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                      ⏳ CHỜ XÁC NHẬN
+                      <ChevronDown size={12} className="text-amber-600 ml-0.5" />
+                    </>
+                  )}
+                </button>
+
+                {isStatusMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-44 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100">
+                    <button
+                      onClick={() => handleUpdateStatus("Xác nhận")}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50 rounded-xl transition text-left cursor-pointer"
+                    >
+                      <Check size={14} className="text-emerald-600" />
+                      Xác nhận đơn
+                    </button>
+                    <button
+                      onClick={() => handleUpdateStatus("cancelled")}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition text-left cursor-pointer"
+                    >
+                      <XCircle size={14} className="text-rose-500" />
+                      Hủy đơn hàng
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${getDeliveryBadgeClass(orderData.trang_thai_don_hang || orderData.status)}`}>
+                {renderDeliveryBadgeText(orderData.trang_thai_don_hang || orderData.status)}
+              </span>
+            )}
+          </div>
+
+          <span className="text-slate-300">|</span>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-400">Thanh toán:</span>
+            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${isPaid ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" : "bg-slate-100 text-slate-600 border border-slate-200/60"}`}>
+              {isPaid ? "COMPLETED" : rawPaymentStatus}
+            </span>
+          </div>
+        </div>
+
         <button
           onClick={() => navigate("/admin/Donhang")}
-          className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all shadow-sm"
+          className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all shadow-xs cursor-pointer"
         >
           <ArrowLeft size={16} /> Quay về
         </button>
@@ -256,10 +475,8 @@ const OrderDetail = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-sm font-semibold">
-                  {/* 🌟 VÒNG LẶP RENDER DỮ LIỆU ĐÃ ĐƯỢC GOM NHÓM */}
                   {groupedProducts.map((group, gIdx) => (
                     <React.Fragment key={gIdx}>
-                      {/* Dòng Header Sản phẩm chính */}
                       <tr className="bg-slate-50/30">
                         <td colSpan="5" className="py-3.5 px-4">
                           <div className="flex items-center gap-4">
@@ -279,7 +496,6 @@ const OrderDetail = () => {
                           </div>
                         </td>
                       </tr>
-                      {/* Dòng Chi tiết từng Biến thể (SKU) */}
                       {group.items.map((item, iIdx) => (
                         <tr
                           key={iIdx}
@@ -313,7 +529,7 @@ const OrderDetail = () => {
             </div>
           </div>
 
-          {/* Timeline */}
+          {/* Timeline Tiến trình */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
             <h2 className="font-black text-slate-800 flex items-center gap-2 mb-6 text-lg">
               <span className="text-emerald-600">
@@ -390,7 +606,7 @@ const OrderDetail = () => {
                 </div>
                 <div>
                   <div className="text-[10px] uppercase font-black text-slate-400 mb-0.5 tracking-wider">
-                    Điện thoại
+                    Điện thoại người nhận
                   </div>
                   <div className="text-slate-800 font-mono text-sm font-bold">
                     {customerPhone}
@@ -435,16 +651,24 @@ const OrderDetail = () => {
                 </div>
               )}
 
+              {/* Ô ĐỊA CHỈ GIAO HÀNG ĐÃ TỰ ĐỘNG DỊCH THÀNH TIẾNG VIỆT */}
               <div className="flex gap-3 items-start">
                 <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 text-slate-400">
                   <MapPin size={14} />
                 </div>
                 <div>
                   <div className="text-[10px] uppercase font-black text-slate-400 mb-0.5 tracking-wider">
-                    Địa chỉ giao hàng
+                    Địa chỉ giao hàng chi tiết
                   </div>
-                  <div className="text-slate-800 leading-relaxed font-bold">
-                    {customerAddress}
+                  <div className="text-slate-800 leading-relaxed font-bold bg-emerald-50/40 p-2.5 rounded-xl border border-emerald-100/60 mt-0.5">
+                    {isResolvingAddress ? (
+                      <span className="flex items-center gap-1.5 text-emerald-700 italic font-normal">
+                        <Loader2 size={13} className="animate-spin text-emerald-600" />
+                        Đang tra cứu tên địa chỉ thực địa...
+                      </span>
+                    ) : (
+                      resolvedAddress
+                    )}
                   </div>
                 </div>
               </div>
@@ -455,7 +679,7 @@ const OrderDetail = () => {
                 </div>
                 <div>
                   <div className="text-[10px] uppercase font-black text-slate-400 mb-0.5 tracking-wider">
-                    Thanh toán
+                    Phương thức thanh toán
                   </div>
                   <div className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-xs inline-block mt-0.5">
                     {paymentMethod}
@@ -467,7 +691,6 @@ const OrderDetail = () => {
 
           {/* Hóa đơn */}
           <div className="bg-gradient-to-br from-emerald-800 to-[#006c49] text-white rounded-3xl shadow-lg p-6 flex flex-col justify-between relative overflow-hidden">
-            {/* Decal Background */}
             <div className="absolute top-0 right-0 p-4 opacity-10 rotate-12">
               <FileText size={100} />
             </div>
