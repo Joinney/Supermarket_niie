@@ -10,7 +10,7 @@ import {
   Loader2,
   X,
   Ticket,
-  Zap, // 👈 ĐÃ BỔ SUNG: Import icon Zap cho Demi Xu
+  Zap,
 } from "lucide-react";
 import { useOrder } from "../../context/OrderContext";
 import { authApi, orderApi, paymentApi, couponApi } from "../../api/axios";
@@ -48,7 +48,7 @@ export default function Checkout() {
   // 🌟 QUẢN LÝ SỐ DƯ VÍ DEMIPAY
   const [walletBalance, setWalletBalance] = useState(0);
 
-  // 🌟 ĐÃ BỔ SUNG: STATE QUẢN LÝ DEMI XU (LOYALTY POINTS)
+  // 🌟 STATE QUẢN LÝ DEMI XU (LOYALTY POINTS)
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
   const [usePoints, setUsePoints] = useState(false);
 
@@ -331,7 +331,15 @@ export default function Checkout() {
       address.wardCode ||
       address.ward_id;
 
+    // 🌟 BỔ SUNG TRỌNG TÂM: Lấy mã ID địa chỉ được chọn
+    const targetAddressId =
+      address.address_id ||
+      address.addressId ||
+      address.id ||
+      null;
+
     const orderData = {
+      address_id: targetAddressId ? Number(targetAddressId) : null, // 👈 ĐÃ THÊM: Truyền address_id lên Backend
       thong_tin_giao_hang: {
         ten_nguoi_nhan:
           address.receiver_name || address.receiverName || "Khách hàng",
@@ -383,7 +391,6 @@ export default function Checkout() {
       so_tien_giam_gia: discountAmount,
       coupon_code: appliedCoupon ? appliedCoupon.code : null,
 
-      // 🌟 ĐÃ BỔ SUNG: Truyền điểm sử dụng xuống Backend
       points_used: usePoints ? maxPointsToUse : 0,
 
       tong_thanh_toan: finalTotal,
@@ -393,10 +400,8 @@ export default function Checkout() {
     };
 
     try {
-      // 🌟 ĐÃ SỬA: Bỏ qua hàm placeOrder của Context, gọi thẳng API
-      // Để lấy được trọn vẹn cục JSON trả về từ Backend (có chứa chữ success: true)
       const result = await orderApi.post("/orders/place-order", orderData);
-      const cleanResult = result.data; // Bóc tách chính xác cục data của Axios
+      const cleanResult = result.data;
 
       if (cleanResult && cleanResult.success) {
         const maDonHangText =
@@ -424,10 +429,8 @@ export default function Checkout() {
           }
         }
 
-        // Trả về mã đơn hàng cho các hàm bên ngoài xử lý tiếp
         return maDonHangText;
       } else {
-        // Nếu Backend trả về success: false kèm lời nhắn (VD: Hết hàng, Không đủ Xu...)
         alert(
           cleanResult?.message ||
             "Có sự cố từ máy chủ đơn hàng, Demi kiểm tra lại nhé!",
@@ -868,7 +871,7 @@ export default function Checkout() {
               </p>
             )}
 
-            {/* 🌟 KHU VỰC VOUCHER */}
+            {/* KHU VỰC VOUCHER */}
             <div className="border-t pt-5 mt-4 flex flex-col gap-3">
               <div className="flex justify-between items-center font-bold mb-1">
                 <div className="flex gap-2 text-[#006c49] text-sm uppercase tracking-wider">
@@ -922,7 +925,7 @@ export default function Checkout() {
               )}
             </div>
 
-            {/* 🌟 KHU VỰC DÙNG DEMI XU (SHOPEE COINS MODEL) */}
+            {/* KHU VỰC DÙNG DEMI XU */}
             <div className="border-t pt-5 mt-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap size={20} className="text-[#fea619]" fill="#fea619" />
@@ -1019,7 +1022,7 @@ export default function Checkout() {
                 </div>
               )}
 
-              {/* 🌟 HIỂN THỊ SỐ XU ĐƯỢC GIẢM */}
+              {/* HIỂN THỊ SỐ XU ĐƯỢC GIẢM */}
               {usePoints && maxPointsToUse > 0 && (
                 <div className="flex justify-between text-[#fea619] font-bold bg-orange-50 p-2 rounded-lg border border-orange-100">
                   <span className="flex items-center gap-1">
@@ -1137,7 +1140,7 @@ export default function Checkout() {
         walletBalance={walletBalance}
       />
 
-      {/* 🌟 MODAL CHỌN VOUCHER HIỂN THỊ KHI ĐƯỢC KÍCH HOẠT */}
+      {/* MODAL CHỌN VOUCHER HIỂN THỊ KHI ĐƯỢC KÍCH HOẠT */}
       {showVoucherModal && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-fadeIn">

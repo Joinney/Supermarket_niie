@@ -141,12 +141,23 @@ const getShippingFee = async (req, res) => {
   }
 };
 
-// 2. Tiếp nhận đặt hàng (ĐÃ TỰ ĐỘNG BỔ SUNG ĐỦ 2 BƯU CỤC TRUNG TRUYỂN Ở GIỮA)
+// 2. Tiếp nhận đặt hàng
 const placeOrder = async (req, res) => {
-  console.log("Dữ liệu nhận được từ client:", req.body);
+  // 🔍 LOG DEBUG TRỌNG TÂM ĐỂ BẮT VẤN ĐỀ VỚI ADDRESS ID
+  console.log("🔍 [DEBUG PAYLOAD BODY]:", req.body);
+  console.log("🔍 [DEBUG ADDRESS_ID INCOMING]:", {
+    address_id: req.body.address_id,
+    addressId: req.body.addressId,
+    selectedAddressId: req.body.selectedAddressId
+  });
+
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
+
+    // Ép kiểu & nhận diện tất cả biến thể tên key của ID địa chỉ
+    const rawAddressId = req.body.address_id || req.body.addressId || req.body.selectedAddressId;
+    const finalAddressId = (rawAddressId && !isNaN(rawAddressId)) ? Number(rawAddressId) : null;
 
     const { 
       to_district_id, 
@@ -156,7 +167,7 @@ const placeOrder = async (req, res) => {
       phuong_thuc_thanh_toan,
       to_lat,
       to_lng,
-      points_used // 👈 Lấy số Xu khách muốn dùng từ request
+      points_used 
     } = req.body;
     
     if (!to_district_id || !to_ward_code || !danh_sach_san_pham || !Array.isArray(danh_sach_san_pham) || danh_sach_san_pham.length === 0) {
@@ -250,43 +261,34 @@ const placeOrder = async (req, res) => {
     req.body.phi_van_chuyen = validShippingCost;
     req.body.don_vi_van_chuyen = req.body.don_vi_van_chuyen || 'Siêu thị DemiMart Express';
 
-    // 👉 ĐÃ SỬA: Tính tổng tiền sơ bộ và bắt lỗi < 0
     let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(req.body.so_tien_giam_gia || 0);
     if (isNaN(finalTotal) || finalTotal < 0) finalTotal = 0; 
 
     // =========================================================
-    // 🌟 LOGIC DÙNG XU GIẢM GIÁ (SHOPEE COIN MODEL)
+    // 🌟 LOGIC DÙNG XU GIẢM GIÁ
     // =========================================================
     const userPointsToUse = Number(points_used || 0);
     if (userPointsToUse > 0) {
-      // Đảm bảo không dùng quá tổng tiền đơn hàng
       const validPointsToUse = Math.min(userPointsToUse, finalTotal); 
 
       try {
         const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
         
-        // Gọi sang Auth-Service yêu cầu trừ Xu (Sync call để đảm bảo có tiền mới cho tạo đơn)
         const pointRes = await axios.post(`${authUrl}/api/v1/auth/loyalty/spend`, {
           userId: String(userId),
           points: validPointsToUse,
-          referenceId: `ORD_PENDING_${Date.now()}` // Ghi mã tạm thời vào lịch sử
+          referenceId: `ORD_PENDING_${Date.now()}`
         });
 
         if (pointRes.data && pointRes.data.success) {
-          // Trừ Xu thành công -> Giảm thẳng vào tổng hóa đơn
           finalTotal = finalTotal - validPointsToUse;
           console.log(`🪙 Khách hàng đã dùng ${validPointsToUse} Xu. Tổng tiền phải trả mới: ${finalTotal}đ`);
-          req.body.points_used = validPointsToUse; // Chốt số Xu đã dùng để lưu DB orders
+          req.body.points_used = validPointsToUse;
         }
       } catch (pointErr) {
         console.error("🔥 Lỗi không đủ Xu hoặc lỗi hệ thống:", pointErr.response?.data || pointErr.message);
-        
-        // CỰC KỲ QUAN TRỌNG: Nếu lỗi trừ Xu, phải hoàn lại sản phẩm vào kho
-        // vì ở trên chúng ta đã gọi deduct-fifo trừ kho mất rồi
         try {
-           // Giả định bạn có endpoint trả hàng, hoặc ta báo lỗi ra để xử lý
            console.warn("Cần phải rollback tồn kho do giao dịch trừ xu thất bại!");
-           // await axios.post(`${productServiceUrl}/api/v1/products/internal/restore-stock`, { items: normalizedItems });
         } catch(e) {}
 
         return res.status(400).json({ 
@@ -297,7 +299,6 @@ const placeOrder = async (req, res) => {
     } else {
       req.body.points_used = 0;
     }
-    // =========================================================
 
     req.body.tong_thanh_toan = finalTotal;
 
@@ -306,6 +307,7 @@ const placeOrder = async (req, res) => {
 
     const normalizedOrder = {
       ...req.body,
+      address_id: finalAddressId, // 👈 Đã gán chắc chắn giá trị số đã ép kiểu vào đây
       trang_thai_don_hang: 'Chờ xác nhận',
       danh_sach_san_pham: normalizedItems,
       paypal_transaction_id: req.body.paypal_transaction_id || null,
@@ -315,9 +317,9 @@ const placeOrder = async (req, res) => {
     };
 
     const order = await Order.create(userId, normalizedOrder);
-    console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang);
+    console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang, "| Address ID đã lưu:", order.address_id);
 
-    // 🚀 BƯỚC 1: TRẢ KẾT QUẢ VỀ FRONTEND NGAY LẬP TỨC ĐỂ TRÁNH TIMEOUT
+    // 🚀 BƯỚC 1: TRẢ KẾT QUẢ VỀ FRONTEND
     res.status(201).json({ 
       success: true, 
       ma_don_hang: order.ma_don_hang, 
@@ -326,11 +328,9 @@ const placeOrder = async (req, res) => {
       message: "Đặt hàng thành công! Hệ thống đang xử lý lộ trình giao hàng." 
     });
 
-    // 🔄 BƯỚC 2: ĐẨY TOÀN BỘ TÁC VỤ NẶNG XUỐNG TIẾN TRÌNH CHẠY NGẦM (BACKGROUND)
-    // IIFE (async () => {...})() giúp Node.js chạy ngầm mà không block request
+    // 🔄 BƯỚC 2: TIẾN TRÌNH CHẠY NGẦM
     (async () => {
       try {
-        // --- 1. TỰ ĐỘNG XÁC NHẬN SAU 1 PHÚT ---
         setTimeout(async () => {
           try {
             const getStatusQuery = `SELECT trang_thai_don_hang FROM public.orders WHERE id = $1`;
@@ -345,7 +345,6 @@ const placeOrder = async (req, res) => {
           } catch (timerErr) {}
         }, 60000);
 
-        // --- 2. TÍNH TOÁN LỘ TRÌNH VÀ LƯU 4 BƯU CỤC ---
         try {
           const storeLat = 10.771963;
           const storeLng = 106.697194;
@@ -533,7 +532,6 @@ const placeOrder = async (req, res) => {
           console.error('⚠️ Cảnh báo lỗi cấu trúc hành trình:', logisticsErr.message);
         }
 
-        // --- 3. ĐỒNG BỘ THANH TOÁN PAYPAL ---
         const methodUpper = String(phuong_thuc_thanh_toan || '').toUpperCase().trim();
         if (methodUpper !== 'COD' && methodUpper !== '') {
           try {
@@ -550,7 +548,6 @@ const placeOrder = async (req, res) => {
           } catch (syncErr) {}
         }
 
-        // --- 4. BẮN THÔNG BÁO WEBSOCKET ---
         try {
           await axios.post('http://notification-service:8085/api/v1/notifications/send', {
             userId: String(userId),
@@ -569,9 +566,7 @@ const placeOrder = async (req, res) => {
     })();
 
   } catch (err) {
-    // Chỉ lọt vào catch này nếu lỗi xảy ra TRƯỚC khi gọi res.status(201).json
     console.error("🔥 [LỖI TẠO ĐƠN HÀNG LOG CHI TIẾT]:", err.message);
-    // Kiểm tra headersSent để đảm bảo không dính lỗi ERR_HTTP_HEADERS_SENT
     if (!res.headersSent) {
       return res.status(500).json({ 
         success: false, 
@@ -684,6 +679,7 @@ const getAllOrdersAdmin = async (req, res) => {
       SELECT 
         o.id, 
         o.ma_don_hang, 
+        o.address_id,
         o.phuong_thuc_thanh_toan, 
         o.trang_thai_thanh_toan, 
         o.trang_thai_don_hang, 
@@ -754,8 +750,8 @@ const getOrderDetailAdmin = async (req, res) => {
     const isNumber = /^\d+$/.test(id); 
     
     let orderSql = isNumber 
-      ? `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE id = $1 LIMIT 1;`
-      : `SELECT id, user_id, ma_don_hang, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE ma_don_hang = $1 LIMIT 1;`;
+      ? `SELECT id, user_id, ma_don_hang, address_id, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE id = $1 LIMIT 1;`
+      : `SELECT id, user_id, ma_don_hang, address_id, phuong_thuc_thanh_toan, trang_thai_thanh_toan, trang_thai_don_hang, tong_thanh_toan, phi_van_chuyen, to_lat, to_lng, ngay_tao FROM public.orders WHERE ma_don_hang = $1 LIMIT 1;`;
   
     const orderResult = db.query ? await db.query(orderSql, [isNumber ? Number(id) : id]) : await db.execute(orderSql, [isNumber ? Number(id) : id]);
     const order = orderResult.rows ? orderResult.rows[0] : orderResult[0];
@@ -846,7 +842,6 @@ const cancelOrder = async (req, res) => {
       await db.execute(updateQuery, [ma_don_hang]);
     }
 
-    // Hoàn tiền vào ví DemiPay nếu đã thanh toán trước
     try {
       const paymentStatus = String(orderInfo.trang_thai_thanh_toan).trim().toLowerCase();
       const paymentMethod = String(orderInfo.phuong_thuc_thanh_toan).trim().toUpperCase();
@@ -867,7 +862,6 @@ const cancelOrder = async (req, res) => {
       console.warn("⚠️ Hoàn tiền ví thất bại:", refundErr.message);
     }
     
-    // Bắn thông báo hủy đơn
     try {
       if (orderInfo.user_id) {
         await axios.post('http://notification-service:8085/api/v1/notifications/send', {
@@ -947,7 +941,7 @@ const testReadKml = async (req, res) => {
   }
 };
 
-// 11. Tính toán địa lý và chi phí (ĐÃ HOÀN CHỈNH BẬC THANG & MỨC TRẦN)
+// 11. Tính toán địa lý và chi phí
 const calculateShipping = async (req, res) => {
   try {
     const { userLat, userLng } = req.body;
@@ -956,36 +950,27 @@ const calculateShipping = async (req, res) => {
     const storeLat = 10.792622;
     const storeLng = 106.680172;
     
-    // Khoảng cách theo đường chim bay (KM)
     const distanceKm = calcHaversine(parseFloat(userLat), parseFloat(userLng), storeLat, storeLng);
     
     let shippingFee = 0;
     let estimatedMinutes = 0;
 
-    // 🚚 TRƯỜNG HỢP 1: NỘI TỈNH / CỰ LY GẦN (Dưới 32km - Giao siêu tốc)
     if (distanceKm <= 32) {
-      // Tốc độ di chuyển nội thành ước tính 30km/h
       estimatedMinutes = Math.round((distanceKm / 30) * 60) + 15; 
       
       if (distanceKm <= 2) {
-        shippingFee = 0; // Giữ nguyên luật cũ: Dưới 2km freeship
+        shippingFee = 0; 
       } else {
-        // Trên 2km: Tính 5.000đ cho mỗi KM tiếp theo
         shippingFee = Math.round((distanceKm - 2) * 5000); 
       }
     } 
-    // 🚛 TRƯỜNG HỢP 2: NGOẠI TỈNH / CỰ LY XA (Gửi đơn vị vận chuyển)
     else {
-      // Thời gian giao hàng: Cộng thêm 2 ngày (2880 phút) + thời gian di chuyển
       estimatedMinutes = Math.round(2880 + (distanceKm / 500) * 1440); 
       
-      // Phí cơ bản 35k, cứ mỗi 50km tiếp theo thì cộng nhẹ thêm 5k
       const baseFee = 35000;
       const extraDistanceFee = Math.floor((distanceKm - 32) / 50) * 5000;
       shippingFee = baseFee + extraDistanceFee;
       
-      // 🌟 RÀNG BUỘC QUAN TRỌNG: MỨC TRẦN GIÁ SHIP (MAX CAP)
-      // Dù xa đến mấy (Hà Nội, Lào Cai...) thì tiền ship cũng tối đa 80.000đ
       const MAX_SHIPPING_FEE = 80000; 
       if (shippingFee > MAX_SHIPPING_FEE) {
         shippingFee = MAX_SHIPPING_FEE;
@@ -1285,65 +1270,57 @@ const payOrderWithDemiPay = async (req, res) => {
 
 // 16. Khách hàng xác nhận đã nhận hàng (Cộng Xu Cashback)
 const confirmReceiveOrder = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { ma_don_hang } = req.params;
+
+    if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
+
+    const checkQuery = `SELECT id, tong_thanh_toan, trang_thai_don_hang FROM public.orders WHERE ma_don_hang = $1 AND user_id = $2`;
+    const checkRes = db.query ? await db.query(checkQuery, [ma_don_hang, userId]) : await db.execute(checkQuery, [ma_don_hang, userId]);
+    const orderInfo = checkRes.rows ? checkRes.rows[0] : checkRes[0];
+
+    if (!orderInfo) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
+    if (orderInfo.trang_thai_don_hang === 'Đã giao') return res.status(400).json({ success: false, message: "Đơn hàng này đã được xác nhận trước đó." });
+
+    const updateQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Đã giao' WHERE id = $1`;
+    if (db.query) await db.query(updateQuery, [orderInfo.id]);
+    else await db.execute(updateQuery, [orderInfo.id]);
+
     try {
-        const userId = req.user?.id;
-        const { ma_don_hang } = req.params;
+      const cashbackRate = 0.01; 
+      const earnedPoints = Math.floor(Number(orderInfo.tong_thanh_toan) * cashbackRate);
 
-        if (!userId) return res.status(401).json({ success: false, message: "Vui lòng đăng nhập!" });
+      if (earnedPoints > 0) {
+        const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+        const notificationUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:8085';
 
-        // 1. Kiểm tra đơn hàng có đúng của user này không
-        const checkQuery = `SELECT id, tong_thanh_toan, trang_thai_don_hang FROM public.orders WHERE ma_don_hang = $1 AND user_id = $2`;
-        const checkRes = db.query ? await db.query(checkQuery, [ma_don_hang, userId]) : await db.execute(checkQuery, [ma_don_hang, userId]);
-        const orderInfo = checkRes.rows ? checkRes.rows[0] : checkRes[0];
+        await axios.post(`${authUrl}/api/v1/auth/loyalty/earn`, {
+          userId: Number(userId),
+          points: earnedPoints,
+          source: 'ORDER',
+          referenceId: String(ma_don_hang),
+          description: `Hoàn xu mua sắm từ đơn hàng ${ma_don_hang}`
+        });
 
-        if (!orderInfo) return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
-        if (orderInfo.trang_thai_don_hang === 'Đã giao') return res.status(400).json({ success: false, message: "Đơn hàng này đã được xác nhận trước đó." });
-
-        // 2. Cập nhật trạng thái thành 'Đã giao'
-        const updateQuery = `UPDATE public.orders SET trang_thai_don_hang = 'Đã giao' WHERE id = $1`;
-        if (db.query) await db.query(updateQuery, [orderInfo.id]);
-        else await db.execute(updateQuery, [orderInfo.id]);
-
-        // =========================================================================
-        // 🌟 HOOK: TÍNH TOÁN VÀ CỘNG XU (Hoàn tiền 1% trên tổng thanh toán)
-        // =========================================================================
-        try {
-            const cashbackRate = 0.01; 
-            const earnedPoints = Math.floor(Number(orderInfo.tong_thanh_toan) * cashbackRate);
-
-            if (earnedPoints > 0) {
-                // Trỏ về AUTH_SERVICE_URL
-                const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
-                const notificationUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:8085';
-
-                //  Gọi API /api/v1/auth/loyalty/earn và truyền biến userId
-                await axios.post(`${authUrl}/api/v1/auth/loyalty/earn`, {
-                    userId: Number(userId), // Đã đổi tên biến thành userId cho khớp DB mới
-                    points: earnedPoints,
-                    source: 'ORDER',
-                    referenceId: String(ma_don_hang),
-                    description: `Hoàn xu mua sắm từ đơn hàng ${ma_don_hang}`
-                });
-
-                // Bắn thông báo về client
-                await axios.post(`${notificationUrl}/api/v1/notifications/send`, {
-                    userId: String(userId),
-                    channel: "websocket",
-                    title: "🛍️ Đơn hàng hoàn tất",
-                    description: `Bạn đã nhận hàng thành công và được hoàn lại ${earnedPoints.toLocaleString('vi-VN')} Xu!`,
-                    type: "order"
-                });
-            }
-        } catch (pointError) {
-            console.warn("⚠️ Lỗi hệ thống hoàn xu:", pointError.message);
-        }
-
-        return res.status(200).json({ success: true, message: "Cảm ơn bạn đã xác nhận nhận hàng!" });
-
-    } catch (err) {
-        console.error("🔥 Lỗi confirmReceiveOrder:", err.message);
-        return res.status(500).json({ success: false, message: "Lỗi máy chủ khi xác nhận đơn hàng." });
+        await axios.post(`${notificationUrl}/api/v1/notifications/send`, {
+          userId: String(userId),
+          channel: "websocket",
+          title: "🛍️ Đơn hàng hoàn tất",
+          description: `Bạn đã nhận hàng thành công và được hoàn lại ${earnedPoints.toLocaleString('vi-VN')} Xu!`,
+          type: "order"
+        });
+      }
+    } catch (pointError) {
+      console.warn("⚠️ Lỗi hệ thống hoàn xu:", pointError.message);
     }
+
+    return res.status(200).json({ success: true, message: "Cảm ơn bạn đã xác nhận nhận hàng!" });
+
+  } catch (err) {
+    console.error("🔥 Lỗi confirmReceiveOrder:", err.message);
+    return res.status(500).json({ success: false, message: "Lỗi máy chủ khi xác nhận đơn hàng." });
+  }
 };
 
 // 17. Admin Cập nhật trạng thái đơn hàng nhanh
