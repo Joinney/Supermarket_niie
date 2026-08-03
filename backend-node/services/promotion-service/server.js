@@ -15,6 +15,7 @@ import { connectDB } from './configs/mongo/databasemg.js';
 import promotionRoutes from './routes/promotionRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import HomeposterRoutes from './routes/HomeposterRoutes.js';
+import loyaltyRoutes from './routes/loyaltyRoutes.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,7 +96,7 @@ const swaggerOptions = {
         info: { 
             title: 'Demi Mart - Promotion & Homeposter Service API (v1)', 
             version: '1.0.0',
-            description: 'API Khuyến mãi, Mã giảm giá và Quản lý Banner/Poster Quảng cáo Trang chủ' 
+            description: 'API Khuyến mãi, Mã giảm giá, Thưởng Tích Lũy và Quản lý Banner/Poster Quảng cáo' 
         },
         servers: [{ url: `http://localhost:${PORT}` }]
     },
@@ -112,6 +113,8 @@ const v1Router = express.Router();
 v1Router.use('/promotions', promotionRoutes);
 v1Router.use('/coupons', couponRoutes);
 
+v1Router.use('/loyalty', loyaltyRoutes);
+
 // 🖼️ ROUTE QUẢNG CÁO: Khai báo cả 2 tiền tố để tương thích 100% với gọi trực tiếp lẫn qua Gateway
 v1Router.use('/homeposters', HomeposterRoutes);
 v1Router.use('/promotions/homeposters', HomeposterRoutes);
@@ -124,7 +127,7 @@ app.get('/', (req, res) => {
     res.status(200).send(`
         <div style="text-align: center; margin-top: 50px; font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; padding: 40px; border-radius: 20px;">
             <h1 style="color: #006c49; font-size: 2.5rem;">Demi Mart Promotion & Homeposter Service (v1)</h1>
-            <p style="color: #64748b; font-size: 1.2rem;">Hệ thống Khuyến mãi, Coupon và Poster Quảng cáo đang hoạt động xanh mướt! 🚀</p>
+            <p style="color: #64748b; font-size: 1.2rem;">Hệ thống Khuyến mãi, Coupon, Tích điểm và Poster Quảng cáo đang hoạt động xanh mướt! 🚀</p>
             <div style="margin-top: 20px;">
                 <a href="/api-docs" style="background-color: #006c49; color: white; padding: 12px 24px; border-radius: 10px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(0, 108, 73, 0.2);">Vào Swagger xem API →</a>
             </div>
@@ -159,6 +162,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🔗 API Gateway Homeposter URL:  http://localhost:${PORT}/api/v1/promotions/homeposters`);
     console.log(`🔗 API Promotions URL:          http://localhost:${PORT}/api/v1/promotions`);
     console.log(`🔗 API Coupons URL:             http://localhost:${PORT}/api/v1/coupons`);
+    console.log(`🔗 API Loyalty (Điểm Thưởng):   http://localhost:${PORT}/api/v1/loyalty`); // Xác nhận log
     console.log(`📝 Swagger Docs:                http://localhost:${PORT}/api-docs`);
     console.log(`=========================================\n`);
 });

@@ -1,30 +1,31 @@
 // File: backend/services/order-service/routes/orderRoutes.js
 import express from 'express';
 import { 
-  getShippingFee, 
-  placeOrder, 
-  updateInternalOrderStatus, 
-  getOrderStatistics, 
-  getAllOrdersAdmin, 
-  getMyOrders, 
-  getOrderDetailAdmin, 
-  cancelOrder,
-  getOrdersByUserAdmin,
-  getPostOffices,
-  testReadKml,
-  getOrderTrackingLogs,
-  createOrderTrackingLogNode, 
-  calculateShipping,
-  getUserSpent,
-  payOrderWithDemiPay,
-  updateOrderStatusAdmin // 🌟 Import hàm xử lý cập nhật trạng thái đơn hàng của Admin
+    getShippingFee, 
+    placeOrder, 
+    updateInternalOrderStatus, 
+    getOrderStatistics, 
+    getAllOrdersAdmin, 
+    getMyOrders, 
+    getOrderDetailAdmin, 
+    cancelOrder,
+    getOrdersByUserAdmin,
+    getPostOffices,
+    testReadKml,
+    getOrderTrackingLogs,
+    createOrderTrackingLogNode, 
+    calculateShipping,
+    getUserSpent,
+    payOrderWithDemiPay,
+    confirmReceiveOrder,        
+    updateOrderStatusAdmin       
 } from '../controllers/orderController.js';
 
 // Đồng bộ import các hàm thống kê từ đúng tệp tin cấu hình statisticsController
 import { 
-  getMonthlyRevenue, 
-  getOrderOverviewStats,
-  getTopProducts
+    getMonthlyRevenue, 
+    getOrderOverviewStats,
+    getTopProducts
 } from '../controllers/statisticsController.js';
 
 // Chỉ sử dụng middleware 'protect' đã được định nghĩa chắc chắn để chống lỗi requireAdmin undefined
@@ -58,6 +59,9 @@ router.put('/orders/:ma_don_hang/cancel', protect, cancelOrder);
 router.get('/:id/check-review', (req, res) => {
     res.status(200).json({ hasReviewed: false }); 
 });
+
+// 5.3 Khách hàng xác nhận đã nhận hàng (Tự động chuyển trạng thái Đã giao & Cộng XU hoàn tiền)
+router.put('/orders/:ma_don_hang/confirm-receive', protect, confirmReceiveOrder);
 
 // ========================================================
 // 🔒 ROUTE ĐỒNG BỘ NỘI BỘ (INTERNAL SERVICE ENDPOINTS)
