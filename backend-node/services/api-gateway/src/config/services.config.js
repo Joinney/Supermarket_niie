@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const isLocal = process.env.NODE_ENV !== 'production';
+
+// Nếu không truyền ENV ở Local, tự động linh hoạt chọn Cloud hoặc Local Port
 export const services = {
     auth: process.env.AUTH_SERVICE_URL || 'http://localhost:5001',
     product: process.env.PRODUCT_SERVICE_URL || 'http://localhost:5002',

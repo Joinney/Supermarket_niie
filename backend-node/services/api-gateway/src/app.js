@@ -6,15 +6,18 @@ import { services } from './config/services.config.js';
 
 const app = express();
 
-// --- 1. DYNAMIC CORS CONFIGURATION ---
+// ==========================================
+// 1. DYNAMIC CORS CONFIGURATION
+// ==========================================
 // Danh sách các origins được phép gọi vào Gateway
 const allowedOrigins = [
     'https://demimart-fe.onrender.com',
     'http://localhost:5173',
     'http://localhost:3000',
     'http://127.0.0.1:5173',
+    'http://localhost:5000',
     process.env.FRONTEND_URL
-].filter(Boolean); // Lọc bỏ giá trị undefined
+].filter(Boolean); // Lọc bỏ giá trị undefined/null
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -39,7 +42,9 @@ app.use(cors({
 // Ghi log request để dễ debug
 app.use(morgan('dev'));
 
-// Giao diện Dashboard hiển thị toàn bộ Microservices & Frontend (Tông màu chủ đạo #006c49)
+// ==========================================
+// 2. DASHBOARD ROUTE (Tông màu #006c49)
+// ==========================================
 app.get('/dashboard', (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://demimart-fe.onrender.com';
     const totalServices = Object.keys(services).length;
@@ -292,6 +297,9 @@ app.get('/dashboard', (req, res) => {
     `);
 });
 
+// ==========================================
+// 3. PROXY ROUTES REGISTRATION
+// ==========================================
 // Gắn các route proxy (Tuyệt đối không để express.json() phía trên dòng này)
 app.use('/', routes);
 
