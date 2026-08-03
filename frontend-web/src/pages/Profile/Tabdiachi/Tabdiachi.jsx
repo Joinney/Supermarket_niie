@@ -1,6 +1,6 @@
 import React from "react";
 import { MapPin, Plus, Edit2, Trash2, Check } from "lucide-react";
-import AddressModal from "./AddressModal"; // Import component vừa tách
+import AddressModal from "./AddressModal";
 
 export default function Tabdiachi({
   addresses, handleOpenAddModal, handleOpenEditModal, handleDeleteAddress, handleSetDefault,
@@ -40,11 +40,6 @@ export default function Tabdiachi({
                 <div className="space-y-0.5">
                   <p className="text-xs text-slate-600 font-semibold leading-relaxed">{addr.detail_address}</p>
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest"><span className="text-slate-300">📍</span> {`${addr.ward_name} • ${addr.district_name} • ${addr.province_name}`}</p>
-                  {addr.latitude && addr.longitude && (
-                    <span className="text-[10px] font-mono bg-slate-100 text-slate-400 px-2 py-0.5 rounded border border-dashed block w-max mt-1">
-                      GPS: {parseFloat(addr.latitude).toFixed(4)}, {parseFloat(addr.longitude).toFixed(4)}
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -67,7 +62,6 @@ export default function Tabdiachi({
         )}
       </div>
 
-      {/* Sử dụng Component Modal vừa được tách riêng ra */}
       <AddressModal
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}

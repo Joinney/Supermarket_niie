@@ -67,13 +67,13 @@ export default function Danhsachdonhang() {
     return () => clearTimeout(timer);
   }, [searchTerm, currentPage, limit, filterStatus, filterPayment]);
 
-  // ⚡ HÀM CẬP NHẬT TRẠNG THÁI ĐƠN LẺ
+  // ⚡ HÀM CẬP NHẬT TRẠNG THÁI ĐƠN LẺ (LƯU "Xác nhận" VÀO DATABASE)
   const handleUpdateStatus = async (order, newStatus) => {
     const maDonHang = order.ma_don_hang || order.id;
     setUpdatingOrderId(maDonHang);
     setOpenStatusMenuId(null);
 
-    // 🌟 Cập nhật UI local trước để phản hồi mượt mà
+    // Cập nhật UI tạm thời
     setOrders((prevOrders) =>
       prevOrders.map((o) =>
         (o.ma_don_hang || o.id) === maDonHang
@@ -83,9 +83,10 @@ export default function Danhsachdonhang() {
     );
 
     try {
-      if (newStatus === "cancelled" || newStatus === "da_huy") {
+      if (newStatus === "cancelled" || newStatus === "da_huy" || newStatus === "Đã hủy") {
         await orderApi.put(`/admin/orders/${maDonHang}/cancel`);
       } else {
+        // Gửi chính xác chuỗi "Xác nhận" lên Server
         await orderApi.put(`/admin/orders/${maDonHang}/status`, {
           trang_thai_don_hang: newStatus,
           status: newStatus,
@@ -101,14 +102,13 @@ export default function Danhsachdonhang() {
         err.response?.data?.error ||
         "Cập nhật trạng thái thất bại!";
       alert(`⚠️ Lỗi: ${msg}`);
-      // Lỗi thì fetch lại để hoàn tác UI
       fetchOrders();
     } finally {
       setUpdatingOrderId(null);
     }
   };
 
-  // ⚡ HÀM XÁC NHẬN TẤT CẢ ĐƠN ĐÃ CHỌN
+  // ⚡ HÀM XÁC NHẬN TẤT CẢ ĐƠN ĐÃ CHỌN (LƯU "Xác nhận" VÀO DATABASE)
   const handleConfirmAllSelected = async () => {
     if (selectedOrders.length === 0) return;
 
@@ -142,8 +142,8 @@ export default function Danhsachdonhang() {
         pendingSelectedOrders.map((o) => {
           const maDonHang = o.ma_don_hang || o.id;
           return orderApi.put(`/admin/orders/${maDonHang}/status`, {
-            trang_thai_don_hang: "da_xac_nhan",
-            status: "da_xac_nhan",
+            trang_thai_don_hang: "Xác nhận",
+            status: "Xác nhận",
           });
         })
       );
@@ -191,10 +191,10 @@ export default function Danhsachdonhang() {
     });
   };
 
-  // 🌟 KHÔNG GIAO BADGE CLASS CHO TRẠNG THÁI
+  // 🌟 BADGE CLASS CHO TRẠNG THÁI (NHẬN DIỆN CHUẨN "xác nhận" / "da_xac_nhan")
   const getDeliveryBadgeClass = (status) => {
     const s = String(status || "").toLowerCase().trim();
-    if (["da_xac_nhan", "đã xác nhận", "xac_nhan", "xác nhận", "processing", "shipped", "delivered", "da_giao", "đã giao"].includes(s))
+    if (["xác nhận", "xac_nhan", "da_xac_nhan", "đã xác nhận", "processing", "shipped", "delivered", "da_giao", "đã giao"].includes(s))
       return "bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-bold";
     if (["pending", "dang_xu_ly", "cho_xu_ly", "chờ xử lý", "cho_xac_nhan", "chờ xác nhận"].includes(s))
       return "bg-amber-50 text-amber-700 border border-amber-200/60 font-bold";
@@ -203,10 +203,10 @@ export default function Danhsachdonhang() {
     return "bg-slate-50 text-slate-700 border border-slate-200/60 font-bold";
   };
 
-  // 🌟 HIỂN THỊ CHỮ DỰA TRÊN CSDL
+  // 🌟 HIỂN THỊ CHỮ TRÊN BADGE
   const renderDeliveryBadgeText = (status) => {
     const s = String(status || "").toLowerCase().trim();
-    if (["da_xac_nhan", "đã xác nhận", "xac_nhan", "xác nhận"].includes(s)) return "XÁC NHẬN";
+    if (["xác nhận", "xac_nhan", "da_xac_nhan", "đã xác nhận"].includes(s)) return "XÁC NHẬN";
     if (["shipped", "da_giao", "đã giao"].includes(s)) return "SHIPPED";
     if (["cancelled", "da_huy", "đã hủy"].includes(s)) return "ĐÃ HỦY";
     return String(status || "CHỜ XỬ LÝ").toUpperCase();
@@ -424,7 +424,7 @@ export default function Danhsachdonhang() {
                     >
                       <option value="">Tất cả trạng thái</option>
                       <option value="pending">Chờ xử lý</option>
-                      <option value="da_xac_nhan">Đã xác nhận</option>
+                      <option value="Xác nhận">Xác nhận</option>
                       <option value="shipped">Đang giao hàng</option>
                       <option value="delivered">Đã giao thành công</option>
                       <option value="cancelled">Đã hủy</option>
@@ -540,7 +540,7 @@ export default function Danhsachdonhang() {
 
                   const currentStatusStr = String(order.trang_thai_don_hang || order.status || "").toLowerCase().trim();
 
-                  // 🌟 SỬA ĐIỀU KIỆN PENDING CHUẨN: CHỈ HIỂN THỊ NÚT CHO ĐƠN THỰC SỰ ĐANG CHỜ
+                  // 🌟 KIỂM TRA CHUẨN ĐƠN HÀNG ĐANG CHỜ CHƯA XÁC NHẬN
                   const isPending = [
                     "pending",
                     "dang_xu_ly",
@@ -615,7 +615,7 @@ export default function Danhsachdonhang() {
                         </span>
                       </td>
 
-                      {/* 🌟 CỘT TRẠNG THÁI HIỂN THỊ CHUẨN */}
+                      {/* 🌟 CỘT TRẠNG THÁI */}
                       <td className="py-4 px-4 whitespace-nowrap text-center align-top pt-4">
                         {isPending ? (
                           <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
@@ -643,11 +643,11 @@ export default function Danhsachdonhang() {
                               )}
                             </button>
 
-                            {/* DROPDOWN MENU CON */}
+                            {/* DROPDOWN MENU CON (GỬI CHUẨN "Xác nhận") */}
                             {openStatusMenuId === orderIdKey && (
                               <div className="absolute right-1/2 translate-x-1/2 top-full mt-1.5 w-44 bg-white border border-slate-100 rounded-2xl shadow-xl z-40 p-1.5 animate-in fade-in zoom-in-95 duration-100">
                                 <button
-                                  onClick={() => handleUpdateStatus(order, "da_xac_nhan")}
+                                  onClick={() => handleUpdateStatus(order, "Xác nhận")}
                                   className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50 rounded-xl transition text-left"
                                 >
                                   <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
