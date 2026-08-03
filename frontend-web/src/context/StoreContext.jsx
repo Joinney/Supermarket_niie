@@ -61,34 +61,32 @@ export const StoreProvider = ({ children }) => {
     }
   }, [stores, window.location.pathname]);
 
-  // 3. Socket Real-time (Đã tối ưu)
+// 3. Socket Real-time (Đã tối ưu)
   useEffect(() => {
-    const apiBaseUrl = productApi.defaults.baseURL || "";
-    let socketUrl = "";
-
-    try {
-      socketUrl = new URL(apiBaseUrl).origin;
-    } catch (e) {
-      socketUrl = window.location.origin;
-    }
+    // 🌟 SỬA TẠI ĐÂY: Trỏ thẳng về cổng 5001 (Realtime Service) thay vì cổng 5000
+    const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // Tự động nhận diện môi trường Dev (Local) hoặc Prod (Render)
+    const socketUrl = isLocalHost 
+      ? 'http://localhost:5001' 
+      : 'https://authservice-sz4p.onrender.com'; // Thay bằng link Render của Auth Service nếu cần
     
     if (!socketUrl) return;
 
-    // 🌟 FIX LỖI 400 BAD REQUEST: Thêm transports: ["websocket"]
     const socket = io(socketUrl, {
-      transports: ["websocket"],
+      transports: ["polling", "websocket"], 
       reconnectionAttempts: 5,
       timeout: 10000,
     });
 
-    setProductSocket(socket); // Lưu lại socket để tái sử dụng toàn app
+    setProductSocket(socket);
 
     socket.on("connect", () => {
-      console.log(`✅ StoreContext: Đã kết nối Socket tới Product Server tại: ${socketUrl}`);
+      console.log(`✅ StoreContext: Đã kết nối Socket tới Server tại: ${socketUrl}`);
     });
 
     socket.on("connect_error", (err) => {
-      console.warn(`⚠️ StoreContext: Lỗi kết nối Socket Product:`, err.message);
+      console.warn(`⚠️ StoreContext: Lỗi kết nối Socket:`, err.message);
     });
 
     socket.on("store_status_changed", (data) => {
@@ -115,8 +113,6 @@ export const StoreProvider = ({ children }) => {
     });
 
     return () => {
-      // 🌟 MẸO CHỐNG CẢNH BÁO STRICT MODE:
-      // Chỉ ngắt khi đã kết nối xong, nếu đang kết nối dở thì đợi kết nối rồi mới disconnect
       if (socket.connected) {
         socket.disconnect();
       } else {

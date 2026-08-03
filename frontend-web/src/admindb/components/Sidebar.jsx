@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { io } from "socket.io-client";
+import { useSocket } from "../../context/SocketContext";
 import Logo from "../../assets/Demi Mart.png";
 import LogoMini from "../../assets/DemiMarticon.png";
 
@@ -14,6 +14,7 @@ const removeDiacritics = (str) => {
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const socket = useSocket();
 
   // Trạng thái thu gọn/mở rộng Sidebar
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -40,26 +41,19 @@ export default function Sidebar() {
   // 🎯 2. REAL-TIME LISTENERS: KẾT NỐI VÀ ĐỒNG BỘ NGAY KHI ADMIN LƯU
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    const currentUserId =
-      adminInfo.id || adminInfo.user_id || storedUser.id || storedUser.user_id;
+    const currentUserId = adminInfo.id || adminInfo.user_id || storedUser.id || storedUser.user_id;
 
     if (!currentUserId) {
-      console.warn(
-        "⚠️ Không tìm thấy ID người dùng để thiết lập kết nối Real-time!",
-      );
+      console.warn("⚠️ Không tìm thấy ID người dùng để thiết lập kết nối Real-time!");
       return;
     }
 
-    const socketUrl =
-      import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-    const socket = io(socketUrl, {
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-    });
+    if (!socket) return; // 🌟 Chờ sóng socket sẵn sàng
 
     socket.emit("join_user_room", currentUserId);
 
-    socket.on("permission_matrix_changed", (newCustomPermissions) => {
+    // Tách hàm callback ra để dễ dàng gỡ bỏ (off)
+    const handlePermissionChange = (newCustomPermissions) => {
       try {
         let cleanPerms = newCustomPermissions;
         if (typeof cleanPerms === "string") {
@@ -82,12 +76,15 @@ export default function Sidebar() {
       } catch (err) {
         console.error("Lỗi parse real-time packet:", err);
       }
-    });
+    };
+
+    socket.on("permission_matrix_changed", handlePermissionChange);
 
     return () => {
-      socket.disconnect();
+      // 🌟 KHÔNG NGẮT MẠNG, CHỈ TẮT LẮNG NGHE
+      socket.off("permission_matrix_changed", handlePermissionChange);
     };
-  }, []);
+  }, [socket]);
 
   const hasAccess = (idKey) => {
     if (userRole === "ADMIN") return true;

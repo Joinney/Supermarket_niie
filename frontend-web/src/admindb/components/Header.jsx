@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client"; // 🎯 TÍNH HỢP KHÁCH HÀNG SOCKET ĐỂ LIVE AVATAR
+import { useSocket } from "../../context/SocketContext";
 
 export default function Header() {
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
+  const socket = useSocket();
   
   // Trạng thái lưu trữ dữ liệu Live của tài khoản
   const [adminData, setAdminData] = useState({
@@ -39,6 +40,8 @@ export default function Header() {
     const info = localStorage.getItem("adminInfo");
     const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
     if (!info && !storedUser) return;
+    
+    if (!socket) return; // 🌟 Chờ sóng socket sẵn sàng
 
     try {
       const parsedInfo = info ? JSON.parse(info) : {};
@@ -46,18 +49,10 @@ export default function Header() {
       
       if (!currentUserId) return;
 
-      const socketUrl = import.meta.env.VITE_API_USER_URL || "http://localhost:5001";
-      const socket = io(socketUrl, { 
-        withCredentials: true,
-        transports: ['websocket', 'polling']
-      });
-
-      // Tham gia vào phòng real-time của chính mình
       socket.emit('join_user_room', currentUserId);
 
-      // Lắng nghe tín hiệu ma trận hoặc hồ sơ cá nhân thay đổi live
-      socket.on('permission_matrix_changed', (newCustomPermissions) => {
-        // Đồng bộ lại UI bằng cách bốc lại dữ liệu LocalStorage mới vừa được Sidebar cập nhật nóng
+      // Tách hàm callback ra
+      const handleMatrixChanged = () => {
         const updatedInfo = localStorage.getItem("adminInfo");
         if (updatedInfo) {
           const parsed = JSON.parse(updatedInfo);
@@ -67,15 +62,18 @@ export default function Header() {
             status: parsed.status === "inactive" ? "Tạm ngưng" : "Đang hoạt động"
           }));
         }
-      });
+      };
+
+      socket.on('permission_matrix_changed', handleMatrixChanged);
 
       return () => {
-        socket.disconnect();
+        // 🌟 KHÔNG NGẮT MẠNG, CHỈ TẮT LẮNG NGHE
+        socket.off('permission_matrix_changed', handleMatrixChanged);
       };
     } catch (err) {
       console.error("Lỗi đồng bộ socket trên Header:", err);
     }
-  }, []);
+  }, [socket]);
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");

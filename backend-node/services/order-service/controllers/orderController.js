@@ -269,7 +269,7 @@ const placeOrder = async (req, res) => {
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang);
 
-<<<<<<< HEAD
+
    // 🚀 BƯỚC ĐỘT PHÁ SỬA LỖI TIMEOUT: TRẢ KẾT QUẢ VỀ FRONTEND NGAY LẬP TỨC!
     // Trình duyệt sẽ nhận được thành công ngay lập tức để tiến hành xóa giỏ hàng
     res.status(201).json({ 

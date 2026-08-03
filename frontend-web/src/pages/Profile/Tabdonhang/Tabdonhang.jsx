@@ -15,7 +15,7 @@ import ModalLoTrinh from "./ModalLoTrinh";
 import ModalChiTietDonHang from "./ModalChiTietDonHang";
 import ReviewModal from "../../../components/Reviews/ReviewModal";
 import { productApi } from "../../../api/axios";
-import io from "socket.io-client";
+import { useSocket } from "../../../context/SocketContext";
 
 const ORDER_STEPS = [
   {
@@ -49,6 +49,7 @@ export default function Tabdonhang({
   const [expandedOrders, setExpandedOrders] = useState({});
   const [reviewModalData, setReviewModalData] = useState(null);
   const [reviewedOrderIds, setReviewedOrderIds] = useState([]);
+  const globalSocket = useSocket();
 
   const socketRef = useRef(null);
   const realtimeUpdatedOrdersRef = useRef({});
@@ -72,26 +73,33 @@ export default function Tabdonhang({
 
   // 🌟 KẾT NỐI SOCKET REALTIME VẬN ĐƠN (Đã xử lý triệt để lỗi WebSocket closed)
   useEffect(() => {
-    const socket = io("http://localhost:5005", {
-      transports: ["websocket"],
-      reconnectionAttempts: 5,
-    });
-    socketRef.current = socket;
+    // Nếu chưa có sóng thì nằm im
+    if (!globalSocket) return;
 
-    // Chờ kết nối thành công mới Join Room để tránh rớt packet
-    socket.on("connect", () => {
+    socketRef.current = globalSocket;
+
+    // Hàm xử lý Join Room
+    const joinRooms = () => {
       if (initialOrders && initialOrders.length > 0) {
         initialOrders.forEach((order) => {
           const roomId = String(order.ma_don_hang || "").trim();
           if (roomId) {
-            socket.emit("join_order_room", roomId);
+            globalSocket.emit("join_order_room", roomId);
           }
         });
       }
-    });
+    };
 
-    // Lắng nghe cập nhật vị trí xe / trạng thái đơn hàng
-    socket.on("send_truck_location", (data) => {
+    // Nếu socket đã mở sẵn thì join luôn
+    if (globalSocket.connected) {
+      joinRooms();
+    }
+
+    // Đề phòng trường hợp socket bị ngắt rồi kết nối lại
+    globalSocket.on("connect", joinRooms);
+
+    // Hàm lắng nghe cập nhật vị trí xe
+    const handleTruckLocation = (data) => {
       if (!data) return;
       const { ma_don_hang, isFullyDelivered, isArrived, currentStationIndex } = data;
 
@@ -127,18 +135,16 @@ export default function Tabdonhang({
         }
         return prevOrders;
       });
-    });
-
-    return () => {
-      // 🌟 MẸO AN TOÀN TRÁNH CẢNH BÁO STRICT MODE CONSOLE:
-      // Chỉ ngắt ngay nếu đã kết nối xong, nếu đang bắt tay (connecting) thì đợi xong rồi ngắt
-      if (socket.connected) {
-        socket.disconnect();
-      } else {
-        socket.once("connect", () => socket.disconnect());
-      }
     };
-  }, [initialOrders, onRefreshData]);
+
+    globalSocket.on("send_truck_location", handleTruckLocation);
+
+    // 🌟 CHỈ TẮT LẮNG NGHE SỰ KIỆN, KHÔNG DISCONNECT CẢ ĐƯỜNG TRUYỀN MẠNG
+    return () => {
+      globalSocket.off("connect", joinRooms);
+      globalSocket.off("send_truck_location", handleTruckLocation);
+    };
+  }, [globalSocket, initialOrders, onRefreshData]);
 
   // Kiểm tra trạng thái đánh giá sản phẩm
   useEffect(() => {
