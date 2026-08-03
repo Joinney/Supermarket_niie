@@ -691,9 +691,10 @@ export default function Header({ onOpenMenu }) {
                 strokeWidth={2.5}
                 className="group-hover:rotate-12 transition-transform"
               />
+             {/* Tính tổng số lượng thực tế của tất cả vật phẩm */}
               {cart && cart.length > 0 && (
                 <span className="absolute -top-2 -right-2 bg-[#fea619] text-[#161b22] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#006c49] animate-bounce">
-                  {cart.length}
+                  {cart.reduce((total, item) => total + (item.quantity || 1), 0)}
                 </span>
               )}
             </div>

@@ -1,5 +1,4 @@
 import { createContext, useState, useEffect, useCallback, useContext, useRef } from "react";
-// 🌟 ĐỒNG BỘ: Sử dụng instance cartApi chuyên biệt từ file cấu hình interceptor chung của bạn
 import { cartApi } from "../api/axios"; 
 import { AuthContext } from "./AuthContext";
 
@@ -9,9 +8,9 @@ export const CartProvider = ({ children }) => {
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(true);
     const { user } = useContext(AuthContext);
-    const hasMerged = useRef(false);
+    const isMerging = useRef(false); // Cờ chặn gửi request song song
 
-    // ✅ HÀM ĐỊNH DẠNG VẬT PHẨM: Giữ lại toàn vẹn ma trận thuộc tính động từ PostgreSQL
+    // ✅ HÀM ĐỊNH DẠNG VẬT PHẨM
     const formatItem = useCallback((item) => {
         if (!item) return null;
 
@@ -28,29 +27,23 @@ export const CartProvider = ({ children }) => {
         return {
             productId: resolvedProductId,
             id: resolvedProductId, 
-
             variantId: item.variantId || item.variant_id || item.ma_bien_the,
             sku: item.sku || item.ma_sku || item.variantId || item.variant_id || "", 
-
             name: item.name || item.ten_san_pham || "Sản phẩm",
             variantName: item.variantName || item.ten_bien_the || "",
             price: Number(item.price || item.gia_ban_le || item.gia_khuyen_mai || 0),
             quantity: Number(item.quantity || 1),
-            
-            // 🌟 ĐÂY RỒI: Chốt chặn bắt lại thông tin tồn kho để không bị rơi mất nữa!
             stock: Number(item.stock ?? item.so_luong_ton ?? item.so_luong_thuc_te ?? 9999),
-
             image: item.image || item.duong_dan_url || item.hinh_anh_url || "",
             categorySlug: item.categorySlug || item.slug_danh_muc || "san-pham",
             countryCode: item.countryCode || item.country_code || "vn",
-            
             thuoc_tinh_hop_nhat: item.thuoc_tinh_hop_nhat || [],
             thuoc_tinh: flattenAttributes,
             ten_don_vi: item.ten_don_vi || "Gói"
         };
     }, []);
 
-    // ✅ 1. LẤY GIỎ HÀNG TỪ DATABASE (MongoDB + Gộp Postgres)
+    // ✅ 1. LẤY GIỎ HÀNG TỪ DATABASE HOẶC LOCALSTORAGE
     const fetchCart = useCallback(async () => {
         const token = localStorage.getItem("token");
         if (!token) {
@@ -62,7 +55,6 @@ export const CartProvider = ({ children }) => {
 
         setLoading(true);
         try {
-            // 🚀 TỐI ƯU: Gọi qua instance cartApi để tự động nhận diện domain động
             const res = await cartApi.get("/cart");
             const backendItems = res.data?.items || res.data || [];
             setCart((Array.isArray(backendItems) ? backendItems : []).map(formatItem));
@@ -74,40 +66,56 @@ export const CartProvider = ({ children }) => {
         }
     }, [formatItem]);
 
-    // ✅ 2. ĐỒNG BỘ GIỎ HÀNG TỪ LOCALSTORAGE LÊN SERVER KHI ĐĂNG NHẬP
+    // ✅ 2. ĐỒNG BỘ GIỎ HÀNG (SỬA LỖI RACE CONDITION)
     const mergeCart = useCallback(async () => {
         const token = localStorage.getItem("token");
         const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
         
-        if (token && local.length > 0) {
-            try {
-                // 🚀 TỐI ƯU: Thay thế url cứng bằng endpoint tương đối của cartApi
-                await cartApi.post("/cart/merge", { items: local });
-                localStorage.removeItem("demi_cart");
-            } catch (err) {
-                console.error("❌ Lỗi merge giỏ hàng:", err.response?.data || err.message);
-            }
+        // Nếu không có token, không có đồ local hoặc đang trong tiến trình merge -> HỦY BỎ
+        if (!token || local.length === 0 || isMerging.current) {
+            await fetchCart();
+            return;
         }
-        await fetchCart();
-    }, [fetchCart]);
+
+        isMerging.current = true; // Bật cờ khóa
+        setLoading(true);
+
+        try {
+            // 🌟 CHẬN ĐỨNG TRÙNG LẶP: Xóa LocalStorage NGAY TRƯỚC KHI BẮN API
+            localStorage.removeItem("demi_cart");
+
+            const response = await cartApi.post("/cart/merge", { items: local });
+            
+            // Nếu Backend trả về giỏ hàng mới sau khi merge, set trực tiếp vào State
+            const mergedItems = response.data?.items || response.data || [];
+            if (Array.isArray(mergedItems) && mergedItems.length > 0) {
+                setCart(mergedItems.map(formatItem));
+            } else {
+                await fetchCart();
+            }
+        } catch (err) {
+            console.error("❌ Lỗi merge giỏ hàng:", err.response?.data || err.message);
+            await fetchCart();
+        } finally {
+            isMerging.current = false; // Mở khóa
+            setLoading(false);
+        }
+    }, [fetchCart, formatItem]);
 
     const clearLocalCart = useCallback(() => {
         localStorage.removeItem("demi_cart");
-        hasMerged.current = false;
+        isMerging.current = false;
     }, []);
 
-    // Kiểm soát trạng thái đăng nhập để kích hoạt luồng đồng bộ dữ liệu chuẩn
+    // 🌟 ĐỒNG BỘ LUỒNG USER
     useEffect(() => {
         if (user) {
-            if (!hasMerged.current) {
-                hasMerged.current = true;
-                mergeCart();
-            }
+            mergeCart();
         } else {
-            hasMerged.current = false;
+            isMerging.current = false;
             fetchCart();
         }
-    }, [user, mergeCart, fetchCart]);
+    }, [user]); // Chỉ cần lắng nghe `user` để tránh trigger vòng lặp vô tận
 
     // ✅ 3. THÊM SẢN PHẨM VÀO GIỎ HÀNG
     const addToCart = useCallback(async (product) => {
@@ -120,7 +128,6 @@ export const CartProvider = ({ children }) => {
         const token = localStorage.getItem("token");
 
         if (!token) {
-            // --- CHẾ ĐỘ CHƯA ĐĂNG NHẬP (LƯU LOCAL STORAGE) ---
             const local = JSON.parse(localStorage.getItem("demi_cart") || "[]");
             const idx = local.findIndex(i => i.variantId === newItem.variantId);
             if (idx > -1) {
@@ -131,21 +138,10 @@ export const CartProvider = ({ children }) => {
             localStorage.setItem("demi_cart", JSON.stringify(local));
             setCart(local.map(formatItem));
         } else {
-            // --- CHẾ ĐỘ ĐÃ ĐĂNG NHẬP (LƯU MONGODB) ---
             try {
-                setLoading(true); // Bật loading khóa UI tạm thời
-
-                // 🚀 TỐI ƯU: Đẩy dữ liệu định danh lên MongoDB qua cartApi
+                setLoading(true);
                 await cartApi.post("/cart/add", newItem);
-
-                console.log("🚀 Đã ghi nhận vào MongoDB, đợi DB ổn định luồng liên dịch vụ...");
-
-                // Vá khoảng delay nhỏ tránh lệch nhịp liên dịch vụ
-                await new Promise((resolve) => setTimeout(resolve, 150));
-
-                // Tiến hành fetch lại toàn bộ giỏ hàng full mảng thuộc tính động
                 await fetchCart();
-
             } catch (err) {
                 console.error("❌ Lỗi lưu giỏ hàng vào MongoDB:", err.response?.data || err.message);
             } finally {
@@ -163,7 +159,6 @@ export const CartProvider = ({ children }) => {
             setCart(local.map(formatItem));
         } else {
             try {
-                // 🚀 TỐI ƯU: Gọi hàm xóa của cartApi với chuỗi template string động sạch sẽ
                 await cartApi.delete(`/cart/remove/${variantId}`);
                 await fetchCart();
             } catch (err) {
@@ -177,13 +172,11 @@ export const CartProvider = ({ children }) => {
         const token = localStorage.getItem("token");
         try {
             if (token) {
-                // 🚀 TỐI ƯU: Dọn sạch giỏ hàng trên DB qua cartApi
                 await cartApi.delete('/cart/clear');
             } else {
                 localStorage.removeItem("demi_cart");
             }
             setCart([]); 
-            console.log("✅ Đã dọn sạch toàn bộ giỏ hàng!");
         } catch (err) {
             console.error("Lỗi xóa giỏ hàng:", err.response?.data || err.message);
         }
@@ -196,7 +189,6 @@ export const CartProvider = ({ children }) => {
         const token = localStorage.getItem("token");
         try {
             if (token) {
-                // 🚀 TỐI ƯU: Gọi API dọn các item đã mua thông qua cartApi
                 await cartApi.post('/cart/remove-selected', { variant_ids: boughtVariantIds });
                 await fetchCart();
             } else {
@@ -205,7 +197,6 @@ export const CartProvider = ({ children }) => {
                 localStorage.setItem("demi_cart", JSON.stringify(remainingItems));
                 setCart(remainingItems.map(formatItem));
             }
-            console.log("✅ Đã lọc bỏ các sản phẩm đã mua khỏi giỏ hàng!");
         } catch (err) {
             console.error("Lỗi khi loại bỏ sản phẩm đã mua:", err.response?.data || err.message);
             setCart(prev => prev.filter(item => !boughtVariantIds.includes(item.variantId || item.variant_id)));
