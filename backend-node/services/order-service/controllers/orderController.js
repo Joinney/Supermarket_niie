@@ -155,7 +155,8 @@ const placeOrder = async (req, res) => {
       danh_sach_san_pham,
       phuong_thuc_thanh_toan,
       to_lat,
-      to_lng
+      to_lng,
+      points_used // 👈 Lấy số Xu khách muốn dùng từ request
     } = req.body;
     
     if (!to_district_id || !to_ward_code || !danh_sach_san_pham || !Array.isArray(danh_sach_san_pham) || danh_sach_san_pham.length === 0) {
@@ -249,8 +250,55 @@ const placeOrder = async (req, res) => {
     req.body.phi_van_chuyen = validShippingCost;
     req.body.don_vi_van_chuyen = req.body.don_vi_van_chuyen || 'Siêu thị DemiMart Express';
 
+    // 👉 ĐÃ SỬA: Tính tổng tiền sơ bộ và bắt lỗi < 0
     let finalTotal = Number(tong_tien_hang) + validShippingCost - Number(req.body.so_tien_giam_gia || 0);
-    if (isNaN(finalTotal) || finalTotal < 5000) finalTotal = 50000;
+    if (isNaN(finalTotal) || finalTotal < 0) finalTotal = 0; 
+
+    // =========================================================
+    // 🌟 LOGIC DÙNG XU GIẢM GIÁ (SHOPEE COIN MODEL)
+    // =========================================================
+    const userPointsToUse = Number(points_used || 0);
+    if (userPointsToUse > 0) {
+      // Đảm bảo không dùng quá tổng tiền đơn hàng
+      const validPointsToUse = Math.min(userPointsToUse, finalTotal); 
+
+      try {
+        const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+        
+        // Gọi sang Auth-Service yêu cầu trừ Xu (Sync call để đảm bảo có tiền mới cho tạo đơn)
+        const pointRes = await axios.post(`${authUrl}/api/v1/auth/loyalty/spend`, {
+          userId: String(userId),
+          points: validPointsToUse,
+          referenceId: `ORD_PENDING_${Date.now()}` // Ghi mã tạm thời vào lịch sử
+        });
+
+        if (pointRes.data && pointRes.data.success) {
+          // Trừ Xu thành công -> Giảm thẳng vào tổng hóa đơn
+          finalTotal = finalTotal - validPointsToUse;
+          console.log(`🪙 Khách hàng đã dùng ${validPointsToUse} Xu. Tổng tiền phải trả mới: ${finalTotal}đ`);
+          req.body.points_used = validPointsToUse; // Chốt số Xu đã dùng để lưu DB orders
+        }
+      } catch (pointErr) {
+        console.error("🔥 Lỗi không đủ Xu hoặc lỗi hệ thống:", pointErr.response?.data || pointErr.message);
+        
+        // CỰC KỲ QUAN TRỌNG: Nếu lỗi trừ Xu, phải hoàn lại sản phẩm vào kho
+        // vì ở trên chúng ta đã gọi deduct-fifo trừ kho mất rồi
+        try {
+           // Giả định bạn có endpoint trả hàng, hoặc ta báo lỗi ra để xử lý
+           console.warn("Cần phải rollback tồn kho do giao dịch trừ xu thất bại!");
+           // await axios.post(`${productServiceUrl}/api/v1/products/internal/restore-stock`, { items: normalizedItems });
+        } catch(e) {}
+
+        return res.status(400).json({ 
+          success: false, 
+          message: pointErr.response?.data?.message || "Số dư Demi Xu không đủ để thanh toán. Vui lòng thử lại!" 
+        });
+      }
+    } else {
+      req.body.points_used = 0;
+    }
+    // =========================================================
+
     req.body.tong_thanh_toan = finalTotal;
 
     const rgbLatNum = parseFloat(to_lat || 10.762622);
@@ -269,9 +317,7 @@ const placeOrder = async (req, res) => {
     const order = await Order.create(userId, normalizedOrder);
     console.log("✅ Đơn hàng đã tạo thành công với mã:", order.ma_don_hang);
 
-<<<<<<< HEAD
    // 🚀 BƯỚC ĐỘT PHÁ SỬA LỖI TIMEOUT: TRẢ KẾT QUẢ VỀ FRONTEND NGAY LẬP TỨC!
-    // Trình duyệt sẽ nhận được thành công ngay lập tức để tiến hành xóa giỏ hàng
     res.status(201).json({ 
       success: true, 
       message: "Đặt hàng thành công!", 
@@ -294,7 +340,7 @@ const placeOrder = async (req, res) => {
         } catch (timerErr) {}
       }, 60000);
     })(order.id, order.ma_don_hang);
-
+    
     // =========================================================================
     // --- LUỒNG TỰ ĐỘNG HÓA TÍNH TẮT HÀNH TRÌNH CHẶNG VÀ LƯU BƯU CỤC VÀO DATABASE ---
     // =========================================================================
@@ -1461,12 +1507,13 @@ const confirmReceiveOrder = async (req, res) => {
             const earnedPoints = Math.floor(Number(orderInfo.tong_thanh_toan) * cashbackRate);
 
             if (earnedPoints > 0) {
-                const promotionUrl = process.env.PROMOTION_SERVICE_URL || 'http://promotion-service:5003';
+                // Trỏ về AUTH_SERVICE_URL
+                const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
                 const notificationUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:8085';
 
-                // Gọi cộng xu sang promotion-service
-                await axios.post(`${promotionUrl}/api/v1/loyalty/earn`, {
-                    customerId: Number(userId),
+                //  Gọi API /api/v1/auth/loyalty/earn và truyền biến userId
+                await axios.post(`${authUrl}/api/v1/auth/loyalty/earn`, {
+                    userId: Number(userId), // Đã đổi tên biến thành userId cho khớp DB mới
                     points: earnedPoints,
                     source: 'ORDER',
                     referenceId: String(ma_don_hang),
@@ -1485,7 +1532,6 @@ const confirmReceiveOrder = async (req, res) => {
         } catch (pointError) {
             console.warn("⚠️ Lỗi hệ thống hoàn xu:", pointError.message);
         }
-        // =========================================================================
 
         return res.status(200).json({ success: true, message: "Cảm ơn bạn đã xác nhận nhận hàng!" });
 

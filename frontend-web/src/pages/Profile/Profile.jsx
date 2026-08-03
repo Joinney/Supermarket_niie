@@ -30,7 +30,7 @@ import {
   Bell,
   Eye,
   History,
-  Zap, // Import sẵn icon Zap cho nút Điểm danh
+  Zap,
   Award,
   X,
   Plus,
@@ -117,7 +117,7 @@ export default function ProfilePage() {
   // State lưu trữ Điểm thưởng tích lũy (Xu)
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
 
-  // 👉 BỔ SUNG: State loading cho nút Điểm danh
+  // State loading cho nút Điểm danh
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
   const API_BASE_URL = authApi.defaults.baseURL
@@ -404,12 +404,12 @@ export default function ProfilePage() {
     }
   };
 
-  // Hàm gọi API lấy số dư Xu từ promotion-service
+  // 🌟 ĐÃ SỬA: Hàm gọi API lấy số dư Xu trỏ về Auth Service
   const fetchLoyaltyPoints = async () => {
     try {
-      const pointUrl = import.meta.env.VITE_PROMOTION_URL
-        ? `${import.meta.env.VITE_PROMOTION_URL}/api/v1/loyalty/balance`
-        : "http://localhost:5007/api/v1/loyalty/balance";
+      const pointUrl = import.meta.env.VITE_AUTH_URL
+        ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/balance`
+        : "http://localhost:5001/api/v1/auth/loyalty/balance";
 
       const res = await authApi.get(pointUrl);
       if (res.data && res.data.success) {
@@ -420,13 +420,13 @@ export default function ProfilePage() {
     }
   };
 
-  // 👉 BỔ SUNG: Hàm xử lý khi user bấm nút Điểm danh
+  // 🌟 ĐÃ SỬA: Hàm xử lý điểm danh trỏ về Auth Service
   const handleCheckIn = async () => {
     try {
       setIsCheckingIn(true);
-      const checkinUrl = import.meta.env.VITE_PROMOTION_URL
-        ? `${import.meta.env.VITE_PROMOTION_URL}/api/v1/loyalty/checkin`
-        : "http://localhost:5007/api/v1/loyalty/checkin";
+      const checkinUrl = import.meta.env.VITE_AUTH_URL
+        ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/checkin`
+        : "http://localhost:5001/api/v1/auth/loyalty/checkin";
 
       const res = await authApi.post(checkinUrl);
 
@@ -1222,7 +1222,6 @@ export default function ProfilePage() {
                       Thưởng tích lũy
                     </p>
 
-                    {/* 👉 ĐÃ BỔ SUNG: Thay nút "Đổi quà" bằng nút "Điểm danh" */}
                     <span
                       onClick={isCheckingIn ? null : handleCheckIn}
                       className="text-[9px] font-black text-white bg-[#fea619] px-2.5 py-1 rounded-md cursor-pointer hover:bg-amber-600 transition-all uppercase flex items-center gap-1 shadow-sm"

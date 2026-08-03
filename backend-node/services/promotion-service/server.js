@@ -15,7 +15,6 @@ import { connectDB } from './configs/mongo/databasemg.js';
 import promotionRoutes from './routes/promotionRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import HomeposterRoutes from './routes/HomeposterRoutes.js';
-import loyaltyRoutes from './routes/loyaltyRoutes.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -112,8 +111,6 @@ const v1Router = express.Router();
 
 v1Router.use('/promotions', promotionRoutes);
 v1Router.use('/coupons', couponRoutes);
-
-v1Router.use('/loyalty', loyaltyRoutes);
 
 // 🖼️ ROUTE QUẢNG CÁO: Khai báo cả 2 tiền tố để tương thích 100% với gọi trực tiếp lẫn qua Gateway
 v1Router.use('/homeposters', HomeposterRoutes);

@@ -10,6 +10,7 @@ import {
   Loader2,
   X,
   Ticket,
+  Zap, // 👈 ĐÃ BỔ SUNG: Import icon Zap cho Demi Xu
 } from "lucide-react";
 import { useOrder } from "../../context/OrderContext";
 import { authApi, orderApi, paymentApi, couponApi } from "../../api/axios";
@@ -44,25 +45,38 @@ export default function Checkout() {
   const [availableVouchers, setAvailableVouchers] = useState([]);
   const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
 
-  // 🌟 THÊM STATE QUẢN LÝ SỐ DƯ VÍ
+  // 🌟 QUẢN LÝ SỐ DƯ VÍ DEMIPAY
   const [walletBalance, setWalletBalance] = useState(0);
 
-  // 🌟 GỌI API LẤY SỐ DƯ CHÍNH XÁC NHẤT KHI VÀO TRANG CHECKOUT
+  // 🌟 ĐÃ BỔ SUNG: STATE QUẢN LÝ DEMI XU (LOYALTY POINTS)
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [usePoints, setUsePoints] = useState(false);
+
+  // Gọi API lấy thông tin Profile & Xu
   useEffect(() => {
-    const fetchWalletBalance = async () => {
+    const fetchUserData = async () => {
       try {
-        const response = await authApi.get("/profile/hoso");
-        if (response.data && response.data.success) {
-          // Lấy đúng trường wallet_balance từ database
-          setWalletBalance(Number(response.data.data.wallet_balance || 0));
+        // Lấy số dư ví DemiPay
+        const profileRes = await authApi.get("/profile/hoso");
+        if (profileRes.data && profileRes.data.success) {
+          setWalletBalance(Number(profileRes.data.data.wallet_balance || 0));
+        }
+
+        // Lấy số dư Demi Xu
+        const pointUrl = import.meta.env.VITE_AUTH_URL
+          ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/balance`
+          : "http://localhost:5001/api/v1/auth/loyalty/balance";
+        const pointRes = await authApi.get(pointUrl);
+        if (pointRes.data?.success) {
+          setLoyaltyPoints(pointRes.data.data.availablePoints || 0);
         }
       } catch (err) {
-        console.error("Lỗi tải số dư ví DemiPay:", err);
+        console.error("Lỗi tải thông tin tài chính:", err);
       }
     };
-    fetchWalletBalance();
+    fetchUserData();
   }, []);
-  
+
   const mockCart = [
     {
       variantId: "v1",
@@ -104,7 +118,6 @@ export default function Checkout() {
         groups[pId] = {
           productId: pId,
           name: item.name,
-          // 🌟 ĐÃ SỬA: Fallback nhận diện mọi định dạng ảnh từ Mua ngay hoặc Giỏ hàng
           image:
             item.image_url ||
             item.image ||
@@ -140,15 +153,30 @@ export default function Checkout() {
     loading: false,
   });
 
+  // ====================================================================
+  // 🌟 LOGIC TÍNH TOÁN TIỀN TỆ (BAO GỒM VOUCHER VÀ DEMI XU)
+  // ====================================================================
   const itemTotal = checkoutCart.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
   const shippingFee = shippingInfo.fee;
-
   const discountAmount = appliedCoupon ? appliedCoupon.discount_amount : 0;
-  const finalTotal = Math.max(0, itemTotal + shippingFee - discountAmount);
-  console.log("Tổng đơn hàng:", finalTotal, "|| Số dư ví thực tế:", walletBalance);
+
+  // Tổng tiền phải trả trước khi dùng Xu (Không được < 0)
+  const totalBeforePoints = Math.max(
+    0,
+    itemTotal + shippingFee - discountAmount,
+  );
+
+  // Số Xu tối đa được phép dùng (Tối đa bằng số tiền hóa đơn)
+  const maxPointsToUse = Math.min(loyaltyPoints, totalBeforePoints);
+
+  // Tổng tiền thanh toán cuối cùng
+  const finalTotal = usePoints
+    ? totalBeforePoints - maxPointsToUse
+    : totalBeforePoints;
+  // ====================================================================
 
   useEffect(() => {
     const fetchDistanceShipping = async () => {
@@ -212,7 +240,6 @@ export default function Checkout() {
     fetchAddresses();
   }, []);
 
-  // 🌟 LẤY DANH SÁCH VOUCHER KHI MỞ POPUP
   useEffect(() => {
     if (showVoucherModal && availableVouchers.length === 0) {
       const fetchVouchers = async () => {
@@ -220,7 +247,6 @@ export default function Checkout() {
         try {
           const res = await couponApi.get("/");
           if (res.data.success) {
-            // Chỉ lấy các mã đang active
             setAvailableVouchers(res.data.data.filter((c) => c.is_active));
           }
         } catch (err) {
@@ -233,7 +259,6 @@ export default function Checkout() {
     }
   }, [showVoucherModal, availableVouchers.length]);
 
-  // 🌟 HÀM KIỂM TRA & ÁP DỤNG MÃ (ĐÃ SỬA CHUẨN V1)
   const handleApplyCoupon = async (codeToApply = couponCodeInput) => {
     const finalCode =
       typeof codeToApply === "string"
@@ -329,8 +354,7 @@ export default function Checkout() {
 
         return {
           variant_id: vId,
-          // 🌟 ĐÃ SỬA: Quét mọi key chứa SKU, nếu vẫn rỗng thì lấy luôn mã biến thể (vId) làm dự phòng để Backend tra cứu
-          sku: String(item.sku || item.ma_sku || item.variant_sku || vId), 
+          sku: String(item.sku || item.ma_sku || item.variant_sku || vId),
           quantity: Number(item.quantity),
           price: Number(item.price),
           name: String(item.name || item.productName || "Sản phẩm Demi Mart"),
@@ -358,6 +382,10 @@ export default function Checkout() {
 
       so_tien_giam_gia: discountAmount,
       coupon_code: appliedCoupon ? appliedCoupon.code : null,
+
+      // 🌟 ĐÃ BỔ SUNG: Truyền điểm sử dụng xuống Backend
+      points_used: usePoints ? maxPointsToUse : 0,
+
       tong_thanh_toan: finalTotal,
 
       phuong_thuc_thanh_toan: selectedPayment,
@@ -365,14 +393,10 @@ export default function Checkout() {
     };
 
     try {
-      console.log(
-        "Đang kiểm tra giỏ hàng gửi đi:",
-        orderData.danh_sach_san_pham,
-      );
-      const result = placeOrder
-        ? await placeOrder(orderData)
-        : await orderApi.post("/orders/place-order", orderData);
-      const cleanResult = result?.data || result;
+      // 🌟 ĐÃ SỬA: Bỏ qua hàm placeOrder của Context, gọi thẳng API
+      // Để lấy được trọn vẹn cục JSON trả về từ Backend (có chứa chữ success: true)
+      const result = await orderApi.post("/orders/place-order", orderData);
+      const cleanResult = result.data; // Bóc tách chính xác cục data của Axios
 
       if (cleanResult && cleanResult.success) {
         const maDonHangText =
@@ -399,9 +423,15 @@ export default function Checkout() {
             throw new Error("Không lấy được link từ cổng thanh toán VNPay!");
           }
         }
+
+        // Trả về mã đơn hàng cho các hàm bên ngoài xử lý tiếp
         return maDonHangText;
       } else {
-        alert("Có sự cố từ máy chủ đơn hàng, Demi kiểm tra lại nhé!");
+        // Nếu Backend trả về success: false kèm lời nhắn (VD: Hết hàng, Không đủ Xu...)
+        alert(
+          cleanResult?.message ||
+            "Có sự cố từ máy chủ đơn hàng, Demi kiểm tra lại nhé!",
+        );
         return false;
       }
     } catch (error) {
@@ -425,52 +455,57 @@ export default function Checkout() {
       return alert("Giỏ hàng thanh toán đang trống!");
 
     setIsPlacing(true);
-    const orderSuccess = await executePlaceOrder();
-    if (orderSuccess && selectedPayment === "COD") {
+
+    const orderResult = await executePlaceOrder();
+
+    if (orderResult && selectedPayment === "COD") {
       alert(
         "🎉 Đặt hàng thành công! Đơn hàng thanh toán khi nhận hàng (COD) đã ghi nhận.",
       );
       await finalizeOrderCleanup();
       navigate("/profile/orders");
     }
+
     setIsPlacing(false);
   };
 
-  // 🌟 HÀM XỬ LÝ ĐẶT HÀNG RIÊNG CHO VÍ DEMIPAY
   const handleDemiPayCheckout = async () => {
     if (!address) return alert("Vui lòng chọn địa chỉ giao hàng!");
-    if (!selectedShipping) return alert("Vui lòng đợi hệ thống tính toán phí vận chuyển!");
-    if (checkoutCart.length === 0) return alert("Giỏ hàng thanh toán đang trống!");
+    if (!selectedShipping)
+      return alert("Vui lòng đợi hệ thống tính toán phí vận chuyển!");
+    if (checkoutCart.length === 0)
+      return alert("Giỏ hàng thanh toán đang trống!");
 
     setIsPlacing(true);
     try {
-      // 1. Tạo đơn hàng (Đơn hàng tạo ra lúc này sẽ ở trạng thái Pending/Chờ thanh toán)
       const maDonHangText = await executePlaceOrder({
         trang_thai_thanh_toan: "pending",
-        phuong_thuc_thanh_toan: "DemiPay"
+        phuong_thuc_thanh_toan: "DemiPay",
       });
 
       if (maDonHangText) {
-        // 2. Gọi API trừ tiền trong ví (Auth Service)
         await authApi.post("/auth/wallet/pay", {
           amount: finalTotal,
-          orderId: maDonHangText
+          orderId: maDonHangText,
         });
 
-        // 🌟 3. BỔ SUNG: Báo cho Order Service cập nhật trạng thái đơn thành "Đã thanh toán"
-        // (Sử dụng hàm updateInternalOrderStatus sẵn có trong orderController.js)
         await orderApi.post("/orders/internal-status", {
           ma_don_hang: maDonHangText,
-          trang_thai_thanh_toan: "Đã thanh toán" // Hoặc "completed" tùy quy chuẩn UI của bạn
+          trang_thai_thanh_toan: "Đã thanh toán",
         });
 
-        alert(`🎉 Thanh toán qua Ví DemiPay thành công! Mã đơn: ${maDonHangText}`);
+        alert(
+          `🎉 Thanh toán qua Ví DemiPay thành công! Mã đơn: ${maDonHangText}`,
+        );
         await finalizeOrderCleanup();
-        navigate("/profile/orders"); // 4. Đá về trang lịch sử đơn hàng
+        navigate("/profile/orders");
       }
     } catch (error) {
       console.error("Lỗi thanh toán DemiPay:", error);
-      alert(error.response?.data?.message || "Giao dịch bị gián đoạn, vui lòng kiểm tra lại số dư ví!");
+      alert(
+        error.response?.data?.message ||
+          "Giao dịch bị gián đoạn, vui lòng kiểm tra lại số dư ví!",
+      );
     } finally {
       setIsPlacing(false);
     }
@@ -833,7 +868,7 @@ export default function Checkout() {
               </p>
             )}
 
-            {/* 🌟 KHU VỰC VOUCHER MỚI (CHỌN TỪ POPUP) */}
+            {/* 🌟 KHU VỰC VOUCHER */}
             <div className="border-t pt-5 mt-4 flex flex-col gap-3">
               <div className="flex justify-between items-center font-bold mb-1">
                 <div className="flex gap-2 text-[#006c49] text-sm uppercase tracking-wider">
@@ -846,8 +881,8 @@ export default function Checkout() {
                   <div className="flex gap-3 relative group">
                     <input
                       type="text"
-                      readOnly // Không cho nhập tay nữa
-                      onClick={() => setShowVoucherModal(true)} // Nhấn vào là mở Modal
+                      readOnly
+                      onClick={() => setShowVoucherModal(true)}
                       placeholder="Nhấn để chọn mã khuyến mãi..."
                       value={couponCodeInput}
                       className="border-2 border-slate-200 rounded-xl px-4 py-2 flex-1 outline-none font-bold text-slate-700 uppercase cursor-pointer group-hover:border-[#006c49]/50 transition-colors bg-white"
@@ -885,6 +920,41 @@ export default function Checkout() {
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* 🌟 KHU VỰC DÙNG DEMI XU (SHOPEE COINS MODEL) */}
+            <div className="border-t pt-5 mt-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap size={20} className="text-[#fea619]" fill="#fea619" />
+                <span className="text-sm font-black uppercase text-slate-700">
+                  Dùng Demi Xu
+                </span>
+                <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                  (Đang có {loyaltyPoints.toLocaleString("vi-VN")} Xu)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-bold text-[#fea619]">
+                  {maxPointsToUse > 0
+                    ? `[-${maxPointsToUse.toLocaleString("vi-VN")}đ]`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  disabled={maxPointsToUse <= 0}
+                  onClick={() => setUsePoints(!usePoints)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                    usePoints ? "bg-[#006c49]" : "bg-slate-200"
+                  } ${maxPointsToUse <= 0 && "opacity-50 cursor-not-allowed"}`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                      usePoints ? "translate-x-5" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </section>
 
@@ -941,11 +1011,21 @@ export default function Checkout() {
                 )}
               </div>
 
-              {/* 🌟 HIỂN THỊ SỐ TIỀN COUPON ĐƯỢC GIẢM */}
+              {/* HIỂN THỊ SỐ TIỀN COUPON ĐƯỢC GIẢM */}
               {discountAmount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-100">
                   <span>Mã Giảm Giá</span>{" "}
                   <span>-{discountAmount.toLocaleString()}đ</span>
+                </div>
+              )}
+
+              {/* 🌟 HIỂN THỊ SỐ XU ĐƯỢC GIẢM */}
+              {usePoints && maxPointsToUse > 0 && (
+                <div className="flex justify-between text-[#fea619] font-bold bg-orange-50 p-2 rounded-lg border border-orange-100">
+                  <span className="flex items-center gap-1">
+                    <Zap size={14} fill="currentColor" /> Dùng Demi Xu
+                  </span>{" "}
+                  <span>-{maxPointsToUse.toLocaleString()}đ</span>
                 </div>
               )}
 
@@ -1015,21 +1095,19 @@ export default function Checkout() {
                   }
                 />
               )}
-              
-              {/* 🌟 Nút thanh toán DemiPay */}
-{selectedPayment === "DemiPay" && (
-  <DemiPayButton
-    amount={finalTotal}
-   onClick={handleDemiPayCheckout}
-    disabled={
-      isGlobalLoading ||
-      shippingInfo.loading ||
-      !address ||
-      checkoutCart.length === 0
-    }
-  />
-)}
 
+              {selectedPayment === "DemiPay" && (
+                <DemiPayButton
+                  amount={finalTotal}
+                  onClick={handleDemiPayCheckout}
+                  disabled={
+                    isGlobalLoading ||
+                    shippingInfo.loading ||
+                    !address ||
+                    checkoutCart.length === 0
+                  }
+                />
+              )}
             </div>
           </div>
         </div>
@@ -1055,7 +1133,7 @@ export default function Checkout() {
         onClose={() => setIsPaymentModalOpen(false)}
         onSelect={(methodId) => setSelectedPayment(methodId)}
         selectedMethod={selectedPayment}
-        finalTotal={finalTotal} 
+        finalTotal={finalTotal}
         walletBalance={walletBalance}
       />
 
@@ -1091,23 +1169,18 @@ export default function Checkout() {
                 </div>
               ) : (
                 availableVouchers.map((coupon) => {
-                  // 1. TÍNH TOÁN ĐIỀU KIỆN
                   const reqSpent = Number(coupon.min_lifetime_spent);
                   const reqOrderValue = Number(coupon.min_order_value);
 
-                  // Kiểm tra Hạng (KIM CƯƠNG, VÀNG, hoặc mã 0đ)
                   const isTierEligible =
                     tier === "KIM CƯƠNG" ||
                     reqSpent === 0 ||
                     (tier === "VÀNG" && reqSpent <= 5000000);
 
-                  // Kiểm tra Giá trị đơn hàng tối thiểu
                   const isValueEligible = itemTotal >= reqOrderValue;
 
-                  // Phải thỏa mãn cả 2 điều kiện
                   const isEligible = isTierEligible && isValueEligible;
 
-                  // 2. TẠO CÂU THÔNG BÁO LÝ DO BỊ KHÓA
                   let disableReason = "";
                   if (!isTierEligible) disableReason = "Cần hạng cao hơn";
                   else if (!isValueEligible)
@@ -1119,7 +1192,7 @@ export default function Checkout() {
                       className={`border-2 p-4 rounded-xl flex items-center justify-between relative overflow-hidden transition-all duration-300 ${
                         isEligible
                           ? "bg-white border-emerald-100 cursor-pointer hover:border-[#006c49] group shadow-sm"
-                          : "bg-slate-50 border-slate-200 opacity-60 grayscale-[50%] pointer-events-none" // Hiệu ứng mờ và cấm bấm
+                          : "bg-slate-50 border-slate-200 opacity-60 grayscale-[50%] pointer-events-none"
                       }`}
                     >
                       <div
@@ -1144,7 +1217,6 @@ export default function Checkout() {
                         </div>
                       </div>
 
-                      {/* 3. HIỂN THỊ NÚT HOẶC CẢNH BÁO */}
                       {isEligible ? (
                         <button
                           onClick={() => handleApplyCoupon(coupon.code)}

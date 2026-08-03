@@ -139,12 +139,27 @@ export default function ProductDetail() {
             setQuantity(1);
             setSelectedAttributes(initialVariant.thuoc_tinh || {});
 
-            const variantMedia = productData.media?.find(
-              (m) =>
-                String(m.ma_bien_the) === String(initialVariant.ma_bien_the),
-            );
+            let foundMedia = null;
+            const directImg =
+              initialVariant.hinh_anh_url ||
+              initialVariant.image_url ||
+              initialVariant.hinh_anh;
+            if (directImg) {
+              foundMedia = { duong_dan_url: directImg, loai_media: "image" };
+            }
+
+            if (!foundMedia && productData.media) {
+              foundMedia = productData.media.find(
+                (m) =>
+                  String(m.ma_bien_the) ===
+                    String(initialVariant.ma_bien_the) ||
+                  String(m.variant_id) === String(initialVariant.ma_bien_the) ||
+                  String(m.sku) === String(initialVariant.sku),
+              );
+            }
+
             setMainMedia(
-              variantMedia ||
+              foundMedia ||
                 productData.media?.find((m) => m.la_anh_chinh) ||
                 productData.media?.[0],
             );
@@ -173,26 +188,6 @@ export default function ProductDetail() {
         setLoading(false);
       });
   }, [id, country, category_slug, navigate]);
-
-  useEffect(() => {
-    if (!product || !variantId) return;
-    const targetVariant = product.bien_the?.find(
-      (v) => String(v.ma_bien_the) === String(variantId),
-    );
-
-    if (
-      targetVariant &&
-      targetVariant.ma_bien_the !== selectedVariant?.ma_bien_the
-    ) {
-      setSelectedVariant(targetVariant);
-      setQuantity(1);
-      setSelectedAttributes(targetVariant.thuoc_tinh || {});
-      const variantMedia = product.media?.find(
-        (m) => String(m.ma_bien_the) === String(targetVariant.ma_bien_the),
-      );
-      if (variantMedia) setMainMedia(variantMedia);
-    }
-  }, [variantId, product, selectedVariant]);
 
   useEffect(() => {
     if (!id || id === "undefined") return;
@@ -295,16 +290,12 @@ export default function ProductDetail() {
     });
   };
 
-  // =========================================================================
-  // 🚨 THUẬT TOÁN CHỐNG KẸT MA TRẬN (AUTO-RESOLVE SHOPEE)
-  // =========================================================================
+  // 🌟 HÀM XỬ LÝ CHỌN THUỘC TÍNH (MA TRẬN) ĐÃ FIX CHUẨN ẢNH ĐA TẦNG
   const handleAttributeSelect = (key, value) => {
     if (!product?.bien_the) return;
 
-    // 1. Giả lập việc kết hợp thuộc tính mới với các thuộc tính đang chọn hiện tại
     const nextAttributes = { ...selectedAttributes, [key]: value };
 
-    // 2. Tìm xem có biến thể nào khớp 100% với cấu hình này không
     let matchedVariant = product.bien_the.find((bt) => {
       if (!bt.thuoc_tinh) return false;
       return Object.keys(nhomPhanLoai).every((k) => {
@@ -316,8 +307,6 @@ export default function ProductDetail() {
       });
     });
 
-    // 3. NẾU KHÔNG CÓ (TỨC LÀ BỊ LỆCH PHA DO BẤM NHẦM):
-    // Hệ thống tự động bẻ lái sang 1 biến thể hợp lệ có chứa thuộc tính vừa bấm.
     if (!matchedVariant) {
       const fallbackVariants = product.bien_the.filter((bt) => {
         if (!bt.thuoc_tinh) return false;
@@ -327,12 +316,10 @@ export default function ProductDetail() {
         );
       });
 
-      // Ưu tiên nảy sang biến thể còn hàng
       matchedVariant =
         fallbackVariants.find((v) => Number(v.so_luong_ton || 0) > 0) ||
         fallbackVariants[0];
 
-      // Ép State UI đi theo biến thể mới để tránh bị rỗng gây lỗi "Tạm hết hàng" sai lệch
       if (matchedVariant) {
         setSelectedAttributes(matchedVariant.thuoc_tinh);
       }
@@ -342,16 +329,38 @@ export default function ProductDetail() {
 
     if (matchedVariant) {
       setSelectedVariant(matchedVariant);
-      const vMedia = product.media?.find(
-        (m) => String(m.ma_bien_the) === String(matchedVariant.ma_bien_the),
-      );
-      if (vMedia) setMainMedia(vMedia);
+      setQuantity(1);
+
+      // Bắt ảnh đa tầng chính xác
+      let foundMedia = null;
+      const directImg =
+        matchedVariant.hinh_anh_url ||
+        matchedVariant.image_url ||
+        matchedVariant.hinh_anh;
+      if (directImg) {
+        foundMedia = { duong_dan_url: directImg, loai_media: "image" };
+      }
+
+      if (!foundMedia && product.media) {
+        foundMedia = product.media.find(
+          (m) =>
+            String(m.ma_bien_the) === String(matchedVariant.ma_bien_the) ||
+            String(m.variant_id) === String(matchedVariant.ma_bien_the) ||
+            String(m.sku) === String(matchedVariant.sku),
+        );
+      }
+
+      if (foundMedia) {
+        setMainMedia(foundMedia);
+      }
 
       const realSlug =
         product?.slug_danh_muc || product?.ma_dm_con || "san-pham";
-      navigate(
+
+      window.history.replaceState(
+        null,
+        "",
         `/${country}/product/${realSlug}/${id}/${matchedVariant.ma_bien_the}`,
-        { replace: true },
       );
     }
   };
@@ -513,8 +522,7 @@ export default function ProductDetail() {
     const itemToCart = {
       variantId: selectedVariant.ma_bien_the,
       productId: product.ma_san_pham,
-      // 🌟 ĐÃ SỬA: Đảm bảo SKU luôn được chắp vá, nếu rỗng thì lấy ma_bien_the làm dự phòng
-      sku: selectedVariant.sku || selectedVariant.ma_bien_the || "", 
+      sku: selectedVariant.sku || selectedVariant.ma_bien_the || "",
       name: product.ten_san_pham,
       price: currentPrice,
       quantity: quantity,
@@ -797,8 +805,6 @@ export default function ProductDetail() {
                             const inStock =
                               isValid && isOptionInStock(tenThuocTinh, giaTri);
 
-                            // 🌟 CHO PHÉP BẤM NGAY CẢ KHI HẾT HÀNG ĐỂ XEM ĐƯỢC CHỮ "TẠM HẾT HÀNG"
-                            // 🌟 NHƯNG ĐỔI GIAO DIỆN MỜ CÓ VIỀN ĐỨT NÉT
                             return (
                               <button
                                 type="button"
@@ -807,14 +813,14 @@ export default function ProductDetail() {
                                   isValid &&
                                   handleAttributeSelect(tenThuocTinh, giaTri)
                                 }
-                                disabled={!isValid} // Chỉ khóa khi cái nút này ko tồn tại trong CSDL
+                                disabled={!isValid}
                                 className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 cursor-pointer ${
                                   isSelected
                                     ? "border-[#006c49] bg-[#006c49]/5 text-[#006c49]"
                                     : isValid && inStock
                                       ? "border-slate-200 bg-white text-slate-600 hover:border-[#006c49]/50"
                                       : isValid && !inStock
-                                        ? "border-slate-200 bg-slate-50 text-slate-400 opacity-50 border-dashed" // Hết hàng thì mờ và đứt nét
+                                        ? "border-slate-200 bg-slate-50 text-slate-400 opacity-50 border-dashed"
                                         : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through opacity-30"
                                 }`}
                               >
@@ -835,26 +841,49 @@ export default function ProductDetail() {
                         String(selectedVariant?.ma_bien_the) ===
                         String(v.ma_bien_the);
 
-                      // 🌟 TƯƠNG TỰ VỚI SẢN PHẨM KHÔNG CÓ MA TRẬN, CHO BẤM NHƯNG MỜ ĐI
                       return (
                         <button
                           type="button"
                           key={i}
                           onClick={() => {
                             setSelectedVariant(v);
-                            const vMedia = product.media?.find(
-                              (m) =>
-                                String(m.ma_bien_the) === String(v.ma_bien_the),
-                            );
-                            if (vMedia) setMainMedia(vMedia);
+                            setQuantity(1);
+
+                            // 🌟 BẮT ẢNH ĐA TẦNG CHO BIẾN THỂ ĐƠN
+                            let foundMedia = null;
+                            const directImg =
+                              v.hinh_anh_url || v.image_url || v.hinh_anh;
+                            if (directImg) {
+                              foundMedia = {
+                                duong_dan_url: directImg,
+                                loai_media: "image",
+                              };
+                            }
+
+                            if (!foundMedia && product.media) {
+                              foundMedia = product.media.find(
+                                (m) =>
+                                  String(m.ma_bien_the) ===
+                                    String(v.ma_bien_the) ||
+                                  String(m.variant_id) ===
+                                    String(v.ma_bien_the) ||
+                                  String(m.sku) === String(v.sku),
+                              );
+                            }
+
+                            if (foundMedia) {
+                              setMainMedia(foundMedia);
+                            }
 
                             const realSlug =
                               product?.slug_danh_muc ||
                               product?.ma_dm_con ||
                               "san-pham";
-                            navigate(
+
+                            window.history.replaceState(
+                              null,
+                              "",
                               `/${country}/product/${realSlug}/${id}/${v.ma_bien_the}`,
-                              { replace: true },
                             );
                           }}
                           className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all border-2 cursor-pointer ${
@@ -929,7 +958,6 @@ export default function ProductDetail() {
                 </div>
               </div>
 
-              {/* 🌟 ĐÃ FIX: CHẶN CHUỘT (pointer-events-none) NÚT MUA VÀ THÊM GIỎ HÀNG */}
               <div className="grid grid-cols-2 gap-3 lg:gap-4">
                 <button
                   type="button"

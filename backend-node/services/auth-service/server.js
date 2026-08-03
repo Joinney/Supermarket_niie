@@ -4,7 +4,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import passport from 'passport';
-import cookieParser from 'cookie-parser'; // 👈 1. Thêm cookie-parser
+import cookieParser from 'cookie-parser'; 
 import { fileURLToPath } from 'url';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
@@ -23,6 +23,7 @@ import forgotRoutes from "./routes/ForgotRoutes.js";
 import googleRoutes from './routes/GoogleRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';  
+import loyaltyRoutes from './routes/loyaltyRoutes.js'; // 👈 ĐÃ BỔ SUNG: Import route Điểm thưởng/Ví Xu
 
 // Import trực tiếp các hàm proxy địa chính từ Controller
 import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
@@ -61,7 +62,7 @@ app.options('*', cors());
 // 3. Bảo mật & Xử lý dữ liệu
 app.use(express.json({ limit: '5mb' })); 
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // 👈 2. Kích hoạt middleware đọc cookie
+app.use(cookieParser()); 
 app.use(passport.initialize());
 
 // Cho phép Frontend truy cập ảnh trong thư mục uploads
@@ -124,6 +125,7 @@ const v1Router = express.Router();
 v1Router.use('/auth', authRoutes);
 v1Router.use('/auth', forgotRoutes);
 v1Router.use('/auth/google', googleRoutes);
+v1Router.use('/auth', loyaltyRoutes); // 👈 ĐÃ BỔ SUNG: Chèn chung vào nhánh /auth
 
 v1Router.use('/profile', profileRoutes);
 
