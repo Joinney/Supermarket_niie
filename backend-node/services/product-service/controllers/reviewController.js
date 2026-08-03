@@ -142,9 +142,37 @@ export const createReview = async (req, res) => {
 
             await client.query('COMMIT');
             
+            try {
+                // Logic: Đánh giá chữ = 200 Xu, có kèm Ảnh/Video = 500 Xu
+                const bonusPoints = files.length > 0 ? 500 : 200;
+                const promotionUrl = process.env.PROMOTION_SERVICE_URL || 'http://promotion-service:5003';
+                const notificationUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:8085';
+
+                // 1. Gọi API cộng xu
+                await axios.post(`${promotionUrl}/api/v1/loyalty/earn`, {
+                    customerId: Number(userId),
+                    points: bonusPoints,
+                    source: 'REVIEW',
+                    referenceId: String(maDanhGia),
+                    description: files.length > 0 ? 'Đánh giá sản phẩm có tâm (kèm media)' : 'Đánh giá sản phẩm'
+                });
+
+                // 2. Bắn thông báo cho user
+                await axios.post(`${notificationUrl}/api/v1/notifications/send`, {
+                    userId: String(userId),
+                    channel: "websocket",
+                    title: "🎁 Nhận thưởng đánh giá",
+                    description: `Cảm ơn bạn đã đánh giá! Bạn vừa nhận được ${bonusPoints} Xu vào ví Demi Pay.`,
+                    type: "system"
+                });
+            } catch (pointError) {
+                // Bọc try catch riêng biệt để lỡ Service Khuyến mãi sập, người dùng vẫn đăng bài đánh giá thành công!
+                console.warn("⚠️ Không thể cộng xu lúc này (Promotion Service lỗi):", pointError.message);
+            }
+
             res.status(201).json({ 
                 success: true, 
-                message: "Cảm ơn bạn đã gửi đánh giá!" 
+                message: "Cảm ơn bạn đã gửi đánh giá và nhận xu thưởng thành công!" 
             });
 
         } catch (error) {

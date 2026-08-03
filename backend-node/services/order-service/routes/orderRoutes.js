@@ -16,7 +16,8 @@ import {
   createOrderTrackingLogNode, 
   calculateShipping,
   getUserSpent,
-  payOrderWithDemiPay
+  payOrderWithDemiPay,
+  confirmReceiveOrder 
 } from '../controllers/orderController.js';
 
 // Đồng bộ import 2 hàm thống kê từ đúng tệp tin cấu hình statisticsController
@@ -24,7 +25,6 @@ import {
   getMonthlyRevenue, 
   getOrderOverviewStats,
   getTopProducts
-  
 } from '../controllers/statisticsController.js';
 
 // Chỉ sử dụng middleware 'protect' đã được định nghĩa chắc chắn để chống lỗi requireAdmin undefined
@@ -59,6 +59,9 @@ router.get('/:id/check-review', (req, res) => {
     res.status(200).json({ hasReviewed: false }); 
 });
 
+// 5.3 Khách hàng xác nhận đã nhận hàng (Tự động chuyển trạng thái Đã giao & Cộng XU hoàn tiền)
+router.put('/orders/:ma_don_hang/confirm-receive', protect, confirmReceiveOrder); // 👈 ĐÃ BỔ SUNG ROUTE NÀY
+
 // ========================================================
 // 🔒 ROUTE ĐỒNG BỘ NỘI BỘ (INTERNAL SERVICE ENDPOINTS)
 // ========================================================
@@ -91,6 +94,7 @@ router.get('/admin/monthly-revenue', protect, getMonthlyRevenue);
 router.get('/admin/overview', protect, getOrderOverviewStats);
 
 router.get('/admin/top-products', protect, getTopProducts);
+
 // ========================================================
 // 🏁 ROUTE ĐỊNH TUYẾN LOGISTICS VÀ KIỂM THỬ (LOGISTICS ENDPOINTS)
 // ========================================================
