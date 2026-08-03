@@ -1,7 +1,8 @@
 import express from 'express';
 import { 
     getAddresses, 
-    getAddressesByUserId, // 🌟 Bổ sung controller dành cho Admin View
+    getAddressesByUserId, 
+    getAddressById, // 🌟 Import controller chi tiết theo address_id
     addAddress, 
     updateAddress, 
     deleteAddress,
@@ -21,87 +22,39 @@ const router = express.Router();
  */
 
 // ========================================================
-// 🔓 KHU VỰC API CÔNG KHAI (PUBLIC) - PHỤC VỤ DROPDOWN MENU FE
+// 🔓 KHU VỰC API CÔNG KHAI (PUBLIC) - PHỤC VỤ FE & ADMIN VIEW
 // ========================================================
 
-/**
- * @swagger
- * /api/addresses/locations/provinces:
- *   get:
- *     summary: Proxy lấy danh sách Tỉnh / Thành phố từ GHN (Công khai)
- *     tags: [Addresses]
- *     responses:
- *       200:
- *         description: Trả về danh sách tỉnh thành công
- *       500:
- *         description: Lỗi kết nối hệ thống GHN
- */
 router.get('/locations/provinces', getProvincesProxy);
-
-/**
- * @swagger
- * /api/addresses/locations/districts:
- *   get:
- *     summary: Proxy lấy danh sách Quận / Huyện theo province_id từ GHN (Công khai)
- *     tags: [Addresses]
- *     parameters:
- *       - in: query
- *         name: province_id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Mã ID của Tỉnh / Thành phố
- *     responses:
- *       200:
- *         description: Trả về danh sách quận huyện thành công
- *       400:
- *         description: Thiếu tham số truyền vào
- */
 router.get('/locations/districts', getDistrictsProxy);
+router.get('/locations/wards', getWardsProxy);
 
 /**
  * @swagger
- * /api/addresses/locations/wards:
+ * /api/addresses/detail/{id}:
  *   get:
- *     summary: Proxy lấy danh sách Phường / Xã theo district_id từ GHN (Công khai)
+ *     summary: (Public / Admin) Lấy chi tiết 1 địa chỉ dựa trên address_id
  *     tags: [Addresses]
  *     parameters:
- *       - in: query
- *         name: district_id
+ *       - in: path
+ *         name: id
  *         required: true
  *         schema:
  *           type: integer
- *         description: Mã ID của Quận / Huyện
+ *         description: ID của địa chỉ (address_id)
  *     responses:
  *       200:
- *         description: Trả về danh sách phường xã thành công
+ *         description: Trả về thông tin địa chỉ thành công
+ *       404:
+ *         description: Không tìm thấy địa chỉ
  */
-router.get('/locations/wards', getWardsProxy);
+router.get('/detail/:id', getAddressById);
 
 
 // ========================================================
 // ⚙️ KHU VỰC API INTERNAL / ADMIN VIEW - TRUY VẤN THEO USER ID
 // ========================================================
 
-/**
- * @swagger
- * /api/addresses/internal/{userId}:
- *   get:
- *     summary: (Admin Internal) Lấy danh sách địa chỉ của một người dùng dựa trên userId
- *     tags: [Addresses]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID của người dùng cần lấy danh sách địa chỉ
- *     responses:
- *       200:
- *         description: Trả về danh sách địa chỉ của người dùng thành công
- *       500:
- *         description: Lỗi server khi lấy dữ liệu địa chỉ
- */
 router.get('/internal/:userId', getAddressesByUserId);
 
 
@@ -109,174 +62,9 @@ router.get('/internal/:userId', getAddressesByUserId);
 // 🔐 KHU VỰC API BẢO MẬT (PRIVATE) - YÊU CẦU ĐĂNG NHẬP (USER VIEW)
 // ========================================================
 
-/**
- * @swagger
- * /api/addresses:
- *   get:
- *     summary: Lấy danh sách địa chỉ của user đang đăng nhập
- *     tags: [Addresses]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy danh sách thành công
- *       500:
- *         description: Lỗi server
- */
 router.get('/', authenticateToken, getAddresses); 
-
-/**
- * @swagger
- * /api/addresses:
- *   post:
- *     summary: Thêm địa chỉ mới cho user đang đăng nhập
- *     tags: [Addresses]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               receiver_name:
- *                 type: string
- *                 example: "Toàn Võ Duy"
- *               receiver_phone:
- *                 type: string
- *                 example: "1233454365"
- *               province_name:
- *                 type: string
- *                 example: "Hồ Chí Minh"
- *               province_id:
- *                 type: integer
- *                 example: 202
- *               district_name:
- *                 type: string
- *                 example: "Quận 1"
- *               district_id:
- *                 type: integer
- *                 example: 1442
- *               ward_name:
- *                 type: string
- *                 example: "Phường Bến Nghé"
- *               ward_code:
- *                 type: string
- *                 example: "20101"
- *               detail_address:
- *                 type: string
- *                 example: "123 Đường ABC"
- *               is_default:
- *                 type: boolean
- *                 example: true
- *               address_type:
- *                 type: string
- *                 example: "home"
- *               latitude:
- *                 type: number
- *                 example: 10.7769
- *               longitude:
- *                 type: number
- *                 example: 106.7009
- *     responses:
- *       201:
- *         description: Đã lưu địa chỉ thành công
- *       400:
- *         description: Dữ liệu gửi lên không hợp lệ
- */
 router.post('/', authenticateToken, addAddress);
-
-/**
- * @swagger
- * /api/addresses/{id}:
- *   put:
- *     summary: Cập nhật địa chỉ của user đang đăng nhập
- *     tags: [Addresses]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID của địa chỉ cần cập nhật
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               receiver_name:
- *                 type: string
- *                 example: "Toàn Võ Duy"
- *               receiver_phone:
- *                 type: string
- *                 example: "0987654321"
- *               province_name:
- *                 type: string
- *                 example: "Hà Nội"
- *               province_id:
- *                 type: integer
- *                 example: 201
- *               district_name:
- *                 type: string
- *                 example: "Quận Đống Đa"
- *               district_id:
- *                 type: integer
- *                 example: 1443
- *               ward_name:
- *                 type: string
- *                 example: "Phường Ô Chợ Dừa"
- *               ward_code:
- *                 type: string
- *                 example: "20102"
- *               detail_address:
- *                 type: string
- *                 example: "456 Đường XYZ"
- *               is_default:
- *                 type: boolean
- *                 example: false
- *               address_type:
- *                 type: string
- *                 example: "company"
- *               latitude:
- *                 type: number
- *                 example: 21.0285
- *               longitude:
- *                 type: number
- *                 example: 105.8542
- *     responses:
- *       200:
- *         description: Đã cập nhật địa chỉ thành công
- *       404:
- *         description: Không tìm thấy địa chỉ
- */
 router.put('/:id', authenticateToken, updateAddress);
-
-/**
- * @swagger
- * /api/addresses/{id}:
- *   delete:
- *     summary: Xóa địa chỉ của user đang đăng nhập
- *     tags: [Addresses]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID của địa chỉ cần xóa
- *     responses:
- *       200:
- *         description: Đã xóa địa chỉ thành công
- *       404:
- *         description: Không tìm thấy địa chỉ
- */
 router.delete('/:id', authenticateToken, deleteAddress);
 
 export default router;

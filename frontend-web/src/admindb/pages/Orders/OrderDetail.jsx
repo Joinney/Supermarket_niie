@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
-import { orderApi } from "../../../api/axios";
+import { orderApi, authApi } from "../../../api/axios";
 import {
   ArrowLeft,
   User,
@@ -28,8 +28,12 @@ const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // State hiển thị tên địa chính dịch từ GHN hoặc Nominatim
-  const [resolvedAddress, setResolvedAddress] = useState("Đang tra cứu địa chỉ...");
+  // State lưu thông tin địa chỉ chi tiết trích xuất từ address_id
+  const [addressDetails, setAddressDetails] = useState({
+    receiver_name: "",
+    receiver_phone: "",
+    full_address: "",
+  });
   const [isResolvingAddress, setIsResolvingAddress] = useState(false);
 
   // State cho dropdown thay đổi trạng thái nhanh
@@ -72,101 +76,114 @@ const OrderDetail = () => {
     fetchOrderDetail();
   }, [maDonHang]);
 
-  // 🌟 THUẬT TOÁN ĐỌC ĐỊA CHỈ THÔNG MINH (KẾT HỢP GPS & MÃ ĐỊA CHÍNH GHN)
+  // 🌟 TRÍCH XUẤT ĐỊA CHỈ TỪ `address_id` (TRUY VẤN ƯU TIÊN ĐA TẦNG)
   useEffect(() => {
     if (!orderData) return;
 
-    // 1. Nếu có sẵn chuỗi địa chỉ văn bản từ Backend thì ưu tiên dùng ngay
-    let shippingInfo = orderData.thong_tin_giao_hang || {};
-    if (typeof shippingInfo === "string") {
-      try { shippingInfo = JSON.parse(shippingInfo); } catch (e) { shippingInfo = {}; }
-    }
+    const resolveAddress = async () => {
+      setIsResolvingAddress(true);
+      const targetAddressId = orderData.address_id;
+      const targetUserId = orderData.user_id || orderData.user_info?.user_id;
 
-    const staticAddress =
-      shippingInfo.dia_chi_day_du ||
-      shippingInfo.full_address ||
-      shippingInfo.address ||
-      orderData.dia_chi_day_du ||
-      orderData.full_address ||
-      orderData.address ||
-      orderData.user_info?.address;
+      // --- [TẦNG 1]: Gọi API Lấy chi tiết trực tiếp theo address_id ---
+      if (targetAddressId) {
+        try {
+          const detailRes = await authApi.get(`/addresses/detail/${targetAddressId}`).catch(() => null);
+          if (detailRes?.data?.success && detailRes?.data?.data) {
+            const addr = detailRes.data.data;
+            const fullStr =
+              addr.full_address ||
+              [addr.detail_address, addr.ward_name, addr.district_name, addr.province_name]
+                .filter(Boolean)
+                .join(", ");
 
-    if (staticAddress && String(staticAddress).trim() !== "" && staticAddress !== "null") {
-      setResolvedAddress(staticAddress);
-      return;
-    }
-
-    // 2. Nếu có tọa độ to_lat & to_lng -> Dùng Nominatim Reverse Geocoding lấy địa chỉ tiếng Việt cực nhanh
-    const lat = orderData.to_lat || orderData.latitude;
-    const lng = orderData.to_lng || orderData.longitude;
-
-    setIsResolvingAddress(true);
-
-    if (lat && lng) {
-      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.display_name) {
-            setResolvedAddress(data.display_name);
-          } else {
-            resolveByGhnCodes();
+            setAddressDetails({
+              receiver_name: addr.receiver_name || orderData.user_info?.full_name || "Khách mua hàng",
+              receiver_phone: addr.receiver_phone || orderData.user_info?.phone_number || "Chưa cập nhật SĐT",
+              full_address: fullStr || "Chưa cập nhật địa chỉ chi tiết",
+            });
+            setIsResolvingAddress(false);
+            return;
           }
-        })
-        .catch(() => {
-          resolveByGhnCodes();
-        })
-        .finally(() => {
-          setIsResolvingAddress(false);
-        });
-    } else {
-      resolveByGhnCodes();
-    }
-
-    // 3. Hàm dự phòng dịch từ to_district_id & to_ward_code nếu không có GPS
-    async function resolveByGhnCodes() {
-      const districtId = orderData.to_district_id;
-      const wardCode = String(orderData.to_ward_code || "").trim();
-
-      if (!districtId) {
-        setResolvedAddress("Chưa cập nhật địa chỉ giao hàng");
-        setIsResolvingAddress(false);
-        return;
-      }
-
-      try {
-        let districtName = "";
-        let provinceName = "";
-        let wardName = "";
-
-        // Gọi lấy danh sách Tỉnh
-        const provincesRes = await orderApi.get("/addresses/provinces").catch(() => null);
-        const provinces = provincesRes?.data?.data || provincesRes?.data || [];
-
-        for (const prov of provinces) {
-          const distRes = await orderApi.get(`/addresses/districts?province_id=${prov.ProvinceID}`).catch(() => null);
-          const districts = distRes?.data?.data || distRes?.data || [];
-          const matchedDist = districts.find((d) => Number(d.DistrictID) === Number(districtId));
-
-          if (matchedDist) {
-            districtName = matchedDist.DistrictName;
-            provinceName = prov.ProvinceName;
-
-            const wardRes = await orderApi.get(`/addresses/wards?district_id=${districtId}`).catch(() => null);
-            const wards = wardRes?.data?.data || wardRes?.data || [];
-            const matchedWard = wards.find((w) => String(w.WardCode).trim() === wardCode);
-            if (matchedWard) wardName = matchedWard.WardName;
-            break;
-          }
+        } catch (err) {
+          console.warn("⚠️ API detail/:id chưa sẵn sàng, chuyển sang Tầng 2:", err.message);
         }
-
-        const fullStr = [wardName, districtName, provinceName].filter(Boolean).join(", ");
-        setResolvedAddress(fullStr || `Mã Quận: ${districtId} • Mã Xã: ${wardCode}`);
-      } catch (err) {
-        setResolvedAddress(`Mã Quận: ${districtId} • Mã Xã: ${wardCode}`);
-      } finally {
-        setIsResolvingAddress(false);
       }
-    }
+
+      // --- [TẦNG 2]: Tra cứu danh sách địa chỉ của User dựa trên user_id ---
+      if (targetUserId) {
+        try {
+          const userAddrRes = await authApi.get(`/addresses/internal/${targetUserId}`).catch(() => null);
+          const addrList = userAddrRes?.data?.data || userAddrRes?.data?.addresses || [];
+
+          if (Array.isArray(addrList) && addrList.length > 0) {
+            let matchedAddr = null;
+            if (targetAddressId) {
+              matchedAddr = addrList.find(
+                (a) => Number(a.address_id || a.id) === Number(targetAddressId)
+              );
+            }
+            if (!matchedAddr) {
+              matchedAddr = addrList.find((a) => a.is_default) || addrList[0];
+            }
+
+            if (matchedAddr) {
+              const fullStr =
+                matchedAddr.full_address ||
+                [matchedAddr.detail_address, matchedAddr.ward_name, matchedAddr.district_name, matchedAddr.province_name]
+                  .filter(Boolean)
+                  .join(", ");
+
+              setAddressDetails({
+                receiver_name: matchedAddr.receiver_name || orderData.user_info?.full_name || "Khách mua hàng",
+                receiver_phone: matchedAddr.receiver_phone || orderData.user_info?.phone_number || "Chưa cập nhật SĐT",
+                full_address: fullStr || "Chưa cập nhật địa chỉ chi tiết",
+              });
+              setIsResolvingAddress(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("⚠️ Không lấy được địa chỉ qua user_id:", err.message);
+        }
+      }
+
+      // --- [TẦNG 3 FALLBACK]: Parse từ thong_tin_giao_hang hoặc chuỗi có sẵn ---
+      let shippingInfo = orderData.thong_tin_giao_hang || {};
+      if (typeof shippingInfo === "string") {
+        try {
+          shippingInfo = JSON.parse(shippingInfo);
+        } catch (e) {
+          shippingInfo = {};
+        }
+      }
+
+      const fallbackAddr =
+        shippingInfo.dia_chi_day_du ||
+        shippingInfo.full_address ||
+        orderData.dia_chi_day_du ||
+        orderData.full_address ||
+        orderData.address ||
+        "Chưa cập nhật địa chỉ giao hàng";
+
+      setAddressDetails({
+        receiver_name:
+          shippingInfo.ten_nguoi_nhan ||
+          shippingInfo.receiver_name ||
+          orderData.user_info?.full_name ||
+          "Khách mua hàng",
+        receiver_phone:
+          shippingInfo.so_dien_thoai ||
+          shippingInfo.receiver_phone ||
+          orderData.user_info?.phone_number ||
+          "Chưa cập nhật SĐT",
+        full_address: fallbackAddr,
+      });
+
+      setIsResolvingAddress(false);
+    };
+
+    resolveAddress();
   }, [orderData]);
 
   const handleUpdateStatus = async (newStatus) => {
@@ -295,8 +312,6 @@ const OrderDetail = () => {
     );
   }
 
-  const customerName = orderData.user_info?.full_name || "Khách mua hàng";
-  const customerPhone = orderData.user_info?.phone_number || "Chưa cập nhật SĐT";
   const customerEmail = orderData.user_info?.email || "Chưa cập nhật Email";
   const customerAvatar =
     orderData.user_info?.avatar_url ||
@@ -591,7 +606,7 @@ const OrderDetail = () => {
               />
               <div>
                 <h3 className="font-black text-slate-900 leading-tight text-base">
-                  {customerName}
+                  {addressDetails.receiver_name || orderData.user_info?.full_name || "Khách mua hàng"}
                 </h3>
                 <span className="inline-block bg-emerald-50 text-emerald-700 text-[9px] font-black px-2 py-0.5 rounded-full mt-1.5 uppercase tracking-wider border border-emerald-100 shadow-sm">
                   Thành viên Demi
@@ -609,7 +624,7 @@ const OrderDetail = () => {
                     Điện thoại người nhận
                   </div>
                   <div className="text-slate-800 font-mono text-sm font-bold">
-                    {customerPhone}
+                    {addressDetails.receiver_phone || orderData.user_info?.phone_number || "Chưa cập nhật SĐT"}
                   </div>
                 </div>
               </div>
@@ -651,23 +666,23 @@ const OrderDetail = () => {
                 </div>
               )}
 
-              {/* Ô ĐỊA CHỈ GIAO HÀNG ĐÃ TỰ ĐỘNG DỊCH THÀNH TIẾNG VIỆT */}
+              {/* 🌟 Ô ĐỊA CHỈ GIAO HÀNG TRÍCH XUẤT CHUẨN TỪ `address_id` */}
               <div className="flex gap-3 items-start">
                 <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 text-slate-400">
                   <MapPin size={14} />
                 </div>
                 <div>
                   <div className="text-[10px] uppercase font-black text-slate-400 mb-0.5 tracking-wider">
-                    Địa chỉ giao hàng chi tiết
+                    Địa chỉ giao hàng chi tiết {orderData.address_id ? `(ID: ${orderData.address_id})` : ""}
                   </div>
                   <div className="text-slate-800 leading-relaxed font-bold bg-emerald-50/40 p-2.5 rounded-xl border border-emerald-100/60 mt-0.5">
                     {isResolvingAddress ? (
                       <span className="flex items-center gap-1.5 text-emerald-700 italic font-normal">
                         <Loader2 size={13} className="animate-spin text-emerald-600" />
-                        Đang tra cứu tên địa chỉ thực địa...
+                        Đang truy vấn sổ địa chỉ...
                       </span>
                     ) : (
-                      resolvedAddress
+                      addressDetails.full_address
                     )}
                   </div>
                 </div>

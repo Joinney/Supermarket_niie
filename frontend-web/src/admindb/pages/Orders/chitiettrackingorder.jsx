@@ -10,8 +10,8 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css"; 
-import { orderApi } from "../../../api/axios";
-import { Loader2, Zap, FastForward, Compass } from "lucide-react";
+import { orderApi, authApi } from "../../../api/axios";
+import { Loader2, Zap, FastForward, Compass, MapPin, User, Phone } from "lucide-react";
 import io from "socket.io-client";
 
 // --- KHẮC PHỤC LỖI MẤT ASSET ICON MARKER CỦA LEAFLET KHI BUILD VITE ---
@@ -83,6 +83,14 @@ export default function Chitiettrackingorder() {
   const [customerTarget, setCustomerTarget] = useState([10.771963, 106.660172]);
   const [userAvatarUrl, setUserAvatarUrl] = useState("https://cdn-icons-png.flaticon.com/512/149/149071.png");
 
+  // State thông tin địa chỉ người nhận dịch từ address_id
+  const [addressDetails, setAddressDetails] = useState({
+    receiver_name: "",
+    receiver_phone: "",
+    full_address: "",
+  });
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+
   const [routeInfo, setRouteInfo] = useState({
     distanceKm: 0,
     durationMin: 0,
@@ -108,6 +116,125 @@ export default function Chitiettrackingorder() {
   const simulationIntervalRef = useRef(null);
   const socketRef = useRef(null); 
   const timelineScrollRef = useRef(null);
+
+  // 🌟 HÀM TẢI ĐỊA CHỈ TỰ ĐỘNG DỰA TRÊN address_id HOẶC TỌA ĐỘ GPS
+  useEffect(() => {
+    if (!orderDetail) return;
+
+    const resolveAddress = async () => {
+      setIsResolvingAddress(true);
+      const targetAddressId = orderDetail.address_id;
+      const targetUserId = orderDetail.user_id || orderDetail.user_info?.user_id;
+
+      // 1. Dùng address_id gọi API chi tiết
+      if (targetAddressId) {
+        try {
+          const detailRes = await authApi.get(`/addresses/detail/${targetAddressId}`).catch(() => null);
+          if (detailRes?.data?.success && detailRes?.data?.data) {
+            const addr = detailRes.data.data;
+            const fullStr =
+              addr.full_address ||
+              [addr.detail_address, addr.ward_name, addr.district_name, addr.province_name]
+                .filter(Boolean)
+                .join(", ");
+
+            setAddressDetails({
+              receiver_name: addr.receiver_name || orderDetail.user_info?.full_name || "Khách mua hàng",
+              receiver_phone: addr.receiver_phone || orderDetail.user_info?.phone_number || "Chưa cập nhật SĐT",
+              full_address: fullStr || "Chưa cập nhật địa chỉ chi tiết",
+            });
+            setIsResolvingAddress(false);
+            return;
+          }
+        } catch (err) {
+          console.warn("⚠️ API detail/:id trích xuất thất bại, dùng fallback:", err.message);
+        }
+      }
+
+      // 2. Tra cứu theo user_id trong sổ địa chỉ
+      if (targetUserId) {
+        try {
+          const userAddrRes = await authApi.get(`/addresses/internal/${targetUserId}`).catch(() => null);
+          const addrList = userAddrRes?.data?.data || userAddrRes?.data?.addresses || [];
+
+          if (Array.isArray(addrList) && addrList.length > 0) {
+            let matchedAddr = null;
+            if (targetAddressId) {
+              matchedAddr = addrList.find(
+                (a) => Number(a.address_id || a.id) === Number(targetAddressId)
+              );
+            }
+            if (!matchedAddr) {
+              matchedAddr = addrList.find((a) => a.is_default) || addrList[0];
+            }
+
+            if (matchedAddr) {
+              const fullStr =
+                matchedAddr.full_address ||
+                [matchedAddr.detail_address, matchedAddr.ward_name, matchedAddr.district_name, matchedAddr.province_name]
+                  .filter(Boolean)
+                  .join(", ");
+
+              setAddressDetails({
+                receiver_name: matchedAddr.receiver_name || orderDetail.user_info?.full_name || "Khách mua hàng",
+                receiver_phone: matchedAddr.receiver_phone || orderDetail.user_info?.phone_number || "Chưa cập nhật SĐT",
+                full_address: fullStr || "Chưa cập nhật địa chỉ chi tiết",
+              });
+              setIsResolvingAddress(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("⚠️ Không truy vấn được địa chỉ từ internal user_id:", err.message);
+        }
+      }
+
+      // 3. Fallback: Parse từ thong_tin_giao_hang hoặc dịch từ tọa độ GPS
+      let shippingInfo = orderDetail.thong_tin_giao_hang || {};
+      if (typeof shippingInfo === "string") {
+        try { shippingInfo = JSON.parse(shippingInfo); } catch (e) { shippingInfo = {}; }
+      }
+
+      let fallbackAddr =
+        shippingInfo.dia_chi_day_du ||
+        shippingInfo.full_address ||
+        orderDetail.dia_chi_day_du ||
+        orderDetail.full_address ||
+        orderDetail.address;
+
+      if (!fallbackAddr || fallbackAddr === "null") {
+        const lat = orderDetail.to_lat || orderDetail.latitude;
+        const lng = orderDetail.to_lng || orderDetail.longitude;
+        if (lat && lng) {
+          try {
+            const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=vi`);
+            const geoData = await geoRes.json();
+            if (geoData?.display_name) {
+              fallbackAddr = geoData.display_name;
+            }
+          } catch (e) {}
+        }
+      }
+
+      setAddressDetails({
+        receiver_name:
+          shippingInfo.ten_nguoi_nhan ||
+          shippingInfo.receiver_name ||
+          orderDetail.user_info?.full_name ||
+          "Khách mua hàng",
+        receiver_phone:
+          shippingInfo.so_dien_thoai ||
+          shippingInfo.receiver_phone ||
+          orderDetail.user_info?.phone_number ||
+          "Chưa cập nhật SĐT",
+        full_address: fallbackAddr || "Chưa cập nhật địa chỉ giao hàng",
+      });
+
+      setIsResolvingAddress(false);
+    };
+
+    resolveAddress();
+  }, [orderDetail]);
 
   const getSpeedStep = () => {
     if (speedMode === "fast") return 6;      
@@ -137,7 +264,7 @@ export default function Chitiettrackingorder() {
         current_coord_index: coordIdx, 
         status_text: statusOverride || (routeInfo.isDirectDelivery ? "Shipper đang giao hỏa tốc" : "Đang trung chuyển"),
         is_truck: isTruckVehicleMode,
-        is_direct_delivery: routeInfo.isDirectDelivery // Đồng bộ truyền dữ liệu nội tỉnh/giao thẳng lên Backend
+        is_direct_delivery: routeInfo.isDirectDelivery 
       });
     } catch (err) {
       console.error("❌ Lỗi đồng bộ dữ liệu MongoDB:", err);
@@ -145,28 +272,27 @@ export default function Chitiettrackingorder() {
   };
 
   const createNewOrderTrackingLogSQL = async (stationData, statusText) => {
-  if (!orderDetail) return;
-  try {
-    // SỬA ĐƯỜNG DẪN: Bỏ hoàn toàn chữ "/orders" dư thừa
-    await orderApi.post("/shipping/tracking-logs/create-node", {
-      order_id: orderDetail.id,
-      ma_don_hang: orderDetail.ma_don_hang,
-      station_id: stationData.station_id || `LIVE_NODE_${Date.now()}`,
-      station_name: stationData.station_name,
-      tinh_thanh: stationData.tinh_thanh || "",
-      quan_huyen: stationData.quan_huyen || "",
-      phuong_xa: stationData.phuong_xa || "",
-      so_nha_duong: stationData.so_nha_duong || "",
-      station_lat: stationData.station_lat,
-      station_lng: stationData.station_lng,
-      station_type: stationData.station_type || "HUB",
-      action_type: isFullyDelivered ? "HOAN_THANH_GIAO" : "NHAP_TRAM_REALTIME",
-      trang_thai_hien_thi: statusText
-    });
-  } catch (err) {
-    console.error("❌ Lỗi tạo dòng nhật ký quét trạm SQL:", err.message);
-  }
-};
+    if (!orderDetail) return;
+    try {
+      await orderApi.post("/shipping/tracking-logs/create-node", {
+        order_id: orderDetail.id,
+        ma_don_hang: orderDetail.ma_don_hang,
+        station_id: stationData.station_id || `LIVE_NODE_${Date.now()}`,
+        station_name: stationData.station_name,
+        tinh_thanh: stationData.tinh_thanh || "",
+        quan_huyen: stationData.quan_huyen || "",
+        phuong_xa: stationData.phuong_xa || "",
+        so_nha_duong: stationData.so_nha_duong || "",
+        station_lat: stationData.station_lat,
+        station_lng: stationData.station_lng,
+        station_type: stationData.station_type || "HUB",
+        action_type: isFullyDelivered ? "HOAN_THANH_GIAO" : "NHAP_TRAM_REALTIME",
+        trang_thai_hien_thi: statusText
+      });
+    } catch (err) {
+      console.error("❌ Lỗi tạo dòng nhật ký quét trạm SQL:", err.message);
+    }
+  };
 
   const jumpToNextStation = async () => {
     if (routeCoords.length === 0 || isArrivedAtStation || isFullyDelivered) return;
@@ -331,7 +457,6 @@ export default function Chitiettrackingorder() {
     const stepSize = getSpeedStep(); 
     let dbSaveCounter = 0; 
     
-    // 🔥 ĐỒNG BỘ TỨC THÌ: Gửi lệnh update location đầu tiên ngay khi bấm nút để Backend chuyển sang "Đang giao" không bị trễ hình
     if (routeInfo.isDirectDelivery && animationIndexRef.current === 0) {
       saveCurrentLocationToDB(routeCoords[0][0], routeCoords[0][1], currentStationIndex, 1, "Shipper đang giao hỏa tốc");
     }
@@ -454,7 +579,7 @@ export default function Chitiettrackingorder() {
         throw new Error("Không lấy được dữ liệu cấu trúc gốc của đơn hàng.");
       }
 
-      // KẾT NỐI REALTIME: Mở và Join Room dựa trên mã đơn hàng bốc từ DB
+      // KẾT NỐI REALTIME
       const stringRoomId = String(orderMainData?.ma_don_hang || "").trim();
       socketRef.current = io("http://localhost:5005", {
         transports: ["websocket"]
@@ -859,7 +984,7 @@ export default function Chitiettrackingorder() {
                     <Popup><span className="text-xs font-bold">🏢 Kho tổng điều phối DemiMart</span></Popup>
                   </Marker>
 
-                  {/* 2. DUYỆT RENDER TOÀN BỘ CÁC TRẠM LOGISTICS TRUNG GIAN TỪ DATABASE */}
+                  {/* 2. RENDER TRẠM LOGISTICS */}
                   {stations.map((station, idx) => {
                     let currentIcon = ROUTE_STATION_ICON_URL;
                     if (station.station_type === "FIRST_MILE") currentIcon = COORDINATOR_ICON_URL;
@@ -891,7 +1016,7 @@ export default function Chitiettrackingorder() {
                   >
                     <Popup>
                       <span className="text-xs font-bold">
-                        🏠 Đích đến giao hàng (Nhà khách hàng: {orderDetail?.user_info?.full_name || "Võ Duy Toàn"})
+                        🏠 Đích đến giao hàng (Nhà khách hàng: {addressDetails.receiver_name || orderDetail?.user_info?.full_name})
                       </span>
                     </Popup>
                   </Marker>
@@ -956,16 +1081,70 @@ export default function Chitiettrackingorder() {
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 border-b border-slate-50 pb-3 mb-4 flex items-center gap-1.5">👤 Thông tin địa chỉ đối soát</h3>
-            <div className="space-y-3 text-xs">
+          {/* 🌟 KHỐI THÔNG TIN ĐỊA CHỈ ĐẦY ĐỦ ĐÃ BỔ SUNG Ở GÓC DƯỚI PHẢI */}
+          <div className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm space-y-4">
+            <h3 className="text-sm font-black text-slate-900 border-b border-slate-50 pb-3 flex items-center gap-1.5">
+              👤 Thông tin địa chỉ đối soát
+            </h3>
+            
+            <div className="space-y-3.5 text-xs">
               <div>
                 <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">Mã đơn liên thông</span>
                 <span className="font-black text-[#006c49] text-sm block mt-0.5 font-mono">#{orderDetail.ma_don_hang}</span>
               </div>
-              <div>
+
+              {/* Tên người nhận */}
+              <div className="flex items-start gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 text-slate-400 mt-0.5">
+                  <User size={13} />
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">Người nhận hàng</span>
+                  <span className="font-bold text-slate-800 text-xs block mt-0.5">
+                    {addressDetails.receiver_name || orderDetail.user_info?.full_name || "Khách mua hàng"}
+                  </span>
+                </div>
+              </div>
+
+              {/* SĐT người nhận */}
+              <div className="flex items-start gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 text-slate-400 mt-0.5">
+                  <Phone size={13} />
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">Số điện thoại liên hệ</span>
+                  <span className="font-mono font-bold text-slate-800 text-xs block mt-0.5">
+                    {addressDetails.receiver_phone || orderDetail.user_info?.phone_number || "Chưa cập nhật SĐT"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Địa chỉ giao hàng chi tiết */}
+              <div className="flex items-start gap-2.5 border-t border-dashed border-slate-100 pt-3">
+                <div className="w-6 h-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 text-slate-400 mt-0.5">
+                  <MapPin size={13} />
+                </div>
+                <div className="flex-1">
+                  <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                    Địa chỉ giao hàng chi tiết {orderDetail.address_id ? `(ID: ${orderDetail.address_id})` : ""}
+                  </span>
+                  <div className="font-bold text-slate-800 leading-relaxed block mt-1 bg-emerald-50/40 p-2.5 rounded-xl border border-emerald-100/60">
+                    {isResolvingAddress ? (
+                      <span className="flex items-center gap-1 text-emerald-700 italic font-normal">
+                        <Loader2 size={12} className="animate-spin text-emerald-600" /> Đang truy vấn địa chỉ...
+                      </span>
+                    ) : (
+                      addressDetails.full_address
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-50 pt-2">
                 <span className="block text-[10px] uppercase font-black text-slate-400 tracking-wider">Tọa độ đích thực địa bưu cục phát</span>
-                <span className="font-semibold text-slate-600 block mt-0.5 leading-relaxed font-mono">Lat: {customerTarget[0]} • Lng: {customerTarget[1]}</span>
+                <span className="font-semibold text-slate-600 block mt-0.5 leading-relaxed font-mono text-[11px]">
+                  Lat: {customerTarget[0]} • Lng: {customerTarget[1]}
+                </span>
               </div>
             </div>
           </div>

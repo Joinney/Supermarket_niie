@@ -21,7 +21,7 @@ export const getAddresses = async (req, res) => {
 };
 
 /**
- * 🌟 1B. BỔ SUNG: LẤY DANH SÁCH ĐỊA CHỈ THEO USER ID (DÀNH CHO ADMIN VIEW)
+ * 🌟 1B. LẤY DANH SÁCH ĐỊA CHỈ THEO USER ID (DÀNH CHO ADMIN VIEW)
  */
 export const getAddressesByUserId = async (req, res) => {
     try {
@@ -38,7 +38,6 @@ export const getAddressesByUserId = async (req, res) => {
         `;
         const result = await pool.query(query, [String(userId)]);
 
-        // Trả về cả 2 field "addresses" và "data" để tương thích mọi dạng xử lý ở Frontend
         return res.status(200).json({ 
             success: true, 
             addresses: result.rows,
@@ -50,6 +49,47 @@ export const getAddressesByUserId = async (req, res) => {
             success: false, 
             error: "Lỗi hệ thống khi Admin lấy danh sách địa chỉ của người dùng" 
         });
+    }
+};
+
+/**
+ * 🌟 1C. BỔ SUNG MỚI: LẤY CHI TIẾT 1 ĐỊA CHỈ THEO ADDRESS_ID (ADMIN / INTERNAL CALL)
+ */
+export const getAddressById = async (req, res) => {
+    try {
+        const addressId = req.params.id || req.params.address_id;
+
+        if (!addressId || addressId === "undefined" || addressId === "null") {
+            return res.status(400).json({ success: false, message: "address_id không hợp lệ" });
+        }
+
+        const query = `SELECT * FROM user_addresses WHERE address_id = $1`;
+        const result = await pool.query(query, [Number(addressId)]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy địa chỉ trong CSDL" });
+        }
+
+        const addr = result.rows[0];
+
+        // Tự động ghép chuỗi full_address để Frontend render ngay lập tức
+        const full_address = [
+            addr.detail_address,
+            addr.ward_name,
+            addr.district_name,
+            addr.province_name
+        ].filter(Boolean).join(", ");
+
+        return res.status(200).json({ 
+            success: true, 
+            data: {
+                ...addr,
+                full_address
+            }
+        });
+    } catch (error) {
+        console.error("Lỗi getAddressById:", error.message);
+        return res.status(500).json({ success: false, error: "Lỗi hệ thống khi lấy chi tiết địa chỉ" });
     }
 };
 
