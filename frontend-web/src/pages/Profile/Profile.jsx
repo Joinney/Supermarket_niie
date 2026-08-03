@@ -49,6 +49,9 @@ import Tabvoucher from "./Tabvoucher/Tabvoucher";
 import Tabdathich from "./Tabdathich/Tabdathich";
 import Tabvidemipay from "./Tabvidemipay/Tabvidemipay";
 
+// 🌟 IMPORT MODAL ĐIỂM DANH (Dựa theo đường dẫn trong ảnh của bạn)
+import CheckInModal from "../../admindb/components/CheckInModal";
+
 // Fix lỗi icon mặc định Leaflet
 import iconMarker from "leaflet/dist/images/marker-icon.png";
 import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
@@ -117,8 +120,8 @@ export default function ProfilePage() {
   // State lưu trữ Điểm thưởng tích lũy (Xu)
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
 
-  // State loading cho nút Điểm danh
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  // 🌟 STATE QUẢN LÝ BẬT/TẮT MODAL ĐIỂM DANH
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
 
   const API_BASE_URL = authApi.defaults.baseURL
     ? authApi.defaults.baseURL.replace(/\/api$/, "")
@@ -404,7 +407,6 @@ export default function ProfilePage() {
     }
   };
 
-  // 🌟 ĐÃ SỬA: Hàm gọi API lấy số dư Xu trỏ về Auth Service
   const fetchLoyaltyPoints = async () => {
     try {
       const pointUrl = import.meta.env.VITE_AUTH_URL
@@ -420,29 +422,6 @@ export default function ProfilePage() {
     }
   };
 
-  // 🌟 ĐÃ SỬA: Hàm xử lý điểm danh trỏ về Auth Service
-  const handleCheckIn = async () => {
-    try {
-      setIsCheckingIn(true);
-      const checkinUrl = import.meta.env.VITE_AUTH_URL
-        ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/checkin`
-        : "http://localhost:5001/api/v1/auth/loyalty/checkin";
-
-      const res = await authApi.post(checkinUrl);
-
-      if (res.data && res.data.success) {
-        showToast(res.data.message);
-        setLoyaltyPoints(res.data.data.availablePoints); // Cập nhật ngay lập tức số dư Xu
-      }
-    } catch (error) {
-      const msg = error.response?.data?.message || "Lỗi điểm danh!";
-      showToast(msg, "error");
-    } finally {
-      setIsCheckingIn(false);
-    }
-  };
-
-  // Tích hợp fetchLoyaltyPoints vào lúc load trang
   useEffect(() => {
     const initFetch = async () => {
       setLoading(true);
@@ -1222,15 +1201,12 @@ export default function ProfilePage() {
                       Thưởng tích lũy
                     </p>
 
+                    {/* 🌟 NÚT MỞ MODAL ĐIỂM DANH */}
                     <span
-                      onClick={isCheckingIn ? null : handleCheckIn}
+                      onClick={() => setIsCheckInModalOpen(true)}
                       className="text-[9px] font-black text-white bg-[#fea619] px-2.5 py-1 rounded-md cursor-pointer hover:bg-amber-600 transition-all uppercase flex items-center gap-1 shadow-sm"
                     >
-                      {isCheckingIn ? (
-                        <Loader2 size={10} className="animate-spin" />
-                      ) : (
-                        <Zap size={10} />
-                      )}
+                      <Zap size={10} />
                       Điểm danh
                     </span>
                   </div>
@@ -1400,6 +1376,15 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* 🌟 CHÈN COMPONENT MODAL ĐIỂM DANH */}
+      <CheckInModal
+        isOpen={isCheckInModalOpen}
+        onClose={() => setIsCheckInModalOpen(false)}
+        onCheckInSuccess={(newPoints) => {
+          setLoyaltyPoints(newPoints);
+        }}
+      />
 
       <style
         dangerouslySetInnerHTML={{
