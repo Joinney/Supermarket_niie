@@ -314,7 +314,7 @@ export const getProductById = async (req, res) => {
             id_nhom: index + 1, ten_thuoc_tinh: ten, gia_tri_khadung: Array.from(attributesRaw[ten]), selected: Array.from(attributesRaw[ten])[0]
         }));
 
-const mediaResult = await pool.query(`SELECT ma_media, ma_bien_the, la_anh_chinh, duong_dan_url, loai_media, thoi_luong_video, trang_thai FROM public.media_san_pham WHERE ma_san_pham = $1`, [id]);        
+const mediaResult = await pool.query(`SELECT ma_media, ma_bien_the, la_anh_chinh, duong_dan_url, loai_media, thoi_luong_video, trang_thai FROM public.media_san_pham WHERE ma_san_pham = $1`, [id]);            
         res.status(200).json({ ...product, attributes, bien_the, media: role === 'client' ? mediaResult.rows.filter(m => m.trang_thai) : mediaResult.rows });
     } catch (error) {
         res.status(500).json({ error: "Lỗi hệ thống.", detail: error.message });

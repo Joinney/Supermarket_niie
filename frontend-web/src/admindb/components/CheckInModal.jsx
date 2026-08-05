@@ -2,17 +2,14 @@ import React, { useState, useEffect } from "react";
 import {
   X,
   CalendarCheck,
-  ChevronLeft,
-  ChevronRight,
   Gift,
   Loader2,
-  Flame,
+  Coins,
   CheckCircle2,
 } from "lucide-react";
 import { authApi } from "../../api/axios";
 
 export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
-  const [currentDate, setCurrentDate] = useState(new Date());
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
 
@@ -30,8 +27,6 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
     hasCheckedInToday: false,
   });
 
-  const [checkedInDates, setCheckedInDates] = useState([]);
-
   const showLocalToast = (msg, type = "success") => {
     setLocalToast({ show: true, message: msg, type });
     setTimeout(() => {
@@ -42,6 +37,7 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
   const fetchCheckInStats = async () => {
     try {
       setIsLoadingStats(true);
+      // 🌟 FIX: Ép gọi thẳng vào cổng 5001 của Auth Service để tránh bị lỗi Gateway 5000
       const url = import.meta.env.VITE_AUTH_URL
         ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/checkin-stats`
         : "http://localhost:5001/api/v1/auth/loyalty/checkin-stats";
@@ -49,13 +45,12 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
       const res = await authApi.get(url);
       if (res.data && res.data.success) {
         const data = res.data.data;
-        setCheckedInDates(data.checkedInDates);
         setStats({
-          totalCheckIns: data.totalCheckIns,
-          monthlyCoins: data.monthlyCoins,
-          totalCoins: data.totalCoins,
-          currentStreak: data.currentStreak,
-          hasCheckedInToday: data.hasCheckedInToday,
+          totalCheckIns: data.totalCheckIns || 0,
+          monthlyCoins: data.monthlyCoins || 0,
+          totalCoins: data.totalCoins || 0,
+          currentStreak: data.currentStreak || 0,
+          hasCheckedInToday: data.hasCheckedInToday || false,
         });
       }
     } catch (error) {
@@ -66,28 +61,10 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
   };
 
   useEffect(() => {
-    if (isOpen) {
-      fetchCheckInStats();
-    }
-  }, [isOpen, currentDate]);
+    if (isOpen) fetchCheckInStats();
+  }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay();
-
-  const blanks = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-  const formatMonth = currentDate.toLocaleString("vi-VN", {
-    month: "2-digit",
-    year: "numeric",
-  });
-
-  const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
   const handleCheckIn = async () => {
     if (stats.hasCheckedInToday) {
@@ -100,6 +77,8 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
 
     try {
       setIsCheckingIn(true);
+
+      // 🌟 FIX: Ép gọi thẳng vào cổng 5001
       const checkinUrl = import.meta.env.VITE_AUTH_URL
         ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/checkin`
         : "http://localhost:5001/api/v1/auth/loyalty/checkin";
@@ -119,12 +98,31 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
     }
   };
 
+  // 🌟 LOGIC TẠO VÒNG LẶP 7 NGÀY
+  // Xử lý chuỗi (streak): Nếu > 7 thì chia lấy dư để quay vòng lại UI ngày 1-7
+  const visualStreak =
+    stats.currentStreak === 0 ? 0 : ((stats.currentStreak - 1) % 7) + 1;
   const nextReward =
     stats.currentStreak >= 6 ? 150 : 100 * (1 + stats.currentStreak * 0.1);
 
+  const streakDays = Array.from({ length: 7 }, (_, i) => {
+    const dayNum = i + 1;
+    let status = "future"; // Trạng thái: 'checked' (đã nhận), 'active' (hôm nay), 'future' (chưa tới)
+    let reward = dayNum === 7 ? 150 : 100 + (dayNum - 1) * 10; // Khớp với logic backend
+
+    if (stats.hasCheckedInToday) {
+      if (dayNum <= visualStreak) status = "checked";
+    } else {
+      if (dayNum < visualStreak + 1) status = "checked";
+      else if (dayNum === visualStreak + 1) status = "active";
+    }
+
+    return { dayNum, status, reward };
+  });
+
   return (
-    <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-      {/* 🌟 ĐÃ SỬA: TOAST CỤC BỘ ĐƯỢC CHUYỂN THÀNH FIXED Ở GÓC PHẢI TRÊN MÀN HÌNH */}
+    <div className="fixed inset-0 z-[10010] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
+      {/* LOCAL TOAST */}
       {localToast.show && (
         <div className="fixed top-20 md:top-6 right-4 left-4 md:left-auto z-[10020] animate-[toastIn_0.3s_ease-out_forwards]">
           <div
@@ -142,199 +140,164 @@ export default function CheckInModal({ isOpen, onClose, onCheckInSuccess }) {
         </div>
       )}
 
-      {/* KHUNG TRẮNG MODAL */}
-      <div className="bg-white w-full max-w-lg rounded-[24px] shadow-2xl overflow-hidden relative">
+      {/* MODAL CONTAINER */}
+      <div className="w-full max-w-md bg-slate-50 rounded-[28px] shadow-2xl overflow-hidden relative">
+        {/* NÚT TẮT */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 p-1.5 rounded-full transition-colors z-10"
+          className="absolute top-4 right-4 text-white hover:bg-white/20 bg-black/10 p-1.5 rounded-full transition-colors z-20"
         >
           <X size={20} />
         </button>
 
-        {/* HEADER */}
-        <div className="p-6 pb-0 flex justify-between items-start mt-6">
-          <div className="flex gap-3">
-            <div className="w-12 h-12 bg-emerald-50 text-[#006c49] rounded-2xl flex items-center justify-center shrink-0 relative overflow-hidden">
-              <CalendarCheck size={24} className="relative z-10" />
-              {stats.currentStreak >= 3 && (
-                <div className="absolute inset-0 bg-gradient-to-tr from-amber-200 to-transparent opacity-50 animate-pulse"></div>
-              )}
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                Điểm danh mỗi ngày
-              </h2>
-              <p className="text-sm font-medium text-slate-500 mt-0.5">
-                Tích lũy xu thưởng mỗi ngày cùng
-                <br />
-                Demi Mart!
-              </p>
-            </div>
-          </div>
+        {/* 🌟 PHẦN HEADER: THEME XANH LÁ GRADIENT */}
+        <div className="bg-gradient-to-br from-[#006c49] to-emerald-500 pt-8 pb-12 px-6 text-center relative overflow-hidden">
+          {/* Họa tiết chìm */}
+          <Coins className="absolute -left-6 -bottom-6 w-32 h-32 text-white opacity-10 -rotate-12" />
+          <Gift className="absolute -right-4 top-4 w-20 h-20 text-white opacity-10 rotate-12" />
 
-          <div className="flex flex-col items-center gap-1 mt-1 pr-8">
+          <div className="relative z-10 flex flex-col items-center">
+            <div className="bg-white/20 p-2 rounded-2xl backdrop-blur-sm mb-3 shadow-inner border border-white/20">
+              <Coins
+                size={28}
+                className="text-yellow-300 drop-shadow-md"
+                fill="currentColor"
+              />
+            </div>
+            <p className="text-emerald-100 font-bold text-sm tracking-widest uppercase mb-1">
+              Tổng xu của bạn
+            </p>
+            <h2 className="text-4xl font-black text-white drop-shadow-md">
+              {isLoadingStats ? "..." : stats.totalCoins.toLocaleString()}
+            </h2>
+          </div>
+        </div>
+
+        {/* 🌟 PHẦN BODY: BOX ĐIỂM DANH TRẮNG ĐÈ LÊN HEADER */}
+        <div className="px-4 pb-6 -mt-8 relative z-10">
+          <div className="bg-white rounded-3xl shadow-xl p-5 border border-slate-100 relative">
+            {isLoadingStats && (
+              <div className="absolute inset-0 bg-white/80 z-20 flex items-center justify-center rounded-3xl backdrop-blur-sm">
+                <Loader2 size={32} className="animate-spin text-[#006c49]" />
+              </div>
+            )}
+
+            <h3 className="text-center font-black text-slate-800 text-lg mb-4 text-[#006c49]">
+              ĐIỂM DANH NHẬN XU
+            </h3>
+
+            {/* TIMELINE 7 NGÀY GẦN GIỐNG SHOPEE */}
+            <div className="flex justify-between items-end gap-1.5 mb-6 relative overflow-x-auto no-scrollbar pb-2">
+              {streakDays.map((day, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-col items-center gap-1.5 shrink-0 w-[45px] sm:w-[50px]"
+                >
+                  <span
+                    className={`text-[10px] font-black ${day.status === "active" || day.dayNum === 7 ? "text-[#fea619]" : "text-slate-400"}`}
+                  >
+                    +{day.reward}
+                  </span>
+
+                  {/* Hộp quà / Trạng thái */}
+                  <div
+                    className={`w-full aspect-square rounded-xl flex items-center justify-center border-2 transition-all shadow-sm
+                          ${day.status === "checked" ? "bg-emerald-50 border-[#006c49]/30 text-[#006c49]" : ""}
+                          ${day.status === "active" ? "bg-[#006c49] border-[#006c49] text-white shadow-md shadow-[#006c49]/40 animate-pulse" : ""}
+                          ${day.status === "future" && day.dayNum !== 7 ? "bg-slate-50 border-slate-100 text-slate-300" : ""}
+                          ${day.dayNum === 7 && day.status !== "checked" ? "bg-gradient-to-tr from-amber-200 to-yellow-400 border-amber-400 text-yellow-800 shadow-lg shadow-amber-500/30" : ""}
+                       `}
+                  >
+                    {day.status === "checked" ? (
+                      <CheckCircle2 size={20} strokeWidth={3} />
+                    ) : day.dayNum === 7 ? (
+                      <Gift
+                        size={24}
+                        fill="currentColor"
+                        className="text-amber-500 drop-shadow-sm"
+                      />
+                    ) : (
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center ${day.status === "active" ? "bg-white/20" : "bg-yellow-400 text-white shadow-inner"}`}
+                      >
+                        <Coins
+                          size={14}
+                          fill="currentColor"
+                          className={
+                            day.status === "active"
+                              ? "text-yellow-300"
+                              : "text-yellow-500"
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Text "Hôm nay" / "Ngày X" */}
+                  <span
+                    className={`text-[9px] font-bold tracking-tight whitespace-nowrap mt-0.5
+                          ${day.status === "active" ? "text-[#006c49]" : "text-slate-400"}
+                       `}
+                  >
+                    {day.status === "active" ? "Hôm nay" : `Ngày ${day.dayNum}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* NÚT BẤM CHÀ BÁ NHƯ SHOPEE */}
             <button
               onClick={handleCheckIn}
               disabled={
                 stats.hasCheckedInToday || isCheckingIn || isLoadingStats
               }
-              className={`px-5 py-2 rounded-full font-black text-[13px] flex items-center gap-2 transition-all shadow-sm uppercase tracking-wider ${
-                stats.hasCheckedInToday
-                  ? "bg-slate-100 text-slate-400 cursor-default shadow-none"
-                  : "bg-white text-[#006c49] border-2 border-[#006c49] hover:bg-emerald-50 cursor-pointer"
-              }`}
+              className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2
+                  ${
+                    stats.hasCheckedInToday
+                      ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
+                      : "bg-gradient-to-r from-[#006c49] to-emerald-500 text-white hover:scale-[1.02] active:scale-95 cursor-pointer shadow-emerald-500/40"
+                  }
+                `}
             >
-              {isCheckingIn && <Loader2 size={14} className="animate-spin" />}
+              {isCheckingIn && <Loader2 size={18} className="animate-spin" />}
+
               {!isCheckingIn && stats.hasCheckedInToday && (
-                <CalendarCheck size={14} />
+                <>
+                  <CalendarCheck size={18} /> ĐÃ ĐIỂM DANH HÔM NAY
+                </>
               )}
-              {!isCheckingIn && !stats.hasCheckedInToday && <Gift size={14} />}
 
-              {stats.hasCheckedInToday ? "Đã nhận thưởng" : "+ Check-in"}
+              {!isCheckingIn && !stats.hasCheckedInToday && (
+                <>
+                  <Coins
+                    size={18}
+                    fill="currentColor"
+                    className="text-yellow-300"
+                  />
+                  NHẬN {nextReward} XU HÔM NAY!
+                </>
+              )}
             </button>
-            {!stats.hasCheckedInToday && (
-              <span className="text-[11px] font-black text-[#fea619] flex items-center gap-1 animate-pulse">
-                Hôm nay +{nextReward} XU
-              </span>
-            )}
-            {stats.hasCheckedInToday && (
-              <span className="text-[10px] font-bold text-emerald-600">
-                Quay lại ngày mai nhé!
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* STATS BARS */}
-        <div className="px-6 py-5">
-          <div className="grid grid-cols-3 gap-2 border border-slate-100 rounded-2xl p-2 bg-slate-50/50">
-            <div className="text-center py-2 border-r border-slate-200/60 relative">
-              <p className="text-xl font-black text-slate-800 flex justify-center items-center gap-1">
-                {stats.currentStreak}{" "}
-                <Flame
-                  size={16}
-                  className={`${stats.currentStreak >= 3 ? "text-red-500" : "text-slate-300"}`}
-                  fill="currentColor"
-                />
-              </p>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                Chuỗi liên tiếp
-                <br />
-                (Streak)
-              </p>
-            </div>
-            <div className="text-center py-2 border-r border-slate-200/60">
-              <p className="text-xl font-black text-[#006c49]">
-                +{stats.monthlyCoins.toLocaleString()} Xu
-              </p>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                Tháng này
-              </p>
-            </div>
-            <div className="text-center py-2">
-              <p className="text-xl font-black text-[#fea619]">
-                {stats.totalCoins.toLocaleString()} Xu
-              </p>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                Tổng thưởng xu
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* CALENDAR */}
-        <div className="px-6 pb-6 relative">
-          {isLoadingStats && (
-            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-20 flex justify-center items-center">
-              <Loader2 size={30} className="animate-spin text-[#006c49]" />
-            </div>
-          )}
-
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">
-              THÁNG {formatMonth}
-            </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={handlePrevMonth}
-                className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <button
-                onClick={handleNextMonth}
-                className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-y-3 mb-2 text-center">
-            {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => (
-              <div
-                key={day}
-                className="text-[11px] font-black text-slate-400 tracking-wider"
-              >
-                {day}
-              </div>
-            ))}
-
-            {blanks.map((blank) => (
-              <div key={`blank-${blank}`} className="w-10 h-10 mx-auto"></div>
-            ))}
-
-            {days.map((day) => {
-              const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-              const isCheckedIn = checkedInDates.includes(dateStr);
-
-              const isToday =
-                day === new Date().getDate() &&
-                month === new Date().getMonth() &&
-                year === new Date().getFullYear();
-
-              return (
-                <div key={day} className="flex justify-center relative">
-                  <button
-                    onClick={() => {
-                      if (isToday) handleCheckIn();
-                      else if (isCheckedIn)
-                        showLocalToast(
-                          "Ngày này bạn đã nhận thưởng rồi!",
-                          "success",
-                        );
-                    }}
-                    disabled={!isToday && !isCheckedIn}
-                    className={`w-9 h-9 flex items-center justify-center rounded-full text-sm font-bold transition-all ${
-                      isCheckedIn
-                        ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/30"
-                        : isToday
-                          ? "bg-emerald-50 text-[#006c49] border-2 border-[#006c49] cursor-pointer hover:bg-emerald-100 shadow-[0_0_10px_rgba(0,108,73,0.3)] animate-pulse"
-                          : "text-slate-300 cursor-not-allowed"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* LEGEND */}
-          <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-2">
-            <div className="flex items-center gap-2">
-              <Gift size={14} className="text-[#006c49]" />
-              <span className="text-[11px] font-bold text-slate-500">
-                Giữ chuỗi để x1.5 tiền thưởng!
-              </span>
+          {/* THỐNG KÊ NHỎ BÊN DƯỚI */}
+          <div className="flex justify-between items-center px-4 mt-5">
+            <div className="text-center">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Đã nhận tháng này
+              </p>
+              <p className="font-bold text-slate-700 text-sm">
+                {stats.monthlyCoins.toLocaleString()} Xu
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-[#006c49] flex items-center justify-center">
-                <CalendarCheck size={8} className="text-white" />
-              </div>
-              <span className="text-[11px] font-bold text-slate-500">
-                Đã điểm danh
-              </span>
+            <div className="w-[1px] h-8 bg-slate-200"></div>
+            <div className="text-center">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Số ngày điểm danh
+              </p>
+              <p className="font-bold text-[#006c49] text-sm">
+                {stats.totalCheckIns} Ngày
+              </p>
             </div>
           </div>
         </div>
