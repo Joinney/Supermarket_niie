@@ -24,22 +24,72 @@ export default function ChiTietPhieuNhap() {
   try {
     const cleanId = id ? id.trim().replace(/\s+/g, "-") : id;
 
-    // 1. Gọi song song cả API Chi tiết phiếu và API Lấy danh sách sản phẩm
+    // 1. Gọi API Lấy chi tiết phiếu & API Lấy TOÀN BỘ danh sách sản phẩm (không bị phân trang)
     const [resTicket, resProducts] = await Promise.all([
       warehouseApi.get(`/inventory-import/${cleanId}`),
-      warehouseApi.get("/products").catch(() => ({ data: [] })), // Lấy danh sách sản phẩm có chứa ảnh
+      warehouseApi.get("/products?role=client&limit=1000&all=true").catch(() => ({ data: [] })),
     ]);
 
     const data = resTicket.data;
-    const allProducts = Array.isArray(resProducts.data) ? resProducts.data : (resProducts.data?.products || []);
 
-    // Tạo Map tìm ảnh nhanh theo SKU
-    const productMap = {};
-    allProducts.forEach((p) => {
-      // Lấy link ảnh từ duong_dan_url hoặc images/image
-      const imgUrl = p.duong_dan_url || (Array.isArray(p.images) ? p.images[0] : p.image) || "";
-      if (p.sku) productMap[p.sku] = imgUrl;
-      if (p.id) productMap[p.id] = imgUrl;
+    let rawProducts = [];
+    if (Array.isArray(resProducts.data)) {
+      rawProducts = resProducts.data;
+    } else if (resProducts.data?.data && Array.isArray(resProducts.data.data)) {
+      rawProducts = resProducts.data.data;
+    } else if (resProducts.data?.products && Array.isArray(resProducts.data.products)) {
+      rawProducts = resProducts.data.products;
+    }
+
+    // 2. Tạo Map lưu trữ ảnh đa tầng (Cả cấp Sản phẩm cha lẫn Cấp biến thể)
+    const productImgMap = {};
+
+    rawProducts.forEach((p) => {
+      // Tìm ảnh chính của sản phẩm cha
+      let parentImg = "";
+      if (Array.isArray(p.media) && p.media.length > 0) {
+        const mainMediaObj = p.media.find((m) => m.la_anh_chinh) || p.media[0];
+        parentImg = mainMediaObj?.duong_dan_url || "";
+      } else {
+        parentImg = p.duong_dan_url || p.hinh_anh_chinh || p.image || p.image_url || "";
+      }
+
+      // Lưu ảnh cho Sản phẩm cha
+      if (p.ma_san_pham) productImgMap[p.ma_san_pham] = parentImg;
+      if (p.sku) productImgMap[p.sku] = parentImg;
+      if (p.id) productImgMap[p.id] = parentImg;
+
+      // Lưu ảnh cho tất cả Biến thể con
+      const variants = p.bien_the || p.variants || [];
+      if (Array.isArray(variants)) {
+        variants.forEach((bt) => {
+          let variantImg = bt.hinh_anh_url || bt.image_url || bt.hinh_anh || "";
+
+          // Tìm ảnh biến thể trong mảng media
+          if (!variantImg && Array.isArray(p.media)) {
+            const foundMedia = p.media.find(
+              (m) =>
+                String(m.ma_bien_the) === String(bt.ma_bien_the) ||
+                String(m.sku) === String(bt.sku)
+            );
+            if (foundMedia?.duong_dan_url) {
+              variantImg = foundMedia.duong_dan_url;
+            }
+          }
+
+          // Nếu biến thể không có ảnh riêng -> dùng ảnh của sản phẩm cha làm fallback
+          const finalImg = variantImg || parentImg;
+
+          if (bt.sku) productImgMap[bt.sku] = finalImg;
+          if (bt.ma_bien_the) productImgMap[bt.ma_bien_the] = finalImg;
+
+          // 🌟 Bổ sung mapping theo Prefix mã SKU (Ví dụ CZ-DCS-T455 -> CZ-DCS) phòng trường hợp lệch suffix
+          if (bt.sku && bt.sku.includes("-")) {
+            const prefixSku = bt.sku.split("-").slice(0, 2).join("-");
+            if (!productImgMap[prefixSku]) productImgMap[prefixSku] = finalImg;
+          }
+        });
+      }
     });
 
     const total = Number(data.tong_tien) || 0;
@@ -71,10 +121,18 @@ export default function ChiTietPhieuNhap() {
       debt: currentDebt,
     });
 
-    // 2. Ghép ảnh thực tế theo SKU
+    // 3. Ghép ảnh thực tế tương ứng với từng SKU nhập kho
     if (data.products && Array.isArray(data.products)) {
       const mappedItems = data.products.map((item) => {
-        const realImg = productMap[item.sku] || item.image || "";
+        // Tìm theo SKU đầy đủ
+        let realImg = productImgMap[item.sku];
+
+        // Nếu không có, tìm theo Prefix SKU
+        if (!realImg && item.sku && item.sku.includes("-")) {
+          const prefixSku = item.sku.split("-").slice(0, 2).join("-");
+          realImg = productImgMap[prefixSku];
+        }
+
         return {
           name: item.name || "Sản phẩm Demi Mart",
           sku: item.sku,
@@ -82,13 +140,13 @@ export default function ChiTietPhieuNhap() {
           qty: `${item.so_luong} Cái`,
           price: item.gia_nhap || 0,
           total: item.total || 0,
-          img: realImg,
+          img: realImg || item.image || "",
         };
       });
       setImportItems(mappedItems);
     }
   } catch (err) {
-    console.error("❌ Lỗi truy xuất dữ liệu thật từ Database kho:", err);
+    console.error("❌ Lỗi truy xuất dữ liệu từ Database:", err);
   } finally {
     setLoading(false);
   }
@@ -394,9 +452,11 @@ export default function ChiTietPhieuNhap() {
           alt={item.name}
           className="w-full h-full object-cover"
           onError={(e) => {
-            // Hiển thị thùng hàng nếu link ảnh hỏng
+            // Trường hợp URL ảnh bị hỏng/404, fallback về biểu tượng thùng hàng
             e.target.style.display = "none";
-            if (e.target.nextSibling) e.target.nextSibling.style.display = "block";
+            if (e.target.nextSibling) {
+              e.target.nextSibling.style.display = "block";
+            }
           }}
         />
       ) : null}
