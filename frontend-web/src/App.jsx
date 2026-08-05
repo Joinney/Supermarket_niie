@@ -80,6 +80,9 @@ import ChuyenKho from "./admindb/pages/Warehouse/dieuchuyenkho/Chuyenkho.jsx";
 import Danhsachkhachhang from "./admindb/pages/Customers/Danhsachkhachhang.jsx";
 import Chitietkhachhang from "./admindb/pages/Customers/Chitietkhachhang.jsx";
 
+// 🌟 IMPORT MODULE QUẢN LÝ CHẤM CÔNG
+import AttendanceManager from "./admindb/pages/Attendance/AttendanceManager.jsx";
+
 // Nhóm quản lý nội bộ
 import Danhsachnoibo from "./admindb/pages/Settings/Quanlynoibo/Danhsachnoibo.jsx";
 import Chitietnoibo from "./admindb/pages/Settings/Quanlynoibo/Chitietnoibo.jsx";
@@ -406,7 +409,9 @@ const AdminModuleGuard = ({ moduleName, children }) => {
 
   const hasAccess = permissions.some(
     (p) =>
-      (p.module === moduleName || p.name === moduleName || p.id === moduleName) &&
+      (p.module === moduleName ||
+        p.name === moduleName ||
+        p.id === moduleName) &&
       (p.view === true || p.view === "true"),
   );
 
@@ -710,6 +715,19 @@ const AppRoutes = () => (
         />
       </Route>
 
+      {/* ⏱️ QUẢN LÝ CHẤM CÔNG NHÂN SỰ (THÊM KHỐI NÀY VÀO ĐÂY) ⏱️ */}
+      <Route
+        path="attendance"
+        element={
+          <AdminModuleGuard moduleName="Chấm Công">
+            <Outlet />
+          </AdminModuleGuard>
+        }
+      >
+        <Route index element={<AttendanceManager />} />
+      </Route>
+      {/* ======================================================== */}
+
       {/* 🛡️ Cài đặt & Phân quyền */}
       <Route
         path="settings"
@@ -762,7 +780,7 @@ const AppContent = () => {
   }
 
   const currentUser = profile || user;
-  
+
   return (
     <SocketProvider profile={currentUser}>
       <Toaster

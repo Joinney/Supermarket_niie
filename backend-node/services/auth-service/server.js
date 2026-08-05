@@ -23,7 +23,8 @@ import forgotRoutes from "./routes/ForgotRoutes.js";
 import googleRoutes from './routes/GoogleRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';  
-import loyaltyRoutes from './routes/loyaltyRoutes.js'; // 👈 ĐÃ BỔ SUNG: Import route Điểm thưởng/Ví Xu
+import loyaltyRoutes from './routes/loyaltyRoutes.js'; 
+import attendanceRoutes from './routes/attendanceRoutes.js'; // Đã import chuẩn!
 
 // Import trực tiếp các hàm proxy địa chính từ Controller
 import { getProvincesProxy, getDistrictsProxy, getWardsProxy } from './controllers/addressController.js';
@@ -125,7 +126,8 @@ const v1Router = express.Router();
 v1Router.use('/auth', authRoutes);
 v1Router.use('/auth', forgotRoutes);
 v1Router.use('/auth/google', googleRoutes);
-v1Router.use('/auth', loyaltyRoutes); // 👈 ĐÃ BỔ SUNG: Chèn chung vào nhánh /auth
+v1Router.use('/auth', loyaltyRoutes);
+v1Router.use('/auth', attendanceRoutes); 
 
 v1Router.use('/profile', profileRoutes);
 

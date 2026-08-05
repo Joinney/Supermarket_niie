@@ -41,10 +41,13 @@ export default function Sidebar() {
   // 🎯 2. REAL-TIME LISTENERS: KẾT NỐI VÀ ĐỒNG BỘ NGAY KHI ADMIN LƯU
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    const currentUserId = adminInfo.id || adminInfo.user_id || storedUser.id || storedUser.user_id;
+    const currentUserId =
+      adminInfo.id || adminInfo.user_id || storedUser.id || storedUser.user_id;
 
     if (!currentUserId) {
-      console.warn("⚠️ Không tìm thấy ID người dùng để thiết lập kết nối Real-time!");
+      console.warn(
+        "⚠️ Không tìm thấy ID người dùng để thiết lập kết nối Real-time!",
+      );
       return;
     }
 
@@ -108,10 +111,13 @@ export default function Sidebar() {
     dashboard: location.pathname.includes("/admin/dashboard"),
     sanPham: location.pathname.includes("/admin/products"),
     khuyenMai: location.pathname.includes("/admin/promotions"),
-    posterNotification: location.pathname.includes("/admin/posters-notifications"), // 🌟 THÊM STATE CHO DROP-DOWN MOI
+    posterNotification: location.pathname.includes(
+      "/admin/posters-notifications",
+    ),
     donHang: location.pathname.includes("/admin/Donhang"),
     khoHang: location.pathname.includes("/admin/inventory"),
     khachHang: location.pathname.includes("/admin/customers"),
+    attendance: location.pathname.includes("/admin/attendance"),
     settings:
       location.pathname.includes("/admin/settings/quanlynoibo") ||
       location.pathname.includes("/admin/settings/quanlyvaitro"),
@@ -138,6 +144,9 @@ export default function Sidebar() {
       khachHang: currentPath.includes("/admin/customers")
         ? true
         : prev.khachHang,
+      attendance: currentPath.includes("/admin/attendance")
+        ? true
+        : prev.attendance,
       settings:
         currentPath.includes("/admin/settings/quanlynoibo") ||
         currentPath.includes("/admin/settings/quanlyvaitro")
@@ -160,7 +169,12 @@ export default function Sidebar() {
       navigate("/admin/dashboard/tongquan");
     } else if (menuKey === "khuyenMai" && hasAccess("promotions")) {
       navigate("/admin/promotions/danh-sach");
-    } else if (menuKey === "posterNotification" && (hasAccess("posters") || hasAccess("notifications") || userRole === "ADMIN")) {
+    } else if (
+      menuKey === "posterNotification" &&
+      (hasAccess("posters") ||
+        hasAccess("notifications") ||
+        userRole === "ADMIN")
+    ) {
       navigate("/admin/posters-notifications/poster");
     } else if (menuKey === "donHang" && hasAccess("orders")) {
       navigate("/admin/Donhang/DanhsachTrackingorder");
@@ -168,6 +182,8 @@ export default function Sidebar() {
       navigate("/admin/inventory/warehouse-list");
     } else if (menuKey === "khachHang" && hasAccess("customers")) {
       navigate("/admin/customers/list");
+    } else if (menuKey === "attendance" && hasAccess("attendance")) {
+      navigate("/admin/attendance");
     } else if (menuKey === "settings" && hasAccess("settings")) {
       navigate("/admin/settings/quanlynoibo/danhsachnoibo");
     } else {
@@ -195,13 +211,20 @@ export default function Sidebar() {
   const getMainMenuStyle = (path) => {
     if (
       activeItem === path ||
-      (path === "/admin/dashboard" && activeItem.includes("/admin/dashboard")) ||
+      (path === "/admin/dashboard" &&
+        activeItem.includes("/admin/dashboard")) ||
       (path === "/admin/products" && activeItem.includes("/admin/products")) ||
-      (path === "/admin/promotions" && activeItem.includes("/admin/promotions")) ||
-      (path === "/admin/posters-notifications" && activeItem.includes("/admin/posters-notifications")) ||
+      (path === "/admin/promotions" &&
+        activeItem.includes("/admin/promotions")) ||
+      (path === "/admin/posters-notifications" &&
+        activeItem.includes("/admin/posters-notifications")) ||
       (path === "/admin/Donhang" && activeItem.includes("/admin/Donhang")) ||
-      (path === "/admin/inventory" && activeItem.includes("/admin/inventory")) ||
-      (path === "/admin/customers" && activeItem.includes("/admin/customers")) ||
+      (path === "/admin/inventory" &&
+        activeItem.includes("/admin/inventory")) ||
+      (path === "/admin/customers" &&
+        activeItem.includes("/admin/customers")) ||
+      (path === "/admin/attendance" &&
+        activeItem.includes("/admin/attendance")) ||
       (path === "/admin/settings-auth" &&
         (activeItem.includes("/admin/settings/quanlynoibo") ||
           activeItem.includes("/admin/settings/quanlyvaitro") ||
@@ -338,18 +361,26 @@ export default function Sidebar() {
                 {openDropdowns.dashboard && !isCollapsed && (
                   <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
                     <button
-                      onClick={() => handleSubMenuClick("/admin/dashboard/tongquan")}
+                      onClick={() =>
+                        handleSubMenuClick("/admin/dashboard/tongquan")
+                      }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/tongquan")}`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/tongquan") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/tongquan") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
                       <span>Tổng quan kinh doanh</span>
                     </button>
 
                     <button
-                      onClick={() => handleSubMenuClick("/admin/dashboard/thongkesanpham")}
+                      onClick={() =>
+                        handleSubMenuClick("/admin/dashboard/thongkesanpham")
+                      }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/dashboard/thongkesanpham")}`}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}></span>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/dashboard/thongkesanpham") ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
                       <span>Thống kê sản phẩm</span>
                     </button>
                     <button
@@ -560,7 +591,9 @@ export default function Sidebar() {
             )}
 
             {/* 🌟 MODULE MỚI: POSTER VÀ THÔNG BÁO */}
-            {(hasAccess("posters") || hasAccess("notifications") || userRole === "ADMIN") && (
+            {(hasAccess("posters") ||
+              hasAccess("notifications") ||
+              userRole === "ADMIN") && (
               <div>
                 <button
                   onClick={() =>
@@ -593,7 +626,9 @@ export default function Sidebar() {
                       />
                     </svg>
                     {!isCollapsed && (
-                      <span className="animate-fadeIn">Poster và thông báo</span>
+                      <span className="animate-fadeIn">
+                        Poster và thông báo
+                      </span>
                     )}
                   </div>
                   {!isCollapsed && (
@@ -610,7 +645,9 @@ export default function Sidebar() {
                     {/* Tab con 1: Poster */}
                     <button
                       onClick={() =>
-                        handleSubMenuClick("/admin/posters-notifications/poster")
+                        handleSubMenuClick(
+                          "/admin/posters-notifications/poster",
+                        )
                       }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/posters-notifications/poster")}`}
                     >
@@ -623,7 +660,9 @@ export default function Sidebar() {
                     {/* Tab con 2: Thông báo */}
                     <button
                       onClick={() =>
-                        handleSubMenuClick("/admin/posters-notifications/thong-bao")
+                        handleSubMenuClick(
+                          "/admin/posters-notifications/thong-bao",
+                        )
                       }
                       className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/posters-notifications/thong-bao")}`}
                     >
@@ -857,6 +896,59 @@ export default function Sidebar() {
                         className={`w-1.5 h-1.5 rounded-full ${activeItem.includes("/admin/customers/list") ? "bg-[#006c49]" : "bg-gray-300"}`}
                       ></span>
                       <span>Danh sách khách hàng</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Chấm Công & Nhân Sự */}
+            {hasAccess("attendance") && (
+              <div>
+                <button
+                  onClick={() =>
+                    handleMainMenuClick("attendance", "/admin/attendance")
+                  }
+                  className={`w-full flex items-center ${isCollapsed ? "justify-center" : "justify-between"} px-4 py-3 rounded-xl text-sm transition group ${getMainMenuStyle("/admin/attendance")}`}
+                  title={isCollapsed ? "Chấm Công" : ""}
+                >
+                  <div className="flex items-center gap-3">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.8}
+                      stroke="currentColor"
+                      className="w-5 h-5 transition-colors"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+                      />
+                    </svg>
+                    {!isCollapsed && (
+                      <span className="animate-fadeIn">Chấm Công</span>
+                    )}
+                  </div>
+                  {!isCollapsed && (
+                    <span
+                      className={`text-[10px] transition-transform duration-200 ${openDropdowns.attendance ? "rotate-90" : ""}`}
+                    >
+                      ❯
+                    </span>
+                  )}
+                </button>
+
+                {openDropdowns.attendance && !isCollapsed && (
+                  <div className="mt-1 space-y-1 pl-2 animate-fadeIn">
+                    <button
+                      onClick={() => handleSubMenuClick("/admin/attendance")}
+                      className={`w-full flex items-center gap-3 pl-6 pr-4 py-2.5 rounded-xl text-sm text-left transition ${getSubMenuStyle("/admin/attendance")}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${activeItem === "/admin/attendance" ? "bg-[#006c49]" : "bg-gray-300"}`}
+                      ></span>
+                      <span>Bảng chấm công tổng</span>
                     </button>
                   </div>
                 )}
