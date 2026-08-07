@@ -20,63 +20,146 @@ export default function ChiTietPhieuNhap() {
   // ĐỒNG BỘ REAL-TIME DATA TỪ BACKEND WAREHOUSE-SERVICE
   // Hàm này dùng để gọi dữ liệu (bạn có thể gọi lại sau khi thanh toán)
   const loadData = async () => {
-    setLoading(true);
-    try {
-      const res = await warehouseApi.get(`/inventory-import/${id}`);
-      const data = res.data;
+  setLoading(true);
+  try {
+    const cleanId = id ? id.trim().replace(/\s+/g, "-") : id;
 
-      // Tính toán số nợ còn lại
-      const total = data.tong_tien || 0;
-      const paid = data.da_thanh_toan || 0;
-      const currentDebt = total - paid > 0 ? total - paid : 0;
+    // 1. Gọi API Lấy chi tiết phiếu & API Lấy TOÀN BỘ danh sách sản phẩm (không bị phân trang)
+    const [resTicket, resProducts] = await Promise.all([
+      warehouseApi.get(`/inventory-import/${cleanId}`),
+      warehouseApi.get("/products?role=client&limit=1000&all=true").catch(() => ({ data: [] })),
+    ]);
 
-      // 1. Gán thông tin chung
-      setTicketInfo({
-        id: data.ma_phieu,
-        warehouse:
-          data.ma_kho === "KHO-001" || data.ma_kho === "1"
-            ? "Kho Tổng (Quận 1)"
-            : data.ma_kho,
-        supplier: data.nha_cung_cap || "Chưa xác định nhà cung cấp",
-        status: data.trang_thai_thanh_toan || "UNPAID",
-        date: data.ngay_tao,
-        creator:
-          data.nguoi_thuc_hien_id === 1
-            ? "Admin"
-            : `Nhân viên kho #${data.nguoi_thuc_hien_id}`,
-        note:
-          data.loai_phieu === "NHAP"
-            ? "Mua Hàng Từ Nhà Cung Cấp"
-            : data.loai_phieu,
-        ghiChuText: data.ghi_chu || "Nhập kho định kỳ hệ thống",
-        total: total,
-        paid: paid,
-        debt: currentDebt,
-      });
+    const data = resTicket.data;
 
-      // 2. Gán thông tin chi tiết sản phẩm
-      if (data.products && Array.isArray(data.products)) {
-        const mappedItems = data.products.map((item) => ({
+    let rawProducts = [];
+    if (Array.isArray(resProducts.data)) {
+      rawProducts = resProducts.data;
+    } else if (resProducts.data?.data && Array.isArray(resProducts.data.data)) {
+      rawProducts = resProducts.data.data;
+    } else if (resProducts.data?.products && Array.isArray(resProducts.data.products)) {
+      rawProducts = resProducts.data.products;
+    }
+
+    // 2. Tạo Map lưu trữ ảnh đa tầng (Cả cấp Sản phẩm cha lẫn Cấp biến thể)
+    const productImgMap = {};
+
+    rawProducts.forEach((p) => {
+      // Tìm ảnh chính của sản phẩm cha
+      let parentImg = "";
+      if (Array.isArray(p.media) && p.media.length > 0) {
+        const mainMediaObj = p.media.find((m) => m.la_anh_chinh) || p.media[0];
+        parentImg = mainMediaObj?.duong_dan_url || "";
+      } else {
+        parentImg = p.duong_dan_url || p.hinh_anh_chinh || p.image || p.image_url || "";
+      }
+
+      // Lưu ảnh cho Sản phẩm cha
+      if (p.ma_san_pham) productImgMap[p.ma_san_pham] = parentImg;
+      if (p.sku) productImgMap[p.sku] = parentImg;
+      if (p.id) productImgMap[p.id] = parentImg;
+
+      // Lưu ảnh cho tất cả Biến thể con
+      const variants = p.bien_the || p.variants || [];
+      if (Array.isArray(variants)) {
+        variants.forEach((bt) => {
+          let variantImg = bt.hinh_anh_url || bt.image_url || bt.hinh_anh || "";
+
+          // Tìm ảnh biến thể trong mảng media
+          if (!variantImg && Array.isArray(p.media)) {
+            const foundMedia = p.media.find(
+              (m) =>
+                String(m.ma_bien_the) === String(bt.ma_bien_the) ||
+                String(m.sku) === String(bt.sku)
+            );
+            if (foundMedia?.duong_dan_url) {
+              variantImg = foundMedia.duong_dan_url;
+            }
+          }
+
+          // Nếu biến thể không có ảnh riêng -> dùng ảnh của sản phẩm cha làm fallback
+          const finalImg = variantImg || parentImg;
+
+          if (bt.sku) productImgMap[bt.sku] = finalImg;
+          if (bt.ma_bien_the) productImgMap[bt.ma_bien_the] = finalImg;
+
+          // 🌟 Bổ sung mapping theo Prefix mã SKU (Ví dụ CZ-DCS-T455 -> CZ-DCS) phòng trường hợp lệch suffix
+          if (bt.sku && bt.sku.includes("-")) {
+            const prefixSku = bt.sku.split("-").slice(0, 2).join("-");
+            if (!productImgMap[prefixSku]) productImgMap[prefixSku] = finalImg;
+          }
+        });
+      }
+    });
+
+    const total = Number(data.tong_tien) || 0;
+    const paid = Number(data.da_thanh_toan) || 0;
+    const currentDebt = total - paid > 0 ? total - paid : 0;
+
+    setTicketInfo({
+      id: data.ma_phieu || cleanId,
+      warehouse:
+        data.ma_kho === "KHO-001" || data.ma_kho === "1"
+          ? "Kho Tổng (Quận 1)"
+          : data.ma_kho || "Kho Tổng",
+      supplier: data.nha_cung_cap || "Chưa xác định nhà cung cấp",
+      status: data.trang_thai_thanh_toan || "UNPAID",
+      date: data.ngay_tao
+        ? new Date(data.ngay_tao).toLocaleString("vi-VN")
+        : "N/A",
+      creator:
+        data.nguoi_thuc_hien_id === 1
+          ? "Admin"
+          : `Nhân viên kho #${data.nguoi_thuc_hien_id}`,
+      note:
+        data.loai_phieu === "NHAP"
+          ? "Mua Hàng Từ Nhà Cung Cấp"
+          : data.loai_phieu,
+      ghiChuText: data.ghi_chu || "Nhập kho định kỳ hệ thống",
+      total: total,
+      paid: paid,
+      debt: currentDebt,
+    });
+
+    // 3. Ghép ảnh thực tế tương ứng với từng SKU nhập kho
+    if (data.products && Array.isArray(data.products)) {
+      const mappedItems = data.products.map((item) => {
+        // Tìm theo SKU đầy đủ
+        let realImg = productImgMap[item.sku];
+
+        // Nếu không có, tìm theo Prefix SKU
+        if (!realImg && item.sku && item.sku.includes("-")) {
+          const prefixSku = item.sku.split("-").slice(0, 2).join("-");
+          realImg = productImgMap[prefixSku];
+        }
+
+        return {
           name: item.name || "Sản phẩm Demi Mart",
           sku: item.sku,
           lot: item.ma_lo_hang,
           qty: `${item.so_luong} Cái`,
-          price: item.gia_nhap,
-          total: item.total,
-          img: "📦",
-        }));
-        setImportItems(mappedItems);
-      }
-    } catch (err) {
-      console.error("❌ Lỗi truy xuất dữ liệu thật từ Database kho:", err);
-    } finally {
-      setLoading(false);
+          price: item.gia_nhap || 0,
+          total: item.total || 0,
+          img: realImg || item.image || "",
+        };
+      });
+      setImportItems(mappedItems);
     }
-  };
+  } catch (err) {
+    console.error("❌ Lỗi truy xuất dữ liệu từ Database:", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
+  if (id && id.includes(" ")) {
+    const fixedId = id.trim().replace(/\s+/g, "-");
+    navigate(`/admin/inventory/import-detail/${fixedId}`, { replace: true });
+  } else {
     loadData();
-  }, [id]);
+  }
+}, [id]);
 
   // Nhật ký xử lý chứng từ vận hành kho
   const mockOrderHistory = [
@@ -137,8 +220,9 @@ export default function ChiTietPhieuNhap() {
   };
 
   const formatCurrency = (num) => {
-    return new Intl.NumberFormat("vi-VN").format(num) + " đ";
-  };
+  if (num === undefined || num === null || isNaN(num)) return "0 đ";
+  return new Intl.NumberFormat("vi-VN").format(num) + " đ";
+};
 
   if (loading) {
     return (
@@ -360,20 +444,30 @@ export default function ChiTietPhieuNhap() {
                     className="hover:bg-slate-50/30 transition-colors"
                   >
                     <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center text-lg shadow-inner select-none">
-                          {item.img}
-                        </div>
-                        <div>
-                          <p className="text-slate-800 font-bold">
-                            {item.name}
-                          </p>
-                          <p className="text-[10px] text-gray-400 font-mono font-medium">
-                            {item.sku}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
+  <div className="flex items-center gap-3">
+    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shadow-inner overflow-hidden shrink-0 border border-slate-200/80">
+      {item.img ? (
+        <img
+          src={item.img}
+          alt={item.name}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            // Trường hợp URL ảnh bị hỏng/404, fallback về biểu tượng thùng hàng
+            e.target.style.display = "none";
+            if (e.target.nextSibling) {
+              e.target.nextSibling.style.display = "block";
+            }
+          }}
+        />
+      ) : null}
+      <span style={{ display: item.img ? "none" : "block" }} className="text-base">📦</span>
+    </div>
+    <div>
+      <p className="text-slate-800 font-bold">{item.name}</p>
+      <p className="text-[10px] text-gray-400 font-mono font-medium">{item.sku}</p>
+    </div>
+  </div>
+</td>
                     <td className="py-4 px-4 text-center">
                       <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-100/40 font-mono">
                         {item.lot}

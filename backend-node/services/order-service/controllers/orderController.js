@@ -559,7 +559,29 @@ const placeOrder = async (req, res) => {
         } catch (notiError) {
           console.warn("⚠️ Gửi thông báo thất bại:", notiError.message);
         }
+// 🌟 [THÊM MỚI] GỬI DỮ LIỆU ĐƠN HÀNG SANG N8N AUTOMATION WORKFLOW
+// 🌟 [CẬP NHẬT chuẩn Docker] GỬI DỮ LIỆU ĐƠN HÀNG SANG N8N AUTOMATION WORKFLOW
+// 🌟 [KẾT NỐI CHUẨN TỪ DOCKER RA MÁY HOST]
+try {
+  const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'http://n8n:5678/webhook/demimart-order-webhook';
 
+  await axios.post(n8nWebhookUrl, {
+    ma_don_hang: order.ma_don_hang,
+    user_id: String(userId),
+    receiver_name: req.body.receiver_name || "Khách hàng DemiMart",
+    receiver_phone: req.body.receiver_phone || "Chưa cập nhật SĐT",
+    email: req.body.email || "thugoodcat@gmail.com",
+    tong_thanh_toan: finalTotal,
+    items: normalizedItems
+  }, { 
+    timeout: 3000,
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  console.log("🚀 [n8n Workflow]: Kích hoạt tự động hóa n8n thành công cho đơn:", order.ma_don_hang);
+} catch (n8nErr) {
+  console.warn("⚠️ [n8n Workflow]: Không thể kết nối Webhook n8n:", n8nErr.message);
+}
       } catch (backgroundErr) {
         console.error("🔥 Lỗi tiến trình chạy ngầm:", backgroundErr);
       }

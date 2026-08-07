@@ -44,6 +44,7 @@ router.use('/socket.io', setupProxy(services.order, true));
 // 1. Nhóm Kho hàng (Trỏ về Inventory Service)
 router.use('/api/v1/warehouses', setupProxy(services.inventory));
 router.use('/api/v1/inventory-tickets', setupProxy(services.inventory));
+router.use('/api/v1/inventory-import', setupProxy(services.inventory));
 router.use('/api/v1/lots', setupProxy(services.inventory));
 router.use('/api/v1/transfers', setupProxy(services.inventory));
 

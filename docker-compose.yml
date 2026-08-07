@@ -42,17 +42,14 @@ services:
       - demi_network
     restart: on-failure
 
-
-# 4. PRODUCT SERVICE
+  # 4. PRODUCT SERVICE
   product-service:
     build: ./backend-node/services/product-service
     container_name: demi_product_service
     ports:
       - "5002:5002"
-    # --- SỬA CHÍNH XÁC DÒNG NÀY ---
     extra_hosts:
       - "localhost:host-gateway"
-    # ------------------------------
     env_file: 
       - ./backend-node/services/product-service/.env
     depends_on:
@@ -174,33 +171,26 @@ services:
       - demi_network
     restart: always
 
-  # =======================================================================
-# 13. NOTIFICATION SERVICE (Cổng 8085 - Viết bằng Java Spring Boot) ✉️
-# =======================================================================
+  # 13. NOTIFICATION SERVICE (Cổng 8085 - Viết bằng Java Spring Boot) ✉️
   notification-service:
     build: ./backend-node/services/notification-service
     container_name: demi_notification_service
     ports:
       - "8085:8085"
     environment:
-      # 🌟 Đồng bộ múi giờ Việt Nam (GMT+7) cho hệ thống và JVM
       - TZ=Asia/Ho_Chi_Minh
       - SPRING_JACKSON_TIME_ZONE=Asia/Ho_Chi_Minh
-      
-      # 🔌 Kết nối nội bộ Docker tới RabbitMQ Service
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_PORT=5672
       - SPRING_RABBITMQ_USERNAME=guest
       - SPRING_RABBITMQ_PASSWORD=guest
-    # Bạn có thể bổ sung file .env nếu cấu hình tài khoản mail hoặc pass riêng biệt
-    # env_file:
-    #   - ./backend-node/services/notification-service/.env
     depends_on:
       - rabbitmq
     networks:
       - demi_network
     restart: on-failure
-# 14. PROMOTION SERVICE
+
+  # 14. PROMOTION SERVICE
   promotion-service:
     build: ./backend-node/services/promotion-service
     container_name: demi_promotion_service
@@ -215,7 +205,8 @@ services:
       - db
     networks:
       - demi_network
-# 15. API GATEWAY
+
+  # 15. API GATEWAY
   api-gateway:
     build: ./backend-node/services/api-gateway
     container_name: demi_api_gateway
@@ -229,6 +220,25 @@ services:
       - demi_network
     restart: always
 
+  # 16. N8N AUTOMATION WORKFLOW (Cổng 5678)
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Ho_Chi_Minh
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - demi_network
+    restart: always
+
 networks:
   demi_network:
     driver: bridge
@@ -236,3 +246,4 @@ networks:
 volumes:
   pgdata:
   kuma_data:
+  n8n_data:

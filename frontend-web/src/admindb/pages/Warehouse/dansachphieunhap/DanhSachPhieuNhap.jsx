@@ -411,18 +411,17 @@ export default function DanhSachPhieuNhap() {
             <div className="overflow-x-auto min-h-[300px]">
               <table className="w-full border-collapse text-left text-sm">
                 <thead>
-                  <tr className="bg-[#f8fafc] border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-400 select-none">
-                    <th className="py-4 px-6">Mã phiếu</th>
-                    <th className="py-4 px-6 w-48">Nhà cung cấp</th>{" "}
-                    {/* 🌟 Thêm Cột */}
-                    <th className="py-4 px-6">Kho nhận</th>
-                    <th className="py-4 px-6">Tình trạng</th>
-                    <th className="py-4 px-6">Ngày lập</th>
-                    <th className="py-4 px-6 text-right">Tổng tiền</th>
-                    <th className="py-4 px-6 text-right">Còn Nợ</th>
-                    <th className="py-4 px-6 text-center">Thao tác</th>
-                  </tr>
-                </thead>
+  <tr className="bg-[#f8fafc] border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-400 select-none">
+    <th className="py-4 px-6">Mã phiếu</th>
+    <th className="py-4 px-6 w-48">Nhà cung cấp</th>
+    <th className="py-4 px-6">Kho nhận</th>
+    <th className="py-4 px-6">Tình trạng</th>
+    <th className="py-4 px-6">Ngày lập</th>
+    <th className="py-4 px-6 text-right">Tổng tiền</th>
+    <th className="py-4 px-6 text-right">Còn Nợ</th>
+    <th className="py-4 px-6 text-center">Thao tác</th>
+  </tr>
+</thead>
                 <tbody className="divide-y divide-gray-50 font-semibold text-slate-600">
                   {loading ? (
                     <tr>
@@ -464,13 +463,14 @@ export default function DanhSachPhieuNhap() {
                         className="hover:bg-slate-50/60 transition-colors"
                       >
                         <td
-                          onClick={() =>
-                            navigate(`/admin/inventory/import-detail/${row.id}`)
-                          }
-                          className="py-4 px-6 text-[#006c49] font-bold hover:underline cursor-pointer font-mono"
-                        >
-                          {row.id}
-                        </td>
+  onClick={() => {
+    const cleanId = row.id ? row.id.trim().replace(/\s+/g, "-") : row.id;
+    navigate(`/admin/inventory/import-detail/${cleanId}`);
+  }}
+  className="py-4 px-6 text-[#006c49] font-bold hover:underline cursor-pointer font-mono"
+>
+  {row.id}
+</td>
                         <td className="py-4 px-6 text-slate-700 truncate max-w-[200px]">
                           {row.supplier}
                         </td>
@@ -511,15 +511,14 @@ export default function DanhSachPhieuNhap() {
                         </td>
                         <td className="py-4 px-6 text-center">
                           <button
-                            onClick={() =>
-                              navigate(
-                                `/admin/inventory/import-detail/${row.id}`,
-                              )
-                            }
-                            className="flex items-center gap-1 mx-auto text-gray-400 hover:text-[#006c49] font-bold text-xs bg-slate-50 hover:bg-emerald-50 px-2.5 py-1.5 rounded transition-all border border-gray-100 cursor-pointer"
-                          >
-                            Chi tiết
-                          </button>
+  onClick={() => {
+    const cleanId = row.id ? row.id.trim().replace(/\s+/g, "-") : row.id;
+    navigate(`/admin/inventory/import-detail/${cleanId}`);
+  }}
+  className="flex items-center gap-1 mx-auto text-gray-400 hover:text-[#006c49] font-bold text-xs bg-slate-50 hover:bg-emerald-50 px-2.5 py-1.5 rounded transition-all border border-gray-100 cursor-pointer"
+>
+  Chi tiết
+</button>
                         </td>
                       </tr>
                     ))
