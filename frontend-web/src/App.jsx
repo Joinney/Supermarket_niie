@@ -34,7 +34,7 @@ import SearchPage from "./pages/Search/SearchPage";
 import { StoreProvider } from "./context/StoreContext";
 import ChatbotAI from "./components/layout/ChatbotAI";
 
-// --- IMPORTS GIAO DIỆN ADMIN (ĐÃ SỬA CHÍNH XÁC CHỮ HOA/THƯỜNG THEO GIT INDEX) ---
+// --- IMPORTS GIAO DIỆN ADMIN ---
 import AdminProtect from "./admindb/components/AdminProtect";
 import AdminProfile from "./admindb/pages/Profile/AdminProfile.jsx";
 import AdminLogin from "./admindb/pages/Auth/AdminLogin.jsx";
@@ -96,6 +96,23 @@ import CreateCoupon from "./admindb/pages/Promotions/CreateCoupon.jsx";
 
 // --- IMPORT TRANG POSTER BUILDER ---
 import PosterBuilder from "./admindb/pages/quanlyposterthongbao/PosterBuilder.jsx";
+
+// 1. NHÓM DỊCH VỤ ƯU TIÊN (BẮT BUỘC CHỜ CHẠY XONG MỚI TẮT LOADING)
+const PRIORITY_SERVICES = [
+  "https://authservice-sz4p.onrender.com",
+  "https://productservice-n87v.onrender.com",
+  "https://cartservice-i6s1.onrender.com",
+  "https://promotion-service-r5zx.onrender.com",
+];
+
+// 2. NHÓM DỊCH VỤ PHỤ (KÍCH HOẠT NGÀM KHÔNG CHỜ)
+const BACKGROUND_SERVICES = [
+  "https://payment-service-opea.onrender.com",
+  "https://orderservice-n0z1.onrender.com",
+  "https://inventory-service-mjzr.onrender.com",
+  "https://ai-service-0zyu.onrender.com",
+  "https://notification-service-w3tg.onrender.com",
+];
 
 /**
  * Component Giao Diện Cấu hình chung (General Settings)
@@ -355,7 +372,7 @@ const SettingsGeneral = () => {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 019-9"
                   />
                 </svg>
               </div>
@@ -715,7 +732,7 @@ const AppRoutes = () => (
         />
       </Route>
 
-      {/* ⏱️ QUẢN LÝ CHẤM CÔNG NHÂN SỰ (THÊM KHỐI NÀY VÀO ĐÂY) ⏱️ */}
+      {/* ⏱️ QUẢN LÝ CHẤM CÔNG NHÂN SỰ ⏱️ */}
       <Route
         path="attendance"
         element={
@@ -726,7 +743,6 @@ const AppRoutes = () => (
       >
         <Route index element={<AttendanceManager />} />
       </Route>
-      {/* ======================================================== */}
 
       {/* 🛡️ Cài đặt & Phân quyền */}
       <Route
@@ -766,15 +782,47 @@ const AppRoutes = () => (
 );
 
 /**
- * COMPONENT ĐIỀU PHỐI
+ * COMPONENT ĐIỀU PHỐI (KÈM GIAO DIỆN LOADING PHỦ MÀN HÌNH CHỜ MICROSERVICES)
  */
 const AppContent = () => {
   const { loading, user, profile } = useContext(AuthContext);
+  const [isServicesWarming, setIsServicesWarming] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    // 1. Kích hoạt song song nhóm dịch vụ phụ
+    BACKGROUND_SERVICES.forEach((url) => {
+      fetch(url, { mode: "no-cors" }).catch(() => {});
+    });
+
+    // 2. Kích hoạt nhóm ưu tiên & Bắt buộc chờ phản hồi
+    const priorityPromises = PRIORITY_SERVICES.map((url) =>
+      fetch(url, { mode: "no-cors" }).catch(() => {})
+    );
+
+    // Chờ tất cả nhóm ưu tiên khởi động xong
+    Promise.all(priorityPromises).finally(() => {
+      setIsServicesWarming(false);
+    });
+  }, []);
+
+  // Màn hình Loading Phủ Toàn Trang (Full-screen Overlay)
+  if (isServicesWarming || loading) {
     return (
-      <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-emerald-900 text-white px-4">
+        <div className="relative flex items-center justify-center mb-6">
+          <div className="w-20 h-20 border-4 border-emerald-400/30 border-t-white rounded-full animate-spin"></div>
+          <div className="absolute font-bold text-lg tracking-wider text-emerald-200">
+            DM
+          </div>
+        </div>
+
+        <h2 className="text-xl font-bold tracking-wide text-center">
+          Đang kết nối hệ thống Demi Mart...
+        </h2>
+        <p className="text-xs text-emerald-200 mt-2 text-center max-w-sm leading-relaxed">
+          Đang khởi động các dịch vụ cốt lõi (Auth, Product, Cart, Promotion).
+          Vui lòng chờ trong giây lát!
+        </p>
       </div>
     );
   }
