@@ -19,16 +19,17 @@ const BACKGROUND_SERVICES = [
 ];
 
 const SLATS = Array.from({ length: 28 }); // 28 nan cửa mỏng
+const SLEEP_TIMEOUT = 12 * 60 * 1000; // Render cho ngủ sau 15 phút -> đặt 12 phút để an toàn
 
 export default function ServiceLoader({ onFinish }) {
   const [progress, setProgress] = useState(0);
-  const [currentStatus, setCurrentStatus] = useState("Đang kiểm tra trạng thái dịch vụ...");
+  const [currentStatus, setCurrentStatus] = useState("Đang kết nối hệ thống...");
   const [isExpanding, setIsExpanding] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
 
   // Hàm nhích % mượt mà
-  const animateProgress = (start, target, duration = 600) => {
+  const animateProgress = (start, target, duration = 500) => {
     return new Promise((resolve) => {
       const startTime = performance.now();
       const step = (currentTime) => {
@@ -47,7 +48,6 @@ export default function ServiceLoader({ onFinish }) {
     });
   };
 
-  // Hàm ping gửi request
   const pingService = async (url) => {
     try {
       await fetch(url, { mode: "no-cors" });
@@ -68,30 +68,27 @@ export default function ServiceLoader({ onFinish }) {
       return;
     }
 
-    // 2. Kích hoạt ngầm 5 dịch vụ phụ
+    // 2. Kiểm tra xem các Service có ĐANG THỨC (trong thời hạn 12 phút gần nhất) không
+    const lastActiveTime = sessionStorage.getItem("demimart_last_active");
+    const now = Date.now();
+
+    if (lastActiveTime && now - parseInt(lastActiveTime, 10) < SLEEP_TIMEOUT) {
+      // Các Service đã thức sẵn -> KHÔNG HIỆN LOADING NỮA!
+      sessionStorage.setItem("demimart_last_active", now.toString());
+      setIsVisible(false);
+      if (onFinish) onFinish();
+
+      // Vẫn kích hoạt ngầm để duy trì độ ấm cho server
+      PRIORITY_SERVICES.concat(BACKGROUND_SERVICES).forEach((s) =>
+        pingService(typeof s === "string" ? s : s.url)
+      );
+      return;
+    }
+
+    // 3. Nếu chưa thức hoặc đã quá 12 phút (Service bị ngủ đông) -> MỚI CHẠY LOADING CỬA CUỐN
     BACKGROUND_SERVICES.forEach((url) => pingService(url));
 
-    // 3. KIỂM TRA XEM CÁC DỊCH VỤ CÓ ĐANG NGỦ ĐÔNG KHÔNG (FAST HEALTH CHECK)
-    const checkAndRun = async () => {
-      // Đặt timeout 1.5 giây để kiểm tra xem cả 4 service có thức sẵn hay không
-      const checkFastResponse = Promise.all(
-        PRIORITY_SERVICES.map((s) => pingService(s.url))
-      );
-
-      const timeoutPromise = new Promise((resolve) =>
-        setTimeout(() => resolve("SLEEPING"), 1500)
-      );
-
-      const result = await Promise.race([checkFastResponse, timeoutPromise]);
-
-      // NẾU CẢ 4 SERVICE ĐỀU THỨC SẴN (Phản hồi < 1.5s) -> Bỏ qua Loading ngay!
-      if (result !== "SLEEPING") {
-        setIsVisible(false);
-        if (onFinish) onFinish();
-        return;
-      }
-
-      // NẾU CÓ SERVICE BỊ NGỦ ĐÔNG -> Chạy giao diện Loading cửa cuốn từng bước!
+    const runWarmupProcess = async () => {
       let currentP = 0;
 
       for (let i = 0; i < PRIORITY_SERVICES.length; i++) {
@@ -100,19 +97,18 @@ export default function ServiceLoader({ onFinish }) {
 
         setCurrentStatus(service.step);
 
-        // Nhích mượt nửa chặng
         const midTargetP = currentP + 12;
-        await animateProgress(currentP, midTargetP, 400);
+        await animateProgress(currentP, midTargetP, 300);
 
-        // Chờ service thực sự tỉnh dậy (nếu đang ngủ Render sẽ mất 10-30s)
+        // Chờ service khởi động thực sự xong
         await pingService(service.url);
 
-        // Nhích mượt đến mốc 25%, 50%, 75%, 100%
-        await animateProgress(midTargetP, nextTargetP, 500);
+        await animateProgress(midTargetP, nextTargetP, 400);
         currentP = nextTargetP;
       }
 
-      // KHI ĐÃ HOÀN THÀNH 100%
+      // Đã thức hoàn toàn 100% -> Lưu mốc thời gian thức
+      sessionStorage.setItem("demimart_last_active", Date.now().toString());
       setCurrentStatus("Hệ thống đã sẵn sàng!");
 
       // BƯỚC 1: Dãn khe thoáng li ti
@@ -132,7 +128,7 @@ export default function ServiceLoader({ onFinish }) {
       }, 1850);
     };
 
-    checkAndRun();
+    runWarmupProcess();
   }, [onFinish]);
 
   if (!isVisible) return null;
@@ -154,7 +150,7 @@ export default function ServiceLoader({ onFinish }) {
               transitionDelay: isExpanding ? `${(SLATS.length - index) * 18}ms` : "0ms",
             }}
           >
-            {/* DÃY LỖ THOÁNG LI TI HIỆN RA KHI CỬA DÃN */}
+            {/* LỖ THOÁNG LI TI HIỆN RA KHI DÃN NAN */}
             <div
               className={`absolute -bottom-[4px] left-0 right-0 h-[3px] flex justify-around items-center transition-opacity duration-300 ${
                 isExpanding ? "opacity-100" : "opacity-0"
@@ -215,7 +211,7 @@ export default function ServiceLoader({ onFinish }) {
         Đang khởi động hệ thống Microservices...
       </p>
 
-      {/* CHÂN NẸP NHÔM DƯỚI ĐÁY CỬA CUỐN */}
+      {/* CHÂN NẸP NHÔM CỬA CUỐN */}
       <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-b from-slate-400 via-slate-300 to-slate-500 border-t border-white/80 shadow-[0_8px_20px_rgba(0,0,0,0.4)] z-20" />
     </div>
   );
