@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useContext } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -13,6 +13,9 @@ import { OrderProvider } from "./context/OrderContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ProtectedRoute } from "./components/Auth/ProtectedRoute";
 import { SocketProvider } from "./context/SocketContext";
+
+// --- IMPORT COMPONENT LOADING TÁCH RỜI ---
+import ServiceLoader from "./components/layout/ServiceLoader";
 
 // --- IMPORTS GIAO DIỆN KHÁCH HÀNG ---
 import Checkout from "./pages/Checkout/Checkout";
@@ -96,23 +99,6 @@ import CreateCoupon from "./admindb/pages/Promotions/CreateCoupon.jsx";
 
 // --- IMPORT TRANG POSTER BUILDER ---
 import PosterBuilder from "./admindb/pages/quanlyposterthongbao/PosterBuilder.jsx";
-
-// 1. NHÓM DỊCH VỤ ƯU TIÊN (BẮT BUỘC CHỜ CHẠY XONG MỚI TẮT LOADING)
-const PRIORITY_SERVICES = [
-  "https://authservice-sz4p.onrender.com",
-  "https://productservice-n87v.onrender.com",
-  "https://cartservice-i6s1.onrender.com",
-  "https://promotion-service-r5zx.onrender.com",
-];
-
-// 2. NHÓM DỊCH VỤ PHỤ (KÍCH HOẠT NGÀM KHÔNG CHỜ)
-const BACKGROUND_SERVICES = [
-  "https://payment-service-opea.onrender.com",
-  "https://orderservice-n0z1.onrender.com",
-  "https://inventory-service-mjzr.onrender.com",
-  "https://ai-service-0zyu.onrender.com",
-  "https://notification-service-w3tg.onrender.com",
-];
 
 /**
  * Component Giao Diện Cấu hình chung (General Settings)
@@ -782,55 +768,22 @@ const AppRoutes = () => (
 );
 
 /**
- * COMPONENT ĐIỀU PHỐI (KÈM GIAO DIỆN LOADING PHỦ MÀN HÌNH CHỜ MICROSERVICES)
+ * COMPONENT ĐIỀU PHỐI CHÍNH
  */
 const AppContent = () => {
   const { loading, user, profile } = useContext(AuthContext);
   const [isServicesWarming, setIsServicesWarming] = useState(true);
 
-  useEffect(() => {
-    // 1. Kích hoạt song song nhóm dịch vụ phụ
-    BACKGROUND_SERVICES.forEach((url) => {
-      fetch(url, { mode: "no-cors" }).catch(() => {});
-    });
-
-    // 2. Kích hoạt nhóm ưu tiên & Bắt buộc chờ phản hồi
-    const priorityPromises = PRIORITY_SERVICES.map((url) =>
-      fetch(url, { mode: "no-cors" }).catch(() => {})
-    );
-
-    // Chờ tất cả nhóm ưu tiên khởi động xong
-    Promise.all(priorityPromises).finally(() => {
-      setIsServicesWarming(false);
-    });
-  }, []);
-
-  // Màn hình Loading Phủ Toàn Trang (Full-screen Overlay)
-  if (isServicesWarming || loading) {
-    return (
-      <div className="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-emerald-900 text-white px-4">
-        <div className="relative flex items-center justify-center mb-6">
-          <div className="w-20 h-20 border-4 border-emerald-400/30 border-t-white rounded-full animate-spin"></div>
-          <div className="absolute font-bold text-lg tracking-wider text-emerald-200">
-            DM
-          </div>
-        </div>
-
-        <h2 className="text-xl font-bold tracking-wide text-center">
-          Đang kết nối hệ thống Demi Mart...
-        </h2>
-        <p className="text-xs text-emerald-200 mt-2 text-center max-w-sm leading-relaxed">
-          Đang khởi động các dịch vụ cốt lõi (Auth, Product, Cart, Promotion).
-          Vui lòng chờ trong giây lát!
-        </p>
-      </div>
-    );
-  }
-
   const currentUser = profile || user;
 
   return (
     <SocketProvider profile={currentUser}>
+      {/* 1. Màn hình Loading nằm đè lên trên */}
+      {(isServicesWarming || loading) && (
+        <ServiceLoader onFinish={() => setIsServicesWarming(false)} />
+      )}
+
+      {/* 2. Giao diện chính luôn luôn được render sẵn ở bên dưới */}
       <Toaster
         position="top-right"
         reverseOrder={false}
