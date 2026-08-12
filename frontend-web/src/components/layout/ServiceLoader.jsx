@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import logoDemiMart from "../../assets/Demi Mart.png";
 
-// 1. NHÓM DỊCH VỤ CỐT LÕI (BẮT BUỘC SẴN SÀNG)
+// 1. NHÓM DỊCH VỤ CỐT LÕI (BẮT BUỘC CHẠY TUẦN TỰ KHỈ BỊ NGỦ ĐÔNG)
 const PRIORITY_SERVICES = [
   { step: "Đang kiểm tra xác thực hệ thống...", url: "https://authservice-sz4p.onrender.com" },
   { step: "Đang tải danh mục sản phẩm...", url: "https://productservice-n87v.onrender.com" },
@@ -22,75 +22,120 @@ const SLATS = Array.from({ length: 28 }); // 28 nan cửa mỏng
 
 export default function ServiceLoader({ onFinish }) {
   const [progress, setProgress] = useState(0);
-  const [currentStatus, setCurrentStatus] = useState("Đang kiểm tra kết nối hệ thống...");
+  const [currentStatus, setCurrentStatus] = useState("Đang kiểm tra trạng thái dịch vụ...");
   const [isExpanding, setIsExpanding] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
-  const [isLocalOrCached, setIsLocalOrCached] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+
+  // Hàm nhích % mượt mà
+  const animateProgress = (start, target, duration = 600) => {
+    return new Promise((resolve) => {
+      const startTime = performance.now();
+      const step = (currentTime) => {
+        const elapsed = currentTime - startTime;
+        const p = Math.min(elapsed / duration, 1);
+        const currentVal = Math.round(start + (target - start) * p);
+        setProgress(currentVal);
+
+        if (p < 1) {
+          requestAnimationFrame(step);
+        } else {
+          resolve();
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  };
+
+  // Hàm ping gửi request
+  const pingService = async (url) => {
+    try {
+      await fetch(url, { mode: "no-cors" });
+    } catch (e) {
+      // Bỏ qua lỗi CORS
+    }
+  };
 
   useEffect(() => {
-    // 1. KIỂM TRA MÔI TRƯỜNG & SESSION CACHE
+    // 1. Bỏ qua nếu chạy ở Localhost
     const isLocalhost =
       window.location.hostname === "localhost" ||
       window.location.hostname === "127.0.0.1";
 
-    const isWarmedUp = sessionStorage.getItem("demimart_services_warmed");
-
-    // Nếu ở Localhost HOẶC các service đã được kích hoạt sống trước đó -> Bỏ qua loading
-    if (isLocalhost || isWarmedUp === "true") {
-      setIsLocalOrCached(true);
+    if (isLocalhost) {
+      setIsVisible(false);
       if (onFinish) onFinish();
       return;
     }
 
-    // 2. KÍCH HOẠT NGẦM BACKGROUND SERVICES
-    BACKGROUND_SERVICES.forEach((url) => {
-      fetch(url, { mode: "no-cors" }).catch(() => {});
-    });
+    // 2. Kích hoạt ngầm 5 dịch vụ phụ
+    BACKGROUND_SERVICES.forEach((url) => pingService(url));
 
-    // 3. THEO DÕI BẰNG THỜI GIAN THẬT DỰA TRÊN KẾT QUẢ RESPONSE
-    const totalPriority = PRIORITY_SERVICES.length;
-    let completedCount = 0;
+    // 3. KIỂM TRA XEM CÁC DỊCH VỤ CÓ ĐANG NGỦ ĐÔNG KHÔNG (FAST HEALTH CHECK)
+    const checkAndRun = async () => {
+      // Đặt timeout 1.5 giây để kiểm tra xem cả 4 service có thức sẵn hay không
+      const checkFastResponse = Promise.all(
+        PRIORITY_SERVICES.map((s) => pingService(s.url))
+      );
 
-    PRIORITY_SERVICES.forEach((service) => {
-      fetch(service.url, { mode: "no-cors" })
-        .then(() => {})
-        .catch(() => {})
-        .finally(() => {
-          completedCount += 1;
-          
-          // Tính % chính xác tuyệt đối theo số lượng service hoàn thành
-          const exactPercent = Math.round((completedCount / totalPriority) * 100);
-          setProgress(exactPercent);
-          setCurrentStatus(service.step);
+      const timeoutPromise = new Promise((resolve) =>
+        setTimeout(() => resolve("SLEEPING"), 1500)
+      );
 
-          // Khi TOÀN BỘ 4 SERVICES CỐT LÕI ĐÃ CHẠY XONG
-          if (completedCount === totalPriority) {
-            setCurrentStatus("Hệ thống đã sẵn sàng!");
+      const result = await Promise.race([checkFastResponse, timeoutPromise]);
 
-            // Đánh dấu vào Session Storage để không hiển thị lại ở các lượt truy cập sau
-            sessionStorage.setItem("demimart_services_warmed", "true");
+      // NẾU CẢ 4 SERVICE ĐỀU THỨC SẴN (Phản hồi < 1.5s) -> Bỏ qua Loading ngay!
+      if (result !== "SLEEPING") {
+        setIsVisible(false);
+        if (onFinish) onFinish();
+        return;
+      }
 
-            // BƯỚC 1: Hở khe thoáng li ti
-            setTimeout(() => {
-              setIsExpanding(true);
-            }, 300);
+      // NẾU CÓ SERVICE BỊ NGỦ ĐÔNG -> Chạy giao diện Loading cửa cuốn từng bước!
+      let currentP = 0;
 
-            // BƯỚC 2: Cuộn trượt toàn bộ cửa lên đỉnh
-            setTimeout(() => {
-              setIsRolling(true);
-            }, 850);
+      for (let i = 0; i < PRIORITY_SERVICES.length; i++) {
+        const service = PRIORITY_SERVICES[i];
+        const nextTargetP = (i + 1) * 25;
 
-            // BƯỚC 3: Mở hoàn toàn giao diện
-            setTimeout(() => {
-              if (onFinish) onFinish();
-            }, 1850);
-          }
-        });
-    });
+        setCurrentStatus(service.step);
+
+        // Nhích mượt nửa chặng
+        const midTargetP = currentP + 12;
+        await animateProgress(currentP, midTargetP, 400);
+
+        // Chờ service thực sự tỉnh dậy (nếu đang ngủ Render sẽ mất 10-30s)
+        await pingService(service.url);
+
+        // Nhích mượt đến mốc 25%, 50%, 75%, 100%
+        await animateProgress(midTargetP, nextTargetP, 500);
+        currentP = nextTargetP;
+      }
+
+      // KHI ĐÃ HOÀN THÀNH 100%
+      setCurrentStatus("Hệ thống đã sẵn sàng!");
+
+      // BƯỚC 1: Dãn khe thoáng li ti
+      setTimeout(() => {
+        setIsExpanding(true);
+      }, 300);
+
+      // BƯỚC 2: Cuộn trượt cửa lên
+      setTimeout(() => {
+        setIsRolling(true);
+      }, 850);
+
+      // BƯỚC 3: Mở hoàn toàn giao diện
+      setTimeout(() => {
+        setIsVisible(false);
+        if (onFinish) onFinish();
+      }, 1850);
+    };
+
+    checkAndRun();
   }, [onFinish]);
 
-  // Không hiển thị component nếu ở Localhost hoặc khi Dịch vụ đã ấm
-  if (isLocalOrCached) return null;
+  if (!isVisible) return null;
 
   return (
     <div
@@ -109,7 +154,7 @@ export default function ServiceLoader({ onFinish }) {
               transitionDelay: isExpanding ? `${(SLATS.length - index) * 18}ms` : "0ms",
             }}
           >
-            {/* LỖ THOÁNG LI TI HIỆN RA KHI DÃN NAN */}
+            {/* DÃY LỖ THOÁNG LI TI HIỆN RA KHI CỬA DÃN */}
             <div
               className={`absolute -bottom-[4px] left-0 right-0 h-[3px] flex justify-around items-center transition-opacity duration-300 ${
                 isExpanding ? "opacity-100" : "opacity-0"
@@ -121,10 +166,10 @@ export default function ServiceLoader({ onFinish }) {
         ))}
       </div>
 
-      {/* PHỦ BÓNG ĐỔ KHỐI */}
+      {/* ĐỔ BÓNG KHỐI TOÀN MÀN HÌNH */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/15 pointer-events-none" />
 
-      {/* LOGO DEMI MART NỔI BẬT */}
+      {/* KHỐI LOGO DEMI MART */}
       <div
         className={`relative z-10 flex flex-col items-center justify-center mb-6 bg-white/90 backdrop-blur-md p-5 px-8 rounded-3xl border border-white shadow-2xl transition-all duration-500 ${
           isRolling ? "opacity-0 scale-95" : "opacity-100 scale-100"
@@ -140,7 +185,7 @@ export default function ServiceLoader({ onFinish }) {
         </p>
       </div>
 
-      {/* THANH TIẾN TRÌNH REAL-TIME % */}
+      {/* THANH TIẾN TRÌNH % REAL-TIME */}
       <div
         className={`relative z-10 w-full max-w-xs sm:max-w-sm bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-slate-300 shadow-2xl transition-all duration-500 ${
           isRolling ? "opacity-0 scale-95" : "opacity-100 scale-100"
@@ -156,7 +201,7 @@ export default function ServiceLoader({ onFinish }) {
         {/* Track & Progress Bar */}
         <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden p-[2px] border border-slate-300 shadow-inner">
           <div
-            className="h-full bg-gradient-to-r from-[#007a5a] via-emerald-500 to-teal-400 rounded-full transition-all duration-500 ease-out shadow-xs"
+            className="h-full bg-gradient-to-r from-[#007a5a] via-emerald-500 to-teal-400 rounded-full transition-all duration-300 ease-out shadow-xs"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -167,10 +212,10 @@ export default function ServiceLoader({ onFinish }) {
           isRolling ? "opacity-0" : "opacity-100"
         }`}
       >
-        Đang khởi tạo các dịch vụ server...
+        Đang khởi động hệ thống Microservices...
       </p>
 
-      {/* CHÂN NẸP NHÔM CỬA CUỐN */}
+      {/* CHÂN NẸP NHÔM DƯỚI ĐÁY CỬA CUỐN */}
       <div className="absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-b from-slate-400 via-slate-300 to-slate-500 border-t border-white/80 shadow-[0_8px_20px_rgba(0,0,0,0.4)] z-20" />
     </div>
   );
