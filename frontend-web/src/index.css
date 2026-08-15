@@ -25,7 +25,7 @@ body {
   overflow-x: hidden;
 }
 
-/* --- CUSTOM SCROLLBAR (THANH TRƯỢT XANH DEMI MART) --- */
+/* --- CUSTOM SCROLLBAR (THANH TRƯỢT XANH DEMI MART TOÀN TRANG) --- */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -42,6 +42,45 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #004d34;
+}
+
+/* ========================================================== */
+/* SIDEBAR CUSTOM SCROLLBAR (CHỈ HIỂN THỊ KHI HOVER - #006c49)  */
+/* ========================================================== */
+
+/* Mặc định ẩn thanh cuộn nhưng vẫn cho phép cuộn nội dung */
+.custom-sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.custom-sidebar-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Khi HOVER vào Sidebar mới hiện thanh cuộn màu xanh #006c49 */
+.custom-sidebar-scroll:hover {
+  scrollbar-width: thin;
+  scrollbar-color: #006c49 transparent; /* Firefox: con trượt xanh & nền trong suốt */
+}
+
+.custom-sidebar-scroll:hover::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+}
+
+.custom-sidebar-scroll:hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-sidebar-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: #006c49; /* Xanh Demi Mart */
+  border-radius: 9999px;
+}
+
+.custom-sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
+  background-color: #004d34; /* Xanh đậm hơn khi rê chuột trực tiếp vào thanh cuộn */
 }
 
 /* --- ANIMATIONS --- */
@@ -67,7 +106,7 @@ img {
   shape-margin: 0.75rem;
 }
 
-/* Lớp ẩn thanh cuộn nhưng vẫn cho cuộn */
+/* Lớp ẩn thanh cuộn tuyệt đối */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

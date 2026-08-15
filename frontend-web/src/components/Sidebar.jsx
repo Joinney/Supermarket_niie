@@ -18,9 +18,6 @@ export default function Sidebar({ isOpen, onClose }) {
   const [activeSubCategory, setActiveSubCategory] = useState("");
   const [openDropdown, setOpenDropdown] = useState(null);
 
-  const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimeoutRef = useRef(null);
-
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -77,14 +74,6 @@ export default function Sidebar({ isOpen, onClose }) {
 
     fetchCategories();
   }, [currentStore]);
-
-  const handleScroll = () => {
-    setIsScrolling(true);
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => {
-      setIsScrolling(false);
-    }, 1000);
-  };
 
   const mainMenus = [
     { slug: "search", key: "sidebar.main.search", i: <Search size={20} /> },
@@ -157,6 +146,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
   return (
     <>
+      {/* Overlay hiệu ứng mờ nền khi bật menu trên Mobile */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-[10001] lg:hidden backdrop-blur-sm transition-opacity"
@@ -164,9 +154,15 @@ export default function Sidebar({ isOpen, onClose }) {
         />
       )}
 
+      {/* 
+        CHÚ Ý: Class 'custom-sidebar-scroll' đã được thêm bên dưới.
+        Kết hợp với file index.css đã cấu hình, thanh cuộn sẽ ẨN khi bình thường
+        và chỉ HIỂN THỊ KHI RÊ CHUỘT (hover) vào khung Sidebar.
+      */}
       <aside
-        onScroll={handleScroll}
-        className={`fixed lg:sticky z-[10002] lg:z-[99] top-0 lg:top-[112px] h-full lg:h-[calc(100vh-112px)] bg-[#F8FAF9] border-r border-slate-100 overflow-y-auto py-6 px-4 font-sans transition-all duration-300 ease-in-out w-[280px] sm:w-[300px] lg:w-[260px] ${isOpen ? "left-0" : "-left-[300px] lg:left-0"} ${isScrolling ? "demi-scroll-active" : "demi-scroll-idle"}`}
+        className={`fixed lg:sticky z-[10002] lg:z-[99] top-0 lg:top-[112px] h-full lg:h-[calc(100vh-112px)] bg-[#F8FAF9] border-r border-slate-100 custom-sidebar-scroll py-6 px-4 font-sans transition-all duration-300 ease-in-out w-[280px] sm:w-[300px] lg:w-[260px] ${
+          isOpen ? "left-0" : "-left-[300px] lg:left-0"
+        }`}
       >
         <button
           onClick={onClose}
@@ -179,7 +175,9 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="mb-4 mt-8 lg:mt-0 relative">
           <div
             onClick={() => setIsStoreOpen(!isStoreOpen)}
-            className={`bg-white border ${isStoreOpen ? "border-[#006c49]" : "border-slate-100"} rounded-2xl p-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group shadow-sm`}
+            className={`bg-white border ${
+              isStoreOpen ? "border-[#006c49]" : "border-slate-100"
+            } rounded-2xl p-4 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group shadow-sm`}
           >
             <p className="text-[10px] font-black text-slate-400 uppercase text-center mb-1 tracking-[2px]">
               {t("sidebar.current_store")}
@@ -190,7 +188,9 @@ export default function Sidebar({ isOpen, onClose }) {
                 {currentStore?.name || "Đang tải..."}
               </span>
               <span
-                className={`text-[10px] text-slate-400 transition-transform duration-300 ${isStoreOpen ? "rotate-180" : ""}`}
+                className={`text-[10px] text-slate-400 transition-transform duration-300 ${
+                  isStoreOpen ? "rotate-180" : ""
+                }`}
               >
                 ▼
               </span>
@@ -198,7 +198,11 @@ export default function Sidebar({ isOpen, onClose }) {
           </div>
 
           <div
-            className={`overflow-hidden transition-all duration-300 ease-in-out ${isStoreOpen ? "max-h-[200px] mt-2 opacity-100" : "max-h-0 opacity-0"}`}
+            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              isStoreOpen
+                ? "max-h-[200px] mt-2 opacity-100"
+                : "max-h-0 opacity-0"
+            }`}
           >
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-2 flex flex-col gap-1">
               {sortedStores?.map((store) => (
@@ -206,7 +210,11 @@ export default function Sidebar({ isOpen, onClose }) {
                   key={store.code}
                   onClick={() => handleStoreSelect(store)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-[13px] font-bold transition-all
-                    ${currentStore?.code === store.code ? "bg-[#e6f0ed] text-[#006c49]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"}
+                    ${
+                      currentStore?.code === store.code
+                        ? "bg-[#e6f0ed] text-[#006c49]"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }
                   `}
                 >
                   <div className="flex items-center gap-2">
@@ -220,6 +228,7 @@ export default function Sidebar({ isOpen, onClose }) {
           </div>
         </div>
 
+        {/* --- MENU CHÍNH --- */}
         <nav className="space-y-1 mb-4 pb-4 border-b border-slate-200/60 shrink-0">
           {mainMenus.map((m) => (
             <div
@@ -233,7 +242,9 @@ export default function Sidebar({ isOpen, onClose }) {
                 }`}
             >
               <span
-                className={`transition-transform flex items-center justify-center w-6 h-6 ${activeCategory === m.slug ? "scale-110 text-white" : "text-black"}`}
+                className={`transition-transform flex items-center justify-center w-6 h-6 ${
+                  activeCategory === m.slug ? "scale-110 text-white" : "text-black"
+                }`}
               >
                 {m.i}
               </span>
@@ -244,6 +255,7 @@ export default function Sidebar({ isOpen, onClose }) {
           ))}
         </nav>
 
+        {/* --- DANH MỤC SẢN PHẨM --- */}
         <div className="space-y-1 flex-1 pb-6">
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[2px] mb-3 ml-1">
             {t("sidebar.product_catalog")}
@@ -266,21 +278,25 @@ export default function Sidebar({ isOpen, onClose }) {
                   <div
                     onClick={() => handleCategoryClick(c)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all relative group
-                      ${isParentActive ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/15" : "hover:bg-white/60 text-slate-600"}`}
+                      ${
+                        isParentActive
+                          ? "bg-[#006c49] text-white shadow-md shadow-[#006c49]/15"
+                          : "hover:bg-white/60 text-slate-600"
+                      }`}
                   >
-                    {/* 🌟 VÙNG RENDER HÌNH ẢNH DANH MỤC */}
+                    {/* VÙNG RENDER HÌNH ẢNH DANH MỤC */}
                     <div
                       className={`w-9 h-9 rounded-full flex items-center justify-center text-base shadow-sm transition-all duration-300 border overflow-hidden shrink-0
                       ${
                         isParentActive
-                          ? "bg-white border-[#006c49] scale-105 p-0.5" // Hiệu ứng bọc viền khi được chọn
+                          ? "bg-white border-[#006c49] scale-105 p-0.5"
                           : "bg-white border-slate-100 group-hover:border-slate-300 text-black p-0"
                       }`}
                     >
                       <img
                         src={c.image || getAvatarUrl(c.name)}
                         alt={c.name}
-                        className={`w-full h-full object-cover ${isParentActive ? "rounded-full" : "rounded-full"}`}
+                        className="w-full h-full object-cover rounded-full"
                         onError={(e) => {
                           e.target.onerror = null;
                           e.target.src = getAvatarUrl(c.name);
@@ -288,7 +304,11 @@ export default function Sidebar({ isOpen, onClose }) {
                       />
                     </div>
                     <span
-                      className={`text-[14.5px] flex-1 transition-colors ${isParentActive ? "font-black text-white" : "font-bold text-slate-600 group-hover:text-slate-800"}`}
+                      className={`text-[14.5px] flex-1 transition-colors ${
+                        isParentActive
+                          ? "font-black text-white"
+                          : "font-bold text-slate-600 group-hover:text-slate-800"
+                      }`}
                     >
                       {c.name}
                     </span>
@@ -340,6 +360,7 @@ export default function Sidebar({ isOpen, onClose }) {
           )}
         </div>
 
+        {/* --- FOOTER KÍCH THƯỚC NHỎ DƯỚI CÙNG --- */}
         <div className="pt-6 border-t border-slate-200/60 space-y-3 px-3 shrink-0">
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             {footerLinks.map((linkKey) => (

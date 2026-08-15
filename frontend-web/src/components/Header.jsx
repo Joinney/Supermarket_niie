@@ -449,11 +449,11 @@ export default function Header({ onOpenMenu }) {
               <Search size={16} strokeWidth={3} />
             </button>
 
-            {/* Bảng Gợi Ý Tìm Kiếm */}
+            {/* Bảng Gợi Ý Tìm Kiếm - Đã ẩn thanh cuộn bằng no-scrollbar */}
             {isSuggestOpen && (
               <div
                 ref={suggestRef}
-                className="absolute left-0 right-0 mt-3 bg-white border border-slate-100 rounded-3xl shadow-xl z-50 p-4 max-h-[450px] overflow-y-auto overscroll-contain scrollbar-hide"
+                className="absolute left-0 right-0 mt-3 bg-white border border-slate-100 rounded-3xl shadow-xl z-50 p-4 max-h-[450px] overflow-y-auto overscroll-contain no-scrollbar"
               >
                 {searchKeyword.trim().length === 0 && (
                   <div className="animate-fadeIn">
@@ -691,7 +691,7 @@ export default function Header({ onOpenMenu }) {
                 strokeWidth={2.5}
                 className="group-hover:rotate-12 transition-transform"
               />
-             {/* Tính tổng số lượng thực tế của tất cả vật phẩm */}
+              {/* Tính tổng số lượng thực tế của tất cả vật phẩm */}
               {cart && cart.length > 0 && (
                 <span className="absolute -top-2 -right-2 bg-[#fea619] text-[#161b22] text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-[#006c49] animate-bounce">
                   {cart.reduce((total, item) => total + (item.quantity || 1), 0)}
@@ -705,8 +705,11 @@ export default function Header({ onOpenMenu }) {
         </div>
       </div>
 
-      {/* Thanh Menu Phụ */}
-      <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto scrollbar-hide">
+      {/* 
+        Thanh Menu Phụ: Đã dùng 'no-scrollbar' (hoặc 'scrollbar-hide') 
+        để ẨN HOÀN TOÀN thanh trượt ngang khi lướt trên mobile/màn hình nhỏ
+      */}
+      <div className="h-9 md:h-10 bg-white border-b border-slate-100 px-3 md:px-10 flex items-center justify-between overflow-x-auto no-scrollbar">
         <nav className="flex items-center gap-5 md:gap-8 whitespace-nowrap min-w-max">
           {["Toàn cầu+", "Mới về", "Bán chạy", "Ưu đãi"].map((item) => {
             const targetPath =

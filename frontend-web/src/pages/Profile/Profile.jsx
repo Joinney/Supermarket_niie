@@ -123,7 +123,7 @@ export default function ProfilePage() {
   // 🌟 STATE QUẢN LÝ BẬT/TẮT MODAL ĐIỂM DANH
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
 
-  // 🌟 STATE VÀ REF XỬ LÝ DỪNG CỐ ĐỊNH SIDEBAR KHI CHẠM FOOTER (Code của đồng đội)
+  // 🌟 STATE VÀ REF XỬ LÝ DỪNG CỐ ĐỊNH SIDEBAR KHI CHẠM FOOTER
   const [isAtFooter, setIsAtFooter] = useState(false);
   const sidebarContainerRef = useRef(null);
 
@@ -134,9 +134,8 @@ export default function ProfilePage() {
 
       const footerRect = footerElement.getBoundingClientRect();
       const sidebarHeight = sidebarContainerRef.current.offsetHeight || 520;
-      const targetTop = 185; // Khoảng cách cố định đỉnh màn hình
+      const targetTop = 185;
 
-      // Kiểm tra xem mép trên của Footer đã dâng lên đụng đáy Sidebar chưa
       if (footerRect.top <= targetTop + sidebarHeight + 20) {
         setIsAtFooter(true);
       } else {
@@ -145,7 +144,7 @@ export default function ProfilePage() {
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Kiểm tra ngay lần đầu mount
+    handleScroll();
 
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -434,20 +433,18 @@ export default function ProfilePage() {
     }
   };
 
-  const fetchLoyaltyPoints = async () => {
-    try {
-      const pointUrl = import.meta.env.VITE_AUTH_URL
-        ? `${import.meta.env.VITE_AUTH_URL}/api/v1/auth/loyalty/balance`
-        : "http://localhost:5001/api/v1/auth/loyalty/balance";
-
-      const res = await authApi.get(pointUrl);
-      if (res.data && res.data.success) {
-        setLoyaltyPoints(res.data.data.availablePoints || 0);
-      }
-    } catch (error) {
-      console.error("Lỗi lấy số dư ví Xu:", error);
+  // ✅ ĐÃ SỬA: Gọi qua authApi tiêu chuẩn thay vì localhost hardcode
+const fetchLoyaltyPoints = async () => {
+  try {
+    // Thêm prefix /auth để Gateway route đúng module loyalty
+    const res = await authApi.get("/auth/loyalty/balance");
+    if (res.data && res.data.success) {
+      setLoyaltyPoints(res.data.data.availablePoints || 0);
     }
-  };
+  } catch (error) {
+    console.error("Lỗi lấy số dư ví Xu:", error);
+  }
+};
 
   useEffect(() => {
     const initFetch = async () => {
@@ -1120,7 +1117,7 @@ export default function ProfilePage() {
 
       <div className="max-w-[1600px] mx-auto px-0 md:px-6 lg:px-10">
         <div className="flex flex-col md:flex-row gap-6 pt-0 md:pt-6 relative items-start">
-          {/* 🌟 DESKTOP SIDEBAR MENU - TỰ ĐỘNG CHUYỂN DẠNG KHI CHẠM CHÂN TRANG FOOTER */}
+          {/* DESKTOP SIDEBAR MENU */}
           <div className="hidden md:block w-64 lg:w-72 shrink-0">
             <aside
               ref={sidebarContainerRef}
@@ -1194,7 +1191,7 @@ export default function ProfilePage() {
             </aside>
           </div>
 
-          {/* MAIN CONTAINER CONTENT - BÊN PHẢI NẰM RIÊNG KÉO LÊN XUỐNG DỄ DÀNG */}
+          {/* MAIN CONTAINER CONTENT */}
           <div className="flex-1 w-full space-y-4 min-w-0">
             {/* WIDGETS WALLET SECTION */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:gap-4">
@@ -1264,7 +1261,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* TAB HORIZONTAL MOBILE */}
+            {/* ✅ TAB HORIZONTAL MOBILE (Hiển thị đầy đủ chữ không cắt) */}
             <div className="md:hidden bg-[#f0f2f5] py-2 px-4 flex overflow-x-auto no-scrollbar gap-2 sticky top-[73px] z-[90]">
               {mobileTabs.map((item) => (
                 <button
@@ -1273,9 +1270,15 @@ export default function ProfilePage() {
                     setActiveTab(item.id);
                     navigate(item.path ? `/profile/${item.path}` : "/profile");
                   }}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-[10px] font-black uppercase border shadow-sm cursor-pointer ${activeTab === item.id || (item.id === "orders" && activeTab === "orders") ? "bg-[#006c49] text-white border-[#006c49]" : "bg-white text-slate-500 border-slate-200"}`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap text-xs font-bold border shadow-sm cursor-pointer transition-all ${
+                    activeTab === item.id ||
+                    (item.id === "orders" && activeTab === "orders")
+                      ? "bg-[#006c49] text-white border-[#006c49]"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
                 >
-                  {item.icon} {item.label.split(" ")[0]}
+                  {item.icon}
+                  <span>{item.label}</span>
                 </button>
               ))}
             </div>
@@ -1418,7 +1421,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* 🌟 CHÈN COMPONENT MODAL ĐIỂM DANH */}
+      {/* MODAL ĐIỂM DANH */}
       <CheckInModal
         isOpen={isCheckInModalOpen}
         onClose={() => setIsCheckInModalOpen(false)}

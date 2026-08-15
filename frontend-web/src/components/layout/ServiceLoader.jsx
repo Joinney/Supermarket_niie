@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
 import logoDemiMart from "../../assets/Demi Mart.png";
 
-// 1. NHÓM DỊCH VỤ CỐT LÕI (BẮT BUỘC CHẠY TUẦN TỰ KHỈ BỊ NGỦ ĐÔNG)
+// 1. NHÓM DỊCH VỤ CỐT LÕI (BẮT BUỘC CHẠY TRƯỚC ĐỂ LẤY DATA GIAO DIỆN TRANG CHỦ)
 const PRIORITY_SERVICES = [
-  { step: "Đang kiểm tra xác thực hệ thống...", url: "https://authservice-sz4p.onrender.com" },
-  { step: "Đang tải danh mục sản phẩm...", url: "https://productservice-n87v.onrender.com" },
-  { step: "Đang kết nối giỏ hàng...", url: "https://cartservice-i6s1.onrender.com" },
   { step: "Hoàn tất chuẩn bị chương trình ưu đãi...", url: "https://promotion-service-r5zx.onrender.com" },
+  { step: "Đang tải danh mục sản phẩm...", url: "https://productservice-n87v.onrender.com" },
 ];
 
-// 2. NHÓM DỊCH VỤ PHỤ (KÍCH HOẠT NGẦM)
+// 2. NHÓM DỊCH VỤ PHỤ + API GATEWAY (KÍCH HOẠT NGẦM ĐỒNG THỜI - PARALLEL PING)
 const BACKGROUND_SERVICES = [
+  "https://api-gateway-vuyo.onrender.com",
+  "https://authservice-sz4p.onrender.com",
+  "https://cartservice-i6s1.onrender.com",
   "https://payment-service-opea.onrender.com",
   "https://orderservice-n0z1.onrender.com",
   "https://inventory-service-mjzr.onrender.com",
@@ -29,7 +30,7 @@ export default function ServiceLoader({ onFinish }) {
   const [isVisible, setIsVisible] = useState(true);
 
   // Hàm nhích % mượt mà
-  const animateProgress = (start, target, duration = 500) => {
+  const animateProgress = (start, target, duration = 400) => {
     return new Promise((resolve) => {
       const startTime = performance.now();
       const step = (currentTime) => {
@@ -52,7 +53,7 @@ export default function ServiceLoader({ onFinish }) {
     try {
       await fetch(url, { mode: "no-cors" });
     } catch (e) {
-      // Bỏ qua lỗi CORS
+      // Bỏ qua lỗi CORS / Mạng để tránh block luồng
     }
   };
 
@@ -73,59 +74,61 @@ export default function ServiceLoader({ onFinish }) {
     const now = Date.now();
 
     if (lastActiveTime && now - parseInt(lastActiveTime, 10) < SLEEP_TIMEOUT) {
-      // Các Service đã thức sẵn -> KHÔNG HIỆN LOADING NỮA!
       sessionStorage.setItem("demimart_last_active", now.toString());
       setIsVisible(false);
       if (onFinish) onFinish();
 
-      // Vẫn kích hoạt ngầm để duy trì độ ấm cho server
-      PRIORITY_SERVICES.concat(BACKGROUND_SERVICES).forEach((s) =>
-        pingService(typeof s === "string" ? s : s.url)
-      );
+      // Vẫn kích hoạt ngầm đồng thời tất cả service để duy trì độ ấm
+      const allUrls = PRIORITY_SERVICES.map((s) => s.url).concat(BACKGROUND_SERVICES);
+      Promise.all(allUrls.map((url) => pingService(url)));
       return;
     }
 
-    // 3. Nếu chưa thức hoặc đã quá 12 phút (Service bị ngủ đông) -> MỚI CHẠY LOADING CỬA CUỐN
-    BACKGROUND_SERVICES.forEach((url) => pingService(url));
+    // 3. KÍCH HOẠT NGẦM TẤT CẢ DỊCH VỤ PHỤ + API GATEWAY CÙNG MỘT LÚC
+    Promise.all(BACKGROUND_SERVICES.map((url) => pingService(url)));
 
+    // 4. CHẠY TUẦN TỰ 2 DỊCH VỤ CỐT LÕI ƯU TIÊN ĐỂ LẤY DATA GIAO DIỆN
     const runWarmupProcess = async () => {
       let currentP = 0;
+      const stepIncrement = 100 / PRIORITY_SERVICES.length; // 50% mỗi service
 
       for (let i = 0; i < PRIORITY_SERVICES.length; i++) {
         const service = PRIORITY_SERVICES[i];
-        const nextTargetP = (i + 1) * 25;
+        const nextTargetP = (i + 1) * stepIncrement;
 
         setCurrentStatus(service.step);
 
-        const midTargetP = currentP + 12;
-        await animateProgress(currentP, midTargetP, 300);
+        // Nhích thanh tiến trình lên một nửa chặng trước khi ping
+        const midTargetP = currentP + stepIncrement / 2;
+        await animateProgress(currentP, midTargetP, 250);
 
-        // Chờ service khởi động thực sự xong
+        // Chờ service cốt lõi phản hồi xong
         await pingService(service.url);
 
-        await animateProgress(midTargetP, nextTargetP, 400);
+        // Hoàn tất nốt chặng tiến trình của service
+        await animateProgress(midTargetP, nextTargetP, 250);
         currentP = nextTargetP;
       }
 
-      // Đã thức hoàn toàn 100% -> Lưu mốc thời gian thức
+      // Đã thức 2 dịch vụ quan trọng -> Lưu timestamp & thông báo hoàn tất
       sessionStorage.setItem("demimart_last_active", Date.now().toString());
       setCurrentStatus("Hệ thống đã sẵn sàng!");
 
       // BƯỚC 1: Dãn khe thoáng li ti
       setTimeout(() => {
         setIsExpanding(true);
-      }, 300);
+      }, 200);
 
-      // BƯỚC 2: Cuộn trượt cửa lên
+      // BƯỚC 2: Cuộn trượt cửa lên ngay lập tức để người dùng thấy giao diện tràn data
       setTimeout(() => {
         setIsRolling(true);
-      }, 850);
+      }, 600);
 
-      // BƯỚC 3: Mở hoàn toàn giao diện
+      // BƯỚC 3: Hoàn tất ẩn Loader
       setTimeout(() => {
         setIsVisible(false);
         if (onFinish) onFinish();
-      }, 1850);
+      }, 1500);
     };
 
     runWarmupProcess();
@@ -208,7 +211,7 @@ export default function ServiceLoader({ onFinish }) {
           isRolling ? "opacity-0" : "opacity-100"
         }`}
       >
-        Đang khởi động hệ thống Microservices...
+        Đang tải dữ liệu trang chủ...
       </p>
 
       {/* CHÂN NẸP NHÔM CỬA CUỐN */}
