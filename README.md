@@ -8,7 +8,7 @@
 
 ## 🔗 Link Demo & Tài Liệu
 * **Website Demo:** [https://demimart-fe.onrender.com](https://demimart-fe.onrender.com)
-* **API Documentation:** `http://localhost:5000/api-docs` (Swagger / Postman)
+* **API Documentation:** `https://api-gateway-vuyo.onrender.com` (Swagger / Postman)
 
 ---
 
