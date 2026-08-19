@@ -1,13 +1,13 @@
-# 🛒 Supermarket_niie - Hệ Thống Thương Mại Điện Tử Demi Mart
+# Supermarket - Hệ Thống Thương Mại Điện Tử Demi Mart
 
-![Demi Mart Banner](./Screenshot/banner.png)
+![Demi Mart Banner](./Screenshot/demimart.png)
 
 > Hệ thống quản lý và bán hàng siêu thị trực tuyến toàn diện bao gồm **Web App (Next.js 14 / TypeScript)**, **Mobile App (React Native)**, **AI Service Chatbot**, và hệ thống **Backend Node.js Microservices** được triển khai bằng **Docker & NGINX**.
 
 ---
 
 ## 🔗 Link Demo & Tài Liệu
-* **Website Demo:** [https://demimart.com](https://demimart.com)
+* **Website Demo:** [https://demimart-fe.onrender.com](https://demimart.com)
 * **API Documentation:** `http://localhost:5000/api-docs` (Swagger / Postman)
 
 ---
